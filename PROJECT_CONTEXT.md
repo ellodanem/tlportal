@@ -14,3 +14,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Added `PROJECT_CONTEXT.md`, `.githooks/post-commit` + `pre-push`, `.cursor/rules/project-context-log.mdc` (`alwaysApply`), and `npm run hooks:install` to point Git at `.githooks`.
 
 ---
+
+### 2026-04-09 20:24 UTC — commit `c3c04be`
+
+- Scaffold TL Portal: Next.js, Prisma, auth, Invoiless/1NCE API stubs, Docker optional
+
+
+### 2026-04-09 20:25 UTC — pre-push (`main` → origin) @ `c3c04be`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

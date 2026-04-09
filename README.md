@@ -57,6 +57,11 @@ Open [http://localhost:3000](http://localhost:3000). **Admin**: [http://localhos
 
 Without keys, these return **503** with `configured: false`.
 
+### Admin UI (product)
+
+- **`/admin`** — dashboard.
+- **`/admin/customers`** — list, create, edit, delete customers; optional **Invoiless sync** when `INVOILESS_API_KEY` is set (default currency `XCD`, override with `INVOILESS_DEFAULT_CURRENCY`).
+
 ## Scripts
 
 | Script            | Description              |
