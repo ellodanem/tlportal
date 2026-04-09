@@ -1,10 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +12,21 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setPending(true);
+    // #region agent log
+    fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
+      body: JSON.stringify({
+        sessionId: "79eeac",
+        location: "app/login/page.tsx:onSubmit",
+        message: "submit_start",
+        data: { hasEmail: Boolean(email?.trim()), hasPassword: Boolean(password?.length) },
+        timestamp: Date.now(),
+        hypothesisId: "H1",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {});
+    // #endregion
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -21,14 +34,58 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
         credentials: "same-origin",
       });
+      // #region agent log
+      fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
+        body: JSON.stringify({
+          sessionId: "79eeac",
+          location: "app/login/page.tsx:afterFetch",
+          message: "login_response",
+          data: { status: res.status, ok: res.ok },
+          timestamp: Date.now(),
+          hypothesisId: "H1",
+          runId: "pre-fix",
+        }),
+      }).catch(() => {});
+      // #endregion
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setError(data.error ?? `Login failed (${res.status})`);
         return;
       }
-      router.push("/admin");
-      router.refresh();
+      // #region agent log
+      fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
+        body: JSON.stringify({
+          sessionId: "79eeac",
+          location: "app/login/page.tsx:beforeNav",
+          message: "will_navigate_admin",
+          data: { method: "location.assign" },
+          timestamp: Date.now(),
+          hypothesisId: "H5",
+          runId: "post-fix",
+        }),
+      }).catch(() => {});
+      // #endregion
+      window.location.assign("/admin");
     } catch {
+      // #region agent log
+      fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
+        body: JSON.stringify({
+          sessionId: "79eeac",
+          location: "app/login/page.tsx:catch",
+          message: "fetch_or_json_failed",
+          data: {},
+          timestamp: Date.now(),
+          hypothesisId: "H1",
+          runId: "pre-fix",
+        }),
+      }).catch(() => {});
+      // #endregion
       setError("Network error — check your connection and try again.");
     } finally {
       setPending(false);
