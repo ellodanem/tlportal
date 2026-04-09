@@ -284,3 +284,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - chore: PROJECT_CONTEXT post-commit for 3b3767b
 
+
+### 2026-04-09 23:05 UTC — commit `1cfdb4c`
+
+- feat(admin): add All option to device/SIM purpose scope filter
+
+
+### 2026-04-09 23:05 UTC — pre-push (`main` → origin) @ `1cfdb4c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
