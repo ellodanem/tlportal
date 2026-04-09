@@ -41,6 +41,8 @@ export default async function AdminSimsPage({ searchParams }: Props) {
     status: sim.status,
     usedDataMB: sim.usedDataMB,
     totalDataMB: sim.totalDataMB,
+    deviceUsagePurpose: sim.device?.usagePurpose ?? null,
+    deviceTags: sim.device?.tags ?? [],
     device: sim.device
       ? {
           label: sim.device.label,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { SimSyncButton } from "@/components/admin/sim/sim-sync-button";
 import { DataUsageDonut } from "@/components/admin/sim/data-usage-donut";
 import { UsageLineChart } from "@/components/admin/sim/usage-line-chart";
@@ -125,6 +126,25 @@ export default async function AdminSimDetailPage({ params }: Props) {
           </a>
         </div>
       </div>
+
+      {sim.device ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50/90 px-4 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">Linked device</span>
+          <UsagePurposeBadge purpose={sim.device.usagePurpose} />
+          {sim.device.usagePurpose === "customer" ? (
+            <span className="text-xs text-zinc-600 dark:text-zinc-400">Production</span>
+          ) : null}
+          {sim.device.tags.length > 0 ? (
+            <span className="text-xs text-zinc-600 dark:text-zinc-400">{sim.device.tags.join(" · ")}</span>
+          ) : null}
+          <Link
+            href={`/admin/devices/${sim.device.id}/edit`}
+            className="ml-auto text-xs font-medium text-emerald-700 underline decoration-emerald-600/30 hover:decoration-emerald-700 dark:text-emerald-400"
+          >
+            Edit purpose
+          </Link>
+        </div>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

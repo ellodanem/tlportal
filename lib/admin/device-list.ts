@@ -1,7 +1,8 @@
-import type { DeviceStatus } from "@prisma/client";
+import type { DeviceStatus, DeviceUsagePurpose } from "@prisma/client";
 
 import { customerDisplayName, customerInitials } from "@/lib/admin/customer-list";
 import { DEVICE_STATUS_LABEL } from "@/lib/admin/device-status-labels";
+import { DEVICE_USAGE_PURPOSE_LABEL } from "@/lib/admin/device-usage-purpose";
 
 export type DeviceListRow = {
   id: string;
@@ -10,6 +11,8 @@ export type DeviceListRow = {
   serialNumber: string | null;
   firmwareVersion: string | null;
   status: DeviceStatus;
+  usagePurpose: DeviceUsagePurpose;
+  tags: string[];
   deviceModel: { name: string; manufacturer: string | null };
   modelInitials: string;
   sim: {
@@ -50,6 +53,8 @@ export function deviceMatchesSearchQuery(row: DeviceListRow, qRaw: string): bool
     row.sim?.iccid ?? "",
     row.sim?.msisdn ?? "",
     row.assignedCustomer?.displayName ?? "",
+    DEVICE_USAGE_PURPOSE_LABEL[row.usagePurpose].toLowerCase(),
+    ...row.tags,
   ];
   const haystack = parts.join(" ").toLowerCase();
   return haystack.includes(q);
@@ -62,6 +67,8 @@ export function mapDeviceToListRow(device: {
   serialNumber: string | null;
   firmwareVersion: string | null;
   status: DeviceStatus;
+  usagePurpose: DeviceUsagePurpose;
+  tags: string[];
   deviceModel: { name: string; manufacturer: string | null };
   simCard: {
     id: string;
@@ -87,6 +94,8 @@ export function mapDeviceToListRow(device: {
     serialNumber: device.serialNumber,
     firmwareVersion: device.firmwareVersion,
     status: device.status,
+    usagePurpose: device.usagePurpose,
+    tags: device.tags ?? [],
     deviceModel: device.deviceModel,
     modelInitials: modelInitials(device.deviceModel.manufacturer, device.deviceModel.name),
     sim: device.simCard

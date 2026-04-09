@@ -35,6 +35,14 @@ enum ServiceAssignmentStatus {
   cancelled
 }
 
+/// Commercial / lifecycle classification (default: customer-facing production units).
+enum DeviceUsagePurpose {
+  customer
+  internal_demo
+  field_test
+  personal
+}
+
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
@@ -104,8 +112,12 @@ model Device {
   warrantyExpiresAt DateTime?
   firmwareVersion   String?
   notes             String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  /// Billable / customer-facing vs internal, demo, or personal test units.
+  usagePurpose DeviceUsagePurpose @default(customer)
+  /// Free-form labels (e.g. demo-booth, test-vehicle-a); use for search and reporting.
+  tags         String[]           @default([])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
   deviceModelId String
   deviceModel   DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
@@ -117,6 +129,7 @@ model Device {
 
   @@index([deviceModelId])
   @@index([status])
+  @@index([usagePurpose])
 }
 
 model SimCard {

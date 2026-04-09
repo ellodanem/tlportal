@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/get-session";
+import { parseDeviceTagsInput, parseDeviceUsagePurpose } from "@/lib/admin/device-usage-purpose";
 import { prisma } from "@/lib/db";
 
 import type { DeviceFormActionState } from "./device-form-state";
@@ -40,6 +41,8 @@ export async function registerDevice(
   const label = parseOptionalString(formData, "label");
   const firmwareVersion = parseOptionalString(formData, "firmwareVersion");
   const notes = parseOptionalString(formData, "notes");
+  const usagePurpose = parseDeviceUsagePurpose(String(formData.get("usagePurpose") ?? ""));
+  const tags = parseDeviceTagsInput(String(formData.get("tags") ?? ""));
 
   const simCardIdRaw = String(formData.get("simCardId") ?? "").trim();
   const simCardId = simCardIdRaw.length ? simCardIdRaw : null;
@@ -112,6 +115,8 @@ export async function registerDevice(
           condition,
           firmwareVersion,
           notes,
+          usagePurpose,
+          tags,
           deviceModelId,
           status,
           simCardId,
@@ -144,4 +149,41 @@ export async function registerDevice(
   revalidatePath("/admin");
   revalidatePath("/admin/devices");
   redirect("/admin/devices");
+}
+
+export async function updateDeviceCommercialFields(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  if (!deviceId) {
+    return { error: "Missing device id." };
+  }
+
+  const usagePurpose = parseDeviceUsagePurpose(String(formData.get("usagePurpose") ?? ""));
+  const tags = parseDeviceTagsInput(String(formData.get("tags") ?? ""));
+
+  try {
+    const updated = await prisma.device.update({
+      where: { id: deviceId },
+      data: { usagePurpose, tags },
+      select: { id: true, simCardId: true },
+    });
+    if (updated.simCardId) {
+      revalidatePath(`/admin/sims/${updated.simCardId}`);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg || "Could not update device." };
+  }
+
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${deviceId}/edit`);
+  revalidatePath("/admin/sims");
+  return { error: null };
 }

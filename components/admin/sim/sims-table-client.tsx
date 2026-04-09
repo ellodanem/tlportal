@@ -4,7 +4,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useDeferredValue, useMemo, useState } from "react";
 
+import { PurposeScopeFilter } from "@/components/admin/device/purpose-scope-filter";
+import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { formatMegabytes } from "@/lib/format/mbytes";
+import {
+  type DevicePurposeScope,
+  simPurposeMatchesScope,
+} from "@/lib/admin/device-usage-purpose";
 import { type SimListRow, simMatchesSearchQuery } from "@/lib/admin/sim-list-filter";
 
 function deviceLabel(device: SimListRow["device"]) {
@@ -40,12 +46,14 @@ function formatEstMbPerDay(usedMb: number | null | undefined, days: number): str
 
 export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, headerActions }: Props) {
   const [query, setQuery] = useState("");
+  const [purposeScope, setPurposeScope] = useState<DevicePurposeScope>("customer_only");
   const deferredQuery = useDeferredValue(query);
 
-  const filtered = useMemo(
-    () => rows.filter((r) => simMatchesSearchQuery(r, deferredQuery)),
-    [rows, deferredQuery],
-  );
+  const filtered = useMemo(() => {
+    return rows
+      .filter((r) => simPurposeMatchesScope(r.deviceUsagePurpose, purposeScope))
+      .filter((r) => simMatchesSearchQuery(r, deferredQuery));
+  }, [rows, deferredQuery, purposeScope]);
 
   const qTrim = query.trim();
   const showResultHint = qTrim.length > 0 && rows.length > 0 && filtered.length > 0;
@@ -55,7 +63,13 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">{intro}</div>
         <div className="flex w-full min-w-0 flex-col gap-3 sm:max-w-[min(100%,42rem)] sm:flex-1">
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end">
+            <PurposeScopeFilter
+              id="sim-purpose-scope"
+              entityLabel="SIMs"
+              value={purposeScope}
+              onChange={setPurposeScope}
+            />
             <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:max-w-md">
               <label htmlFor="sim-search" className="sr-only">
                 Filter by ICCID, label, or device
@@ -66,7 +80,7 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 autoComplete="off"
-                placeholder="Filter ICCID, label, device…"
+                placeholder="Filter ICCID, label, device, tags…"
                 className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
               />
             </div>
@@ -103,6 +117,7 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
             <tr>
               <th className="px-4 py-3">ICCID / label</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Purpose</th>
               <th className="px-4 py-3">Device</th>
               <th
                 className="px-4 py-3 text-right"
@@ -154,13 +169,13 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No SIM cards yet.
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No SIM cards match your filter.{" "}
                   <button
                     type="button"
@@ -191,6 +206,23 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
                     <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium capitalize text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
                       {sim.status || "—"}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    {sim.deviceUsagePurpose == null ? (
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">Unlinked</span>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <UsagePurposeBadge purpose={sim.deviceUsagePurpose} />
+                          {sim.deviceUsagePurpose === "customer" ? (
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">Production</span>
+                          ) : null}
+                        </div>
+                        {sim.deviceTags.length > 0 ? (
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">{sim.deviceTags.join(" · ")}</p>
+                        ) : null}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 align-top text-zinc-700 dark:text-zinc-300">{deviceLabel(sim.device)}</td>
                   <td className="px-4 py-3 align-top text-right tabular-nums text-zinc-700 dark:text-zinc-200">

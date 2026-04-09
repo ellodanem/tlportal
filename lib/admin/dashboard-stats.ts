@@ -36,12 +36,13 @@ export async function getDashboardStats() {
   ] = await Promise.all([
     prisma.device.groupBy({
       by: ["status"],
+      where: { usagePurpose: "customer" },
       _count: { _all: true },
     }),
     prisma.customer.count(),
-    prisma.device.count({ where: { status: "assigned" } }),
-    prisma.device.count({ where: { status: "in_stock" } }),
-    prisma.device.count({ where: { status: "suspended" } }),
+    prisma.device.count({ where: { status: "assigned", usagePurpose: "customer" } }),
+    prisma.device.count({ where: { status: "in_stock", usagePurpose: "customer" } }),
+    prisma.device.count({ where: { status: "suspended", usagePurpose: "customer" } }),
     prisma.serviceAssignment.count({
       where: { endDate: null, status: { not: "cancelled" } },
     }),

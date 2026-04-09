@@ -5,7 +5,13 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { useDeferredValue, useMemo, useState } from "react";
 
+import { PurposeScopeFilter } from "@/components/admin/device/purpose-scope-filter";
+import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { DEVICE_STATUS_LABEL } from "@/lib/admin/device-status-labels";
+import {
+  type DevicePurposeScope,
+  devicePurposeMatchesScope,
+} from "@/lib/admin/device-usage-purpose";
 import { type DeviceListRow, deviceMatchesSearchQuery } from "@/lib/admin/device-list";
 
 function statusPillClass(status: DeviceStatus): string {
@@ -33,31 +39,41 @@ type Props = {
 
 export function DevicesTableClient({ rows }: Props) {
   const [query, setQuery] = useState("");
+  const [purposeScope, setPurposeScope] = useState<DevicePurposeScope>("customer_only");
   const deferredQuery = useDeferredValue(query);
 
-  const filtered = useMemo(
-    () => rows.filter((r) => deviceMatchesSearchQuery(r, deferredQuery)),
-    [rows, deferredQuery],
-  );
+  const filtered = useMemo(() => {
+    return rows
+      .filter((r) => devicePurposeMatchesScope(r.usagePurpose, purposeScope))
+      .filter((r) => deviceMatchesSearchQuery(r, deferredQuery));
+  }, [rows, deferredQuery, purposeScope]);
 
   const qTrim = query.trim();
   const showResultHint = qTrim.length > 0 && rows.length > 0 && filtered.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="w-full max-w-xl">
-        <label htmlFor="device-search" className="sr-only">
-          Search devices
-        </label>
-        <input
-          id="device-search"
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoComplete="off"
-          placeholder="Search IMEI, serial, model, SIM, customer…"
-          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+      <div className="flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-end">
+        <PurposeScopeFilter
+          id="device-purpose-scope"
+          entityLabel="devices"
+          value={purposeScope}
+          onChange={setPurposeScope}
         />
+        <div className="min-w-0 flex-1">
+          <label htmlFor="device-search" className="sr-only">
+            Search devices
+          </label>
+          <input
+            id="device-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoComplete="off"
+            placeholder="Search IMEI, serial, model, SIM, customer, tags…"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          />
+        </div>
       </div>
 
       <section
@@ -109,6 +125,7 @@ export function DevicesTableClient({ rows }: Props) {
             <tr>
               <th className="px-4 py-3">Model</th>
               <th className="px-4 py-3">Name &amp; identifiers</th>
+              <th className="px-4 py-3">Purpose</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Assigned to</th>
               <th className="px-4 py-3">SIM</th>
@@ -118,13 +135,13 @@ export function DevicesTableClient({ rows }: Props) {
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No devices yet. Register a device to add trackers to the fleet.
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No devices match your search.{" "}
                   <button
                     type="button"
@@ -157,9 +174,17 @@ export function DevicesTableClient({ rows }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {row.label?.trim() || "Unnamed device"}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                        {row.label?.trim() || "Unnamed device"}
+                      </p>
+                      <Link
+                        href={`/admin/devices/${row.id}/edit`}
+                        className="text-xs font-medium text-emerald-700 underline decoration-emerald-600/30 hover:decoration-emerald-700 dark:text-emerald-400"
+                      >
+                        Edit purpose
+                      </Link>
+                    </div>
                     <p className="mt-0.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">IMEI {row.imei}</p>
                     {row.serialNumber?.trim() ? (
                       <p className="mt-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-500">
@@ -171,6 +196,21 @@ export function DevicesTableClient({ rows }: Props) {
                         Firmware {row.firmwareVersion.trim()}
                       </p>
                     ) : null}
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <UsagePurposeBadge purpose={row.usagePurpose} />
+                        {row.usagePurpose === "customer" ? (
+                          <span className="text-xs text-zinc-500 dark:text-zinc-400">Production</span>
+                        ) : null}
+                      </div>
+                      {row.tags.length > 0 ? (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {row.tags.join(" · ")}
+                        </p>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-4 py-3 align-top">
                     <span

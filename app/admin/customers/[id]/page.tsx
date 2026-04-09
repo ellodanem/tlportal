@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { prisma } from "@/lib/db";
 
 type Props = { params: Promise<{ id: string }> };
@@ -171,7 +172,10 @@ export default async function CustomerDetailPage({ params }: Props) {
                       <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{a.id.slice(0, 8)}…</td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-zinc-900 dark:text-zinc-50">{modelName}</div>
-                        <div className="font-mono text-xs text-zinc-500">{a.device.imei}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <UsagePurposeBadge purpose={a.device.usagePurpose} />
+                        </div>
+                        <div className="mt-0.5 font-mono text-xs text-zinc-500">{a.device.imei}</div>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{iccid}</td>
                       <td className="px-4 py-3">{statusPill(a.status)}</td>

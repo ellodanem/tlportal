@@ -13,10 +13,21 @@ const links = [
   { href: "/admin/settings", label: "Settings" },
 ] as const;
 
+/** Show Device models sub-link only while browsing the devices area (fleet + catalog). */
+function isDevicesSection(pathname: string): boolean {
+  return pathname.startsWith("/admin/devices") || pathname.startsWith("/admin/device-models");
+}
+
 function navClass(active: boolean) {
   return active
     ? "rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-100"
     : "rounded-md px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50";
+}
+
+function subNavClass(active: boolean) {
+  return active
+    ? "ml-2 mt-0.5 block rounded-md border-l-2 border-emerald-400 bg-emerald-50/90 py-2 pl-3 pr-2 text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-100"
+    : "ml-2 mt-0.5 block rounded-md border-l-2 border-transparent py-2 pl-3 pr-2 text-sm font-medium text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-50";
 }
 
 export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | null }) {
@@ -51,6 +62,24 @@ export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | n
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {links.map(({ href, label }) => {
+          if (href === "/admin/devices") {
+            const devicesParentActive = isDevicesSection(pathname);
+            const deviceModelsActive = pathname.startsWith("/admin/device-models");
+            const showSub = isDevicesSection(pathname);
+            return (
+              <div key={href} className="flex flex-col gap-0.5">
+                <Link href={href} className={navClass(devicesParentActive)}>
+                  {label}
+                </Link>
+                {showSub ? (
+                  <Link href="/admin/device-models" className={subNavClass(deviceModelsActive)}>
+                    Device models
+                  </Link>
+                ) : null}
+              </div>
+            );
+          }
+
           const active =
             href === "/admin"
               ? pathname === "/admin"

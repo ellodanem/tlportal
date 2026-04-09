@@ -15,6 +15,11 @@ const items = [
     description: "Add a tracker or gateway to the fleet.",
   },
   {
+    href: "/admin/device-models/new",
+    label: "Device model",
+    description: "Add a product to the catalog for registration.",
+  },
+  {
     href: "/admin/sims/new",
     label: "SIM card",
     description: "Provision or link a cellular SIM.",
