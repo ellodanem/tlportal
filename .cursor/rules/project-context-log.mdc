@@ -1,0 +1,21 @@
+---
+description: Maintain PROJECT_CONTEXT.md on every commit and push (local log)
+alwaysApply: true
+---
+
+# Project context log
+
+## Required behavior
+
+1. **`PROJECT_CONTEXT.md`** (repo root) is the local running log of work shipped via Git. Treat it as **append-only**: never delete or rewrite prior sections.
+
+2. **After every `git commit`** and **`git push`** you perform (or guide the user through), ensure this file contains a **new entry at the bottom** for that action, unless the automated **`.githooks`** already recorded the same commit SHA or push (read the last lines of `PROJECT_CONTEXT.md`; if the current `HEAD` short SHA appears in the latest entry from hooks, you may add only extra **Agent notes** bullets when needed).
+
+3. **Entry format** (match existing style in the file):
+
+   - Start with `### ` then an ISO-style **date** (and time if known), then **—** then a short **title**.
+   - Under it, use bullet `- ` lines for: commit hash / branch / remote when relevant, and **what changed** (features, fixes, schema, deps, config).
+
+4. **If hooks are not installed** (`core.hooksPath` not set to `.githooks`), you **must** append these entries yourself so nothing is lost.
+
+5. **First-time clone**: remind to run `npm run hooks:install` once so commits/pushes self-log.

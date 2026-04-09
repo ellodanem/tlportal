@@ -1,0 +1,162 @@
+// TL Portal — Track Lucia admin
+// https://www.prisma.io/docs
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Enums ---
+
+enum DeviceStatus {
+  in_stock
+  assigned
+  suspended
+  returned
+  decommissioned
+  lost
+}
+
+enum DeviceCondition {
+  new
+  refurbished
+  faulty
+}
+
+enum ServiceAssignmentStatus {
+  active
+  due_soon
+  overdue
+  suspended
+  cancelled
+}
+
+// --- Auth (admin) ---
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// --- Core domain ---
+
+model Customer {
+  id                  String    @id @default(uuid())
+  firstName           String?
+  lastName            String?
+  company             String?
+  email               String?
+  phone               String?
+  address             String?
+  invoilessCustomerId String?   @unique
+  notes               String?
+  tags                String[]  @default([])
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  serviceAssignments ServiceAssignment[]
+
+  @@index([email])
+}
+
+model DeviceModel {
+  id                 String   @id @default(uuid())
+  name               String
+  manufacturer       String?
+  category           String?
+  description        String?
+  retailPrice        Decimal  @db.Decimal(12, 2)
+  costPrice          Decimal? @db.Decimal(12, 2)
+  invoilessProductId String?  @unique
+  isActive           Boolean  @default(true)
+  imageUrl           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  devices Device[]
+}
+
+model Device {
+  id                String          @id @default(uuid())
+  imei              String          @unique
+  serialNumber      String?
+  label             String?
+  status            DeviceStatus    @default(in_stock)
+  condition         DeviceCondition @default(new)
+  purchasedAt       DateTime?
+  warrantyExpiresAt DateTime?
+  firmwareVersion   String?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  deviceModelId String
+  deviceModel   DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
+
+  simCardId String?  @unique
+  simCard   SimCard? @relation(fields: [simCardId], references: [id], onDelete: SetNull)
+
+  serviceAssignments ServiceAssignment[]
+
+  @@index([deviceModelId])
+  @@index([status])
+}
+
+model SimCard {
+  id             String    @id @default(uuid())
+  iccid          String    @unique
+  msisdn         String?
+  imsi           String?
+  label          String?
+  status         String    @default("Active")
+  totalDataMB    Float?
+  usedDataMB     Float?
+  dataExpiryDate DateTime?
+  lastSyncedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  device Device?
+
+  serviceAssignments ServiceAssignment[]
+
+  @@index([iccid])
+  @@index([status])
+}
+
+model ServiceAssignment {
+  id                   String                   @id @default(uuid())
+  startDate            DateTime
+  endDate              DateTime?
+  status               ServiceAssignmentStatus  @default(active)
+  invoilessRecurringId String?
+  intervalMonths       Int?
+  lastInvoiceId        String?
+  lastPaymentStatus    String?
+  nextDueDate          DateTime?
+  notes                String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  simCardId String?
+  simCard   SimCard? @relation(fields: [simCardId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([deviceId])
+  @@index([status])
+  @@index([nextDueDate])
+}

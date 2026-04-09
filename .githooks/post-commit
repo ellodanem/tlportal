@@ -1,0 +1,17 @@
+#!/bin/sh
+# Append a commit line to PROJECT_CONTEXT.md (run from repo root).
+# Enable: git config core.hooksPath .githooks
+
+ROOT="$(git rev-parse --show-toplevel)"
+FILE="$ROOT/PROJECT_CONTEXT.md"
+SHORT=$(git rev-parse --short HEAD)
+DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+SUBJ=$(git log -1 --pretty=%s)
+
+{
+  echo ""
+  echo "### $DATE — commit \`$SHORT\`"
+  echo ""
+  echo "- $SUBJ"
+  echo ""
+} >> "$FILE"

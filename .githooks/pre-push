@@ -1,0 +1,18 @@
+#!/bin/sh
+# Log that a push is about to be sent (before refs update on remote).
+# Enable: git config core.hooksPath .githooks
+
+ROOT="$(git rev-parse --show-toplevel)"
+FILE="$ROOT/PROJECT_CONTEXT.md"
+REMOTE="$1"
+DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+SHORT=$(git rev-parse --short HEAD)
+
+{
+  echo ""
+  echo "### $DATE — pre-push (\`$BRANCH\` → ${REMOTE:-origin}) @ \`$SHORT\`"
+  echo ""
+  echo "- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note)."
+  echo ""
+} >> "$FILE"

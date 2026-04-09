@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: tlportal
+      POSTGRES_PASSWORD: tlportal
+      POSTGRES_DB: tlportal
+    volumes:
+      - tlportal_pgdata:/var/lib/postgresql/data
+
+volumes:
+  tlportal_pgdata:
