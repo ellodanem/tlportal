@@ -1,14 +1,13 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import type { Customer } from "@prisma/client";
 
+import { createCustomer, updateCustomer } from "@/app/admin/customers/actions";
 import {
-  createCustomer,
   customerFormInitialState,
-  updateCustomer,
-  type ActionState,
-} from "@/app/admin/customers/actions";
+  type CustomerFormActionState,
+} from "@/app/admin/customers/customer-form-state";
 
 function toFormDefaults(customer: Customer) {
   return {
@@ -27,12 +26,12 @@ const inputClass =
   "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
 
 export function CustomerCreateForm() {
-  const [state, formAction] = useFormState(createCustomer, customerFormInitialState);
+  const [state, formAction] = useActionState(createCustomer, customerFormInitialState);
   return <CustomerFormInner formAction={formAction} state={state} defaults={{}} />;
 }
 
 export function CustomerEditForm({ customer }: { customer: Customer }) {
-  const [state, formAction] = useFormState(updateCustomer, customerFormInitialState);
+  const [state, formAction] = useActionState(updateCustomer, customerFormInitialState);
   const d = toFormDefaults(customer);
   return <CustomerFormInner formAction={formAction} state={state} defaults={d} customerId={customer.id} />;
 }
@@ -44,7 +43,7 @@ function CustomerFormInner({
   customerId,
 }: {
   formAction: (payload: FormData) => void;
-  state: ActionState;
+  state: CustomerFormActionState;
   defaults: Partial<
     Pick<Customer, "firstName" | "lastName" | "company" | "email" | "phone" | "address" | "notes">
   > & { tags?: string };

@@ -6,9 +6,7 @@ import { redirect } from "next/navigation";
 import { createInvoilessCustomer, updateInvoilessCustomer } from "@/lib/invoiless/customer-sync";
 import { prisma } from "@/lib/db";
 
-export type ActionState = { error: string | null };
-
-const initial: ActionState = { error: null };
+import type { CustomerFormActionState } from "./customer-form-state";
 
 function parseTags(raw: string | null): string[] {
   if (!raw?.trim()) {
@@ -43,7 +41,10 @@ function validateNameOrCompany(fields: ReturnType<typeof readCustomerFields>): s
   return null;
 }
 
-export async function createCustomer(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function createCustomer(
+  _prev: CustomerFormActionState,
+  formData: FormData,
+): Promise<CustomerFormActionState> {
   const fields = readCustomerFields(formData);
   const v = validateNameOrCompany(fields);
   if (v) {
@@ -72,7 +73,10 @@ export async function createCustomer(_prev: ActionState, formData: FormData): Pr
   redirect("/admin/customers");
 }
 
-export async function updateCustomer(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function updateCustomer(
+  _prev: CustomerFormActionState,
+  formData: FormData,
+): Promise<CustomerFormActionState> {
   const id = String(formData.get("id") ?? "").trim();
   if (!id) {
     return { error: "Missing customer id." };
@@ -146,5 +150,3 @@ export async function syncCustomerToInvoiless(customerId: string): Promise<{ ok:
     return { ok: false, error: message };
   }
 }
-
-export const customerFormInitialState = initial;
