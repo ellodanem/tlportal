@@ -94,3 +94,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-09 22:35 UTC — commit `01237d4`
+
+- feat(admin): devices registry, register device flow, settings branding
+
+
+### 2026-04-09 22:35 UTC — pre-push (`main` → origin) @ `01237d4`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
