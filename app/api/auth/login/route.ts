@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 
+import { sessionCookieFlags } from "@/lib/auth/cookie-options";
 import { SESSION_COOKIE } from "@/lib/auth/constants";
 import { isAuthConfigured } from "@/lib/auth/env";
 import { verifyPassword } from "@/lib/auth/password";
@@ -39,13 +40,7 @@ export async function POST(req: Request) {
 
   const token = await signSession({ sub: user.id, email: user.email });
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  jar.set(SESSION_COOKIE, token, sessionCookieFlags(req));
 
   return Response.json({ ok: true, user: { id: user.id, email: user.email, name: user.name } });
 }

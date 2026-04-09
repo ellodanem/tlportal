@@ -19,6 +19,7 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "same-origin",
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -27,6 +28,8 @@ export default function LoginPage() {
       }
       router.push("/admin");
       router.refresh();
+    } catch {
+      setError("Network error — check your connection and try again.");
     } finally {
       setPending(false);
     }
@@ -43,7 +46,7 @@ export default function LoginPage() {
         </h1>
         <p className="mt-1 text-center text-sm text-zinc-500">Admin sign in</p>
 
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+        <form className="mt-6 space-y-4" method="post" onSubmit={onSubmit}>
           <div>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="email">
               Email
