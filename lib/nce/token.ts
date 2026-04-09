@@ -1,4 +1,5 @@
-const TOKEN_URL = "https://portal.1nce.com/management-api/oauth/token";
+/** Must match Management API host (`lib/nce/client.ts`). The portal subdomain returns HTML 404 for this path. */
+const TOKEN_URL = "https://api.1nce.com/management-api/oauth/token";
 
 type TokenResponse = {
   access_token: string;
@@ -36,15 +37,19 @@ export async function getOneNceAccessToken(): Promise<string> {
   }
 
   const { id, secret } = getCredentials();
+  /** 1NCE requires HTTP Basic (client_id:client_secret), not only form body fields. */
+  const basic = Buffer.from(`${id}:${secret}`, "utf8").toString("base64");
   const body = new URLSearchParams({
     grant_type: "client_credentials",
-    client_id: id,
-    client_secret: secret,
   });
 
   const res = await fetch(TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
     body,
   });
 

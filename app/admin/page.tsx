@@ -3,16 +3,8 @@ import { formatDistanceToNow } from "date-fns";
 
 import { StatCard } from "@/components/dashboard/stat-card";
 import { IconAlert, IconDevice, IconLayers, IconLink, IconSearch, IconUsers } from "@/components/dashboard/dashboard-icons";
+import { DEVICE_STATUS_LABEL } from "@/lib/admin/device-status-labels";
 import { getDashboardStats } from "@/lib/admin/dashboard-stats";
-
-const DEVICE_STATUS_LABEL: Record<string, string> = {
-  in_stock: "In stock",
-  assigned: "Assigned",
-  suspended: "Suspended",
-  returned: "Returned",
-  decommissioned: "Decommissioned",
-  lost: "Lost",
-};
 
 function toneRowClass(tone: "urgent" | "warning" | "info") {
   switch (tone) {
@@ -97,7 +89,10 @@ export default async function AdminPage() {
             Live data
           </span>
           <span className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800/80">
-            Devices &amp; SIMs UI next
+            Device registry live · SIMs on{" "}
+            <Link href="/admin/sims" className="text-emerald-700 hover:underline dark:text-emerald-400">
+              SIM cards
+            </Link>
           </span>
         </div>
       </div>
@@ -114,7 +109,7 @@ export default async function AdminPage() {
         <StatCard
           label="Assigned devices"
           value={s.assignedDeviceCount}
-          href="/admin/customers"
+          href="/admin/devices"
           icon={<IconDevice className="h-5 w-5" />}
           badges={assignedBadges}
           hint="In the field vs warehouse (badges)"
@@ -210,7 +205,11 @@ export default async function AdminPage() {
           </p>
           {totalDevices === 0 ? (
             <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-              No devices yet. When the devices module lands, counts will mirror your warehouse and field stock.
+              No devices yet.{" "}
+              <Link href="/admin/devices" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                Open devices
+              </Link>{" "}
+              to register trackers when you are ready.
             </p>
           ) : (
             <ul className="mt-4 space-y-2">

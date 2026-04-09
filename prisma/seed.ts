@@ -20,6 +20,19 @@ async function main() {
   });
 
   console.info(`Seeded admin user: ${email}`);
+
+  const hasModel = await prisma.deviceModel.findFirst({ select: { id: true } });
+  if (!hasModel) {
+    await prisma.deviceModel.create({
+      data: {
+        name: "Generic tracker",
+        manufacturer: "Various",
+        retailPrice: 0,
+        isActive: true,
+      },
+    });
+    console.info("Seeded default device model: Generic tracker");
+  }
 }
 
 main()

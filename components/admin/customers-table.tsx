@@ -51,17 +51,39 @@ function RollupPill({ rollup }: { rollup: AssignmentRollup }) {
   );
 }
 
-function InvoilessBadge({ linked, show }: { linked: boolean; show: boolean }) {
-  if (!show) {
-    return <span className="text-zinc-400">—</span>;
-  }
-  return linked ? (
-    <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
-      Linked
-    </span>
-  ) : (
-    <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
-      Not linked
+/** Inline next to customer name when Invoiless is configured. */
+function InvoilessLinkIcon({ linked }: { linked: boolean }) {
+  return (
+    <span
+      className="inline-flex shrink-0 align-middle text-zinc-500 dark:text-zinc-400"
+      title={linked ? "Linked" : "Unlinked"}
+    >
+      {linked ? (
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/50">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden className="text-emerald-600 dark:text-emerald-400">
+            <path
+              d="M2.5 6.5L5 9l4.5-5.5"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      ) : (
+        <span className="inline-flex h-5 w-5 items-center justify-center" aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-amber-600/90 dark:text-amber-500/90">
+            <path
+              d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path d="m4 4 16 16" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          </svg>
+        </span>
+      )}
     </span>
   );
 }
@@ -91,9 +113,6 @@ export function CustomersTable({
             <th className="hidden px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 lg:table-cell dark:text-zinc-400">
               Next due
             </th>
-            <th className="hidden px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:table-cell dark:text-zinc-400">
-              Invoiless
-            </th>
             <th className="hidden px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 md:table-cell dark:text-zinc-400">
               Status
             </th>
@@ -106,7 +125,7 @@ export function CustomersTable({
         <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {rows.length === 0 ? (
             <tr>
-              <td className="px-4 py-14 text-center text-zinc-500" colSpan={7}>
+              <td className="px-4 py-14 text-center text-zinc-500" colSpan={6}>
                 No customers yet.{" "}
                 <Link href="/admin/customers/new" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
                   Create one
@@ -126,8 +145,11 @@ export function CustomersTable({
                       {r.initials}
                     </span>
                     <span className="min-w-0">
-                      <span className="block font-semibold text-zinc-900 group-hover:text-emerald-800 dark:text-zinc-50 dark:group-hover:text-emerald-300">
-                        {r.displayName}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate font-semibold text-zinc-900 group-hover:text-emerald-800 dark:text-zinc-50 dark:group-hover:text-emerald-300">
+                          {r.displayName}
+                        </span>
+                        {invoilessConfigured ? <InvoilessLinkIcon linked={r.invoilessLinked} /> : null}
                       </span>
                       <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">{r.subtitle}</span>
                       {r.tagsLine ? (
@@ -138,9 +160,6 @@ export function CustomersTable({
                         <span className="text-[11px] text-zinc-500">
                           {r.activeServices} svc · {r.distinctDevices} dev
                         </span>
-                        {invoilessConfigured ? (
-                          <InvoilessBadge linked={r.invoilessLinked} show />
-                        ) : null}
                       </span>
                     </span>
                   </Link>
@@ -160,9 +179,6 @@ export function CustomersTable({
                   ) : (
                     <span className="text-zinc-400">—</span>
                   )}
-                </td>
-                <td className="hidden align-top px-4 py-4 sm:table-cell">
-                  <InvoilessBadge linked={r.invoilessLinked} show={invoilessConfigured} />
                 </td>
                 <td className="hidden align-top px-4 py-4 md:table-cell">
                   <RollupPill rollup={r.rollup} />

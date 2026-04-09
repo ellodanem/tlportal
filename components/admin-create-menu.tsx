@@ -11,8 +11,8 @@ const items = [
   },
   {
     href: "/admin/devices/new",
-    label: "Device",
-    description: "Register a tracker or gateway.",
+    label: "Register device",
+    description: "Add a tracker or gateway to the fleet.",
   },
   {
     href: "/admin/sims/new",

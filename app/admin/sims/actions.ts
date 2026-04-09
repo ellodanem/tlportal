@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   fetchAllOneNceSimsFromList,
-  fetchOneNceSimByIccid,
+  fetchMergedSimFieldsForIccid,
   iccidFromSimPayload,
   parseSimDetailPayload,
 } from "@/lib/nce/sim-api";
@@ -20,8 +20,7 @@ export async function syncSimFromOneNce(simId: string): Promise<{ ok: true } | {
   }
 
   try {
-    const raw = await fetchOneNceSimByIccid(sim.iccid);
-    const p = parseSimDetailPayload(raw);
+    const p = await fetchMergedSimFieldsForIccid(sim.iccid);
     await prisma.simCard.update({
       where: { id: sim.id },
       data: {
@@ -84,6 +83,38 @@ export async function importSimsFromOneNce(): Promise<
       });
       imported += 1;
     }
+
+    const iccids = [
+      ...new Set(
+        rows.map(iccidFromSimPayload).filter((x): x is string => typeof x === "string" && x.length > 0),
+      ),
+    ];
+    const chunkSize = 8;
+    for (let i = 0; i < iccids.length; i += chunkSize) {
+      const chunk = iccids.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (iccid) => {
+          try {
+            const p = await fetchMergedSimFieldsForIccid(iccid);
+            await prisma.simCard.update({
+              where: { iccid },
+              data: {
+                msisdn: p.msisdn ?? undefined,
+                imsi: p.imsi ?? undefined,
+                label: p.label ?? undefined,
+                status: p.status ?? undefined,
+                totalDataMB: p.totalDataMB ?? undefined,
+                usedDataMB: p.usedDataMB ?? undefined,
+                lastSyncedAt: new Date(),
+              },
+            });
+          } catch {
+            // Skip one ICCID if detail/quota fails.
+          }
+        }),
+      );
+    }
+
     revalidatePath("/admin/sims");
     return { ok: true, imported };
   } catch (e) {

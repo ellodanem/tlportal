@@ -7,7 +7,11 @@ import { UsageLineChart } from "@/components/admin/sim/usage-line-chart";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { formatMegabytes } from "@/lib/format/mbytes";
 import { ONE_NCE_CUSTOMER_PORTAL_DASHBOARD } from "@/lib/nce/portal-urls";
-import { fetchOneNceSimUsageSeries, type UsageSeriesPoint } from "@/lib/nce/sim-api";
+import {
+  fetchMergedSimFieldsForIccid,
+  fetchOneNceSimUsageSeries,
+  type UsageSeriesPoint,
+} from "@/lib/nce/sim-api";
 import { prisma } from "@/lib/db";
 
 type Props = { params: Promise<{ id: string }> };
@@ -66,6 +70,8 @@ export default async function AdminSimDetailPage({ params }: Props) {
   );
 
   let usagePoints: UsageSeriesPoint[] = [];
+  let liveTotalMb: number | null = null;
+  let liveUsedMb: number | null = null;
   if (oneNceConfigured) {
     const end = new Date();
     const start = new Date();
@@ -75,7 +81,18 @@ export default async function AdminSimDetailPage({ params }: Props) {
     } catch {
       usagePoints = [];
     }
+    try {
+      const merged = await fetchMergedSimFieldsForIccid(sim.iccid);
+      liveTotalMb = merged.totalDataMB;
+      liveUsedMb = merged.usedDataMB;
+    } catch {
+      liveTotalMb = null;
+      liveUsedMb = null;
+    }
   }
+
+  const displayTotalMb = liveTotalMb ?? sim.totalDataMB;
+  const displayUsedMb = liveUsedMb ?? sim.usedDataMB;
 
   const title = sim.label?.trim() || sim.iccid;
   const deviceLine = sim.device
@@ -114,7 +131,7 @@ export default async function AdminSimDetailPage({ params }: Props) {
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Data allowance</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Used vs included quota from the last sync.</p>
           <div className="mt-4">
-            <DataUsageDonut usedMb={sim.usedDataMB} totalMb={sim.totalDataMB} />
+            <DataUsageDonut usedMb={displayUsedMb} totalMb={displayTotalMb} />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -145,7 +162,7 @@ export default async function AdminSimDetailPage({ params }: Props) {
             <div className="flex justify-between gap-4">
               <dt className="text-zinc-500 dark:text-zinc-400">Data</dt>
               <dd className="text-right tabular-nums text-zinc-900 dark:text-zinc-50">
-                {formatMegabytes(sim.usedDataMB)} / {formatMegabytes(sim.totalDataMB)}
+                {formatMegabytes(displayUsedMb)} / {formatMegabytes(displayTotalMb)}
               </dd>
             </div>
             <div className="flex justify-between gap-4">

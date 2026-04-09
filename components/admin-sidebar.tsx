@@ -8,7 +8,9 @@ import { AdminCreateMenu } from "@/components/admin-create-menu";
 const links = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/customers", label: "Customers" },
+  { href: "/admin/devices", label: "Devices" },
   { href: "/admin/sims", label: "SIMs" },
+  { href: "/admin/settings", label: "Settings" },
 ] as const;
 
 function navClass(active: boolean) {
@@ -17,17 +19,31 @@ function navClass(active: boolean) {
     : "rounded-md px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50";
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | null }) {
   const pathname = usePathname();
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="border-b border-zinc-100 px-4 py-5 dark:border-zinc-800">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-          Track Lucia
-        </p>
-        <Link href="/admin" className="mt-1 block text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-          TL Portal
+      <div className="border-b border-zinc-100 px-4 py-6 dark:border-zinc-800">
+        <Link href="/admin" className="block outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md">
+          {brandingLogoUrl ? (
+            <>
+              <span className="sr-only">Track Lucia — TL Portal home</span>
+              {/* eslint-disable-next-line @next/next/no-img-element -- admin-uploaded branding */}
+              <img
+                src={brandingLogoUrl}
+                alt=""
+                className="h-16 w-auto max-w-full object-contain object-left dark:brightness-[1.02]"
+              />
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                Track Lucia
+              </p>
+              <span className="mt-1 block text-lg font-semibold text-zinc-900 dark:text-zinc-50">TL Portal</span>
+            </>
+          )}
         </Link>
       </div>
       <div className="relative px-3 pt-1">
