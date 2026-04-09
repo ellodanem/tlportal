@@ -1,7 +1,28 @@
+import { jwtVerify } from "jose";
 import { type NextRequest, NextResponse } from "next/server";
 
-import { SESSION_COOKIE } from "@/lib/auth/constants";
-import { verifySessionToken } from "@/lib/auth/session";
+/** Keep in sync with `lib/auth/session.ts` (Node) — Edge cannot import that file. */
+const SESSION_COOKIE = "tl_session";
+const SESSION_ISS = "tl-portal";
+const SESSION_AUD = "admin";
+
+async function verifySessionTokenEdge(token: string): Promise<boolean> {
+  const s = process.env.AUTH_SECRET?.trim();
+  if (!s || s.length < 32) {
+    return false;
+  }
+  const secret = new TextEncoder().encode(s);
+  try {
+    await jwtVerify(token, secret, {
+      issuer: SESSION_ISS,
+      audience: SESSION_AUD,
+      algorithms: ["HS256"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
@@ -9,14 +30,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  try {
-    const session = await verifySessionToken(token);
-    if (!session) {
-      const res = NextResponse.redirect(new URL("/login", req.url));
-      res.cookies.delete(SESSION_COOKIE);
-      return res;
-    }
-  } catch {
+  const ok = await verifySessionTokenEdge(token);
+  if (!ok) {
     const res = NextResponse.redirect(new URL("/login", req.url));
     res.cookies.delete(SESSION_COOKIE);
     return res;

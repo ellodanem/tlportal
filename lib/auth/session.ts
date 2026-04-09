@@ -7,6 +7,7 @@ export type SessionPayload = {
   email: string;
 };
 
+/** Must match `middleware.ts` (Edge) — duplicated there; do not import this file from middleware. */
 const ISS = "tl-portal";
 const AUD = "admin";
 
