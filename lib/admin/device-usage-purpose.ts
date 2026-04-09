@@ -1,9 +1,10 @@
 import type { DeviceUsagePurpose } from "@prisma/client";
 
 /** List / SIM table scope: default hides non-customer hardware. */
-export type DevicePurposeScope = "customer_only" | "include_all" | "internal_only";
+export type DevicePurposeScope = "all" | "customer_only" | "include_all" | "internal_only";
 
 export const DEVICE_PURPOSE_SCOPE_LABEL: Record<DevicePurposeScope, string> = {
+  all: "All",
   customer_only: "Production only",
   include_all: "Include internal / demo",
   internal_only: "Internal / non-production only",
@@ -33,7 +34,7 @@ export function devicePurposeMatchesScope(
   purpose: DeviceUsagePurpose,
   scope: DevicePurposeScope,
 ): boolean {
-  if (scope === "include_all") return true;
+  if (scope === "all" || scope === "include_all") return true;
   const isCustomer = isCustomerPurpose(purpose);
   if (scope === "customer_only") return isCustomer;
   return !isCustomer;
@@ -47,7 +48,7 @@ export function simPurposeMatchesScope(
   deviceUsagePurpose: DeviceUsagePurpose | null,
   scope: DevicePurposeScope,
 ): boolean {
-  if (scope === "include_all") return true;
+  if (scope === "all" || scope === "include_all") return true;
   if (deviceUsagePurpose === null) {
     return scope === "customer_only";
   }

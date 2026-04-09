@@ -3,7 +3,8 @@
 import type { DevicePurposeScope } from "@/lib/admin/device-usage-purpose";
 import { DEVICE_PURPOSE_SCOPE_LABEL } from "@/lib/admin/device-usage-purpose";
 
-const SCOPES: DevicePurposeScope[] = ["customer_only", "include_all", "internal_only"];
+/** `all` and `include_all` apply the same rule (no purpose filter); both labels are offered. */
+const SCOPES: DevicePurposeScope[] = ["all", "customer_only", "include_all", "internal_only"];
 
 const selectClass =
   "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
