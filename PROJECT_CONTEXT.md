@@ -154,3 +154,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-09 22:53 UTC — commit `811f4ec`
+
+- feat(admin): device models, usage purpose, SIM est. MB/day, sidebar branding
+
+
+### 2026-04-09 22:53 UTC — pre-push (`main` → origin) @ `811f4ec`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
