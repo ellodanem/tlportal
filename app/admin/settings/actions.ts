@@ -1,9 +1,11 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { unlink } from "fs/promises";
 import { revalidatePath } from "next/cache";
 import path from "path";
 
+import { del, put } from "@vercel/blob";
 import type { Prisma } from "@prisma/client";
 
 import { getSession } from "@/lib/auth/get-session";
@@ -20,6 +22,29 @@ export type SmtpSettingsFormState = { ok?: boolean; error?: string };
 function publicPathToFs(publicUrl: string): string {
   const relative = publicUrl.replace(/^\/+/, "");
   return path.join(process.cwd(), "public", relative);
+}
+
+function isBlobLogoUrl(url: string): boolean {
+  return url.startsWith("http://") || url.startsWith("https://");
+}
+
+function blobToken(): string | undefined {
+  const t = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+  return t || undefined;
+}
+
+function useVercelBlob(): boolean {
+  return Boolean(blobToken());
+}
+
+async function removeStoredBrandingFile(logoUrl: string): Promise<void> {
+  if (isBlobLogoUrl(logoUrl)) {
+    const token = blobToken();
+    if (!token) return;
+    await del(logoUrl, { token }).catch(() => {});
+    return;
+  }
+  await unlink(publicPathToFs(logoUrl)).catch(() => {});
 }
 
 export async function uploadBrandingLogo(
@@ -55,38 +80,58 @@ export async function uploadBrandingLogo(
           ? "webp"
           : "svg";
 
-  const { mkdir, writeFile, readdir } = await import("fs/promises");
-  const dir = path.join(process.cwd(), "public", "uploads", "branding");
-  await mkdir(dir, { recursive: true });
+  const bytes = Buffer.from(await file.arrayBuffer());
 
   const prev = await prisma.appSettings.findUnique({
     where: { id: SETTINGS_ID },
     select: { logoUrl: true },
   });
   if (prev?.logoUrl) {
-    await unlink(publicPathToFs(prev.logoUrl)).catch(() => {});
+    await removeStoredBrandingFile(prev.logoUrl);
   }
 
-  try {
-    const existing = await readdir(dir);
-    await Promise.all(
-      existing
-        .filter((name) => name.startsWith("logo."))
-        .map((name) => unlink(path.join(dir, name)).catch(() => {})),
-    );
-  } catch {
-    /* ignore */
+  let logoUrl: string;
+
+  if (useVercelBlob()) {
+    const token = blobToken()!;
+    const pathname = `branding/${randomUUID()}.${ext}`;
+    const blob = await put(pathname, bytes, {
+      access: "public",
+      token,
+    });
+    logoUrl = blob.url;
+  } else {
+    if (process.env.VERCEL === "1") {
+      return {
+        error:
+          "Logo upload on Vercel needs Blob storage. In Vercel: Storage → Blob → create a store (sets BLOB_READ_WRITE_TOKEN), or add that env var manually.",
+      };
+    }
+
+    const { mkdir, writeFile, readdir } = await import("fs/promises");
+    const dir = path.join(process.cwd(), "public", "uploads", "branding");
+    await mkdir(dir, { recursive: true });
+
+    try {
+      const existing = await readdir(dir);
+      await Promise.all(
+        existing
+          .filter((name) => name.startsWith("logo."))
+          .map((name) => unlink(path.join(dir, name)).catch(() => {})),
+      );
+    } catch {
+      /* ignore */
+    }
+
+    const filename = `logo.${ext}`;
+    await writeFile(path.join(dir, filename), bytes);
+    logoUrl = `/uploads/branding/${filename}`;
   }
 
-  const filename = `logo.${ext}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, filename), bytes);
-
-  const publicPath = `/uploads/branding/${filename}`;
   await prisma.appSettings.upsert({
     where: { id: SETTINGS_ID },
-    create: { id: SETTINGS_ID, logoUrl: publicPath },
-    update: { logoUrl: publicPath },
+    create: { id: SETTINGS_ID, logoUrl },
+    update: { logoUrl },
   });
 
   revalidatePath("/admin");
@@ -105,7 +150,7 @@ export async function removeBrandingLogo(_formData: FormData): Promise<void> {
     select: { logoUrl: true },
   });
   if (prev?.logoUrl) {
-    await unlink(publicPathToFs(prev.logoUrl)).catch(() => {});
+    await removeStoredBrandingFile(prev.logoUrl);
   }
 
   await prisma.appSettings.upsert({

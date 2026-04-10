@@ -143,6 +143,40 @@ export default async function AdminPage() {
         />
       </section>
 
+      {/* Fleet + activity — high on the page after KPIs */}
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Device inventory by fleet segment ({totalDevices.toLocaleString()} total)
+          </p>
+          <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recent activity</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Latest customer record updates</p>
+          <ul className="mt-4 space-y-3">
+            {s.recentItems.length === 0 ? (
+              <li className="text-sm text-zinc-600 dark:text-zinc-400">No customers yet.</li>
+            ) : (
+              s.recentItems.map((r) => (
+                <li key={r.id}>
+                  <Link href={r.href} className="group block rounded-lg p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                    <p className="text-sm font-medium text-zinc-900 group-hover:text-emerald-700 dark:text-zinc-50 dark:group-hover:text-emerald-400">
+                      {r.label}
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      {r.sub} · {formatDistanceToNow(r.at, { addSuffix: true })}
+                    </p>
+                  </Link>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      </section>
+
       {/* Important notifications */}
       <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -194,40 +228,6 @@ export default async function AdminPage() {
             ))
           )}
         </ul>
-      </section>
-
-      {/* Bottom row */}
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Device inventory by fleet segment ({totalDevices.toLocaleString()} total)
-          </p>
-          <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recent activity</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Latest customer record updates</p>
-          <ul className="mt-4 space-y-3">
-            {s.recentItems.length === 0 ? (
-              <li className="text-sm text-zinc-600 dark:text-zinc-400">No customers yet.</li>
-            ) : (
-              s.recentItems.map((r) => (
-                <li key={r.id}>
-                  <Link href={r.href} className="group block rounded-lg p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                    <p className="text-sm font-medium text-zinc-900 group-hover:text-emerald-700 dark:text-zinc-50 dark:group-hover:text-emerald-400">
-                      {r.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                      {r.sub} · {formatDistanceToNow(r.at, { addSuffix: true })}
-                    </p>
-                  </Link>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
       </section>
 
       <p className="text-sm text-zinc-500">
