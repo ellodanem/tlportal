@@ -454,3 +454,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 12:19 UTC — commit `484b3d7`
+
+- feat(admin): Vercel Blob for branding logo on serverless; doc env token
+
+
+### 2026-04-10 12:20 UTC — pre-push (`main` → origin) @ `484b3d7`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
