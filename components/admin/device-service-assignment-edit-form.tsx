@@ -17,7 +17,7 @@ function SubmitButton() {
       disabled={pending}
       className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
     >
-      {pending ? "Saving…" : "Save dates"}
+      {pending ? "Saving…" : "Save"}
     </button>
   );
 }
@@ -27,11 +27,13 @@ export function DeviceServiceAssignmentEditForm({
   assignmentId,
   defaultStartDate,
   defaultNextDueDate,
+  defaultInvoilessRecurringId,
 }: {
   deviceId: string;
   assignmentId: string;
   defaultStartDate: string;
   defaultNextDueDate: string;
+  defaultInvoilessRecurringId: string;
 }) {
   const [state, formAction] = useActionState(updateServiceAssignmentDates, deviceFormInitialState);
 
@@ -77,6 +79,24 @@ export function DeviceServiceAssignmentEditForm({
           className={inputClass}
         />
         <p className="mt-1 text-xs text-zinc-500">Optional. Clear to remove.</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="svc-invoilessRecurringId">
+          Invoiless recurring ID
+        </label>
+        <input
+          id="svc-invoilessRecurringId"
+          name="invoilessRecurringId"
+          type="text"
+          key={defaultInvoilessRecurringId}
+          defaultValue={defaultInvoilessRecurringId}
+          placeholder="e.g. ret_abc123"
+          className={inputClass}
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          Paste the retainer / recurring schedule ID from Invoiless. Clear to unlink.
+        </p>
       </div>
 
       <SubmitButton />

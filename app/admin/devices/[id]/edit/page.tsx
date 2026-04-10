@@ -35,7 +35,12 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
         endDate: null,
         status: { not: "cancelled" },
       },
-      include: {
+      select: {
+        id: true,
+        customerId: true,
+        startDate: true,
+        nextDueDate: true,
+        invoilessRecurringId: true,
         customer: {
           select: { id: true, company: true, firstName: true, lastName: true },
         },
@@ -91,6 +96,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
               assignmentId={openAssignment.id}
               defaultStartDate={dateInputValue(openAssignment.startDate)}
               defaultNextDueDate={dateInputValue(openAssignment.nextDueDate)}
+              defaultInvoilessRecurringId={openAssignment.invoilessRecurringId ?? ""}
             />
           </div>
           {device.status !== "decommissioned" && device.status !== "lost" ? (

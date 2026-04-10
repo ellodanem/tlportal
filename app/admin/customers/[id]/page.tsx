@@ -316,6 +316,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                   <th className="px-4 py-3">Device</th>
                   <th className="px-4 py-3">SIM</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Billing</th>
                   <th className="px-4 py-3">Next due</th>
                   <th className="px-4 py-3">Started</th>
                 </tr>
@@ -380,6 +381,23 @@ export default async function CustomerDetailPage({ params }: Props) {
                         )}
                       </td>
                       <td className="px-4 py-3">{statusPill(a.status)}</td>
+                      <td className="px-4 py-3">
+                        {a.invoilessRecurringId ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                            title={`Invoiless recurring: ${a.invoilessRecurringId}`}
+                          >
+                            <span aria-hidden="true">↻</span> Linked
+                          </span>
+                        ) : (
+                          <span className="text-xs text-zinc-400 dark:text-zinc-600">—</span>
+                        )}
+                        {a.lastPaymentStatus ? (
+                          <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            {a.lastPaymentStatus}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{formatDate(a.nextDueDate)}</td>
                       <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{formatDate(a.startDate)}</td>
                     </tr>

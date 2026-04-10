@@ -307,6 +307,8 @@ export async function updateServiceAssignmentDates(
   const deviceId = String(formData.get("deviceId") ?? "").trim();
   const startRaw = String(formData.get("startDate") ?? "").trim();
   const nextDueRaw = String(formData.get("nextDueDate") ?? "").trim();
+  const invoilessRecurringIdRaw = String(formData.get("invoilessRecurringId") ?? "").trim();
+  const invoilessRecurringId = invoilessRecurringIdRaw.length ? invoilessRecurringIdRaw : null;
 
   if (!assignmentId || !deviceId) {
     return { error: "Missing assignment or device." };
@@ -346,7 +348,7 @@ export async function updateServiceAssignmentDates(
   try {
     await prisma.serviceAssignment.update({
       where: { id: assignmentId },
-      data: { startDate, nextDueDate },
+      data: { startDate, nextDueDate, invoilessRecurringId },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
