@@ -484,3 +484,18 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 16:30 UTC — commit `e71ac22`
+
+- feat(admin): TL Portal billing ledger UI for invoices
+
+
+### 2026-04-10 16:30 UTC — commit `5ac1a18`
+
+- feat(admin): TL Portal billing ledger UI for invoices
+
+
+### 2026-04-10 16:31 UTC — pre-push (`main` → origin) @ `5ac1a18`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
