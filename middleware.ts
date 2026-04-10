@@ -24,45 +24,19 @@ async function verifySessionTokenEdge(token: string): Promise<boolean> {
   }
 }
 
-function debugMw(
-  message: string,
-  data: Record<string, string | boolean | number | undefined>,
-  hypothesisId: string,
-) {
-  // #region agent log
-  fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
-    body: JSON.stringify({
-      sessionId: "79eeac",
-      location: "middleware.ts",
-      message,
-      data,
-      timestamp: Date.now(),
-      hypothesisId,
-      runId: "pre-fix",
-    }),
-  }).catch(() => {});
-  // #endregion
-}
-
 export async function middleware(req: NextRequest) {
-  const path = req.nextUrl.pathname;
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) {
-    debugMw("admin_no_token_redirect_login", { path, hasToken: false }, "H4");
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
   const ok = await verifySessionTokenEdge(token);
   if (!ok) {
-    debugMw("admin_token_verify_failed_redirect_login", { path, hasToken: true, verifyOk: false }, "H4");
     const res = NextResponse.redirect(new URL("/login", req.url));
     res.cookies.delete(SESSION_COOKIE);
     return res;
   }
 
-  debugMw("admin_ok", { path, hasToken: true, verifyOk: true }, "H4");
   return NextResponse.next();
 }
 
