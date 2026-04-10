@@ -509,3 +509,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 16:42 UTC — commit `bc64cad`
+
+- fix(admin): open Invoiless new invoice at app create URL
+
+
+### 2026-04-10 16:42 UTC — pre-push (`main` → origin) @ `bc64cad`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
