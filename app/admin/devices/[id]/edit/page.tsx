@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { DeviceAssignToCustomerForm } from "@/components/admin/device-assign-customer-form";
 import { DeviceCommercialEditForm } from "@/components/admin/device-commercial-edit-form";
+import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-service-assignment-edit-form";
 import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
@@ -60,8 +61,11 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           Manage device
         </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          {title} · {device.deviceModel.name} · IMEI {device.imei}
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <ObjectTypeIcon type={device.objectType} className="h-5 w-5 text-zinc-500 dark:text-zinc-400" />
+          <span>
+            {title} · {device.deviceModel.name} · IMEI {device.imei}
+          </span>
         </p>
       </div>
 
@@ -131,6 +135,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
           <DeviceCommercialEditForm
             key={device.updatedAt.toISOString()}
             deviceId={device.id}
+            objectType={device.objectType}
             usagePurpose={device.usagePurpose}
             tags={device.tags}
           />

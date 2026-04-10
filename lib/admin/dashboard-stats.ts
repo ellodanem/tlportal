@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { FleetSegmentKey } from "@/lib/admin/fleet-segments";
+
 import { prisma } from "@/lib/db";
 
 export type DashboardAttentionItem = {
@@ -22,7 +24,10 @@ export async function getDashboardStats() {
   const invoilessConfigured = Boolean(process.env.INVOILESS_API_KEY?.trim());
 
   const [
-    deviceByStatus,
+    fleetUnassigned,
+    fleetProduction,
+    fleetDemo,
+    fleetPersonal,
     customerCount,
     assignedDeviceCount,
     inStockDeviceCount,
@@ -34,10 +39,17 @@ export async function getDashboardStats() {
     attentionAssignments,
     recentCustomers,
   ] = await Promise.all([
-    prisma.device.groupBy({
-      by: ["status"],
-      where: { usagePurpose: "customer" },
-      _count: { _all: true },
+    prisma.device.count({
+      where: { usagePurpose: "customer", status: "in_stock" },
+    }),
+    prisma.device.count({
+      where: { usagePurpose: "customer", status: { not: "in_stock" } },
+    }),
+    prisma.device.count({
+      where: { usagePurpose: { in: ["internal_demo", "field_test"] } },
+    }),
+    prisma.device.count({
+      where: { usagePurpose: "personal" },
     }),
     prisma.customer.count(),
     prisma.device.count({ where: { status: "assigned", usagePurpose: "customer" } }),
@@ -139,13 +151,16 @@ export async function getDashboardStats() {
     href: `/admin/customers/${c.id}`,
   }));
 
-  const fleetByStatus = Object.fromEntries(
-    deviceByStatus.map((r) => [r.status, r._count._all]),
-  ) as Partial<Record<string, number>>;
+  const fleetSegments: Record<FleetSegmentKey, number> = {
+    unassigned: fleetUnassigned,
+    production: fleetProduction,
+    demo: fleetDemo,
+    personal: fleetPersonal,
+  };
 
   return {
     invoilessConfigured,
-    fleetByStatus,
+    fleetSegments,
     customerCount,
     assignedDeviceCount,
     inStockDeviceCount,

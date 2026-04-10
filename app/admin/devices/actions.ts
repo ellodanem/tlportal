@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/get-session";
+import { parseDeviceObjectType } from "@/lib/admin/device-object-type";
 import { parseDeviceTagsInput, parseDeviceUsagePurpose } from "@/lib/admin/device-usage-purpose";
 import { prisma } from "@/lib/db";
 
@@ -42,6 +43,7 @@ export async function registerDevice(
   const firmwareVersion = parseOptionalString(formData, "firmwareVersion");
   const notes = parseOptionalString(formData, "notes");
   const usagePurpose = parseDeviceUsagePurpose(String(formData.get("usagePurpose") ?? ""));
+  const objectType = parseDeviceObjectType(String(formData.get("objectType") ?? ""));
   const tags = parseDeviceTagsInput(String(formData.get("tags") ?? ""));
 
   const simCardIdRaw = String(formData.get("simCardId") ?? "").trim();
@@ -112,6 +114,7 @@ export async function registerDevice(
           firmwareVersion,
           notes,
           usagePurpose,
+          objectType,
           tags,
           deviceModelId,
           status,
@@ -162,16 +165,29 @@ export async function updateDeviceCommercialFields(
   }
 
   const usagePurpose = parseDeviceUsagePurpose(String(formData.get("usagePurpose") ?? ""));
+  const objectType = parseDeviceObjectType(String(formData.get("objectType") ?? ""));
   const tags = parseDeviceTagsInput(String(formData.get("tags") ?? ""));
 
   try {
     const updated = await prisma.device.update({
       where: { id: deviceId },
-      data: { usagePurpose, tags },
+      data: { usagePurpose, objectType, tags },
       select: { id: true, simCardId: true },
     });
     if (updated.simCardId) {
       revalidatePath(`/admin/sims/${updated.simCardId}`);
+    }
+    const assignmentCustomers = await prisma.serviceAssignment.findMany({
+      where: {
+        deviceId,
+        endDate: null,
+        status: { not: "cancelled" },
+      },
+      select: { customerId: true },
+      distinct: ["customerId"],
+    });
+    for (const row of assignmentCustomers) {
+      revalidatePath(`/admin/customers/${row.customerId}`);
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

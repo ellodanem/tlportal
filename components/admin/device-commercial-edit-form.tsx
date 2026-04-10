@@ -6,8 +6,12 @@ import { useFormStatus } from "react-dom";
 
 import { updateDeviceCommercialFields } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
-import type { DeviceUsagePurpose } from "@prisma/client";
+import type { DeviceObjectType, DeviceUsagePurpose } from "@prisma/client";
 
+import {
+  DEVICE_OBJECT_TYPE_LABEL,
+  DEVICE_OBJECT_TYPE_ORDER,
+} from "@/lib/admin/device-object-type";
 import { DEVICE_USAGE_PURPOSE_LABEL } from "@/lib/admin/device-usage-purpose";
 
 const inputClass =
@@ -35,10 +39,12 @@ function SubmitButton() {
 
 export function DeviceCommercialEditForm({
   deviceId,
+  objectType,
   usagePurpose,
   tags,
 }: {
   deviceId: string;
+  objectType: DeviceObjectType | null;
   usagePurpose: DeviceUsagePurpose;
   tags: string[];
 }) {
@@ -48,6 +54,28 @@ export function DeviceCommercialEditForm({
   return (
     <form action={formAction} className="max-w-2xl space-y-6">
       <input type="hidden" name="deviceId" value={deviceId} />
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="objectType">
+          Object type
+        </label>
+        <select
+          id="objectType"
+          name="objectType"
+          className={inputClass}
+          defaultValue={objectType ?? ""}
+        >
+          <option value="">Not set</option>
+          {DEVICE_OBJECT_TYPE_ORDER.map((t) => (
+            <option key={t} value={t}>
+              {DEVICE_OBJECT_TYPE_LABEL[t]}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Icon appears on the device header and in lists. Add more types in the database schema when needed.
+        </p>
+      </div>
 
       {state.error ? (
         <p

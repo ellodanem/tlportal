@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
+import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { SimSyncButton } from "@/components/admin/sim/sim-sync-button";
 import { DataUsageDonut } from "@/components/admin/sim/data-usage-donut";
 import { UsageLineChart } from "@/components/admin/sim/usage-line-chart";
@@ -96,9 +97,17 @@ export default async function AdminSimDetailPage({ params }: Props) {
   const displayUsedMb = liveUsedMb ?? sim.usedDataMB;
 
   const title = sim.label?.trim() || sim.iccid;
-  const deviceLine = sim.device
-    ? `${sim.device.label?.trim() || sim.device.imei} · ${sim.device.deviceModel.name}`
-    : null;
+  const linkedDeviceSummary = sim.device ? (
+    <span className="inline-flex items-center justify-end gap-1.5">
+      <ObjectTypeIcon
+        type={sim.device.objectType}
+        className="h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400"
+      />
+      <span>
+        {sim.device.label?.trim() || sim.device.imei} · {sim.device.deviceModel.name}
+      </span>
+    </span>
+  ) : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -129,6 +138,10 @@ export default async function AdminSimDetailPage({ params }: Props) {
 
       {sim.device ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50/90 px-4 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+          <ObjectTypeIcon
+            type={sim.device.objectType}
+            className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400"
+          />
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Linked device</span>
           <UsagePurposeBadge purpose={sim.device.usagePurpose} />
           {sim.device.usagePurpose === "customer" ? (
@@ -196,7 +209,7 @@ export default async function AdminSimDetailPage({ params }: Props) {
             <div className="flex justify-between gap-4">
               <dt className="text-zinc-500 dark:text-zinc-400">Linked device</dt>
               <dd className="max-w-[60%] text-right text-zinc-900 dark:text-zinc-50">
-                {deviceLine ?? "—"}
+                {linkedDeviceSummary ?? "—"}
               </dd>
             </div>
           </dl>
@@ -217,7 +230,17 @@ export default async function AdminSimDetailPage({ params }: Props) {
             ) : (
               sim.serviceAssignments.map((a) => {
                 const custName = customerDisplayName(a.customer);
-                const dev = `${a.device.label?.trim() || a.device.imei} · ${a.device.deviceModel.name}`;
+                const dev = (
+                  <span className="inline-flex items-center gap-1.5">
+                    <ObjectTypeIcon
+                      type={a.device.objectType}
+                      className="h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400"
+                    />
+                    <span>
+                      {a.device.label?.trim() || a.device.imei} · {a.device.deviceModel.name}
+                    </span>
+                  </span>
+                );
                 return (
                   <li
                     key={a.id}

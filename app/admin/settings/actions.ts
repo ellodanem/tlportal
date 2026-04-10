@@ -4,6 +4,8 @@ import { unlink } from "fs/promises";
 import { revalidatePath } from "next/cache";
 import path from "path";
 
+import type { Prisma } from "@prisma/client";
+
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
 
@@ -12,6 +14,8 @@ const MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 
 export type BrandingFormState = { ok?: boolean; error?: string };
+
+export type SmtpSettingsFormState = { ok?: boolean; error?: string };
 
 function publicPathToFs(publicUrl: string): string {
   const relative = publicUrl.replace(/^\/+/, "");
@@ -112,4 +116,91 @@ export async function removeBrandingLogo(_formData: FormData): Promise<void> {
 
   revalidatePath("/admin");
   revalidatePath("/admin/settings");
+}
+
+function parseSmtpPort(raw: FormDataEntryValue | null): number {
+  if (typeof raw !== "string") return 587;
+  const n = parseInt(raw.trim(), 10);
+  if (!Number.isFinite(n)) return 587;
+  return Math.min(65535, Math.max(1, n));
+}
+
+export async function updateSmtpSettings(
+  _prev: SmtpSettingsFormState,
+  formData: FormData,
+): Promise<SmtpSettingsFormState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const host = (formData.get("smtpHost") as string)?.trim() || "";
+  const smtpSecure = formData.get("smtpSecure") === "on";
+  const user = (formData.get("smtpUser") as string)?.trim() || "";
+  const fromEmail = (formData.get("smtpFromEmail") as string)?.trim() || "";
+  const fromName = (formData.get("smtpFromName") as string)?.trim() || "";
+  const passwordRaw = formData.get("smtpPassword");
+  const password = typeof passwordRaw === "string" ? passwordRaw : "";
+  const clearPassword = formData.get("smtpClearPassword") === "on";
+
+  if (!host) {
+    await prisma.appSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: {
+        id: SETTINGS_ID,
+        smtpHost: null,
+        smtpPort: 587,
+        smtpSecure: false,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFromEmail: null,
+        smtpFromName: null,
+      },
+      update: {
+        smtpHost: null,
+        smtpPort: 587,
+        smtpSecure: false,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFromEmail: null,
+        smtpFromName: null,
+      },
+    });
+    revalidatePath("/admin/settings");
+    return { ok: true };
+  }
+
+  const port = parseSmtpPort(formData.get("smtpPort"));
+
+  const updateData: Prisma.AppSettingsUpdateInput = {
+    smtpHost: host,
+    smtpPort: port,
+    smtpSecure,
+    smtpUser: user || null,
+    smtpFromEmail: fromEmail || null,
+    smtpFromName: fromName || null,
+  };
+  if (clearPassword) {
+    updateData.smtpPassword = null;
+  } else if (password.trim()) {
+    updateData.smtpPassword = password.trim();
+  }
+
+  await prisma.appSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: {
+      id: SETTINGS_ID,
+      smtpHost: host,
+      smtpPort: port,
+      smtpSecure,
+      smtpUser: user || null,
+      smtpPassword: clearPassword ? null : password.trim() || null,
+      smtpFromEmail: fromEmail || null,
+      smtpFromName: fromName || null,
+    },
+    update: updateData,
+  });
+
+  revalidatePath("/admin/settings");
+  return { ok: true };
 }

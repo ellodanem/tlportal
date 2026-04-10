@@ -43,11 +43,35 @@ enum DeviceUsagePurpose {
   personal
 }
 
+/// What the tracker is installed on (fleet / ops labeling).
+enum DeviceObjectType {
+  car
+  bike
+  ambulance
+  fire_truck
+  atv
+  boat
+  container
+  bus
+  garbage_truck
+  jet_ski
+  speed_boat
+}
+
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
   id      String   @id
   logoUrl String?
+  /// Outgoing mail (SMTP). When `smtpHost` is null, other SMTP fields are ignored.
+  smtpHost      String?
+  smtpPort      Int @default(587)
+  /// When true, Nodemailer uses implicit TLS (typical for port 465).
+  smtpSecure    Boolean @default(false)
+  smtpUser      String?
+  smtpPassword  String?
+  smtpFromEmail String?
+  smtpFromName  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -131,6 +155,8 @@ model Device {
   notes             String?
   /// Billable / customer-facing vs internal, demo, or personal test units.
   usagePurpose DeviceUsagePurpose @default(customer)
+  /// Vehicle / asset class for UI and reporting (optional).
+  objectType   DeviceObjectType?
   /// Free-form labels (e.g. demo-booth, test-vehicle-a); use for search and reporting.
   tags         String[]           @default([])
   createdAt    DateTime           @default(now())
@@ -147,6 +173,7 @@ model Device {
   @@index([deviceModelId])
   @@index([status])
   @@index([usagePurpose])
+  @@index([objectType])
 }
 
 model SimCard {

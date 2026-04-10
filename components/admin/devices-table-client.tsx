@@ -7,6 +7,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 
 import { PurposeScopeFilter } from "@/components/admin/device/purpose-scope-filter";
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
+import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DEVICE_STATUS_LABEL } from "@/lib/admin/device-status-labels";
 import {
   type DevicePurposeScope,
@@ -70,7 +71,7 @@ export function DevicesTableClient({ rows }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoComplete="off"
-            placeholder="Search IMEI, serial, model, SIM, customer, tags…"
+            placeholder="Search IMEI, serial, model, object type, SIM, customer, tags…"
             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
           />
         </div>
@@ -175,8 +176,9 @@ export function DevicesTableClient({ rows }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {row.label?.trim() || "Unnamed device"}
+                    <p className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-50">
+                      <ObjectTypeIcon type={row.objectType} className="h-5 w-5 text-zinc-500 dark:text-zinc-400" />
+                      <span>{row.label?.trim() || "Unnamed device"}</span>
                     </p>
                     <p className="mt-0.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">IMEI {row.imei}</p>
                     {row.serialNumber?.trim() ? (

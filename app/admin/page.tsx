@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import type { DeviceStatus } from "@prisma/client";
 
-import { FleetSnapshot, type FleetSnapshotRow } from "@/components/dashboard/fleet-snapshot";
+import {
+  FleetSnapshot,
+  FLEET_SEGMENT_ORDER,
+  type FleetSnapshotRow,
+} from "@/components/dashboard/fleet-snapshot";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { IconAlert, IconDevice, IconLayers, IconLink, IconSearch, IconUsers } from "@/components/dashboard/dashboard-icons";
-import { DEVICE_STATUS_LABEL } from "@/lib/admin/device-status-labels";
 import { getDashboardStats } from "@/lib/admin/dashboard-stats";
 
 function toneRowClass(tone: "urgent" | "warning" | "info") {
@@ -49,23 +51,12 @@ export default async function AdminPage() {
         ]
       : undefined;
 
-  const fleetOrder: DeviceStatus[] = [
-    "in_stock",
-    "assigned",
-    "suspended",
-    "returned",
-    "decommissioned",
-    "lost",
-  ];
-  const fleetRows: FleetSnapshotRow[] = fleetOrder
-    .map((key) => ({
-      key,
-      label: DEVICE_STATUS_LABEL[key],
-      count: s.fleetByStatus[key] ?? 0,
-    }))
-    .filter((r) => r.count > 0);
+  const fleetRows: FleetSnapshotRow[] = FLEET_SEGMENT_ORDER.map((key) => ({
+    key,
+    count: s.fleetSegments[key],
+  })).filter((r) => r.count > 0);
 
-  const totalDevices = Object.values(s.fleetByStatus).reduce<number>((sum, n) => sum + (n ?? 0), 0);
+  const totalDevices = FLEET_SEGMENT_ORDER.reduce((sum, k) => sum + s.fleetSegments[k], 0);
 
   return (
     <div className="flex flex-col gap-8">
@@ -210,7 +201,7 @@ export default async function AdminPage() {
         <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Device inventory by status ({totalDevices.toLocaleString()} total)
+            Device inventory by fleet segment ({totalDevices.toLocaleString()} total)
           </p>
           <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
         </div>

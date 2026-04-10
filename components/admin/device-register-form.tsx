@@ -7,6 +7,10 @@ import { useFormStatus } from "react-dom";
 import { registerDevice } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
 import { UnlinkedSimPicker } from "@/components/admin/unlinked-sim-picker";
+import {
+  DEVICE_OBJECT_TYPE_LABEL,
+  DEVICE_OBJECT_TYPE_ORDER,
+} from "@/lib/admin/device-object-type";
 import type { UnlinkedSimRow } from "@/lib/admin/unlinked-sim-filter";
 
 const inputClass =
@@ -142,6 +146,23 @@ export function DeviceRegisterForm({
             </label>
             <input id="firmwareVersion" name="firmwareVersion" autoComplete="off" className={inputClass} />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="objectType">
+            Object type
+          </label>
+          <select id="objectType" name="objectType" className={inputClass} defaultValue="">
+            <option value="">Not set</option>
+            {DEVICE_OBJECT_TYPE_ORDER.map((t) => (
+              <option key={t} value={t}>
+                {DEVICE_OBJECT_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            What the tracker is installed on (car, boat, etc.). Shown as an icon in the admin UI.
+          </p>
         </div>
 
         <div>

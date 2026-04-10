@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
+import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { prisma } from "@/lib/db";
 import { buildInvoilessBillToAddress } from "@/lib/invoiless/customer-sync";
 
@@ -285,8 +286,12 @@ export default async function CustomerDetailPage({ params }: Props) {
                         <div className="min-w-0">
                           <Link
                             href={deviceManage}
-                            className="font-medium text-emerald-800 hover:underline dark:text-emerald-300"
+                            className="inline-flex items-center gap-2 font-medium text-emerald-800 hover:underline dark:text-emerald-300"
                           >
+                            <ObjectTypeIcon
+                              type={a.device.objectType}
+                              className="h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400"
+                            />
                             {friendly}
                           </Link>
                           <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{modelName}</div>
