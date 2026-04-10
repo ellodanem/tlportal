@@ -414,3 +414,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 11:18 UTC — commit `5d55c7d`
+
+- fix: remove localhost debug fetch from admin middleware
+
+
+### 2026-04-10 11:18 UTC — pre-push (`main` → origin) @ `5d55c7d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
