@@ -2,22 +2,19 @@ import Link from "next/link";
 
 import { DeviceRegisterForm } from "@/components/admin/device-register-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
+import { fetchSimsAvailableForDeviceLink } from "@/lib/admin/sims-available-for-device";
 import { prisma } from "@/lib/db";
 
-export default async function RegisterDevicePage() {
-  const defaultStartDate = new Date().toISOString().slice(0, 10);
+export const dynamic = "force-dynamic";
 
+export default async function RegisterDevicePage() {
   const [deviceModels, unlinkedSims, customerRows] = await Promise.all([
     prisma.deviceModel.findMany({
       where: { isActive: true },
       orderBy: [{ manufacturer: "asc" }, { name: "asc" }],
       select: { id: true, name: true, manufacturer: true },
     }),
-    prisma.simCard.findMany({
-      where: { device: null },
-      orderBy: { iccid: "asc" },
-      select: { id: true, iccid: true, label: true, msisdn: true },
-    }),
+    fetchSimsAvailableForDeviceLink(),
     prisma.customer.findMany({
       orderBy: [{ company: "asc" }, { lastName: "asc" }],
       select: { id: true, company: true, firstName: true, lastName: true },
@@ -45,12 +42,7 @@ export default async function RegisterDevicePage() {
         </p>
       </div>
 
-      <DeviceRegisterForm
-        deviceModels={deviceModels}
-        unlinkedSims={unlinkedSims}
-        customers={customers}
-        defaultStartDate={defaultStartDate}
-      />
+      <DeviceRegisterForm deviceModels={deviceModels} unlinkedSims={unlinkedSims} customers={customers} />
     </div>
   );
 }

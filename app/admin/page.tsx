@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
+import type { DeviceStatus } from "@prisma/client";
 
+import { FleetSnapshot, type FleetSnapshotRow } from "@/components/dashboard/fleet-snapshot";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { IconAlert, IconDevice, IconLayers, IconLink, IconSearch, IconUsers } from "@/components/dashboard/dashboard-icons";
 import { DEVICE_STATUS_LABEL } from "@/lib/admin/device-status-labels";
@@ -47,11 +49,18 @@ export default async function AdminPage() {
         ]
       : undefined;
 
-  const fleetOrder = ["in_stock", "assigned", "suspended", "returned", "decommissioned", "lost"] as const;
-  const fleetRows = fleetOrder
+  const fleetOrder: DeviceStatus[] = [
+    "in_stock",
+    "assigned",
+    "suspended",
+    "returned",
+    "decommissioned",
+    "lost",
+  ];
+  const fleetRows: FleetSnapshotRow[] = fleetOrder
     .map((key) => ({
       key,
-      label: DEVICE_STATUS_LABEL[key] ?? key,
+      label: DEVICE_STATUS_LABEL[key],
       count: s.fleetByStatus[key] ?? 0,
     }))
     .filter((r) => r.count > 0);
@@ -203,24 +212,7 @@ export default async function AdminPage() {
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Device inventory by status ({totalDevices.toLocaleString()} total)
           </p>
-          {totalDevices === 0 ? (
-            <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-              No devices yet.{" "}
-              <Link href="/admin/devices" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
-                Open devices
-              </Link>{" "}
-              to register trackers when you are ready.
-            </p>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {fleetRows.map((row) => (
-                <li key={row.key} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-zinc-700 dark:text-zinc-300">{row.label}</span>
-                  <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-50">{row.count}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
         </div>
 
         <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

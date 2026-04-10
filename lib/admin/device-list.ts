@@ -96,7 +96,10 @@ export function mapDeviceToListRow(device: {
     status: device.status,
     usagePurpose: device.usagePurpose,
     tags: device.tags ?? [],
-    deviceModel: device.deviceModel,
+    deviceModel: {
+      name: device.deviceModel.name,
+      manufacturer: device.deviceModel.manufacturer,
+    },
     modelInitials: modelInitials(device.deviceModel.manufacturer, device.deviceModel.name),
     sim: device.simCard
       ? {

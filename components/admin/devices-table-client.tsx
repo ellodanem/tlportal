@@ -120,11 +120,12 @@ export function DevicesTableClient({ rows }: Props) {
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full min-w-[880px] text-left text-sm">
+        <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50/80 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-400">
             <tr>
               <th className="px-4 py-3">Model</th>
               <th className="px-4 py-3">Name &amp; identifiers</th>
+              <th className="px-4 py-3 w-24">Manage</th>
               <th className="px-4 py-3">Purpose</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Assigned to</th>
@@ -135,13 +136,13 @@ export function DevicesTableClient({ rows }: Props) {
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No devices yet. Register a device to add trackers to the fleet.
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No devices match your search.{" "}
                   <button
                     type="button"
@@ -174,17 +175,9 @@ export function DevicesTableClient({ rows }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {row.label?.trim() || "Unnamed device"}
-                      </p>
-                      <Link
-                        href={`/admin/devices/${row.id}/edit`}
-                        className="text-xs font-medium text-emerald-700 underline decoration-emerald-600/30 hover:decoration-emerald-700 dark:text-emerald-400"
-                      >
-                        Edit purpose
-                      </Link>
-                    </div>
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                      {row.label?.trim() || "Unnamed device"}
+                    </p>
                     <p className="mt-0.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">IMEI {row.imei}</p>
                     {row.serialNumber?.trim() ? (
                       <p className="mt-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-500">
@@ -196,6 +189,14 @@ export function DevicesTableClient({ rows }: Props) {
                         Firmware {row.firmwareVersion.trim()}
                       </p>
                     ) : null}
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <Link
+                      href={`/admin/devices/${row.id}/edit`}
+                      className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                    >
+                      Manage
+                    </Link>
                   </td>
                   <td className="px-4 py-3 align-top">
                     <div className="flex flex-col gap-1.5">

@@ -39,8 +39,8 @@ export default async function AdminDevicesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Devices</h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-            Trackers and gateways in TL Portal: assign them to customers via service assignments, link a SIM for
-            cellular data, and use{" "}
+            Register hardware in stock, then use <strong className="font-medium text-zinc-800 dark:text-zinc-200">Manage</strong>{" "}
+            on a row to assign a customer when you&apos;re ready. Link a SIM for cellular data, and use{" "}
             <Link href="/admin/sims" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
               SIM cards
             </Link>{" "}

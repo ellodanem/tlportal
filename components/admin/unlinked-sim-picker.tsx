@@ -71,7 +71,8 @@ export function UnlinkedSimPicker({ sims }: { sims: UnlinkedSimRow[] }) {
           aria-describedby={`${listId}-hint`}
         />
         <p id={`${listId}-hint`} className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Full list below — type to narrow. Click a row to link. Leave unset for no SIM.
+          Only SIMs not already on a device (or an open service) are listed. Type to narrow, click a row to link, or leave
+          unset for no SIM.
         </p>
       </div>
 

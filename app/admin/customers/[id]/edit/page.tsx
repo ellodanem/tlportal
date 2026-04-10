@@ -48,7 +48,7 @@ export default async function EditCustomerPage({ params }: Props) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
               {customer.invoilessCustomerId
-                ? `Linked id: ${customer.invoilessCustomerId}. Push updates after editing fields.`
+                ? `Linked id: ${customer.invoilessCustomerId}. Push sends billing address (combined), legal info, notes, tags, and invoice Cc/Bcc.`
                 : "Not linked yet. Sync will create the customer in Invoiless and store the id."}
             </p>
             <SyncInvoilessButton customerId={customer.id} hasInvoilessId={Boolean(customer.invoilessCustomerId)} />

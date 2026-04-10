@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,7 @@ function parseTags(raw: string | null): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
+    .map((s) => (s.length > 50 ? s.slice(0, 50) : s))
     .slice(0, 10);
 }
 
@@ -27,9 +29,26 @@ function readCustomerFields(formData: FormData) {
     email: String(formData.get("email") ?? "").trim() || null,
     phone: String(formData.get("phone") ?? "").trim() || null,
     address: String(formData.get("address") ?? "").trim() || null,
+    city: String(formData.get("city") ?? "").trim() || null,
+    state: String(formData.get("state") ?? "").trim() || null,
+    postalCode: String(formData.get("postalCode") ?? "").trim() || null,
+    country: String(formData.get("country") ?? "").trim() || null,
+    legalInfo: String(formData.get("legalInfo") ?? "").trim() || null,
+    invoiceCc: String(formData.get("invoiceCc") ?? "").trim() || null,
+    invoiceBcc: String(formData.get("invoiceBcc") ?? "").trim() || null,
+    traqcareUsername: String(formData.get("traqcareUsername") ?? "").trim() || null,
+    traqcarePortalUrl: String(formData.get("traqcarePortalUrl") ?? "").trim() || null,
     notes: String(formData.get("notes") ?? "").trim() || null,
     tags: parseTags(String(formData.get("tags") ?? "")),
   };
+}
+
+function readTraqcarePassword(formData: FormData): { clear: boolean; next: string | null } {
+  const clearRaw = formData.get("traqcarePasswordClear");
+  const clear = clearRaw === "on" || clearRaw === "true" || clearRaw === "1";
+  const raw = String(formData.get("traqcarePassword") ?? "");
+  const trimmed = raw.trim();
+  return { clear, next: trimmed.length ? trimmed : null };
 }
 
 function validateNameOrCompany(fields: ReturnType<typeof readCustomerFields>): string | null {
@@ -51,6 +70,8 @@ export async function createCustomer(
     return { error: v };
   }
 
+  const traqcarePwd = readTraqcarePassword(formData);
+
   try {
     await prisma.customer.create({
       data: {
@@ -60,6 +81,16 @@ export async function createCustomer(
         email: fields.email,
         phone: fields.phone,
         address: fields.address,
+        city: fields.city,
+        state: fields.state,
+        postalCode: fields.postalCode,
+        country: fields.country,
+        legalInfo: fields.legalInfo,
+        invoiceCc: fields.invoiceCc,
+        invoiceBcc: fields.invoiceBcc,
+        traqcareUsername: fields.traqcareUsername,
+        traqcarePortalUrl: fields.traqcarePortalUrl,
+        traqcarePassword: traqcarePwd.clear ? null : traqcarePwd.next,
         notes: fields.notes,
         tags: fields.tags,
       },
@@ -83,24 +114,41 @@ export async function updateCustomer(
   }
 
   const fields = readCustomerFields(formData);
+  const traqcarePwd = readTraqcarePassword(formData);
   const v = validateNameOrCompany(fields);
   if (v) {
     return { error: v };
   }
 
   try {
+    const data: Prisma.CustomerUpdateInput = {
+      firstName: fields.firstName,
+      lastName: fields.lastName,
+      company: fields.company,
+      email: fields.email,
+      phone: fields.phone,
+      address: fields.address,
+      city: fields.city,
+      state: fields.state,
+      postalCode: fields.postalCode,
+      country: fields.country,
+      legalInfo: fields.legalInfo,
+      invoiceCc: fields.invoiceCc,
+      invoiceBcc: fields.invoiceBcc,
+      traqcareUsername: fields.traqcareUsername,
+      traqcarePortalUrl: fields.traqcarePortalUrl,
+      notes: fields.notes,
+      tags: fields.tags,
+    };
+    if (traqcarePwd.clear) {
+      data.traqcarePassword = null;
+    } else if (traqcarePwd.next) {
+      data.traqcarePassword = traqcarePwd.next;
+    }
+
     await prisma.customer.update({
       where: { id },
-      data: {
-        firstName: fields.firstName,
-        lastName: fields.lastName,
-        company: fields.company,
-        email: fields.email,
-        phone: fields.phone,
-        address: fields.address,
-        notes: fields.notes,
-        tags: fields.tags,
-      },
+      data,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not update customer.";

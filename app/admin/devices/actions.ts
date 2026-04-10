@@ -59,10 +59,6 @@ export async function registerDevice(
     return { error: "Enter a valid IMEI (at least 8 characters)." };
   }
 
-  if (customerId && !startDateRaw) {
-    return { error: "Choose a service start date when assigning to a customer." };
-  }
-
   let startDate: Date | null = null;
   if (startDateRaw) {
     const d = new Date(startDateRaw + "T12:00:00.000Z");
@@ -123,7 +119,7 @@ export async function registerDevice(
         },
       });
 
-      if (customerId && startDate) {
+      if (customerId) {
         await tx.serviceAssignment.create({
           data: {
             customerId,
@@ -186,4 +182,233 @@ export async function updateDeviceCommercialFields(
   revalidatePath(`/admin/devices/${deviceId}/edit`);
   revalidatePath("/admin/sims");
   return { error: null };
+}
+
+/**
+ * Create an active service assignment for an existing in-stock (or unassigned) device.
+ */
+export async function assignDeviceToCustomer(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  const startDateRaw = String(formData.get("startDate") ?? "").trim();
+
+  if (!deviceId) {
+    return { error: "Missing device id." };
+  }
+  if (!customerId) {
+    return { error: "Select a customer." };
+  }
+
+  let startDate: Date | null = null;
+  if (startDateRaw) {
+    const d = new Date(startDateRaw + "T12:00:00.000Z");
+    if (Number.isNaN(d.getTime())) {
+      return { error: "Invalid start date." };
+    }
+    startDate = d;
+  }
+
+  const device = await prisma.device.findUnique({
+    where: { id: deviceId },
+    select: { id: true, status: true, simCardId: true },
+  });
+  if (!device) {
+    return { error: "Device not found." };
+  }
+  if (device.status === "decommissioned" || device.status === "lost") {
+    return { error: "Cannot assign a decommissioned or lost device." };
+  }
+
+  const existingOpen = await prisma.serviceAssignment.findFirst({
+    where: {
+      deviceId,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    select: { id: true },
+  });
+  if (existingOpen) {
+    return { error: "This device already has an active service assignment." };
+  }
+
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId },
+    select: { id: true },
+  });
+  if (!customer) {
+    return { error: "Selected customer was not found." };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceAssignment.create({
+        data: {
+          customerId,
+          deviceId,
+          startDate,
+          status: "active",
+          simCardId: device.simCardId,
+        },
+      });
+      await tx.device.update({
+        where: { id: deviceId },
+        data: { status: "assigned" },
+      });
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg || "Could not assign device." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${deviceId}/edit`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  if (device.simCardId) {
+    revalidatePath(`/admin/sims/${device.simCardId}`);
+  }
+  redirect(`/admin/devices/${deviceId}/edit`);
+}
+
+export async function updateServiceAssignmentDates(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  const startRaw = String(formData.get("startDate") ?? "").trim();
+  const nextDueRaw = String(formData.get("nextDueDate") ?? "").trim();
+
+  if (!assignmentId || !deviceId) {
+    return { error: "Missing assignment or device." };
+  }
+
+  let startDate: Date | null = null;
+  if (startRaw) {
+    const d = new Date(startRaw + "T12:00:00.000Z");
+    if (Number.isNaN(d.getTime())) {
+      return { error: "Invalid start date." };
+    }
+    startDate = d;
+  }
+
+  let nextDueDate: Date | null = null;
+  if (nextDueRaw) {
+    const d = new Date(nextDueRaw + "T12:00:00.000Z");
+    if (Number.isNaN(d.getTime())) {
+      return { error: "Invalid next due date." };
+    }
+    nextDueDate = d;
+  }
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: {
+      id: assignmentId,
+      deviceId,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    select: { id: true, customerId: true },
+  });
+  if (!assignment) {
+    return { error: "Active assignment not found for this device." };
+  }
+
+  try {
+    await prisma.serviceAssignment.update({
+      where: { id: assignmentId },
+      data: { startDate, nextDueDate },
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg || "Could not update assignment." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${deviceId}/edit`);
+  revalidatePath(`/admin/customers/${assignment.customerId}`);
+  redirect(`/admin/devices/${deviceId}/edit`);
+}
+
+/**
+ * End the active service assignment and return the device to in-stock (e.g. removal / relocation).
+ */
+export async function unassignDeviceFromCustomer(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  if (!deviceId) {
+    return { error: "Missing device id." };
+  }
+
+  const device = await prisma.device.findUnique({
+    where: { id: deviceId },
+    select: { id: true, status: true, simCardId: true },
+  });
+  if (!device) {
+    return { error: "Device not found." };
+  }
+  if (device.status === "decommissioned" || device.status === "lost") {
+    return { error: "Cannot unassign a decommissioned or lost device." };
+  }
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: {
+      deviceId,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    select: { id: true, customerId: true },
+  });
+  if (!assignment) {
+    return { error: "This device has no active assignment to end." };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceAssignment.update({
+        where: { id: assignment.id },
+        data: {
+          endDate: new Date(),
+          status: "cancelled",
+        },
+      });
+      await tx.device.update({
+        where: { id: deviceId },
+        data: { status: "in_stock" },
+      });
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg || "Could not unassign device." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${deviceId}/edit`);
+  revalidatePath(`/admin/customers/${assignment.customerId}`);
+  if (device.simCardId) {
+    revalidatePath(`/admin/sims/${device.simCardId}`);
+  }
+  redirect(`/admin/devices/${deviceId}/edit`);
 }

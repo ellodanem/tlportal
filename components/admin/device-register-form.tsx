@@ -32,12 +32,10 @@ export function DeviceRegisterForm({
   deviceModels,
   unlinkedSims,
   customers,
-  defaultStartDate,
 }: {
   deviceModels: DeviceModelOption[];
   unlinkedSims: UnlinkedSimRow[];
   customers: CustomerOption[];
-  defaultStartDate: string;
 }) {
   const [state, formAction] = useActionState(registerDevice, deviceFormInitialState);
   const modelsEmpty = deviceModels.length === 0;
@@ -194,7 +192,7 @@ export function DeviceRegisterForm({
         <div>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">SIM (optional)</h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Link a SIM that is not already on a device. Import inventory from{" "}
+            The list only includes SIMs not linked to a device or an open service. Import inventory from{" "}
             <Link href="/admin/sims" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
               SIM cards
             </Link>
@@ -241,14 +239,8 @@ export function DeviceRegisterForm({
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="startDate">
             Service start date
           </label>
-          <input
-            id="startDate"
-            name="startDate"
-            type="date"
-            defaultValue={defaultStartDate}
-            className={inputClass}
-          />
-          <p className="mt-1 text-xs text-zinc-500">Required when a customer is selected.</p>
+          <input id="startDate" name="startDate" type="date" className={inputClass} />
+          <p className="mt-1 text-xs text-zinc-500">Optional. Leave blank if you don&apos;t have a start date yet.</p>
         </div>
       </section>
 

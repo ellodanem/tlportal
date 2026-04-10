@@ -72,8 +72,25 @@ model Customer {
   company             String?
   email               String?
   phone               String?
+  /// Street / multi-line address (Invoiless “Address”); city/state/postal/country are composed into billTo.address on sync.
   address             String?
+  city                String?
+  state               String?
+  postalCode          String?
+  country             String?
+  /// Maps to Invoiless billTo.legal (e.g. company / tax registration).
+  legalInfo           String?
+  /// Comma-separated Cc emails for invoice sends (Invoiless max 3).
+  invoiceCc           String?
+  /// Comma-separated Bcc emails (Invoiless max 3).
+  invoiceBcc          String?
   invoilessCustomerId String?   @unique
+  /// Traqcare GPS portal login (optional).
+  traqcareUsername    String?
+  /// Stored in DB as plain text — restrict DB access; prefer env/secret store for production.
+  traqcarePassword    String?
+  /// Traqcare / white-label portal base URL if not the default (e.g. https://…).
+  traqcarePortalUrl   String?
   notes               String?
   tags                String[]  @default([])
   createdAt           DateTime  @default(now())
@@ -156,7 +173,7 @@ model SimCard {
 
 model ServiceAssignment {
   id                   String                   @id @default(uuid())
-  startDate            DateTime
+  startDate            DateTime?
   endDate              DateTime?
   status               ServiceAssignmentStatus  @default(active)
   invoilessRecurringId String?
