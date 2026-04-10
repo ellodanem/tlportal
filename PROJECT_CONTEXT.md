@@ -499,3 +499,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 16:36 UTC — commit `d3a9589`
+
+- fix(admin): drop ledger wording on invoices page
+
+
+### 2026-04-10 16:37 UTC — pre-push (`main` → origin) @ `d3a9589`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
