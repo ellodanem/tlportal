@@ -93,18 +93,22 @@ export async function fetchOneNceSimDataQuota(iccid: string): Promise<unknown> {
  * Single-SIM detail + optional quota endpoint, merged. Use for sync and post-import enrichment.
  */
 export async function fetchMergedSimFieldsForIccid(iccid: string): Promise<ParsedSimFields> {
-  const detailRaw = await fetchOneNceSimByIccid(iccid);
+  const [detailRaw, quotaRaw] = await Promise.all([
+    fetchOneNceSimByIccid(iccid),
+    fetchOneNceSimDataQuota(iccid).catch(() => null),
+  ]);
   const base = parseSimDetailPayload(detailRaw);
 
   let qTotal: number | null = null;
   let qUsed: number | null = null;
-  try {
-    const quotaRaw = await fetchOneNceSimDataQuota(iccid);
-    const q = parseDataQuotaPayload(quotaRaw);
-    qTotal = q.totalDataMB;
-    qUsed = q.usedDataMB;
-  } catch {
-    // Quota path may 404 for some products; detail-only is still useful.
+  if (quotaRaw != null) {
+    try {
+      const q = parseDataQuotaPayload(quotaRaw);
+      qTotal = q.totalDataMB;
+      qUsed = q.usedDataMB;
+    } catch {
+      // Quota path may 404 for some products; detail-only is still useful.
+    }
   }
 
   return {

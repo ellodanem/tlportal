@@ -78,18 +78,16 @@ export default async function AdminSimDetailPage({ params }: Props) {
     const end = new Date();
     const start = new Date();
     start.setDate(start.getDate() - 90);
-    try {
-      usagePoints = await fetchOneNceSimUsageSeries(sim.iccid, start, end);
-    } catch {
-      usagePoints = [];
+    const [usageOutcome, mergedOutcome] = await Promise.allSettled([
+      fetchOneNceSimUsageSeries(sim.iccid, start, end),
+      fetchMergedSimFieldsForIccid(sim.iccid),
+    ]);
+    if (usageOutcome.status === "fulfilled") {
+      usagePoints = usageOutcome.value;
     }
-    try {
-      const merged = await fetchMergedSimFieldsForIccid(sim.iccid);
-      liveTotalMb = merged.totalDataMB;
-      liveUsedMb = merged.usedDataMB;
-    } catch {
-      liveTotalMb = null;
-      liveUsedMb = null;
+    if (mergedOutcome.status === "fulfilled") {
+      liveTotalMb = mergedOutcome.value.totalDataMB;
+      liveUsedMb = mergedOutcome.value.usedDataMB;
     }
   }
 

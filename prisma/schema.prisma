@@ -196,6 +196,7 @@ model SimCard {
 
   @@index([iccid])
   @@index([status])
+  @@index([usedDataMB])
 }
 
 model ServiceAssignment {
