@@ -7,7 +7,8 @@ import { fetchInvoicesPage, isInvoilessConfigured } from "@/lib/invoiless/invoic
 
 type Props = { searchParams: Promise<{ page?: string; q?: string; limit?: string }> };
 
-const INVOILESS_APP = "https://invoiless.com";
+/** Invoiless web app — create invoice (login required). */
+const INVOILESS_NEW_INVOICE_URL = "https://app.invoiless.com/invoices/create";
 
 const ALLOWED_LIMITS = [25, 50, 100] as const;
 
@@ -83,7 +84,7 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
         limit={pagination.limit}
         search={q}
         invoilessConfigured={invoilessConfigured}
-        invoilessDashboardUrl={INVOILESS_APP}
+        invoilessDashboardUrl={INVOILESS_NEW_INVOICE_URL}
       />
 
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
