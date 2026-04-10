@@ -519,3 +519,30 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 17:01 UTC — pre-push (`main` → origin) @ `7971634`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-04-10 — feat(billing): wire Invoiless recurring ID to service assignments — `7971634`
+
+- **Agent notes** — Option B billing integration hardening (Steps 2, 3, 5):
+- `components/admin/device-service-assignment-edit-form.tsx` — added **Invoiless recurring ID** text field; saving writes `invoilessRecurringId` to the assignment row.
+- `app/admin/devices/actions.ts` (`updateServiceAssignmentDates`) — parses and persists `invoilessRecurringId` (clear field to unlink).
+- `app/admin/devices/[id]/edit/page.tsx` — passes `defaultInvoilessRecurringId` prop; uses `select` instead of `include` for the open assignment query so new field is available.
+- `app/admin/customers/[id]/page.tsx` — service history table gains a **Billing** column: green "↻ Linked" badge (tooltip shows ID) when recurring is linked, dash otherwise; last payment status shown beneath when present.
+
+
+### 2026-04-10 17:03 UTC — pre-push (`main` → origin) @ `45fa4c5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-04-10 — feat(devices): sortable Status and Assigned To columns — `45fa4c5`
+
+- **Agent notes** — `components/admin/devices-table-client.tsx`:
+- Status and Assigned To column headers are now clickable sort buttons with a `↑`/`↓` indicator.
+- Click once to sort ascending; click again to toggle descending.
+- Status sort uses a logical sequence: assigned → in stock → suspended → returned → decommissioned → lost.
+- Assigned To sort is alphabetical by display name; unassigned devices always sort to the bottom.
+- All sorting is client-side (no server round-trip); works alongside the existing search and purpose-scope filters.
+
