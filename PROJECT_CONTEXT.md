@@ -424,3 +424,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 11:19 UTC — commit `524f8b0`
+
+- chore: PROJECT_CONTEXT for 5d55c7d
+
+
+### 2026-04-10 11:19 UTC — pre-push (`main` → origin) @ `524f8b0`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-10 11:32 UTC — commit `695a367`
+
+- feat: fleet snapshot by segment; device object types; SMTP settings
+
+
+### 2026-04-10 11:32 UTC — pre-push (`main` → origin) @ `695a367`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
