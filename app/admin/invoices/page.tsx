@@ -60,9 +60,7 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
           <span className="mx-2 text-zinc-300 dark:text-zinc-600">/</span>
           <span className="text-zinc-700 dark:text-zinc-300">Invoices</span>
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Billing ledger
-        </h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Invoices</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
           Read-only mirror of Invoiless. Build and send invoices there; use this view to scan status, totals, and jump
           to linked customers in TL Portal.

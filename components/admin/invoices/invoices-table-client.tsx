@@ -374,7 +374,7 @@ export function InvoicesTableClient({
       <section className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex flex-col gap-1 border-b border-zinc-100 px-4 py-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Ledger</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Invoice list</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {rows.length} row{rows.length === 1 ? "" : "s"} on this page
               {totalItems > 0 ? (
