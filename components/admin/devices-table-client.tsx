@@ -15,6 +15,44 @@ import {
 } from "@/lib/admin/device-usage-purpose";
 import { type DeviceListRow, deviceMatchesSearchQuery } from "@/lib/admin/device-list";
 
+type SortCol = "status" | "assignedTo";
+type SortDir = "asc" | "desc";
+
+const STATUS_ORDER: Record<DeviceStatus, number> = {
+  assigned: 0,
+  in_stock: 1,
+  suspended: 2,
+  returned: 3,
+  decommissioned: 4,
+  lost: 5,
+};
+
+function sortRows(rows: DeviceListRow[], col: SortCol | null, dir: SortDir): DeviceListRow[] {
+  if (!col) return rows;
+  return [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (col === "status") {
+      cmp = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+    } else {
+      const aName = a.assignedCustomer?.displayName ?? "";
+      const bName = b.assignedCustomer?.displayName ?? "";
+      if (!aName && bName) return 1;
+      if (aName && !bName) return -1;
+      cmp = aName.localeCompare(bName);
+    }
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
+function SortIcon({ col, active, dir }: { col: SortCol; active: SortCol | null; dir: SortDir }) {
+  const isActive = active === col;
+  return (
+    <span className={`ml-1 inline-block transition-opacity ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-40"}`} aria-hidden>
+      {isActive && dir === "desc" ? "↓" : "↑"}
+    </span>
+  );
+}
+
 function statusPillClass(status: DeviceStatus): string {
   switch (status) {
     case "assigned":
@@ -41,13 +79,25 @@ type Props = {
 export function DevicesTableClient({ rows }: Props) {
   const [query, setQuery] = useState("");
   const [purposeScope, setPurposeScope] = useState<DevicePurposeScope>("customer_only");
+  const [sortCol, setSortCol] = useState<SortCol | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const deferredQuery = useDeferredValue(query);
 
+  function handleSort(col: SortCol) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
+
   const filtered = useMemo(() => {
-    return rows
+    const base = rows
       .filter((r) => devicePurposeMatchesScope(r.usagePurpose, purposeScope))
       .filter((r) => deviceMatchesSearchQuery(r, deferredQuery));
-  }, [rows, deferredQuery, purposeScope]);
+    return sortRows(base, sortCol, sortDir);
+  }, [rows, deferredQuery, purposeScope, sortCol, sortDir]);
 
   const qTrim = query.trim();
   const showResultHint = qTrim.length > 0 && rows.length > 0 && filtered.length > 0;
@@ -128,8 +178,26 @@ export function DevicesTableClient({ rows }: Props) {
               <th className="px-4 py-3">Name &amp; identifiers</th>
               <th className="px-4 py-3 w-24">Manage</th>
               <th className="px-4 py-3">Purpose</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Assigned to</th>
+              <th className="px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => handleSort("status")}
+                  className="group inline-flex items-center gap-0.5 uppercase tracking-wide hover:text-zinc-800 dark:hover:text-zinc-200"
+                >
+                  Status
+                  <SortIcon col="status" active={sortCol} dir={sortDir} />
+                </button>
+              </th>
+              <th className="px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => handleSort("assignedTo")}
+                  className="group inline-flex items-center gap-0.5 uppercase tracking-wide hover:text-zinc-800 dark:hover:text-zinc-200"
+                >
+                  Assigned to
+                  <SortIcon col="assignedTo" active={sortCol} dir={sortDir} />
+                </button>
+              </th>
               <th className="px-4 py-3">SIM</th>
               <th className="px-4 py-3">Carrier sync</th>
             </tr>
