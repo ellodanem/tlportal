@@ -474,3 +474,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-10 12:57 UTC — commit `570ee8f`
+
+- perf(sims): parallel 1NCE API calls on SIM detail; index usedDataMB
+
+
+### 2026-04-10 12:58 UTC — pre-push (`main` → origin) @ `570ee8f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
