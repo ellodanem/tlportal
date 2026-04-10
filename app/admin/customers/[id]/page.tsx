@@ -5,6 +5,7 @@ import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { prisma } from "@/lib/db";
 import { buildInvoilessBillToAddress } from "@/lib/invoiless/customer-sync";
+import { fetchInvoicesForInvoilessCustomerId, isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -77,6 +78,18 @@ export default async function CustomerDetailPage({ params }: Props) {
   const nextDue = nextDueDates[0];
   const linkedInvoiless = Boolean(customer.invoilessCustomerId);
   const invoilessAddressPreview = buildInvoilessBillToAddress(customer);
+  const invoilessApi = isInvoilessConfigured();
+  let recentInvoices: Awaited<ReturnType<typeof fetchInvoicesForInvoilessCustomerId>> = [];
+  if (invoilessApi && customer.invoilessCustomerId) {
+    try {
+      recentInvoices = await fetchInvoicesForInvoilessCustomerId(customer.invoilessCustomerId, {
+        maxInvoices: 10,
+        maxPages: 4,
+      });
+    } catch {
+      recentInvoices = [];
+    }
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -198,6 +211,53 @@ export default async function CustomerDetailPage({ params }: Props) {
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No billing address details yet.</p>
         ) : null}
       </section>
+
+      {invoilessApi && linkedInvoiless ? (
+        <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recent invoices (Invoiless)</h2>
+            <Link
+              href="/admin/invoices"
+              className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              All invoices
+            </Link>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Pulled from your latest Invoiless pages and matched to this linked customer. Open the full list to search.
+          </p>
+          {recentInvoices.length === 0 ? (
+            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">No matching invoices found in recent pages.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">
+              {recentInvoices.map((inv) => (
+                <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300">{inv.number ?? inv.id}</span>
+                    {inv.status ? (
+                      <span className="ml-2 inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium capitalize text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                        {inv.status}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {inv.previewUrl ? (
+                      <a
+                        href={inv.previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                      >
+                        Open
+                      </a>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Traqcare (GPS)</h2>
