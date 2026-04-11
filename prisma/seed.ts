@@ -21,17 +21,17 @@ async function main() {
 
   console.info(`Seeded admin user: ${email}`);
 
-  const hasModel = await prisma.deviceModel.findFirst({ select: { id: true } });
-  if (!hasModel) {
-    await prisma.deviceModel.create({
-      data: {
-        name: "Generic tracker",
-        manufacturer: "Various",
-        retailPrice: 0,
-        isActive: true,
-      },
+  const planCount = await prisma.subscriptionOption.count();
+  if (planCount === 0) {
+    await prisma.subscriptionOption.createMany({
+      data: [
+        { label: "Monthly - $30 (Debit/Credit Only)", sortOrder: 10, isActive: true },
+        { label: "3 Months - $90", sortOrder: 20, isActive: true },
+        { label: "6 Months - $180", sortOrder: 30, isActive: true },
+        { label: "12 Months - $330", sortOrder: 40, isActive: true },
+      ],
     });
-    console.info("Seeded default device model: Generic tracker");
+    console.info("Seeded default subscription options for /register.");
   }
 }
 

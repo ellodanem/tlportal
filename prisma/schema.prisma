@@ -35,6 +35,12 @@ enum ServiceAssignmentStatus {
   cancelled
 }
 
+enum RegistrationRequestStatus {
+  pending
+  approved
+  rejected
+}
+
 /// Commercial / lifecycle classification (default: customer-facing production units).
 enum DeviceUsagePurpose {
   customer
@@ -85,6 +91,8 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  reviewedRegistrationRequests RegistrationRequest[] @relation("RegistrationReviewedBy")
 }
 
 // --- Core domain ---
@@ -122,7 +130,63 @@ model Customer {
 
   serviceAssignments ServiceAssignment[]
 
+  registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
+  createdFromRegistration    RegistrationRequest?  @relation("RegistrationCreatedCustomer")
+
   @@index([email])
+}
+
+/// Public registration form — subscription choice labels (staff CRUD).
+model SubscriptionOption {
+  id        String   @id @default(uuid())
+  label     String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrationRequests RegistrationRequest[]
+}
+
+/// Client-submitted registration; staff approves → Customer created (Invoiless separate).
+model RegistrationRequest {
+  id     String                    @id @default(uuid())
+  status RegistrationRequestStatus @default(pending)
+
+  firstName String
+  lastName  String
+  /// WhatsApp / primary phone from the registration form.
+  phone String
+  email String
+
+  vehicleDetails       String  @db.Text
+  subscriptionOptionId String?
+  subscriptionOption   SubscriptionOption? @relation(fields: [subscriptionOptionId], references: [id], onDelete: SetNull)
+
+  termInstallAfterPayment Boolean
+  termHardwarePerVehicle  Boolean
+  termTravelFee           Boolean
+
+  /// Existing customer with the same email (reviewer duplicate flag).
+  matchesCustomerId String?
+  matchesCustomer   Customer? @relation("RegistrationEmailMatchCustomer", fields: [matchesCustomerId], references: [id], onDelete: SetNull)
+  /// Count of other pending rows with the same email when this row was submitted.
+  otherPendingSameEmail Int @default(0)
+
+  submittedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+  reviewedById String?
+  reviewedBy   User?   @relation("RegistrationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  rejectionReason String? @db.Text
+
+  createdCustomerId String?  @unique
+  createdCustomer   Customer? @relation("RegistrationCreatedCustomer", fields: [createdCustomerId], references: [id], onDelete: SetNull)
+
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([submittedAt])
 }
 
 model DeviceModel {

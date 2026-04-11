@@ -8,6 +8,8 @@ import { AdminCreateMenu } from "@/components/admin-create-menu";
 const links = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/customers", label: "Customers" },
+  { href: "/admin/registration-requests", label: "Registrations" },
+  { href: "/admin/subscription-options", label: "Plans" },
   { href: "/admin/invoices", label: "Invoices" },
   { href: "/admin/devices", label: "Devices" },
   { href: "/admin/sims", label: "SIMs" },

@@ -14,6 +14,12 @@ export default function Home() {
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
           <Link
+            href="/register"
+            className="rounded-full border border-emerald-700 px-4 py-2 font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
+          >
+            Register
+          </Link>
+          <Link
             href="/login"
             className="rounded-full bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
           >
