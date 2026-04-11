@@ -546,3 +546,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Assigned To sort is alphabetical by display name; unassigned devices always sort to the bottom.
 - All sorting is client-side (no server round-trip); works alongside the existing search and purpose-scope filters.
 
+
+### 2026-04-10 17:59 UTC — pre-push (`main` → origin) @ `cb1cced`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-11 10:36 UTC — commit `603fc8c`
+
+- feat(cron): nightly 1NCE SIM import at ~AST midnight
+- **Agent notes** — `lib/admin/one-nce-sims-sync.ts` (shared import + single-SIM sync + revalidate); `app/api/cron/nightly-sims-sync/route.ts` (GET, `Authorization: Bearer CRON_SECRET`, `maxDuration` 300); `vercel.json` cron `5 4 * * *` (04:05 UTC ≈ 00:05 AST); `app/admin/sims/actions.ts` delegates to lib; `.env.example` + `README.md` document `CRON_SECRET`.
+
+
+### 2026-04-11 10:36 UTC — pre-push (`main` → origin) @ `603fc8c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
