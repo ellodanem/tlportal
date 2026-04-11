@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/nightly-sims-sync",
+      "schedule": "5 4 * * *"
+    }
+  ]
+}

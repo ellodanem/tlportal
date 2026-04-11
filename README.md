@@ -79,6 +79,8 @@ Without keys, these return **503** with `configured: false`.
 
 Import the repo, set `DATABASE_URL` and other secrets in the Vercel project settings. The `postinstall` script runs `prisma generate` on each deploy.
 
+**Nightly SIM sync:** set `CRON_SECRET` (long random string) in the project environment. `vercel.json` schedules `GET /api/cron/nightly-sims-sync` at **04:05 UTC** (about **00:05 AST**, Barbados / St Lucia, UTC−4). Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. Self-hosted: call the same URL on the same schedule with that header.
+
 ## Project context log
 
 **`PROJECT_CONTEXT.md`** is an append-only local log of commits and pushes. Cursor is configured (`.cursor/rules/project-context-log.mdc`) to keep it updated when you work in this repo.
