@@ -562,3 +562,24 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-11 10:36 UTC — commit `b474e4e`
+
+- docs: expand PROJECT_CONTEXT for nightly SIM cron commit
+
+
+### 2026-04-11 10:36 UTC — pre-push (`main` → origin) @ `b474e4e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-11 23:19 UTC — commit `0898050`
+
+- feat(register): public registration queue and subscription plans CRUD
+- **Agent notes** — Prisma `SubscriptionOption`, `RegistrationRequest` (+ migration); public `app/register` + `submitRegistrationRequest`; `lib/register/build-registration-notes.ts`; admin `/admin/registration-requests` (list/detail, approve/reject, duplicate flags); `/admin/subscription-options` CRUD; sidebar **Registrations** / **Plans**; home **Register** link; `prisma/seed.ts` seeds four default plan labels when table empty; approve creates `Customer` with `from-registration` tag only (no Invoiless).
+
+
+### 2026-04-11 23:19 UTC — pre-push (`main` → origin) @ `0898050`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
