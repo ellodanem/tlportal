@@ -82,57 +82,68 @@ export async function uploadBrandingLogo(
 
   const bytes = Buffer.from(await file.arrayBuffer());
 
-  const prev = await prisma.appSettings.findUnique({
-    where: { id: SETTINGS_ID },
-    select: { logoUrl: true },
-  });
-  if (prev?.logoUrl) {
-    await removeStoredBrandingFile(prev.logoUrl);
-  }
-
   let logoUrl: string;
-
-  if (useVercelBlob()) {
-    const token = blobToken()!;
-    const pathname = `branding/${randomUUID()}.${ext}`;
-    const blob = await put(pathname, bytes, {
-      access: "public",
-      token,
+  try {
+    const prev = await prisma.appSettings.findUnique({
+      where: { id: SETTINGS_ID },
+      select: { logoUrl: true },
     });
-    logoUrl = blob.url;
-  } else {
-    if (process.env.VERCEL === "1") {
-      return {
-        error:
-          "Logo upload on Vercel needs Blob storage. In Vercel: Storage → Blob → create a store (sets BLOB_READ_WRITE_TOKEN), or add that env var manually.",
-      };
+    if (prev?.logoUrl) {
+      await removeStoredBrandingFile(prev.logoUrl);
     }
 
-    const { mkdir, writeFile, readdir } = await import("fs/promises");
-    const dir = path.join(process.cwd(), "public", "uploads", "branding");
-    await mkdir(dir, { recursive: true });
+    if (useVercelBlob()) {
+      const token = blobToken()!;
+      const pathname = `branding/${randomUUID()}.${ext}`;
+      const blob = await put(pathname, bytes, {
+        access: "public",
+        token,
+        contentType: mime || undefined,
+      });
+      logoUrl = blob.url;
+    } else {
+      if (process.env.VERCEL === "1") {
+        return {
+          error:
+            "Logo upload on Vercel needs Blob storage. In Vercel: Storage → Blob → create a store (sets BLOB_READ_WRITE_TOKEN), or add that env var manually.",
+        };
+      }
 
-    try {
-      const existing = await readdir(dir);
-      await Promise.all(
-        existing
-          .filter((name) => name.startsWith("logo."))
-          .map((name) => unlink(path.join(dir, name)).catch(() => {})),
-      );
-    } catch {
-      /* ignore */
+      const { mkdir, writeFile, readdir } = await import("fs/promises");
+      const dir = path.join(process.cwd(), "public", "uploads", "branding");
+      await mkdir(dir, { recursive: true });
+
+      try {
+        const existing = await readdir(dir);
+        await Promise.all(
+          existing
+            .filter((name) => name.startsWith("logo."))
+            .map((name) => unlink(path.join(dir, name)).catch(() => {})),
+        );
+      } catch {
+        /* ignore */
+      }
+
+      const filename = `logo.${ext}`;
+      await writeFile(path.join(dir, filename), bytes);
+      logoUrl = `/uploads/branding/${filename}`;
     }
 
-    const filename = `logo.${ext}`;
-    await writeFile(path.join(dir, filename), bytes);
-    logoUrl = `/uploads/branding/${filename}`;
+    await prisma.appSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: { id: SETTINGS_ID, logoUrl },
+      update: { logoUrl },
+    });
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    const hint =
+      raw.toLowerCase().includes("body exceeded") || raw.includes("413")
+        ? " Request was too large for the server action limit — try a smaller file or redeploy after next.config bodySizeLimit."
+        : "";
+    return {
+      error: `Logo upload failed: ${raw.slice(0, 280)}${raw.length > 280 ? "…" : ""}${hint} If you use Vercel Blob, confirm BLOB_READ_WRITE_TOKEN matches the store and redeploy.`,
+    };
   }
-
-  await prisma.appSettings.upsert({
-    where: { id: SETTINGS_ID },
-    create: { id: SETTINGS_ID, logoUrl },
-    update: { logoUrl },
-  });
 
   revalidatePath("/admin");
   revalidatePath("/admin/settings");

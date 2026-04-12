@@ -70,6 +70,8 @@ Import the repo, set `DATABASE_URL` and other secrets in the Vercel project sett
 
 **Public registration:** `/register` (not under `/admin`). Staff manage subscription dropdown labels at **Plans** (`/admin/subscription-options`), review submissions under **Registrations** (`/admin/registration-requests`). Approve creates a `Customer` with snapshot notes and tag `from-registration`; Invoiless is still a separate step. Run `npm run db:seed` once to seed default plan labels if the table is empty.
 
+**Branding / Vercel Blob:** set `BLOB_READ_WRITE_TOKEN` from the Blob store. Logo upload uses a Server Action; `next.config.ts` raises `experimental.serverActions.bodySizeLimit` so files up to **2 MB** are not rejected by the default **~1 MB** multipart limit — **redeploy** after changing that config.
+
 ## Project context log
 
 `**PROJECT_CONTEXT.md`** is an append-only local log of commits and pushes. Cursor is configured (`.cursor/rules/project-context-log.mdc`) to keep it updated when you work in this repo.
