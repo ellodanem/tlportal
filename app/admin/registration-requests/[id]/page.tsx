@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { RegistrationReviewForms } from "@/components/admin/registration-review-forms";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { prisma } from "@/lib/db";
+import { formatSubscriptionChoiceLabel } from "@/lib/subscription-options/display";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -23,7 +24,7 @@ export default async function RegistrationRequestDetailPage({ params }: Props) {
   const r = await prisma.registrationRequest.findUnique({
     where: { id },
     include: {
-      subscriptionOption: { select: { label: true } },
+      subscriptionOption: { select: { durationMonths: true, priceUsd: true } },
       matchesCustomer: { select: { id: true, company: true, firstName: true, lastName: true, email: true } },
       createdCustomer: { select: { id: true } },
       reviewedBy: { select: { email: true, name: true } },
@@ -83,7 +84,9 @@ export default async function RegistrationRequestDetailPage({ params }: Props) {
             <div className="flex justify-between gap-4">
               <dt className="text-zinc-500 dark:text-zinc-400">Subscription (form)</dt>
               <dd className="max-w-[60%] text-right text-zinc-900 dark:text-zinc-50">
-                {r.subscriptionOption?.label ?? "—"}
+                {r.subscriptionOption
+                  ? formatSubscriptionChoiceLabel(r.subscriptionOption.durationMonths, r.subscriptionOption.priceUsd)
+                  : "—"}
               </dd>
             </div>
             <div>

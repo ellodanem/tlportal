@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/get-session";
 import { buildRegistrationCustomerNotes } from "@/lib/register/build-registration-notes";
 import { prisma } from "@/lib/db";
+import { formatSubscriptionChoiceLabel } from "@/lib/subscription-options/display";
 
 export type RegistrationReviewState = { error: string | null };
 
@@ -27,7 +28,7 @@ export async function approveRegistrationRequest(
 
   const reg = await prisma.registrationRequest.findUnique({
     where: { id },
-    include: { subscriptionOption: { select: { label: true } } },
+    include: { subscriptionOption: { select: { durationMonths: true, priceUsd: true } } },
   });
   if (!reg) {
     return { error: "Registration not found." };
@@ -56,7 +57,13 @@ export async function approveRegistrationRequest(
   const notes = buildRegistrationCustomerNotes({
     submittedAt: reg.submittedAt,
     vehicleDetails: reg.vehicleDetails,
-    subscriptionLabel: reg.subscriptionOption?.label ?? null,
+    subscriptionLabel:
+      reg.subscriptionOption != null
+        ? formatSubscriptionChoiceLabel(
+            reg.subscriptionOption.durationMonths,
+            reg.subscriptionOption.priceUsd,
+          )
+        : null,
     termInstallAfterPayment: reg.termInstallAfterPayment,
     termHardwarePerVehicle: reg.termHardwarePerVehicle,
     termTravelFee: reg.termTravelFee,

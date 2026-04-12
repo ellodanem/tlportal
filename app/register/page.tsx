@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import { RegistrationForm } from "@/components/register/registration-form";
 import { prisma } from "@/lib/db";
+import { formatSubscriptionChoiceLabel } from "@/lib/subscription-options/display";
+import { ensureSubscriptionPlanRows } from "@/lib/subscription-options/ensure-plans";
 
 export const metadata: Metadata = {
   title: "Register — Track Lucia",
@@ -10,11 +12,16 @@ export const metadata: Metadata = {
 };
 
 export default async function RegisterPage() {
-  const subscriptionOptions = await prisma.subscriptionOption.findMany({
+  await ensureSubscriptionPlanRows();
+  const rows = await prisma.subscriptionOption.findMany({
     where: { isActive: true },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, label: true },
+    orderBy: { durationMonths: "asc" },
+    select: { id: true, durationMonths: true, priceUsd: true },
   });
+  const subscriptionOptions = rows.map((o) => ({
+    id: o.id,
+    displayLabel: formatSubscriptionChoiceLabel(o.durationMonths, o.priceUsd),
+  }));
 
   return (
     <div className="min-h-screen bg-zinc-50 px-4 py-10 dark:bg-zinc-950">

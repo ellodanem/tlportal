@@ -68,7 +68,7 @@ Import the repo, set `DATABASE_URL` and other secrets in the Vercel project sett
 
 **Nightly SIM sync:** set `CRON_SECRET` (long random string) in the project environment. `vercel.json` schedules `GET /api/cron/nightly-sims-sync` at **04:05 UTC** (about **00:05 AST**, Barbados / St Lucia, UTC−4). Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. Self-hosted: call the same URL on the same schedule with that header.
 
-**Public registration:** `/register` (not under `/admin`). Staff manage subscription dropdown labels at **Plans** (`/admin/subscription-options`), review submissions under **Registrations** (`/admin/registration-requests`). Approve creates a `Customer` with snapshot notes and tag `from-registration`; Invoiless is still a separate step. Run `npm run db:seed` once to seed default plan labels if the table is empty.
+**Public registration:** `/register` (not under `/admin`). Staff set **USD prices** for the four fixed plans (1 / 3 / 6 / 12 month) at **Plans** (`/admin/subscription-options`), review submissions under **Registrations** (`/admin/registration-requests`). Approve creates a `Customer` with snapshot notes and tag `from-registration`; Invoiless is still a separate step. Run `npm run db:seed` once if you need a default admin user; empty plan rows are filled automatically when you open Plans or `/register`.
 
 **Branding / Vercel Blob:** set `BLOB_READ_WRITE_TOKEN` from the Blob store. Logo upload uses a Server Action; `next.config.ts` raises `experimental.serverActions.bodySizeLimit` so files up to **2 MB** are not rejected by the default **~1 MB** multipart limit — **redeploy** after changing that config.
 

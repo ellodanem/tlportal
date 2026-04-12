@@ -41,7 +41,7 @@ export async function submitRegistrationRequest(
   if (subscriptionOptionId) {
     const opt = await prisma.subscriptionOption.findFirst({
       where: { id: subscriptionOptionId, isActive: true },
-      select: { id: true },
+      select: { id: true, durationMonths: true },
     });
     if (!opt) {
       return { ok: false, error: "Selected subscription option is no longer available." };

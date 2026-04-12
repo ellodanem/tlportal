@@ -8,7 +8,7 @@ import {
   type RegisterFormState,
 } from "@/app/register/register-form-state";
 
-type SubscriptionRow = { id: string; label: string };
+type SubscriptionRow = { id: string; displayLabel: string };
 
 function fieldClass() {
   return "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none ring-emerald-500 focus:border-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
@@ -107,12 +107,13 @@ export function RegistrationForm({ subscriptionOptions }: { subscriptionOptions:
             <option value="">Choose…</option>
             {subscriptionOptions.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.label}
+                {o.displayLabel}
               </option>
             ))}
           </select>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Billed monthly per vehicle. Selection is recorded in your customer notes for our team.
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">Billed monthly per vehicle.</span> Selection is
+            recorded in your customer notes for our team.
           </p>
         </div>
       ) : (
