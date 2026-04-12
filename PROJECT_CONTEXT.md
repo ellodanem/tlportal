@@ -604,3 +604,24 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-12 00:32 UTC — commit `ffeea61`
+
+- docs: PROJECT_CONTEXT for copy register link
+
+
+### 2026-04-12 00:32 UTC — pre-push (`main` → origin) @ `ffeea61`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:36 UTC — commit `2835216`
+
+- fix(settings): server action body limit for logo upload + blob error message
+- **Agent notes** — `next.config.ts` `experimental.serverActions.bodySizeLimit: "3mb"` (default ~1mb multipart was rejecting 2mb-capable uploads); `uploadBrandingLogo` try/catch returns `{ error }` + Blob `contentType`; README Vercel Blob / redeploy note.
+
+
+### 2026-04-12 00:36 UTC — pre-push (`main` → origin) @ `2835216`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
