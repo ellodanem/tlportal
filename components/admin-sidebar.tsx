@@ -8,7 +8,6 @@ import { AdminCreateMenu } from "@/components/admin-create-menu";
 const links = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/customers", label: "Customers" },
-  { href: "/admin/subscription-options", label: "Plans" },
   { href: "/admin/invoices", label: "Invoices" },
   { href: "/admin/devices", label: "Devices" },
   { href: "/admin/sims", label: "SIMs" },
@@ -23,6 +22,11 @@ function isDevicesSection(pathname: string): boolean {
 /** Customers + registration queue share one nav group. */
 function isCustomerSection(pathname: string): boolean {
   return pathname.startsWith("/admin/customers") || pathname.startsWith("/admin/registration-requests");
+}
+
+/** Settings + subscription plan prices share one nav group. */
+function isSettingsSection(pathname: string): boolean {
+  return pathname.startsWith("/admin/settings") || pathname.startsWith("/admin/subscription-options");
 }
 
 function navClass(active: boolean) {
@@ -99,6 +103,24 @@ export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | n
                 {showSub ? (
                   <Link href="/admin/device-models" className={subNavClass(deviceModelsActive)}>
                     Device models
+                  </Link>
+                ) : null}
+              </div>
+            );
+          }
+
+          if (href === "/admin/settings") {
+            const settingsParentActive = isSettingsSection(pathname);
+            const plansActive = pathname.startsWith("/admin/subscription-options");
+            const showSub = isSettingsSection(pathname);
+            return (
+              <div key={href} className="flex flex-col gap-0.5">
+                <Link href={href} className={navClass(settingsParentActive)}>
+                  {label}
+                </Link>
+                {showSub ? (
+                  <Link href="/admin/subscription-options" className={subNavClass(plansActive)}>
+                    Plans
                   </Link>
                 ) : null}
               </div>
