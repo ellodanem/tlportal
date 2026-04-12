@@ -843,3 +843,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - `scripts/run-build.mjs`: `migrate deploy` uses `DATABASE_URL` = `DIRECT_URL` when set; retries only on P1002 / advisory-lock messages (removed non-functional lock timeout env var).
 - README: deploy notes updated for migrate behavior.
 
+
+### 2026-04-12 11:43 UTC — commit `928e11b`
+
+- docs: PROJECT_CONTEXT for d6a2833
+
+
+### 2026-04-12 11:43 UTC — pre-push (`main` → origin) @ `928e11b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 11:47 UTC — commit `b704edc`
+
+- fix(admin): registration approve/reject without redirect in server action
+- `registration-review-state.ts`: initial state + `next` URL for client navigation after success; `actions.ts` returns `next` instead of `redirect()`; `RegistrationReviewForms` uses `router.push` when `next` is set.
+
