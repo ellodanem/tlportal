@@ -908,3 +908,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(admin): first usage day + total MB from 1NCE usage window
 - `lib/nce/sim-api.ts`: `summarizeUsageSeries()`; SIM detail usage query widened to ~180 days; UI shows first calendar day with reported usage + sum of daily MB in window (proxy for first data activity).
 
+
+### 2026-04-12 12:04 UTC — commit `c291a7e`
+
+- docs: PROJECT_CONTEXT for 77f3184
+
+
+### 2026-04-12 12:04 UTC — pre-push (`main` → origin) @ `c291a7e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 12:46 UTC — commit `f5a7e81`
+
+- feat(admin): URL-driven 1NCE SIM usage date range
+- `lib/nce/sim-usage-range.ts`: resolve/clamp `usageFrom` / `usageTo` (`YYYY-MM-DD`); `SimUsageRangeControls` presets + custom apply; SIM detail page uses `searchParams` and README note.
+
