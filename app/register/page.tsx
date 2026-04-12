@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   description: "Submit your Track Lucia service registration.",
 };
 
+/** DB-backed options; avoid static prerender at build (schema must match Prisma client). */
+export const dynamic = "force-dynamic";
+
 export default async function RegisterPage() {
   await ensureSubscriptionPlanRows();
   const rows = await prisma.subscriptionOption.findMany({
