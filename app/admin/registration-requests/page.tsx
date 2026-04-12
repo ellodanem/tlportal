@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CopyRegisterLinkButton } from "@/components/admin/copy-register-link-button";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { prisma } from "@/lib/db";
 
@@ -26,7 +27,14 @@ export default async function RegistrationRequestsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Registration requests</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Public submissions from <Link className="text-emerald-700 underline dark:text-emerald-400" href="/register">/register</Link>. Approve to create a customer (notes include the full snapshot). Reject keeps an audit trail.
+          Public submissions from{" "}
+          <Link className="text-emerald-700 underline dark:text-emerald-400" href="/register">
+            /register
+          </Link>
+          . <CopyRegisterLinkButton />{" "}
+          <span className="max-md:block max-md:mt-1 md:contents">
+            Approve to create a customer (notes include the full snapshot). Reject keeps an audit trail.
+          </span>
         </p>
       </div>
 
