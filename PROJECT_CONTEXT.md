@@ -755,3 +755,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-12 01:14 UTC — commit `f62af93`
+
+- refactor(admin): top header nav; customers and SIMs updates; NCE token and gitignore
+
+
+### 2026-04-12 01:15 UTC — pre-push (`main` → origin) @ `f62af93`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
