@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { prisma } from "@/lib/db";
 
 import type { RegisterFormState } from "./register-form-state";
@@ -78,6 +80,9 @@ export async function submitRegistrationRequest(
     const message = e instanceof Error ? e.message : "Could not submit registration.";
     return { ok: false, error: message };
   }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/registration-requests");
 
   return {
     ok: true,

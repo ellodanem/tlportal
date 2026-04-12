@@ -8,7 +8,6 @@ import { AdminCreateMenu } from "@/components/admin-create-menu";
 const links = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/customers", label: "Customers" },
-  { href: "/admin/registration-requests", label: "Registrations" },
   { href: "/admin/subscription-options", label: "Plans" },
   { href: "/admin/invoices", label: "Invoices" },
   { href: "/admin/devices", label: "Devices" },
@@ -19,6 +18,11 @@ const links = [
 /** Show Device models sub-link only while browsing the devices area (fleet + catalog). */
 function isDevicesSection(pathname: string): boolean {
   return pathname.startsWith("/admin/devices") || pathname.startsWith("/admin/device-models");
+}
+
+/** Customers + registration queue share one nav group. */
+function isCustomerSection(pathname: string): boolean {
+  return pathname.startsWith("/admin/customers") || pathname.startsWith("/admin/registration-requests");
 }
 
 function navClass(active: boolean) {
@@ -65,6 +69,24 @@ export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | n
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {links.map(({ href, label }) => {
+          if (href === "/admin/customers") {
+            const customerParentActive = isCustomerSection(pathname);
+            const registrationsActive = pathname.startsWith("/admin/registration-requests");
+            const showSub = isCustomerSection(pathname);
+            return (
+              <div key={href} className="flex flex-col gap-0.5">
+                <Link href={href} className={navClass(customerParentActive)}>
+                  {label}
+                </Link>
+                {showSub ? (
+                  <Link href="/admin/registration-requests" className={subNavClass(registrationsActive)}>
+                    Registrations
+                  </Link>
+                ) : null}
+              </div>
+            );
+          }
+
           if (href === "/admin/devices") {
             const devicesParentActive = isDevicesSection(pathname);
             const deviceModelsActive = pathname.startsWith("/admin/device-models");

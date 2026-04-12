@@ -7,8 +7,16 @@ import {
   type FleetSnapshotRow,
 } from "@/components/dashboard/fleet-snapshot";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { IconAlert, IconDevice, IconLayers, IconLink, IconSearch, IconUsers } from "@/components/dashboard/dashboard-icons";
+import {
+  IconAlert,
+  IconDataUsage,
+  IconDevice,
+  IconLayers,
+  IconSearch,
+  IconUsers,
+} from "@/components/dashboard/dashboard-icons";
 import { getDashboardStats } from "@/lib/admin/dashboard-stats";
+import { formatMegabytes } from "@/lib/format/mbytes";
 
 function toneRowClass(tone: "urgent" | "warning" | "info") {
   switch (tone) {
@@ -31,10 +39,13 @@ export default async function AdminPage() {
     assignedBadges.push({ label: `Suspended · ${s.suspendedDeviceCount}`, variant: "amber" });
   }
 
-  const invoilessBadges =
-    s.invoilessConfigured && s.unlinkedInvoilessCount > 0
-      ? [{ label: `Pending link · ${s.unlinkedInvoilessCount}`, variant: "amber" as const }]
-      : undefined;
+  const simDataBadges: { label: string; variant: "neutral" | "amber" | "rose" | "emerald" | "slate" }[] = [];
+  if (s.simCardCount > 0) {
+    simDataBadges.push({ label: `${s.simCardCount.toLocaleString()} SIMs`, variant: "neutral" });
+  }
+  if (s.simTotalSumMb > 0) {
+    simDataBadges.push({ label: `Allowance · ${formatMegabytes(s.simTotalSumMb)}`, variant: "neutral" });
+  }
 
   const attentionBadges =
     s.attentionCount > 0
@@ -84,7 +95,16 @@ export default async function AdminPage() {
           <IconSearch className="shrink-0 opacity-60" />
           <span>Search or browse customers…</span>
         </Link>
-        <div className="flex flex-wrap gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          {s.pendingRegistrationCount > 0 ? (
+            <Link
+              href="/admin/registration-requests"
+              className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 font-medium text-amber-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:border-amber-700 dark:hover:bg-amber-950/60"
+            >
+              {s.pendingRegistrationCount} registration
+              {s.pendingRegistrationCount === 1 ? "" : "s"} to review
+            </Link>
+          ) : null}
           <span className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800/80">
             Live data
           </span>
@@ -122,15 +142,15 @@ export default async function AdminPage() {
           hint="Open assignments (not ended / cancelled)"
         />
         <StatCard
-          label={s.invoilessConfigured ? "Invoiless linked" : "Invoiless"}
-          value={s.invoilessConfigured ? s.linkedInvoilessCount : "—"}
-          href="/admin/customers"
-          icon={<IconLink className="h-5 w-5" />}
-          badges={invoilessBadges}
+          label="SIM data used"
+          value={formatMegabytes(s.simUsedSumMb)}
+          href="/admin/sims"
+          icon={<IconDataUsage className="h-5 w-5" />}
+          badges={simDataBadges.length > 0 ? simDataBadges : undefined}
           hint={
-            s.invoilessConfigured
-              ? "Customers with a stored Invoiless id"
-              : "Set INVOILESS_API_KEY to enable sync & counts"
+            s.simCardCount === 0
+              ? "No SIM records yet; totals come from synced usage fields"
+              : "Summed usedDataMB across SIMs (where sync populated values)"
           }
         />
         <StatCard

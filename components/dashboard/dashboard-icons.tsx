@@ -77,6 +77,16 @@ export function IconLink(props: { className?: string }) {
   );
 }
 
+export function IconDataUsage(props: { className?: string }) {
+  return (
+    <svg className={props.className} width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M5 20V10" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M12 20V4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M19 20v-7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconSearch(props: { className?: string }) {
   return (
     <svg className={props.className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>

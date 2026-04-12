@@ -38,6 +38,9 @@ export async function getDashboardStats() {
     unlinkedInvoilessCount,
     attentionAssignments,
     recentCustomers,
+    pendingRegistrationCount,
+    simDataSums,
+    simCardCount,
   ] = await Promise.all([
     prisma.device.count({
       where: { usagePurpose: "customer", status: "in_stock" },
@@ -88,11 +91,12 @@ export async function getDashboardStats() {
         updatedAt: true,
       },
     }),
+    prisma.registrationRequest.count({ where: { status: "pending" } }),
+    prisma.simCard.aggregate({
+      _sum: { usedDataMB: true, totalDataMB: true },
+    }),
+    prisma.simCard.count(),
   ]);
-
-  const linkedInvoilessCount = invoilessConfigured
-    ? await prisma.customer.count({ where: { invoilessCustomerId: { not: null } } })
-    : 0;
 
   const attentionCount =
     overdueAssignmentCount +
@@ -143,6 +147,9 @@ export async function getDashboardStats() {
     }
   }
 
+  const simUsedSumMb = simDataSums._sum.usedDataMB ?? 0;
+  const simTotalSumMb = simDataSums._sum.totalDataMB ?? 0;
+
   const recentItems: DashboardRecentItem[] = recentCustomers.map((c) => ({
     id: c.id,
     label: `Customer updated — ${displayName(c)}`,
@@ -169,7 +176,10 @@ export async function getDashboardStats() {
     overdueAssignmentCount,
     dueSoonAssignmentCount,
     unlinkedInvoilessCount,
-    linkedInvoilessCount,
+    pendingRegistrationCount,
+    simUsedSumMb,
+    simTotalSumMb,
+    simCardCount,
     attentionCount,
     attentionItems,
     recentItems,
