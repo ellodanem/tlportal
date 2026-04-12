@@ -876,3 +876,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - `scripts/run-build.mjs`: on `VERCEL=1`, set `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1` for migrate unless `TLPORTAL_KEEP_MIGRATE_ADVISORY_LOCK=1` or user already set the Prisma var; optional `SKIP_PRISMA_MIGRATE_ON_BUILD=1`; treat `pgbouncer=true` like pooler in the DIRECT_URL warning.
 - README: P1002 causes, mitigations, and env tradeoffs.
 
+
+### 2026-04-12 11:50 UTC — commit `d2b148a`
+
+- docs: PROJECT_CONTEXT for fc9c4d8
+
+
+### 2026-04-12 11:50 UTC — pre-push (`main` → origin) @ `d2b148a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 11:55 UTC — commit `3688233`
+
+- fix(1nce): send Basic Authorization header for OAuth token
+- `lib/nce/token.ts`: `Authorization: Basic base64(client_id:client_secret)` + JSON `{ grant_type: "client_credentials" }` per 1NCE Dev Hub (fixes 400 Missing Authorization).
+
