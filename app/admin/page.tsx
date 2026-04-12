@@ -6,7 +6,7 @@ import {
   FLEET_SEGMENT_ORDER,
   type FleetSnapshotRow,
 } from "@/components/dashboard/fleet-snapshot";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard, type StatBadge } from "@/components/dashboard/stat-card";
 import {
   IconAlert,
   IconDataUsage,
@@ -39,12 +39,12 @@ export default async function AdminPage() {
     assignedBadges.push({ label: `Suspended · ${s.suspendedDeviceCount}`, variant: "amber" });
   }
 
-  const simDataBadges: { label: string; variant: "neutral" | "amber" | "rose" | "emerald" | "slate" }[] = [];
+  const simDataBadges: StatBadge[] = [];
   if (s.simCardCount > 0) {
-    simDataBadges.push({ label: `${s.simCardCount.toLocaleString()} SIMs`, variant: "neutral" });
+    simDataBadges.push({ label: `${s.simCardCount.toLocaleString()} SIMs`, variant: "emerald" });
   }
   if (s.simTotalSumMb > 0) {
-    simDataBadges.push({ label: `Allowance · ${formatMegabytes(s.simTotalSumMb)}`, variant: "neutral" });
+    simDataBadges.push({ label: `Allowance · ${formatMegabytes(s.simTotalSumMb)}`, variant: "sky" });
   }
 
   const attentionBadges =
@@ -95,24 +95,32 @@ export default async function AdminPage() {
           <IconSearch className="shrink-0 opacity-60" />
           <span>Search or browse customers…</span>
         </Link>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           {s.pendingRegistrationCount > 0 ? (
             <Link
               href="/admin/registration-requests"
-              className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 font-medium text-amber-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:border-amber-700 dark:hover:bg-amber-950/60"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 font-medium text-amber-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:border-amber-700 dark:hover:bg-amber-950/60"
             >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
               {s.pendingRegistrationCount} registration
               {s.pendingRegistrationCount === 1 ? "" : "s"} to review
             </Link>
           ) : null}
-          <span className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800/80">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-2.5 py-1 font-medium text-emerald-900 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/35 dark:text-emerald-200">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40 dark:bg-emerald-500" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+            </span>
             Live data
           </span>
-          <span className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800/80">
-            Device registry live · SIMs on{" "}
-            <Link href="/admin/sims" className="text-emerald-700 hover:underline dark:text-emerald-400">
-              SIM cards
-            </Link>
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200/80 bg-sky-50/90 px-2.5 py-1 text-sky-950 shadow-sm dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-100">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500 dark:bg-sky-400" aria-hidden />
+            <span>
+              Device registry live · SIMs on{" "}
+              <Link href="/admin/sims" className="font-medium text-sky-800 underline-offset-2 hover:underline dark:text-sky-300">
+                SIM cards
+              </Link>
+            </span>
           </span>
         </div>
       </div>
@@ -123,6 +131,7 @@ export default async function AdminPage() {
           label="Customers"
           value={s.customerCount}
           href="/admin/customers"
+          accent="emerald"
           icon={<IconUsers className="h-5 w-5" />}
           hint="Accounts in TL Portal"
         />
@@ -130,21 +139,16 @@ export default async function AdminPage() {
           label="Assigned devices"
           value={s.assignedDeviceCount}
           href="/admin/devices"
+          accent="sky"
           icon={<IconDevice className="h-5 w-5" />}
           badges={assignedBadges}
           hint="In the field vs warehouse (badges)"
         />
         <StatCard
-          label="Active services"
-          value={s.activeServiceCount}
-          href="/admin/customers"
-          icon={<IconLayers className="h-5 w-5" />}
-          hint="Open assignments (not ended / cancelled)"
-        />
-        <StatCard
           label="SIM data used"
           value={formatMegabytes(s.simUsedSumMb)}
           href="/admin/sims"
+          accent="violet"
           icon={<IconDataUsage className="h-5 w-5" />}
           badges={simDataBadges.length > 0 ? simDataBadges : undefined}
           hint={
@@ -154,9 +158,18 @@ export default async function AdminPage() {
           }
         />
         <StatCard
+          label="Active services"
+          value={s.activeServiceCount}
+          href="/admin/customers"
+          accent="cyan"
+          icon={<IconLayers className="h-5 w-5" />}
+          hint="Open assignments (not ended / cancelled)"
+        />
+        <StatCard
           label="Needs attention"
           value={s.attentionCount}
           href={s.attentionItems[0]?.href ?? "/admin/customers"}
+          accent={s.attentionCount > 0 ? "rose" : "zinc"}
           icon={<IconAlert className="h-5 w-5" />}
           badges={attentionBadges}
           hint="Overdue / due-soon services + unlinked Invoiless"
