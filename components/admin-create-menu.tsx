@@ -26,7 +26,7 @@ const items = [
   },
 ] as const;
 
-export function AdminCreateMenu() {
+export function AdminCreateMenu({ sidebarCollapsed = false }: { sidebarCollapsed?: boolean }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -51,7 +51,7 @@ export function AdminCreateMenu() {
   }, [open]);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={`relative ${sidebarCollapsed ? "flex justify-center" : ""}`}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -64,7 +64,11 @@ export function AdminCreateMenu() {
       </button>
       {open ? (
         <div
-          className="absolute left-3 right-3 top-full z-50 mt-1 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40"
+          className={
+            sidebarCollapsed
+              ? "absolute left-full top-0 z-50 ml-1 w-60 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40"
+              : "absolute left-3 right-3 top-full z-50 mt-1 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40"
+          }
           role="menu"
         >
           {items.map(({ href, label, description }) => (
