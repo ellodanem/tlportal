@@ -20,9 +20,6 @@
 # production
 /build
 
-# Admin-uploaded assets (branding logo, etc.)
-/public/uploads/
-
 # misc
 .DS_Store
 *.pem

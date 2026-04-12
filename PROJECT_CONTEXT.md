@@ -625,3 +625,133 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-12 00:36 UTC — commit `818ddf3`
+
+- docs: PROJECT_CONTEXT for logo upload fix
+
+
+### 2026-04-12 00:36 UTC — pre-push (`main` → origin) @ `818ddf3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:39 UTC — commit `4c8aaea`
+
+- feat(admin): dashboard SIM usage, pending registrations banner, nav
+
+
+### 2026-04-12 00:40 UTC — pre-push (`main` → origin) @ `4c8aaea`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:45 UTC — commit `b6f8b7a`
+
+- feat(plans): fixed 1/3/6/12 month tiers with editable USD price only
+
+
+### 2026-04-12 00:45 UTC — pre-push (`main` → origin) @ `b6f8b7a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:47 UTC — commit `e27c6e0`
+
+- style(admin): reorder SIM vs services KPIs and add stat card accents
+
+
+### 2026-04-12 00:47 UTC — pre-push (`main` → origin) @ `e27c6e0`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:48 UTC — commit `a5aaa81`
+
+- fix(admin): move Plans nav under Settings submenu
+
+
+### 2026-04-12 00:48 UTC — pre-push (`main` → origin) @ `a5aaa81`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:49 UTC — commit `c89fdf6`
+
+- fix(build): migrate deploy before next build; dynamic /register
+
+
+### 2026-04-12 00:49 UTC — pre-push (`main` → origin) @ `c89fdf6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:54 UTC — commit `205bbc1`
+
+- fix(build): Neon migrate via prisma.config directUrl and run-build script
+
+
+### 2026-04-12 00:54 UTC — pre-push (`main` → origin) @ `205bbc1`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:55 UTC — commit `0d64f20`
+
+- chore(build): warn when migrate uses Neon pooler without DIRECT_URL
+
+
+### 2026-04-12 00:55 UTC — pre-push (`main` → origin) @ `0d64f20`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 01:01 UTC — commit `c96bfec`
+
+- docs: repair SQL and resolve steps for P3009 subscription migration
+
+
+### 2026-04-12 01:01 UTC — pre-push (`main` → origin) @ `c96bfec`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 01:06 UTC — commit `d25a104`
+
+- fix(docs): repair SQL drop NOT NULL on label before insert
+
+
+### 2026-04-12 01:06 UTC — pre-push (`main` → origin) @ `d25a104`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 01:09 UTC — commit `6aa70c2`
+
+- feat(plans): store and display subscription prices as XCD (rename priceUsd)
+
+
+### 2026-04-12 01:09 UTC — pre-push (`main` → origin) @ `6aa70c2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 01:10 UTC — commit `ece47d8`
+
+- fix(register): pluralize plan term labels (1 month / N months)
+
+
+### 2026-04-12 01:10 UTC — pre-push (`main` → origin) @ `ece47d8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 01:11 UTC — commit `fac9fc2`
+
+- fix(register): remove footer home and admin login links
+
+
+### 2026-04-12 01:11 UTC — pre-push (`main` → origin) @ `fac9fc2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

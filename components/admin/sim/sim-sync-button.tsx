@@ -16,7 +16,7 @@ export function SimSyncButton({ simId }: { simId: string }) {
     try {
       const result = await syncSimFromOneNce(simId);
       if (result.ok) {
-        router.refresh();
+        await router.refresh();
       } else {
         setError(result.error);
       }

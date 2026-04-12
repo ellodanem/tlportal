@@ -4,6 +4,9 @@ import { ONE_NCE_CUSTOMER_PORTAL_DASHBOARD } from "@/lib/nce/portal-urls";
 import type { SimListRow } from "@/lib/admin/sim-list-filter";
 import { prisma } from "@/lib/db";
 
+/** Usage totals change after sync/import; avoid serving a stale full-route cache for this page. */
+export const dynamic = "force-dynamic";
+
 type Props = { searchParams: Promise<{ usage?: string; avg?: string }> };
 
 function parseAvgWindowDays(avg: string | undefined): 7 | 30 | 90 {

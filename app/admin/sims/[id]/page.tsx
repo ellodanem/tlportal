@@ -111,7 +111,11 @@ export default async function AdminSimDetailPage({ params }: Props) {
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-4 border-b border-zinc-200 pb-6 dark:border-zinc-800 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <Link href="/admin/sims" className="text-sm text-emerald-700 hover:underline dark:text-emerald-400">
+          <Link
+            href="/admin/sims"
+            prefetch={false}
+            className="text-sm text-emerald-700 hover:underline dark:text-emerald-400"
+          >
             ← SIM cards
           </Link>
           <h1 className="mt-2 break-all font-mono text-xl font-semibold text-zinc-900 dark:text-zinc-50 sm:text-2xl">

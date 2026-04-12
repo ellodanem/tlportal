@@ -25,7 +25,7 @@ export function ImportSimsButton() {
             return;
           }
           setMessage(`Imported / updated ${r.imported} SIM(s) from 1NCE.`);
-          router.refresh();
+          await router.refresh();
         }}
         className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60 dark:bg-emerald-500 dark:hover:bg-emerald-400"
       >
