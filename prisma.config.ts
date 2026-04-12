@@ -12,5 +12,7 @@ export default defineConfig({
   engine: "classic",
   datasource: {
     url: env("DATABASE_URL"),
+    /** Migrations bypass the pooler when set (Neon: use the direct host, not `…-pooler…`). */
+    directUrl: process.env.DIRECT_URL?.trim() || env("DATABASE_URL"),
   },
 });

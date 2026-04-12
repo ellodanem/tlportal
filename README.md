@@ -64,7 +64,11 @@ Without keys, these return **503** with `configured: false`.
 
 ## Deploy (Vercel)
 
-Import the repo, set `DATABASE_URL` and other secrets in the Vercel project settings. The `postinstall` script runs `prisma generate` on each deploy. **`npm run build` runs `prisma migrate deploy` first** so production schema matches the app before `next build` (required after schema changes).
+Import the repo, set `DATABASE_URL` and other secrets in the Vercel project settings.
+
+**Neon + Prisma migrate:** add **`DIRECT_URL`** in Vercel (and `.env` locally if you use Neon). Use Neon’s **direct** connection string (host **without** `-pooler`) for `DIRECT_URL`, and keep the **pooled** URL as `DATABASE_URL` for runtime. `prisma.config.ts` passes `directUrl` into `migrate deploy` so advisory locks are not taken on the pooler (see [Prisma — Neon](https://www.prisma.io/docs/orm/overview/databases/neon)). The build script sets `DIRECT_URL` to `DATABASE_URL` only when `DIRECT_URL` is unset (OK for Docker; **on Neon you should set both explicitly**).
+
+`postinstall` runs `prisma generate`. **`npm run build`** runs `node scripts/run-build.mjs` (`prisma migrate deploy` → `prisma generate` → `next build`), with a longer schema-engine advisory lock timeout during migrate.
 
 **Nightly SIM sync:** set `CRON_SECRET` (long random string) in the project environment. `vercel.json` schedules `GET /api/cron/nightly-sims-sync` at **04:05 UTC** (about **00:05 AST**, Barbados / St Lucia, UTC−4). Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. Self-hosted: call the same URL on the same schedule with that header.
 
