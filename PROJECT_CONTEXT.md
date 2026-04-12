@@ -836,3 +836,10 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - fix(1nce): use api.1nce.com for OAuth token endpoint
 - `lib/nce/token.ts`: `TOKEN_URL` → `https://api.1nce.com/management-api/oauth/token` (portal host returned 404 HTML on sync); token errors that return HTML show a short hint instead of dumping the page.
 
+
+### 2026-04-12 11:42 UTC — commit `d6a2833`
+
+- fix(build): harden Prisma migrate on Vercel (P1002)
+- `scripts/run-build.mjs`: `migrate deploy` uses `DATABASE_URL` = `DIRECT_URL` when set; retries only on P1002 / advisory-lock messages (removed non-functional lock timeout env var).
+- README: deploy notes updated for migrate behavior.
+
