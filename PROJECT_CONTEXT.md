@@ -941,3 +941,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - `lib/admin/dashboard-stats.ts`: attention meta includes next due date; `upcomingBillItems` for active assignments with `nextDueDate`.
 - `lib/admin/customer-table-rows.ts` + `/admin/customers`: `CustomersTable` with rollup, services, next due; sort soonest due first.
 
+
+### 2026-04-12 13:02 UTC — commit `b4a0751`
+
+- docs: PROJECT_CONTEXT for 04743ab
+
+
+### 2026-04-12 13:02 UTC — pre-push (`main` → origin) @ `b4a0751`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 18:50 UTC — commit `65130a0`
+
+- feat(admin): sidebar icons + collapsible nav
+- `components/admin-nav-icons.tsx`: sidebar SVG set; `AdminSidebar` collapse toggle + `localStorage`; `AdminCreateMenu` positions flyout to the right when collapsed.
+
