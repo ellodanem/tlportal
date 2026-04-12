@@ -1,23 +1,41 @@
 -- Repair Neon DB after failed migration `20260412104500_subscription_option_duration_price` (Prisma P3009).
--- Run this in Neon: SQL Editor → paste → Run. Safe to re-run (idempotent where PG allows).
+-- Run in Neon: SQL Editor → paste entire file → Run once.
 --
--- After this succeeds, from your laptop (with DIRECT_URL + DATABASE_URL pointing at this DB):
+-- IMPORTANT: If `label` / `sortOrder` still exist, they are usually NOT NULL. Inserts that omit them will fail.
+-- This script relaxes those constraints before seeding rows, then drops legacy columns at the end.
+-- Do NOT use Neon AI "fixes" that keep `label` long-term — the app expects only durationMonths + priceUsd.
+--
+-- After success, locally (DATABASE_URL + DIRECT_URL for this DB):
 --   npx prisma migrate resolve --applied 20260412104500_subscription_option_duration_price
 -- Then redeploy Vercel.
 
--- 1) New columns (skip if already added)
+-- 1) New columns
 ALTER TABLE "SubscriptionOption" ADD COLUMN IF NOT EXISTS "durationMonths" INTEGER;
 ALTER TABLE "SubscriptionOption" ADD COLUMN IF NOT EXISTS "priceUsd" DECIMAL(10,2);
 
--- 2) Backfill from legacy sortOrder when that column still exists
+-- 2) Legacy NOT NULL blocks INSERT without label/sortOrder — drop only if those columns exist
 DO $$
 BEGIN
   IF EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'SubscriptionOption'
-      AND column_name = 'sortOrder'
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'SubscriptionOption' AND column_name = 'label'
+  ) THEN
+    ALTER TABLE "SubscriptionOption" ALTER COLUMN "label" DROP NOT NULL;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'SubscriptionOption' AND column_name = 'sortOrder'
+  ) THEN
+    ALTER TABLE "SubscriptionOption" ALTER COLUMN "sortOrder" DROP NOT NULL;
+  END IF;
+END $$;
+
+-- 3) Backfill from legacy sortOrder when that column still exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'SubscriptionOption' AND column_name = 'sortOrder'
   ) THEN
     UPDATE "SubscriptionOption" SET "durationMonths" = 1, "priceUsd" = COALESCE("priceUsd", 30::decimal) WHERE "sortOrder" = 10;
     UPDATE "SubscriptionOption" SET "durationMonths" = 3, "priceUsd" = COALESCE("priceUsd", 90::decimal) WHERE "sortOrder" = 20;
@@ -26,27 +44,27 @@ BEGIN
   END IF;
 END $$;
 
--- 3) Remove rows we still cannot place (orphan custom plans)
+-- 4) Remove rows we still cannot place
 DELETE FROM "SubscriptionOption" WHERE "durationMonths" IS NULL;
 
--- 4) Ensure four standard tiers
+-- 5) Ensure four standard tiers (no label/sortOrder — OK after step 2)
 INSERT INTO "SubscriptionOption" ("id", "durationMonths", "priceUsd", "isActive", "createdAt", "updatedAt")
 SELECT gen_random_uuid()::text, v.m, v.p, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM (VALUES (1, 30::decimal), (3, 90::decimal), (6, 180::decimal), (12, 330::decimal)) AS v(m, p)
 WHERE NOT EXISTS (SELECT 1 FROM "SubscriptionOption" x WHERE x."durationMonths" = v.m);
 
--- 5) One row per duration
+-- 6) One row per duration
 DELETE FROM "SubscriptionOption" AS a
 USING "SubscriptionOption" AS b
 WHERE a."durationMonths" = b."durationMonths" AND a."id" > b."id";
 
--- 6) NOT NULL (only if no nulls remain)
+-- 7) NOT NULL on new columns
 ALTER TABLE "SubscriptionOption" ALTER COLUMN "durationMonths" SET NOT NULL;
 ALTER TABLE "SubscriptionOption" ALTER COLUMN "priceUsd" SET NOT NULL;
 
--- 6b) Unique index (IF NOT EXISTS)
+-- 8) Unique index
 CREATE UNIQUE INDEX IF NOT EXISTS "SubscriptionOption_durationMonths_key" ON "SubscriptionOption" ("durationMonths");
 
--- 7) Drop legacy columns when present
+-- 9) Drop legacy columns
 ALTER TABLE "SubscriptionOption" DROP COLUMN IF EXISTS "label";
 ALTER TABLE "SubscriptionOption" DROP COLUMN IF EXISTS "sortOrder";
