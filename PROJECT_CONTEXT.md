@@ -924,3 +924,20 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(admin): URL-driven 1NCE SIM usage date range
 - `lib/nce/sim-usage-range.ts`: resolve/clamp `usageFrom` / `usageTo` (`YYYY-MM-DD`); `SimUsageRangeControls` presets + custom apply; SIM detail page uses `searchParams` and README note.
 
+
+### 2026-04-12 12:46 UTC — commit `e565ee3`
+
+- docs: PROJECT_CONTEXT for f5a7e81
+
+
+### 2026-04-12 12:46 UTC — pre-push (`main` → origin) @ `e565ee3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 13:02 UTC — commit `04743ab`
+
+- feat(admin): next due visibility on dashboard and customers list
+- `lib/admin/dashboard-stats.ts`: attention meta includes next due date; `upcomingBillItems` for active assignments with `nextDueDate`.
+- `lib/admin/customer-table-rows.ts` + `/admin/customers`: `CustomersTable` with rollup, services, next due; sort soonest due first.
+
