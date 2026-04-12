@@ -13,7 +13,7 @@ export default async function EditSubscriptionOptionPage({ params }: Props) {
     notFound();
   }
 
-  const priceUsd = row.priceUsd.toFixed(2);
+  const priceXcd = row.priceXcd.toFixed(2);
 
   return (
     <div className="mx-auto max-w-lg">
@@ -26,7 +26,7 @@ export default async function EditSubscriptionOptionPage({ params }: Props) {
           initial={{
             id: row.id,
             durationMonths: row.durationMonths,
-            priceUsd,
+            priceXcd,
             isActive: row.isActive,
           }}
         />

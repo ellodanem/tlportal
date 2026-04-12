@@ -19,14 +19,14 @@ export async function updateSubscriptionOption(
   }
 
   const id = String(formData.get("id") ?? "").trim();
-  const priceUsdRaw = String(formData.get("priceUsd") ?? "").trim();
+  const priceXcdRaw = String(formData.get("priceXcd") ?? "").trim();
   const isActive = formData.get("isActive") === "on" || formData.get("isActive") === "true";
 
   if (!id) {
     return { error: "Missing id." };
   }
 
-  const price = Number.parseFloat(priceUsdRaw);
+  const price = Number.parseFloat(priceXcdRaw);
   if (!Number.isFinite(price) || price <= 0) {
     return { error: "Enter a valid price greater than zero." };
   }
@@ -39,7 +39,7 @@ export async function updateSubscriptionOption(
   try {
     await prisma.subscriptionOption.update({
       where: { id },
-      data: { priceUsd: new Prisma.Decimal(price), isActive },
+      data: { priceXcd: new Prisma.Decimal(price), isActive },
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not update option.";

@@ -28,7 +28,7 @@ export async function approveRegistrationRequest(
 
   const reg = await prisma.registrationRequest.findUnique({
     where: { id },
-    include: { subscriptionOption: { select: { durationMonths: true, priceUsd: true } } },
+    include: { subscriptionOption: { select: { durationMonths: true, priceXcd: true } } },
   });
   if (!reg) {
     return { error: "Registration not found." };
@@ -61,7 +61,7 @@ export async function approveRegistrationRequest(
       reg.subscriptionOption != null
         ? formatSubscriptionChoiceLabel(
             reg.subscriptionOption.durationMonths,
-            reg.subscriptionOption.priceUsd,
+            reg.subscriptionOption.priceXcd,
           )
         : null,
     termInstallAfterPayment: reg.termInstallAfterPayment,

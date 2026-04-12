@@ -3,7 +3,8 @@
 --
 -- IMPORTANT: If `label` / `sortOrder` still exist, they are usually NOT NULL. Inserts that omit them will fail.
 -- This script relaxes those constraints before seeding rows, then drops legacy columns at the end.
--- Do NOT use Neon AI "fixes" that keep `label` long-term — the app expects only durationMonths + priceUsd.
+-- Do NOT use Neon AI "fixes" that keep `label` long-term. Column is still `priceUsd` here; after `migrate deploy`,
+-- migration `20260412140000_subscription_option_rename_price_xcd` renames it to `priceXcd` (XCD amounts).
 --
 -- After success, locally (DATABASE_URL + DIRECT_URL for this DB):
 --   npx prisma migrate resolve --applied 20260412104500_subscription_option_duration_price

@@ -141,7 +141,7 @@ model SubscriptionOption {
   id             String   @id @default(uuid())
   /// Billing term length in months; exactly one row per value in { 1, 3, 6, 12 }.
   durationMonths Int      @unique
-  priceUsd       Decimal  @db.Decimal(10, 2)
+  priceXcd       Decimal  @db.Decimal(10, 2)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

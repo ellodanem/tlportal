@@ -19,11 +19,11 @@ export default async function RegisterPage() {
   const rows = await prisma.subscriptionOption.findMany({
     where: { isActive: true },
     orderBy: { durationMonths: "asc" },
-    select: { id: true, durationMonths: true, priceUsd: true },
+    select: { id: true, durationMonths: true, priceXcd: true },
   });
   const subscriptionOptions = rows.map((o) => ({
     id: o.id,
-    displayLabel: formatSubscriptionChoiceLabel(o.durationMonths, o.priceUsd),
+    displayLabel: formatSubscriptionChoiceLabel(o.durationMonths, o.priceXcd),
   }));
 
   return (

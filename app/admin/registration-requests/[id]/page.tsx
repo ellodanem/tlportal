@@ -24,7 +24,7 @@ export default async function RegistrationRequestDetailPage({ params }: Props) {
   const r = await prisma.registrationRequest.findUnique({
     where: { id },
     include: {
-      subscriptionOption: { select: { durationMonths: true, priceUsd: true } },
+      subscriptionOption: { select: { durationMonths: true, priceXcd: true } },
       matchesCustomer: { select: { id: true, company: true, firstName: true, lastName: true, email: true } },
       createdCustomer: { select: { id: true } },
       reviewedBy: { select: { email: true, name: true } },
@@ -85,7 +85,7 @@ export default async function RegistrationRequestDetailPage({ params }: Props) {
               <dt className="text-zinc-500 dark:text-zinc-400">Subscription (form)</dt>
               <dd className="max-w-[60%] text-right text-zinc-900 dark:text-zinc-50">
                 {r.subscriptionOption
-                  ? formatSubscriptionChoiceLabel(r.subscriptionOption.durationMonths, r.subscriptionOption.priceUsd)
+                  ? formatSubscriptionChoiceLabel(r.subscriptionOption.durationMonths, r.subscriptionOption.priceXcd)
                   : "—"}
               </dd>
             </div>

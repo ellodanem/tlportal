@@ -25,10 +25,10 @@ async function main() {
   if (planCount === 0) {
     await prisma.subscriptionOption.createMany({
       data: [
-        { durationMonths: 1, priceUsd: 30, isActive: true },
-        { durationMonths: 3, priceUsd: 90, isActive: true },
-        { durationMonths: 6, priceUsd: 180, isActive: true },
-        { durationMonths: 12, priceUsd: 330, isActive: true },
+        { durationMonths: 1, priceXcd: 30, isActive: true },
+        { durationMonths: 3, priceXcd: 90, isActive: true },
+        { durationMonths: 6, priceXcd: 180, isActive: true },
+        { durationMonths: 12, priceXcd: 330, isActive: true },
       ],
     });
     console.info("Seeded default subscription options for /register.");

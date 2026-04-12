@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 
 import { SUBSCRIPTION_PLAN_MONTHS } from "./display";
 
-const DEFAULT_PRICE_USD: Record<(typeof SUBSCRIPTION_PLAN_MONTHS)[number], number> = {
+const DEFAULT_PRICE_XCD: Record<(typeof SUBSCRIPTION_PLAN_MONTHS)[number], number> = {
   1: 30,
   3: 90,
   6: 180,
@@ -24,7 +24,7 @@ export async function ensureSubscriptionPlanRows(): Promise<void> {
       await prisma.subscriptionOption.create({
         data: {
           durationMonths: months,
-          priceUsd: new Prisma.Decimal(DEFAULT_PRICE_USD[months]),
+          priceXcd: new Prisma.Decimal(DEFAULT_PRICE_XCD[months]),
           isActive: true,
         },
       });

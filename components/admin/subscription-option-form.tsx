@@ -15,7 +15,7 @@ function fieldClass() {
 export function SubscriptionOptionForm({
   initial,
 }: {
-  initial: { id: string; durationMonths: number; priceUsd: string; isActive: boolean };
+  initial: { id: string; durationMonths: number; priceXcd: string; isActive: boolean };
 }) {
   const [state, formAction, pending] = useActionState(updateSubscriptionOption, initialState);
 
@@ -34,16 +34,16 @@ export function SubscriptionOptionForm({
       </div>
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="so-price">
-          Price (USD)
+          Price (XCD)
         </label>
         <input
           id="so-price"
-          name="priceUsd"
+          name="priceXcd"
           type="number"
           required
           min={0.01}
           step={0.01}
-          defaultValue={initial.priceUsd}
+          defaultValue={initial.priceXcd}
           className={fieldClass()}
         />
       </div>

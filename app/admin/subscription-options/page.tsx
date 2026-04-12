@@ -18,8 +18,9 @@ export default async function SubscriptionOptionsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Subscription options</h1>
           <p className="mt-1 max-w-xl text-sm text-zinc-600 dark:text-zinc-400">
-            Four fixed plans (1, 3, 6, and 12 month). Only the price for each plan can be edited; the public form shows
-            &quot;Billed monthly per vehicle&quot; under the dropdown. The applicant&apos;s choice is copied into customer
+            Four fixed plans (1, 3, 6, and 12 month). Prices are in XCD (Eastern Caribbean dollars); only the price for each
+            plan can be edited. The public form shows &quot;Billed monthly per vehicle&quot; under the dropdown. The
+            applicant&apos;s choice is copied into customer
             notes on approval (Invoiless remains a separate admin step).
           </p>
         </div>
@@ -46,7 +47,7 @@ export default async function SubscriptionOptionsPage() {
               options.map((o) => (
                 <tr key={o.id}>
                   <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
-                    {formatSubscriptionChoiceLabel(o.durationMonths, o.priceUsd)}
+                    {formatSubscriptionChoiceLabel(o.durationMonths, o.priceXcd)}
                   </td>
                   <td className="px-4 py-3">
                     {o.isActive ? (
