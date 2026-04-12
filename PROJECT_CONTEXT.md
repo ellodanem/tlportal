@@ -859,3 +859,20 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - fix(admin): registration approve/reject without redirect in server action
 - `registration-review-state.ts`: initial state + `next` URL for client navigation after success; `actions.ts` returns `next` instead of `redirect()`; `RegistrationReviewForms` uses `router.push` when `next` is set.
 
+
+### 2026-04-12 11:47 UTC — commit `502fbac`
+
+- docs: PROJECT_CONTEXT for b704edc
+
+
+### 2026-04-12 11:47 UTC — pre-push (`main` → origin) @ `502fbac`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 11:50 UTC — commit `fc9c4d8`
+
+- fix(build): avoid recurring P1002 on Vercel migrate deploy
+- `scripts/run-build.mjs`: on `VERCEL=1`, set `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1` for migrate unless `TLPORTAL_KEEP_MIGRATE_ADVISORY_LOCK=1` or user already set the Prisma var; optional `SKIP_PRISMA_MIGRATE_ON_BUILD=1`; treat `pgbouncer=true` like pooler in the DIRECT_URL warning.
+- README: P1002 causes, mitigations, and env tradeoffs.
+
