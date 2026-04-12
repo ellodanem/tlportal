@@ -11,6 +11,15 @@ if (!env.DIRECT_URL?.trim() && env.DATABASE_URL?.trim()) {
   env.DIRECT_URL = env.DATABASE_URL;
 }
 
+const dbUrl = env.DATABASE_URL ?? "";
+if (dbUrl.includes("-pooler") && env.DIRECT_URL === dbUrl) {
+  console.warn(
+    "\n[tlportal build] DATABASE_URL uses Neon pooler but DIRECT_URL is not set to a direct (non-pooler) URL.",
+    "Prisma migrate often hits P1002 advisory lock timeouts on the pooler.",
+    "Set DIRECT_URL in Vercel to Neon’s direct connection string (see README Deploy).\n",
+  );
+}
+
 /** Longer lock wait when another session holds Prisma's migrate advisory lock (ms). */
 if (!env.PRISMA_SCHEMA_ENGINE_ADVISORY_LOCK_TIMEOUT?.trim()) {
   env.PRISMA_SCHEMA_ENGINE_ADVISORY_LOCK_TIMEOUT = "120000";
