@@ -37,16 +37,17 @@ export async function getOneNceAccessToken(): Promise<string> {
   }
 
   const { id, secret } = getCredentials();
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: id,
-    client_secret: secret,
-  });
+  // 1NCE Management API: Basic auth (client_id:client_secret) + JSON body per Dev Hub.
+  const basic = Buffer.from(`${id}:${secret}`, "utf8").toString("base64");
 
   const res = await fetch(TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Basic ${basic}`,
+    },
+    body: JSON.stringify({ grant_type: "client_credentials" }),
   });
 
   const text = await res.text();
