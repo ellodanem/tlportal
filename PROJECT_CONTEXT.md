@@ -820,3 +820,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-12 11:27 UTC — commit `4b68da1`
+
+- docs: PROJECT_CONTEXT for a536d48
+
+
+### 2026-04-12 11:27 UTC — pre-push (`main` → origin) @ `4b68da1`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 11:34 UTC — commit `7ccec9a`
+
+- fix(1nce): use api.1nce.com for OAuth token endpoint
+- `lib/nce/token.ts`: `TOKEN_URL` → `https://api.1nce.com/management-api/oauth/token` (portal host returned 404 HTML on sync); token errors that return HTML show a short hint instead of dumping the page.
+
