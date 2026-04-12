@@ -583,3 +583,24 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-11 23:20 UTC — commit `960ea60`
+
+- docs: PROJECT_CONTEXT agent notes for registration feature
+
+
+### 2026-04-11 23:20 UTC — pre-push (`main` → origin) @ `960ea60`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 00:32 UTC — commit `c2ff96b`
+
+- feat(admin): copy full /register URL on registration requests page
+- **Agent notes** — `components/admin/copy-register-link-button.tsx` copies `origin + /register`; intro on `app/admin/registration-requests/page.tsx`.
+
+
+### 2026-04-12 00:32 UTC — pre-push (`main` → origin) @ `c2ff96b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
