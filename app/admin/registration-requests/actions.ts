@@ -1,16 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/get-session";
 import { buildRegistrationCustomerNotes } from "@/lib/register/build-registration-notes";
 import { prisma } from "@/lib/db";
 import { formatSubscriptionChoiceLabel } from "@/lib/subscription-options/display";
 
-export type RegistrationReviewState = { error: string | null };
-
-export const registrationReviewInitialState: RegistrationReviewState = { error: null };
+import type { RegistrationReviewState } from "./registration-review-state";
 
 export async function approveRegistrationRequest(
   _prev: RegistrationReviewState,
@@ -18,12 +15,12 @@ export async function approveRegistrationRequest(
 ): Promise<RegistrationReviewState> {
   const session = await getSession();
   if (!session) {
-    return { error: "You must be signed in." };
+    return { error: "You must be signed in.", next: null };
   }
 
   const id = String(formData.get("id") ?? "").trim();
   if (!id) {
-    return { error: "Missing registration id." };
+    return { error: "Missing registration id.", next: null };
   }
 
   const reg = await prisma.registrationRequest.findUnique({
@@ -31,16 +28,17 @@ export async function approveRegistrationRequest(
     include: { subscriptionOption: { select: { durationMonths: true, priceXcd: true } } },
   });
   if (!reg) {
-    return { error: "Registration not found." };
+    return { error: "Registration not found.", next: null };
   }
   if (reg.status !== "pending") {
-    return { error: "This registration is no longer pending." };
+    return { error: "This registration is no longer pending.", next: null };
   }
 
   if (reg.matchesCustomerId) {
     return {
       error:
         "This submission was flagged: the email already matches an existing customer. Reject it or update the existing customer instead of approving a duplicate.",
+      next: null,
     };
   }
 
@@ -51,6 +49,7 @@ export async function approveRegistrationRequest(
   if (clash) {
     return {
       error: "A customer with this email already exists. Cannot create another. Reject this registration or merge manually.",
+      next: null,
     };
   }
 
@@ -96,13 +95,16 @@ export async function approveRegistrationRequest(
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not approve registration.";
-    return { error: message };
+    return { error: message, next: null };
   }
 
   revalidatePath("/admin/registration-requests");
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}/edit`);
-  redirect(`/admin/customers/${customerId}/edit`);
+  return {
+    error: null,
+    next: `/admin/customers/${customerId}/edit`,
+  };
 }
 
 export async function rejectRegistrationRequest(
@@ -111,24 +113,24 @@ export async function rejectRegistrationRequest(
 ): Promise<RegistrationReviewState> {
   const session = await getSession();
   if (!session) {
-    return { error: "You must be signed in." };
+    return { error: "You must be signed in.", next: null };
   }
 
   const id = String(formData.get("id") ?? "").trim();
   const reason = String(formData.get("rejectionReason") ?? "").trim();
   if (!id) {
-    return { error: "Missing registration id." };
+    return { error: "Missing registration id.", next: null };
   }
   if (!reason) {
-    return { error: "Enter a rejection reason for the record." };
+    return { error: "Enter a rejection reason for the record.", next: null };
   }
 
   const reg = await prisma.registrationRequest.findUnique({ where: { id } });
   if (!reg) {
-    return { error: "Registration not found." };
+    return { error: "Registration not found.", next: null };
   }
   if (reg.status !== "pending") {
-    return { error: "This registration is no longer pending." };
+    return { error: "This registration is no longer pending.", next: null };
   }
 
   try {
@@ -143,10 +145,10 @@ export async function rejectRegistrationRequest(
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not reject registration.";
-    return { error: message };
+    return { error: message, next: null };
   }
 
   revalidatePath("/admin/registration-requests");
   revalidatePath(`/admin/registration-requests/${id}`);
-  redirect("/admin/registration-requests");
+  return { error: null, next: "/admin/registration-requests" };
 }

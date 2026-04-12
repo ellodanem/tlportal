@@ -1,14 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect } from "react";
 
 import {
   approveRegistrationRequest,
   rejectRegistrationRequest,
-  registrationReviewInitialState,
 } from "@/app/admin/registration-requests/actions";
+import { registrationReviewInitialState } from "@/app/admin/registration-requests/registration-review-state";
 
 export function RegistrationReviewForms({ registrationId }: { registrationId: string }) {
+  const router = useRouter();
   const [approveState, approveAction, approvePending] = useActionState(
     approveRegistrationRequest,
     registrationReviewInitialState,
@@ -17,6 +19,18 @@ export function RegistrationReviewForms({ registrationId }: { registrationId: st
     rejectRegistrationRequest,
     registrationReviewInitialState,
   );
+
+  useEffect(() => {
+    if (approveState.next) {
+      router.push(approveState.next);
+    }
+  }, [approveState.next, router]);
+
+  useEffect(() => {
+    if (rejectState.next) {
+      router.push(rejectState.next);
+    }
+  }, [rejectState.next, router]);
 
   return (
     <div className="space-y-6">
