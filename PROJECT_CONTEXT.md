@@ -800,3 +800,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - docs: PROJECT_CONTEXT pre-push for 4c086bf
 
+
+### 2026-04-12 01:17 UTC — commit `d1ba631`
+
+- docs: PROJECT_CONTEXT post-commit for c5aca12
+
+
+### 2026-04-12 01:17 UTC — pre-push (`main` → origin) @ `d1ba631`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 11:26 UTC — commit `a536d48`
+
+- fix(admin): restore sidebar navigation in layout
+
+
+### 2026-04-12 11:26 UTC — pre-push (`main` → origin) @ `a536d48`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
