@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { SimSyncButton } from "@/components/admin/sim/sim-sync-button";
+import { SimUsageRangeControls } from "@/components/admin/sim/sim-usage-range-controls";
 import { DataUsageDonut } from "@/components/admin/sim/data-usage-donut";
 import { UsageLineChart } from "@/components/admin/sim/usage-line-chart";
 import { customerDisplayName } from "@/lib/admin/customer-list";
@@ -15,9 +16,16 @@ import {
   summarizeUsageSeries,
   type UsageSeriesPoint,
 } from "@/lib/nce/sim-api";
+import {
+  SIM_USAGE_RANGE_MAX_SPAN_DAYS,
+  resolveSimUsageRangeFromQuery,
+} from "@/lib/nce/sim-usage-range";
 import { prisma } from "@/lib/db";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ usageFrom?: string; usageTo?: string }>;
+};
 
 function formatDateTime(d: Date | null | undefined) {
   if (!d) return "—";
@@ -55,8 +63,9 @@ function assignmentStatusPill(status: string) {
   );
 }
 
-export default async function AdminSimDetailPage({ params }: Props) {
+export default async function AdminSimDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const sp = await searchParams;
   const sim = await prisma.simCard.findUnique({
     where: { id },
     include: {
@@ -84,13 +93,14 @@ export default async function AdminSimDetailPage({ params }: Props) {
   let usagePoints: UsageSeriesPoint[] = [];
   let liveTotalMb: number | null = null;
   let liveUsedMb: number | null = null;
+  const usageRange = resolveSimUsageRangeFromQuery({
+    usageFrom: sp.usageFrom,
+    usageTo: sp.usageTo,
+  });
+
   if (oneNceConfigured) {
-    const end = new Date();
-    const start = new Date();
-    // 1NCE usage API is bounded (~6 months); use a wide window so “first day with usage” is meaningful for newer SIMs.
-    start.setDate(start.getDate() - 180);
     const [usageOutcome, mergedOutcome] = await Promise.allSettled([
-      fetchOneNceSimUsageSeries(sim.iccid, start, end),
+      fetchOneNceSimUsageSeries(sim.iccid, usageRange.start, usageRange.end),
       fetchMergedSimFieldsForIccid(sim.iccid),
     ]);
     if (usageOutcome.status === "fulfilled") {
@@ -105,6 +115,7 @@ export default async function AdminSimDetailPage({ params }: Props) {
   const displayTotalMb = liveTotalMb ?? sim.totalDataMB;
   const displayUsedMb = liveUsedMb ?? sim.usedDataMB;
   const usageSummary = summarizeUsageSeries(usagePoints);
+  const usageRangeSummary = `1NCE usage range: ${usageRange.usageFrom} → ${usageRange.usageTo} (UTC calendar dates). Share this view with query params usageFrom & usageTo.`;
 
   const title = sim.label?.trim() || sim.iccid;
   const linkedDeviceSummary = sim.device ? (
@@ -184,24 +195,39 @@ export default async function AdminSimDetailPage({ params }: Props) {
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Usage over time</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Daily data from 1NCE (up to ~6 months). First activity below is the earliest day with reported usage in this
-            window—not the exact moment the SIM attached to the network.
+            Daily data from 1NCE (max ~{SIM_USAGE_RANGE_MAX_SPAN_DAYS} days per request). Pick a range below; URLs
+            support{" "}
+            <code className="rounded bg-zinc-200 px-1 font-mono text-[10px] dark:bg-zinc-800">usageFrom</code> /{" "}
+            <code className="rounded bg-zinc-200 px-1 font-mono text-[10px] dark:bg-zinc-800">usageTo</code> as{" "}
+            <code className="rounded bg-zinc-200 px-1 font-mono text-[10px] dark:bg-zinc-800">YYYY-MM-DD</code>. First
+            activity is the earliest day with reported usage in this window—not the exact attach time.
           </p>
           {oneNceConfigured ? (
-            <dl className="mt-3 grid gap-2 rounded-lg bg-zinc-50/90 px-3 py-2.5 text-xs dark:bg-zinc-950/50">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <dt className="text-zinc-500 dark:text-zinc-400">First day with usage</dt>
-                <dd className="font-medium text-zinc-900 dark:text-zinc-100">
-                  {usageSummary.firstUsageDate ? formatUsageDay(usageSummary.firstUsageDate) : "None in this window"}
-                </dd>
+            <>
+              <div className="mt-3">
+                <SimUsageRangeControls
+                  simId={sim.id}
+                  usageFrom={usageRange.usageFrom}
+                  usageTo={usageRange.usageTo}
+                  rangeSummary={usageRangeSummary}
+                  isDefaultRange={!usageRange.usedQueryParams}
+                />
               </div>
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <dt className="text-zinc-500 dark:text-zinc-400">Total in window</dt>
-                <dd className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
-                  {formatMegabytes(usageSummary.totalMbInRange)}
-                </dd>
-              </div>
-            </dl>
+              <dl className="mt-3 grid gap-2 rounded-lg bg-zinc-50/90 px-3 py-2.5 text-xs dark:bg-zinc-950/50">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <dt className="text-zinc-500 dark:text-zinc-400">First day with usage</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {usageSummary.firstUsageDate ? formatUsageDay(usageSummary.firstUsageDate) : "None in this window"}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <dt className="text-zinc-500 dark:text-zinc-400">Total in window</dt>
+                  <dd className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+                    {formatMegabytes(usageSummary.totalMbInRange)}
+                  </dd>
+                </div>
+              </dl>
+            </>
           ) : null}
           <div className="mt-4">
             <UsageLineChart points={usagePoints} />
