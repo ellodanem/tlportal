@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { RegistrationForm } from "@/components/register/registration-form";
 import { prisma } from "@/lib/db";
@@ -40,16 +39,6 @@ export default async function RegisterPage() {
         <div className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <RegistrationForm subscriptionOptions={subscriptionOptions} />
         </div>
-
-        <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          <Link href="/" className="text-emerald-700 underline hover:text-emerald-800 dark:text-emerald-400">
-            Back to home
-          </Link>
-          {" · "}
-          <Link href="/login" className="text-zinc-600 underline hover:text-zinc-800 dark:text-zinc-400">
-            Admin login
-          </Link>
-        </p>
       </div>
     </div>
   );
