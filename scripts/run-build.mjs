@@ -3,7 +3,9 @@
  * - Neon: set DIRECT_URL to the non-pooled connection string; keep DATABASE_URL pooled for runtime.
  * - If DIRECT_URL is unset, falls back to DATABASE_URL (works for local Docker; Neon pooler may still lock-timeout).
  * - Migrate runs with DATABASE_URL forced to DIRECT_URL when DIRECT_URL is set so the CLI never uses the pooler
- *   for advisory locks (see README). Prisma’s migrate advisory lock wait is ~10s; transient P1002 is retried.
+ *   for session locks (see README). Prisma’s migrate advisory lock wait is ~10s; transient P1002 is retried.
+ * - On Vercel (`VERCEL=1`), migrate deploy sets PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK unless opted out — P1002 often
+ *   persists until lock holder exits; disabling the lock is Prisma’s supported escape hatch when only one migrate runs at a time.
  */
 import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -15,13 +17,17 @@ if (!env.DIRECT_URL?.trim() && env.DATABASE_URL?.trim()) {
 }
 
 const dbUrl = env.DATABASE_URL ?? "";
-if (dbUrl.includes("-pooler") && env.DIRECT_URL === dbUrl) {
+const looksLikePooler =
+  dbUrl.includes("-pooler") || /[?&]pgbouncer=true(?:&|$)/i.test(dbUrl);
+if (looksLikePooler && env.DIRECT_URL === dbUrl) {
   console.warn(
-    "\n[tlportal build] DATABASE_URL uses Neon pooler but DIRECT_URL is not set to a direct (non-pooler) URL.",
+    "\n[tlportal build] DATABASE_URL looks like a pooler URL but DIRECT_URL is not set to a separate direct URL.",
     "Prisma migrate often hits P1002 advisory lock timeouts on the pooler.",
     "Set DIRECT_URL in Vercel to Neon’s direct connection string (see README Deploy).\n",
   );
 }
+
+let loggedAdvisoryLockBypass = false;
 
 /** Env for `prisma migrate deploy`: prefer a single non-pooled connection for session locks. */
 function migrateEnv() {
@@ -29,6 +35,21 @@ function migrateEnv() {
   const direct = e.DIRECT_URL?.trim();
   if (direct) {
     e.DATABASE_URL = direct;
+  }
+  // Vercel: repeated P1002 is common (overlapping deploys, pooler, or a stuck session). Prisma allows disabling the lock.
+  const onVercel = e.VERCEL === "1";
+  const keepLock = e.TLPORTAL_KEEP_MIGRATE_ADVISORY_LOCK === "1";
+  const userChoseLock = Boolean(e.PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK?.trim());
+  if (onVercel && !keepLock && !userChoseLock) {
+    e.PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK = "1";
+    if (!loggedAdvisoryLockBypass) {
+      loggedAdvisoryLockBypass = true;
+      console.warn(
+        "\n[tlportal build] VERCEL=1: PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1 for prisma migrate deploy.",
+        "Do not run two migrate deploys against the same DB at once (e.g. parallel production deploys or previews hitting prod).",
+        "Set TLPORTAL_KEEP_MIGRATE_ADVISORY_LOCK=1 to opt out. See README Deploy (P1002).\n",
+      );
+    }
   }
   return e;
 }
@@ -88,6 +109,13 @@ async function runMigrateWithRetries() {
   }
 }
 
-await runMigrateWithRetries();
+if (env.SKIP_PRISMA_MIGRATE_ON_BUILD === "1") {
+  console.warn(
+    "\n[tlportal build] SKIP_PRISMA_MIGRATE_ON_BUILD=1 — skipping prisma migrate deploy.",
+    "Apply migrations manually (e.g. CI or `npx prisma migrate deploy` against DIRECT_URL) before relying on new schema.\n",
+  );
+} else {
+  await runMigrateWithRetries();
+}
 run("prisma generate", "npx", ["prisma", "generate"]);
 run("next build", "npx", ["next", "build"]);
