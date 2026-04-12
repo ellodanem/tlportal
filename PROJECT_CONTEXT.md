@@ -892,3 +892,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - fix(1nce): send Basic Authorization header for OAuth token
 - `lib/nce/token.ts`: `Authorization: Basic base64(client_id:client_secret)` + JSON `{ grant_type: "client_credentials" }` per 1NCE Dev Hub (fixes 400 Missing Authorization).
 
+
+### 2026-04-12 11:55 UTC — commit `fdde090`
+
+- docs: PROJECT_CONTEXT for 3688233
+
+
+### 2026-04-12 11:55 UTC — pre-push (`main` → origin) @ `fdde090`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-12 12:04 UTC — commit `77f3184`
+
+- feat(admin): first usage day + total MB from 1NCE usage window
+- `lib/nce/sim-api.ts`: `summarizeUsageSeries()`; SIM detail usage query widened to ~180 days; UI shows first calendar day with reported usage + sum of daily MB in window (proxy for first data activity).
+
