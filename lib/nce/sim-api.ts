@@ -216,8 +216,34 @@ function parseDataQuotaPayload(body: unknown): { totalDataMB: number | null; use
 
 export type UsageSeriesPoint = { date: Date; usedMb: number };
 
+/** Ignore sub-byte noise when detecting “first day with usage”. */
+const FIRST_USAGE_MIN_MB = 1e-4;
+
 /**
- * GET /v1/sims/:iccid/usage — daily stats for chart (last ~90 days max window per API docs).
+ * From daily usage points (sorted or not), earliest calendar day with measurable usage and sum of MB in range.
+ * Useful as a proxy for “when did this SIM first show data activity” within the queried window (not true network attach time).
+ */
+export function summarizeUsageSeries(points: UsageSeriesPoint[]): {
+  firstUsageDate: Date | null;
+  totalMbInRange: number;
+} {
+  if (!points.length) {
+    return { firstUsageDate: null, totalMbInRange: 0 };
+  }
+  const sorted = [...points].sort((a, b) => a.date.getTime() - b.date.getTime());
+  let firstUsageDate: Date | null = null;
+  let totalMbInRange = 0;
+  for (const p of sorted) {
+    if (p.usedMb > FIRST_USAGE_MIN_MB && !firstUsageDate) {
+      firstUsageDate = p.date;
+    }
+    totalMbInRange += p.usedMb;
+  }
+  return { firstUsageDate, totalMbInRange };
+}
+
+/**
+ * GET /v1/sims/:iccid/usage — daily stats for chart (1NCE limits history; we request up to ~6 months).
  */
 export async function fetchOneNceSimUsageSeries(
   iccid: string,

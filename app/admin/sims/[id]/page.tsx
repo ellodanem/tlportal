@@ -12,6 +12,7 @@ import { ONE_NCE_CUSTOMER_PORTAL_DASHBOARD } from "@/lib/nce/portal-urls";
 import {
   fetchMergedSimFieldsForIccid,
   fetchOneNceSimUsageSeries,
+  summarizeUsageSeries,
   type UsageSeriesPoint,
 } from "@/lib/nce/sim-api";
 import { prisma } from "@/lib/db";
@@ -26,6 +27,15 @@ function formatDateTime(d: Date | null | undefined) {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function formatUsageDay(d: Date) {
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 }
 
@@ -77,7 +87,8 @@ export default async function AdminSimDetailPage({ params }: Props) {
   if (oneNceConfigured) {
     const end = new Date();
     const start = new Date();
-    start.setDate(start.getDate() - 90);
+    // 1NCE usage API is bounded (~6 months); use a wide window so “first day with usage” is meaningful for newer SIMs.
+    start.setDate(start.getDate() - 180);
     const [usageOutcome, mergedOutcome] = await Promise.allSettled([
       fetchOneNceSimUsageSeries(sim.iccid, start, end),
       fetchMergedSimFieldsForIccid(sim.iccid),
@@ -93,6 +104,7 @@ export default async function AdminSimDetailPage({ params }: Props) {
 
   const displayTotalMb = liveTotalMb ?? sim.totalDataMB;
   const displayUsedMb = liveUsedMb ?? sim.usedDataMB;
+  const usageSummary = summarizeUsageSeries(usagePoints);
 
   const title = sim.label?.trim() || sim.iccid;
   const linkedDeviceSummary = sim.device ? (
@@ -171,7 +183,26 @@ export default async function AdminSimDetailPage({ params }: Props) {
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Usage over time</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Daily usage from 1NCE (last 90 days).</p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Daily data from 1NCE (up to ~6 months). First activity below is the earliest day with reported usage in this
+            window—not the exact moment the SIM attached to the network.
+          </p>
+          {oneNceConfigured ? (
+            <dl className="mt-3 grid gap-2 rounded-lg bg-zinc-50/90 px-3 py-2.5 text-xs dark:bg-zinc-950/50">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <dt className="text-zinc-500 dark:text-zinc-400">First day with usage</dt>
+                <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {usageSummary.firstUsageDate ? formatUsageDay(usageSummary.firstUsageDate) : "None in this window"}
+                </dd>
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <dt className="text-zinc-500 dark:text-zinc-400">Total in window</dt>
+                <dd className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+                  {formatMegabytes(usageSummary.totalMbInRange)}
+                </dd>
+              </div>
+            </dl>
+          ) : null}
           <div className="mt-4">
             <UsageLineChart points={usagePoints} />
           </div>
