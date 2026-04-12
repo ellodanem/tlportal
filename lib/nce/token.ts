@@ -1,4 +1,5 @@
-const TOKEN_URL = "https://portal.1nce.com/management-api/oauth/token";
+// Management API OAuth; portal.1nce.com/.../oauth/token returns 404 HTML.
+const TOKEN_URL = "https://api.1nce.com/management-api/oauth/token";
 
 type TokenResponse = {
   access_token: string;
@@ -57,9 +58,10 @@ export async function getOneNceAccessToken(): Promise<string> {
   }
 
   if (!res.ok || !json?.access_token) {
-    throw new Error(
-      `1NCE token ${res.status}: ${text.slice(0, 500)}`,
-    );
+    const detail = text.trimStart().startsWith("<")
+      ? "HTML response (wrong URL or blocked). Expected JSON from the Management API token endpoint."
+      : text.slice(0, 500);
+    throw new Error(`1NCE token ${res.status}: ${detail}`);
   }
 
   const expiresInMs = (json.expires_in ?? 3600) * 1000;
