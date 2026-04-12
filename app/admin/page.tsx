@@ -261,6 +261,36 @@ export default async function AdminPage() {
             ))
           )}
         </ul>
+
+        {s.upcomingBillItems.length > 0 ? (
+          <>
+            <div className="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Upcoming bill dates</h3>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                Active services with a next due date (soonest first). Amounts live in Invoiless when linked.
+              </p>
+            </div>
+            <ul className="mt-4 space-y-3">
+              {s.upcomingBillItems.map((item) => (
+                <li
+                  key={item.id}
+                  className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
+                    <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p>
+                  </div>
+                  <Link
+                    href={item.href}
+                    className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                  >
+                    Open
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
 
       <p className="text-sm text-zinc-500">

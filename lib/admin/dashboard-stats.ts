@@ -12,6 +12,10 @@ export type DashboardAttentionItem = {
   tone: "urgent" | "warning" | "info";
 };
 
+function formatShortDue(d: Date) {
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 export type DashboardRecentItem = {
   id: string;
   label: string;
@@ -37,6 +41,7 @@ export async function getDashboardStats() {
     dueSoonAssignmentCount,
     unlinkedInvoilessCount,
     attentionAssignments,
+    upcomingBillAssignments,
     recentCustomers,
     pendingRegistrationCount,
     simDataSums,
@@ -73,6 +78,21 @@ export async function getDashboardStats() {
       },
       take: 6,
       orderBy: [{ status: "asc" }, { nextDueDate: "asc" }],
+      include: {
+        customer: {
+          select: { id: true, company: true, firstName: true, lastName: true },
+        },
+        device: { select: { imei: true } },
+      },
+    }),
+    prisma.serviceAssignment.findMany({
+      where: {
+        endDate: null,
+        status: "active",
+        nextDueDate: { not: null },
+      },
+      take: 8,
+      orderBy: { nextDueDate: "asc" },
       include: {
         customer: {
           select: { id: true, company: true, firstName: true, lastName: true },
@@ -119,13 +139,32 @@ export async function getDashboardStats() {
   for (const a of attentionAssignments) {
     const name = displayName(a.customer);
     const urgent = a.status === "overdue";
+    const duePart = a.nextDueDate
+      ? `Next due ${formatShortDue(a.nextDueDate)}`
+      : "Next due not set";
     attentionItems.push({
       id: a.id,
       title: urgent ? `Overdue service — ${name}` : `Due soon — ${name}`,
-      meta: `IMEI ${a.device.imei} · ${a.status.replace(/_/g, " ")}`,
+      meta: `${duePart} · IMEI ${a.device.imei} · ${a.status.replace(/_/g, " ")}`,
       href: `/admin/customers/${a.customer.id}`,
       tone: urgent ? "urgent" : "warning",
     });
+  }
+
+  const attentionIds = new Set(attentionAssignments.map((a) => a.id));
+  const upcomingBillItems: DashboardAttentionItem[] = [];
+  for (const a of upcomingBillAssignments) {
+    if (attentionIds.has(a.id)) continue;
+    if (!a.nextDueDate) continue;
+    const name = displayName(a.customer);
+    upcomingBillItems.push({
+      id: `up-${a.id}`,
+      title: `Next bill — ${name}`,
+      meta: `Due ${formatShortDue(a.nextDueDate)} · IMEI ${a.device.imei}`,
+      href: `/admin/customers/${a.customer.id}`,
+      tone: "info",
+    });
+    if (upcomingBillItems.length >= 6) break;
   }
 
   if (invoilessConfigured && unlinkedInvoilessCount > 0) {
@@ -182,6 +221,7 @@ export async function getDashboardStats() {
     simCardCount,
     attentionCount,
     attentionItems,
+    upcomingBillItems,
     recentItems,
   };
 }
