@@ -42,6 +42,15 @@ function lineTotal(item: ProposalLineItem): number {
   return (Number.isFinite(q) ? q : 0) * (Number.isFinite(p) ? p : 0);
 }
 
+/** Subject line under "Proposal for" (matches commercial samples that split headline vs subtitle). */
+function proposalSubjectLine(proposal: ProposalForPdf): string {
+  const t = proposal.title.trim();
+  if (!t) return "Vehicle tracking solution";
+  const parts = t.split("—").map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 2) return parts[0];
+  return parts[0] ?? "Vehicle tracking solution";
+}
+
 function addParagraph(
   doc: jsPDF,
   text: string,
@@ -62,6 +71,28 @@ function addParagraph(
   return y;
 }
 
+/** Terms split with --- alone on a line between sections; first line of each block is the subsection title. */
+function parseTermsBlocks(raw: string): { heading: string; body: string }[] {
+  const normalized = raw.trim();
+  if (!normalized) return [];
+  if (!normalized.includes("\n---\n")) {
+    return [{ heading: "", body: normalized }];
+  }
+  const chunks = normalized
+    .split(/\n---\n/)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  return chunks.map((chunk) => {
+    const lines = chunk.split(/\r?\n/);
+    const heading = (lines[0] ?? "").trim();
+    const body = lines
+      .slice(1)
+      .join("\n")
+      .trim();
+    return { heading, body };
+  });
+}
+
 function drawPlaceholder(doc: jsPDF, x: number, y: number, w: number, h: number, label: string) {
   doc.setDrawColor(180);
   doc.setLineWidth(0.75);
@@ -71,7 +102,7 @@ function drawPlaceholder(doc: jsPDF, x: number, y: number, w: number, h: number,
   const lines = doc.splitTextToSize(label, w - 16);
   let ly = y + h / 2 - (lines.length * 10) / 2;
   for (const ln of lines) {
-    doc.text(ln, x +8, ly);
+    doc.text(ln, x + 8, ly);
     ly += 10;
   }
   doc.setTextColor(0);
@@ -101,6 +132,18 @@ function addLogo(doc: jsPDF, logo: LogoImage | null, yStart: number): number {
   return y;
 }
 
+function addPageFooters(doc: jsPDF) {
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(130);
+    doc.text(`— ${i} of ${total} —`, PAGE_W / 2, PAGE_H - 28, { align: "center" });
+    doc.setTextColor(0);
+  }
+}
+
 export function buildProposalPdfBuffer(
   proposal: ProposalForPdf,
   assets: { logo: LogoImage | null; visualImages: Map<string, LogoImage> },
@@ -108,6 +151,7 @@ export function buildProposalPdfBuffer(
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const issuer = getProposalIssuerBlock();
   const currency = proposal.currencyCode?.trim() || "XCD";
+  const subject = proposalSubjectLine(proposal);
 
   let y = MARGIN;
   y = addLogo(doc, assets.logo, y);
@@ -122,17 +166,23 @@ export function buildProposalPdfBuffer(
     doc.text(line, MARGIN, y);
     y += LINE - 2;
   }
-  y += 8;
+  y += 10;
 
-  doc.setFontSize(16);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80);
+  doc.text("Proposal for", MARGIN, y);
+  y += LINE + 2;
+  doc.setTextColor(0);
+  doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
-  doc.text("Proposal", MARGIN, y);
-  y += 22;
-  doc.setFontSize(12);
-  doc.text(proposal.title, MARGIN, y);
+  doc.text(subject, MARGIN, y);
   y += 20;
-
   doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Commercial proposal – ${subject}`, MARGIN, y);
+  y += 18;
+
   doc.setFont("helvetica", "bold");
   doc.text("Prepared for", MARGIN, y);
   y += LINE;
@@ -153,14 +203,82 @@ export function buildProposalPdfBuffer(
     doc.text(line, MARGIN, y);
     y += LINE - 1;
   }
-  y += 10;
+  y += 12;
 
   if (proposal.executiveSummary?.trim()) {
     doc.setFont("helvetica", "bold");
-    doc.text("Summary", MARGIN, y);
+    doc.text("Overview", MARGIN, y);
     y += LINE;
     doc.setFont("helvetica", "normal");
     y = addParagraph(doc, proposal.executiveSummary.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1);
+    y += 10;
+  }
+
+  if (y > PAGE_H - MARGIN - 140) {
+    doc.addPage();
+    y = MARGIN;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Solution pricing", MARGIN, y);
+  y += 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(90);
+  doc.text(`Amounts in ${currency} unless noted. Per-unit pricing; extend quantities in the table as needed.`, MARGIN, y +10);
+  doc.setTextColor(0);
+  y += 22;
+
+  const sortedLines = [...proposal.lineItems].sort((a, b) => a.sortOrder - b.sortOrder);
+  const subtotal = sortedLines.reduce((acc, row) => acc + lineTotal(row), 0);
+
+  type Cell = string | { content: string; colSpan?: number; styles?: Record<string, unknown> };
+  const body: Cell[][] = sortedLines.map((row) => {
+    const desc = `${categoryLabel(row.category)} — ${row.description}`;
+    const qty = Number(row.quantity);
+    const qtyStr = Number.isFinite(qty) ? String(qty) : "1";
+    const unit = row.unitLabel?.trim() || "—";
+    return [desc, qtyStr, unit, money(Number(row.unitPrice), currency), money(lineTotal(row), currency)];
+  });
+  body.push([
+    {
+      content: "Total (estimate)",
+      colSpan: 4,
+      styles: { fontStyle: "bold", halign: "right", fillColor: [245, 250, 248] },
+    },
+    {
+      content: money(subtotal, currency),
+      styles: { fontStyle: "bold", halign: "right", fillColor: [245, 250, 248] },
+    },
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Product / service details", "Qty", "Unit", `Unit price (${currency})`, `Line total (${currency})`]],
+    body,
+    margin: { left: MARGIN, right: MARGIN },
+    styles: { fontSize: 8, cellPadding: 4, valign: "top" },
+    headStyles: { fillColor: [16, 120, 72], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [252, 252, 252] },
+    columnStyles: {
+      0: { cellWidth: 222 },
+      1: { cellWidth: 34, halign: "right" },
+      2: { cellWidth: 68 },
+      3: { halign: "right" },
+      4: { halign: "right" },
+    },
+  });
+
+  y = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
+
+  if (proposal.pricingFootnote?.trim()) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(70);
+    y = addParagraph(doc, proposal.pricingFootnote.trim(), MARGIN, y, PAGE_W - MARGIN * 2, 11);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0);
     y += 8;
   }
 
@@ -169,10 +287,12 @@ export function buildProposalPdfBuffer(
       doc.addPage();
       y = MARGIN;
     }
+    doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text("Included capabilities", MARGIN, y);
-    y += LINE;
+    doc.text("Application feature set", MARGIN, y);
+    y += LINE + 2;
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
     const bullets = proposal.includedFeatures.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     for (const b of bullets) {
       if (y > PAGE_H - MARGIN - 20) {
@@ -182,50 +302,7 @@ export function buildProposalPdfBuffer(
       doc.text(`• ${b}`, MARGIN + 6, y);
       y += LINE - 2;
     }
-    y += 8;
-  }
-
-  if (y > PAGE_H - MARGIN - 120) {
-    doc.addPage();
-    y = MARGIN;
-  }
-  doc.setFont("helvetica", "bold");
-  doc.text("Commercial summary", MARGIN, y);
-  y += 6;
-
-  const sortedLines = [...proposal.lineItems].sort((a, b) => a.sortOrder - b.sortOrder);
-  const body = sortedLines.map((row) => {
-    const desc = `[${categoryLabel(row.category)}] ${row.description}`;
-    const qty = Number(row.quantity);
-    const qtyStr = Number.isFinite(qty) ? String(qty) : "1";
-    const unit = row.unitLabel?.trim() || "—";
-    return [desc, qtyStr, unit, money(Number(row.unitPrice), currency), money(lineTotal(row), currency)];
-  });
-
-  autoTable(doc, {
-    startY: y + 8,
-    head: [["Description", "Qty", "Unit", "Unit price", "Line total"]],
-    body,
-    margin: { left: MARGIN, right: MARGIN },
-    styles: { fontSize: 8, cellPadding: 4 },
-    headStyles: { fillColor: [16, 120, 72], textColor: 255, fontStyle: "bold" },
-    columnStyles: {
-      0: { cellWidth:230 },
-      1: { cellWidth: 36, halign: "right" },
-      2: { cellWidth: 72 },
-      3: { halign: "right" },
-      4: { halign: "right" },
-    },
-  });
-
-  y = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8;
-
-  if (proposal.pricingFootnote?.trim()) {
-    doc.setFontSize(8);
-    doc.setTextColor(80);
-    y = addParagraph(doc, proposal.pricingFootnote.trim(), MARGIN, y, PAGE_W - MARGIN * 2, 11);
-    doc.setTextColor(0);
-    y += 6;
+    y += 10;
   }
 
   const sortedVisuals = [...proposal.visuals].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -301,17 +378,34 @@ export function buildProposalPdfBuffer(
   }
 
   if (proposal.termsText?.trim()) {
-    if (y > PAGE_H - MARGIN - 40) {
+    if (y > PAGE_H - MARGIN - 48) {
       doc.addPage();
       y = MARGIN;
     }
     doc.setFont("helvetica", "bold");
-    doc.text("Terms", MARGIN, y);
-    y += LINE;
+    doc.setFontSize(11);
+    doc.text("Terms & conditions", MARGIN, y);
+    y += LINE + 4;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    y = addParagraph(doc, proposal.termsText.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1);
-    y += 8;
+
+    const blocks = parseTermsBlocks(proposal.termsText);
+    for (const block of blocks) {
+      if (y > PAGE_H - MARGIN - 36) {
+        doc.addPage();
+        y = MARGIN;
+      }
+      if (block.heading) {
+        doc.setFont("helvetica", "bold");
+        doc.text(block.heading, MARGIN, y);
+        y += LINE;
+      }
+      doc.setFont("helvetica", "normal");
+      if (block.body) {
+        y = addParagraph(doc, block.body, MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1);
+      }
+      y += 6;
+    }
   }
 
   const validDays = proposal.validityDays > 0 ? proposal.validityDays : 14;
@@ -321,19 +415,30 @@ export function buildProposalPdfBuffer(
   }
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("Validity", MARGIN, y);
+  doc.text("Validity of proposal", MARGIN, y);
   y += LINE;
   doc.setFont("helvetica", "normal");
-  doc.text(`This proposal is offered for ${validDays} days from the date of issue unless withdrawn earlier.`, MARGIN, y);
-  y += LINE + 4;
+  y = addParagraph(
+    doc,
+    `This proposal is valid for ${validDays} days from the date of issue unless withdrawn earlier. ${issuer.name} reserves the right to adjust pricing if costs or regulations change before acceptance.`,
+    MARGIN,
+    y,
+    PAGE_W - MARGIN * 2,
+    LINE - 1,
+  );
+  y += 4;
 
   if (
     proposal.salesContactName?.trim() ||
     proposal.salesContactEmail?.trim() ||
     proposal.salesContactPhone?.trim()
   ) {
+    if (y > PAGE_H - MARGIN - 56) {
+      doc.addPage();
+      y = MARGIN;
+    }
     doc.setFont("helvetica", "bold");
-    doc.text("Questions", MARGIN, y);
+    doc.text("Designated contact", MARGIN, y);
     y += LINE;
     doc.setFont("helvetica", "normal");
     if (proposal.salesContactName?.trim()) {
@@ -349,6 +454,8 @@ export function buildProposalPdfBuffer(
       doc.text(proposal.salesContactPhone.trim(), MARGIN, y);
     }
   }
+
+  addPageFooters(doc);
 
   const out = doc.output("arraybuffer");
   return Buffer.from(out);

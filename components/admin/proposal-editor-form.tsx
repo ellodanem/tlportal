@@ -539,6 +539,11 @@ export function ProposalEditorForm({
             value={termsText}
             onChange={(e) => setTermsText(e.target.value)}
           />
+          <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+            PDF uses bold subsection titles when you separate blocks with a line containing only{" "}
+            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">---</code> — the first line of each block is
+            the heading.
+          </span>
         </label>
       </section>
 

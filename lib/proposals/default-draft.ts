@@ -1,31 +1,72 @@
 import type { Prisma } from "@prisma/client";
 
-const DEFAULT_TERMS = `Payment: Subscription fees are billed according to the schedule in this proposal. Hardware may be invoiced on order or delivery as agreed.
+const DEFAULT_TERMS = `Installation and maintenance
+• Installations are scheduled with your operations team. Typical on-site work is about 20–45 minutes per vehicle when the vehicle is accessible.
+• Standard installations use discreet placement to reduce tampering risk. Non-standard vehicles or retrofits may need a separate scope.
+• Remote configuration and monitoring reduce unnecessary field visits for routine troubleshooting.
 
-Installation: Typical on-site installation takes about 20–45 minutes per vehicle when access is available. Travel outside the standard service area may incur additional fees (quoted separately).
+---
 
-Warranty & support: Hardware warranty and ongoing support terms are as stated in your order or service agreement. This proposal is an offer only and does not replace a signed contract.
+Warranty (hardware)
+• The tracking device carries a limited warranty against defects in materials and workmanship under normal use, for the period stated on your order or product documentation.
+• Warranty does not cover batteries, antennas, cables, or damage from misuse, accident, flood, fire, unauthorized service, or faulty third-party installation.
 
-Liability: Except where prohibited by law, Track Lucia is not liable for indirect or consequential losses. Full terms apply in the master service or purchase agreement.`;
+---
 
-const DEFAULT_EXEC_SUMMARY = `This proposal outlines a Track Lucia vehicle visibility solution for your fleet — live map tracking, alerts, and trip history using dedicated mobile data (no reliance on in-vehicle Wi-Fi). Pricing below is structured for clarity; final billing may be confirmed when you move to estimate and invoice.`;
+Annual maintenance (optional)
+• After the initial warranty period, annual maintenance may be purchased to extend hardware coverage and include a defined number of preventive and support interactions (quoted separately).
+• Scope of AMC is described in the service schedule attached to your order.
 
-const DEFAULT_FEATURES = `Live tracking on map
-Geo-fence and movement-related alerts
-Trip history and route playback
-Multi-vehicle dashboard
-User access management and reports
+---
+
+Payment
+• Subscription charges are generally billed in advance according to the term selected (e.g. monthly or annual).
+• Hardware may be invoiced on order confirmation or prior to shipment/delivery as agreed.
+• Travel, lodging, or after-hours work outside the agreed service footprint may be invoiced separately.
+
+---
+
+Delivery and go-live
+• Hardware shipment or staging dates depend on stock and import lead times; we will confirm a window after order acceptance.
+• Service activation (SIM / data / portal access) is coordinated with installation or as soon as devices report in.
+
+---
+
+Service level (support)
+• Business-hours support response targets are communicated in your service agreement. Critical safety or security incidents may be escalated according to that agreement.
+• On-site response outside the standard area may require additional time and travel.
+
+---
+
+Limitations
+• Track Lucia is not responsible for indirect, consequential, or economic loss, including lost profits or business interruption, except where such limitation is prohibited by law.
+• Map, cellular, and third-party platform outages outside our control may affect real-time views without constituting a breach of this proposal.
+
+---
+
+Liability
+• Liability is limited to fees paid for the specific service giving rise to the claim during the twelve (12) months before the event, except for liability that cannot be limited by law.
+• This proposal is an offer only; a signed order or master agreement governs the commercial relationship.`;
+
+const DEFAULT_EXEC_SUMMARY = `We are pleased to offer a Track Lucia fleet visibility package: live map tracking, geo-fence and movement-related alerts, trip history, and multi-vehicle administration — all using dedicated mobile data so vehicles are not dependent on customer Wi-Fi. The commercial summary below lists typical hardware, subscription, installation, and optional maintenance lines; quantities and travel can be adjusted before you move to formal estimate and invoice.`;
+
+const DEFAULT_FEATURES = `Live tracking on map with multi-vehicle dashboard
+Geo-fence, movement, and power-disconnect style alerts
+Trip history and route playback for accountability
+User management, roles, and operational reports
 Discreet installation to reduce tampering risk
-Devices use their own mobile data connection (not your phone or vehicle Wi-Fi)
-Optional FleetGuardian after-hours monitoring for critical alerts`;
+Dedicated cellular data path (devices do not rely on in-vehicle Wi-Fi)
+Optional FleetGuardian after-hours monitoring for critical events`;
 
-const DEFAULT_ASSUMPTIONS = `Pricing assumes the fleet size and service area discussed verbally or by email. Taxes, regulatory fees, or customs (if any) are excluded unless stated.`;
+const DEFAULT_ASSUMPTIONS = `Pricing assumes the fleet size, territory, and installation model discussed with your team. Duties, taxes, regulatory levies, or carrier surcharges may apply and will be shown on invoice unless explicitly included here.`;
 
-const DEFAULT_NEXT_STEPS = `1. Confirm vehicle count and installation schedule.
-2. Accept this proposal within the validity period.
-3. We will follow with estimate and invoice through our billing system.`;
+const DEFAULT_NEXT_STEPS = `1. Confirm vehicle count, installation windows, and billing term.
+2. Accept this proposal within the validity window below.
+3. We will issue estimate and invoice through our billing workflow (e.g. Invoiless) and schedule deployment.`;
 
-const DEFAULT_PRICING_FOOTNOTE = `Amounts are in the currency shown. Taxes and government fees may apply and will appear on invoice where required.`;
+const DEFAULT_PRICING_FOOTNOTE = `* Line totals are indicative only until quantities and taxes are finalized on invoice.
+** Government taxes, regulatory fees, or carrier pass-through charges may apply in addition to the amounts above.
+*** Travel, lodging, or premium after-hours work outside the agreed service area may be quoted separately.`;
 
 export function buildDefaultProposalNestedCreate(
   createdById: string | null,
@@ -47,7 +88,7 @@ export function buildDefaultProposalNestedCreate(
         {
           sortOrder: 0,
           category: "hardware",
-          description: "Track Lucia GPS device (per vehicle, installed)",
+          description: "Track Lucia GPS device (supply, configuration, per vehicle)",
           quantity: 1,
           unitLabel: "per vehicle",
           unitPrice: 0,
@@ -55,7 +96,8 @@ export function buildDefaultProposalNestedCreate(
         {
           sortOrder: 1,
           category: "subscription",
-          description: "Software subscription — maps, hosting, data, alerts (annual, per vehicle)",
+          description:
+            "Software subscription — maps, hosting, cellular data allowance, alerts, backups (annual, per vehicle)",
           quantity: 1,
           unitLabel: "per vehicle / year",
           unitPrice: 0,
@@ -63,9 +105,25 @@ export function buildDefaultProposalNestedCreate(
         {
           sortOrder: 2,
           category: "installation",
-          description: "Professional installation (standard service area)",
+          description: "Professional installation — standard service area (wiring, test, handover)",
           quantity: 1,
           unitLabel: "per vehicle",
+          unitPrice: 0,
+        },
+        {
+          sortOrder: 3,
+          category: "installation",
+          description: "Travel / extended territory installation surcharge (if applicable)",
+          quantity: 0,
+          unitLabel: "per vehicle",
+          unitPrice: 0,
+        },
+        {
+          sortOrder: 4,
+          category: "service",
+          description: "Annual maintenance after year one — hardware coverage + scheduled support (optional)",
+          quantity: 0,
+          unitLabel: "per vehicle / year",
           unitPrice: 0,
         },
       ],
