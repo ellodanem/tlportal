@@ -1051,4 +1051,26 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 ### 2026-04-13 18:21 UTC — commit `60ddf00`
 
 - fix(proposals): Ellodane Enterprises legal entity vs Track Lucia brand
+- **Agent notes:** `getProposalIssuerBlock()` returns `legalName` (default Ellodane Enterprises), `brandLine` (default Track Lucia), `addressLines`. Env: `PROPOSAL_LEGAL_NAME`, `PROPOSAL_BRAND_TAGLINE` (empty or `-` hides brand line), `PROPOSAL_ISSUER_NAME` (alias), `PROPOSAL_ISSUER_ADDRESS`. PDF shows legal + italic brand under logo; validity names legal entity. Default draft terms add “Parties and branding”; limitations/liability name Ellodane. `.env.example` documents vars.
+
+
+### 2026-04-13 18:21 UTC — commit `1546e1d`
+
+- docs: PROJECT_CONTEXT for 60ddf00
+
+
+### 2026-04-13 18:21 UTC — pre-push (`main` → origin) @ `1546e1d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-13 — commit `dcc0b2a`
+
+- feat(proposals): Word (.docx) export alongside PDF
+- **Agent notes:** `lib/proposals/docx.ts` mirrors PDF sections (issuer/letterhead, client block, overview, solution pricing table, footnote, feature bullets, visual blocks including half-width pairs and timeline strip, assumptions, next steps, `---`-split terms, validity, designated contact; footer “— n of m —”). `GET /api/admin/proposals/[id]/docx` returns `application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Admin editor: **Download Word** next to **Download PDF**. Dependency: `docx` (^9.6.1).
+
+
+### 2026-04-13 19:00 UTC — commit `dcc0b2a`
+
+- feat(proposals): export proposals as Word (.docx)
 
