@@ -1186,3 +1186,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-13 20:40 UTC — commit `d363f87`
+
+- fix(proposals): double Track Lucia cover mark size
+
+
+### 2026-04-13 20:40 UTC — pre-push (`main` → origin) @ `d363f87`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
