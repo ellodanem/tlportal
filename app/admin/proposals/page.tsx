@@ -48,7 +48,8 @@ export default async function ProposalsPage() {
 
       {proposals.length === 0 ? (
         <p className="rounded-lg border border-dashed border-zinc-300 bg-white px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
-          No proposals yet. Create one to get the default Track Lucia template, line items, and visual placeholders.
+          No proposals yet. Create one to get the default template (Ellodane Enterprises / Track Lucia), line items, and
+          visual placeholders.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">

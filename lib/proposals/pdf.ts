@@ -17,7 +17,7 @@ const LINE = 14;
 const PAGE_W = 612;
 const PAGE_H = 792;
 
-/** Track Lucia / TL Portal emerald theme (aligned with admin UI accents). */
+/** Proposal PDF accent colors (aligned with TL Portal / Track Lucia product UI). */
 const THEME = {
   primary: [4, 120, 87] as [number, number, number], // emerald-700
   primaryDark: [6, 95, 70] as [number, number, number], // emerald-800
@@ -420,9 +420,16 @@ export function buildProposalPdfBuffer(
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...THEME.primaryDark);
   if (hasLogo) {
-    doc.text(issuer.name, PAGE_W / 2, y, { align: "center" });
+    doc.text(issuer.legalName, PAGE_W / 2, y, { align: "center" });
     y += LINE - 2;
-    doc.setFont("helvetica", "normal");
+    if (issuer.brandLine) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(...THEME.primary);
+      doc.text(issuer.brandLine, PAGE_W / 2, y, { align: "center" });
+      y += LINE - 1;
+      doc.setFont("helvetica", "normal");
+    }
     doc.setFontSize(9);
     doc.setTextColor(...THEME.mutedText);
     for (const line of issuer.addressLines) {
@@ -430,9 +437,16 @@ export function buildProposalPdfBuffer(
       y += LINE - 2;
     }
   } else {
-    doc.text(issuer.name, MARGIN, y);
+    doc.text(issuer.legalName, MARGIN, y);
     y += LINE - 2;
-    doc.setFont("helvetica", "normal");
+    if (issuer.brandLine) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(...THEME.primary);
+      doc.text(issuer.brandLine, MARGIN, y);
+      y += LINE - 1;
+      doc.setFont("helvetica", "normal");
+    }
     doc.setFontSize(9);
     doc.setTextColor(...THEME.mutedText);
     for (const line of issuer.addressLines) {
@@ -678,7 +692,7 @@ export function buildProposalPdfBuffer(
   doc.setFont("helvetica", "normal");
   y = addParagraph(
     doc,
-    `This proposal is valid for ${validDays} days from the date of issue unless withdrawn earlier. ${issuer.name} reserves the right to adjust pricing if costs or regulations change before acceptance.`,
+    `This proposal is valid for ${validDays} days from the date of issue unless withdrawn earlier. ${issuer.legalName} reserves the right to adjust pricing if costs or regulations change before acceptance.`,
     MARGIN,
     y,
     PAGE_W - MARGIN * 2,

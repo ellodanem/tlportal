@@ -1,6 +1,11 @@
 import type { Prisma } from "@prisma/client";
 
-const DEFAULT_TERMS = `Installation and maintenance
+const DEFAULT_TERMS = `Parties and branding
+• This proposal is issued by Ellodane Enterprises. “Track Lucia” is our vehicle and fleet visibility product and service brand.
+
+---
+
+Installation and maintenance
 • Installations are scheduled with your operations team. Typical on-site work is about 20–45 minutes per vehicle when the vehicle is accessible.
 • Standard installations use discreet placement to reduce tampering risk. Non-standard vehicles or retrofits may need a separate scope.
 • Remote configuration and monitoring reduce unnecessary field visits for routine troubleshooting.
@@ -39,16 +44,16 @@ Service level (support)
 ---
 
 Limitations
-• Track Lucia is not responsible for indirect, consequential, or economic loss, including lost profits or business interruption, except where such limitation is prohibited by law.
+• Ellodane Enterprises is not responsible for indirect, consequential, or economic loss, including lost profits or business interruption, except where such limitation is prohibited by law.
 • Map, cellular, and third-party platform outages outside our control may affect real-time views without constituting a breach of this proposal.
 
 ---
 
 Liability
 • Liability is limited to fees paid for the specific service giving rise to the claim during the twelve (12) months before the event, except for liability that cannot be limited by law.
-• This proposal is an offer only; a signed order or master agreement governs the commercial relationship.`;
+• This proposal is an offer only; a signed order or master agreement with Ellodane Enterprises governs the commercial relationship.`;
 
-const DEFAULT_EXEC_SUMMARY = `We are pleased to offer a Track Lucia fleet visibility package: live map tracking, geo-fence and movement-related alerts, trip history, and multi-vehicle administration — all using dedicated mobile data so vehicles are not dependent on customer Wi-Fi. The commercial summary below lists typical hardware, subscription, installation, and optional maintenance lines; quantities and travel can be adjusted before you move to formal estimate and invoice.`;
+const DEFAULT_EXEC_SUMMARY = `Ellodane Enterprises is pleased to offer the Track Lucia fleet visibility package: live map tracking, geo-fence and movement-related alerts, trip history, and multi-vehicle administration — all using dedicated mobile data so vehicles are not dependent on customer Wi-Fi. The commercial summary below lists typical hardware, subscription, installation, and optional maintenance lines; quantities and travel can be adjusted before you move to formal estimate and invoice.`;
 
 const DEFAULT_FEATURES = `Live tracking on map with multi-vehicle dashboard
 Geo-fence, movement, and power-disconnect style alerts
