@@ -1115,3 +1115,9 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - fix(proposals): PDF/DOCX match approved template copy and layout
 - **Agent notes:** `lib/proposals/proposal-template.ts` holds static template strings (letterhead, headings, footer `-- n of m --`, validity Track Lucia + `{{days}}`, designated-contact labels). PDF/DOCX: repeating two-line letterhead;3-column pricing + QTY + `Price/(currency) Total`; feature block + installation subsection inside table; neutral gray styling (no emerald); footer and validity wording per template. Default draft (`default-draft.ts`) text, terms, line-item descriptions, visuals order (incl. Install block + timeline steps), and pricing footnote line aligned to the approved PDF. **Existing proposals** in DB keep prior field values until edited.
 
+
+### 2026-04-13 20:09 UTC — commit `a77d3db`
+
+- fix(proposals): cover page layout — header logo, centered title and product mark, footer
+- **Agent notes:** Page 1 only: Ellodane (or `PROPOSAL_PDF_HEADER_LOGO`) top-left; centered grey “Proposal for”, bold title, then Track Lucia mark from `PROPOSAL_PDF_CENTER_LOGO` or default fetch `public/proposals/track-lucia-cover.png` (add PNG there); left “Prepared for” + client fields (only variable block on cover). Footer on page 1: centered Ellodane + contact line above `-- n of m --`; inner pages unchanged (top letterhead + page footer). `lib/proposals/proposal-cover-assets.ts`. Word export mirrors the same cover order.
+
