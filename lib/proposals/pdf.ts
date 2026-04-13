@@ -4,7 +4,13 @@ import type { Proposal, ProposalLineItem, ProposalVisualBlock } from "@prisma/cl
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import { getProposalIssuerBlock } from "@/lib/proposals/issuer";
+import {
+  footerPageText,
+  formatValidityBody,
+  pricingIntroLine,
+  PROPOSAL_TEMPLATE,
+  tableHeadCol3,
+} from "@/lib/proposals/proposal-template";
 import { parseTimelineSteps, type TimelineStep } from "@/lib/proposals/visual-timeline";
 
 export type ProposalForPdf = Proposal & {
@@ -16,31 +22,21 @@ const MARGIN = 48;
 const LINE = 14;
 const PAGE_W = 612;
 const PAGE_H = 792;
+const FOOTER_Y = PAGE_H - 28;
+const CONTENT_BOTTOM = PAGE_H - 40;
 
-/** Proposal PDF accent colors (aligned with TL Portal / Track Lucia product UI). */
-const THEME = {
-  primary: [4, 120, 87] as [number, number, number], // emerald-700
-  primaryDark: [6, 95, 70] as [number, number, number], // emerald-800
-  headerBg: [236, 253, 245] as [number, number, number], // emerald-50
-  rowStripe: [250, 253, 251] as [number, number, number],
-  border: [167, 243, 208] as [number, number, number], // emerald-200
-  mutedText: [82, 82, 91] as [number, number, number],
+const NEUTRAL = {
+  border: [200, 200, 200] as [number, number, number],
+  headBg: [245, 245, 245] as [number, number, number],
+  stripe: [252, 252, 252] as [number, number, number],
+  muted: [82, 82, 91] as [number, number, number],
 };
 
-function categoryLabel(c: ProposalLineItem["category"]): string {
-  switch (c) {
-    case "hardware":
-      return "Hardware";
-    case "subscription":
-      return "Subscription";
-    case "installation":
-      return "Installation";
-    case "service":
-      return "Service";
-    default:
-      return "Other";
-  }
-}
+type ProposalLayoutCtx = {
+  pageNum: number;
+  logo: LogoImage | null;
+  continuedContentY: number;
+};
 
 function money(amount: number, currency: string): string {
   const safe = Number.isFinite(amount) ? amount : 0;
@@ -51,29 +47,64 @@ function money(amount: number, currency: string): string {
   return `${currency} ${formatted}`;
 }
 
-function lineItemDescriptionCell(row: ProposalLineItem, currency: string): string {
-  const cat = categoryLabel(row.category);
-  const desc = row.description.trim();
-  const qty = Number(row.quantity);
-  const qtyStr = Number.isFinite(qty) ? String(qty) : "1";
-  const unit = row.unitLabel?.trim() || "unit";
-  const unitPrice = money(Number(row.unitPrice), currency);
-  return `${cat} — ${desc}\n(${qtyStr} × ${unit} @ ${unitPrice} each)`;
-}
-
 function lineTotal(item: ProposalLineItem): number {
   const q = Number(item.quantity);
   const p = Number(item.unitPrice);
   return (Number.isFinite(q) ? q : 0) * (Number.isFinite(p) ? p : 0);
 }
 
-/** Subject line under "Proposal for" (matches commercial samples that split headline vs subtitle). */
 function proposalSubjectLine(proposal: ProposalForPdf): string {
   const t = proposal.title.trim();
-  if (!t) return "Vehicle tracking solution";
-  const parts = t.split("—").map((s) => s.trim()).filter(Boolean);
-  if (parts.length >= 2) return parts[0];
-  return parts[0] ?? "Vehicle tracking solution";
+  return t || PROPOSAL_TEMPLATE.defaultSubject;
+}
+
+function formatQty(q: unknown): string {
+  const n = Number(q);
+  return String(Number.isFinite(n) ? n : 0);
+}
+
+function drawContinuedLetterhead(doc: jsPDF): void {
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
+  doc.text(PROPOSAL_TEMPLATE.headerLine1, MARGIN, MARGIN + 10);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(PROPOSAL_TEMPLATE.headerLine2, MARGIN, MARGIN + 22);
+}
+
+function newPage(doc: jsPDF, ctx: ProposalLayoutCtx): number {
+  doc.addPage();
+  ctx.pageNum += 1;
+  drawContinuedLetterhead(doc);
+  return ctx.continuedContentY;
+}
+
+function addLogoBelow(doc: jsPDF, logo: LogoImage | null, yStart: number): number {
+  let y = yStart;
+  if (!logo) return y;
+  try {
+    const maxW = 160;
+    const maxH = 52;
+    const props = doc.getImageProperties(logo.dataUrl);
+    const rw = props.width;
+    const rh = props.height;
+    const scale = Math.min(maxW / rw, maxH / rh, 1);
+    const dw = rw * scale;
+    const dh = rh * scale;
+    doc.addImage(logo.dataUrl, logo.format, MARGIN, y, dw, dh);
+    y += dh + 10;
+  } catch {
+    /* ignore broken image */
+  }
+  return y;
+}
+
+function drawFirstPageLetterhead(doc: jsPDF, logo: LogoImage | null): number {
+  drawContinuedLetterhead(doc);
+  let y = MARGIN + 34;
+  y = addLogoBelow(doc, logo, y);
+  return y + 8;
 }
 
 function addParagraph(
@@ -83,13 +114,20 @@ function addParagraph(
   y: number,
   maxWidth: number,
   lineHeight: number,
+  ctx?: ProposalLayoutCtx,
 ): number {
   const lines = doc.splitTextToSize(text, maxWidth);
+  const bottom = ctx ? CONTENT_BOTTOM : PAGE_H - MARGIN - lineHeight;
   for (const line of lines) {
-    if (y > PAGE_H - MARGIN - lineHeight) {
-      doc.addPage();
-      y = MARGIN;
+    if (y > bottom - lineHeight) {
+      if (ctx) {
+        y = newPage(doc, ctx);
+      } else {
+        doc.addPage();
+        y = MARGIN;
+      }
     }
+    doc.setTextColor(0);
     doc.text(line, x, y);
     y += lineHeight;
   }
@@ -137,27 +175,6 @@ export type LogoImage = { dataUrl: string; format: "PNG" | "JPEG" };
 
 type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
 
-function addLogo(doc: jsPDF, logo: LogoImage | null, yStart: number, align: "left" | "center"): number {
-  let y = yStart;
-  if (!logo) return y;
-  try {
-    const maxW = 160;
-    const maxH = 52;
-    const props = doc.getImageProperties(logo.dataUrl);
-    const rw = props.width;
-    const rh = props.height;
-    const scale = Math.min(maxW / rw, maxH / rh, 1);
-    const dw = rw * scale;
-    const dh = rh * scale;
-    const x = align === "center" ? (PAGE_W - dw) / 2 : MARGIN;
-    doc.addImage(logo.dataUrl, logo.format, x, y, dw, dh);
-    y += dh + 14;
-  } catch {
-    /* ignore broken image */
-  }
-  return y;
-}
-
 function addPageFooters(doc: jsPDF) {
   const total = doc.getNumberOfPages();
   for (let i = 1; i <= total; i++) {
@@ -165,21 +182,20 @@ function addPageFooters(doc: jsPDF) {
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(130);
-    doc.text(`— ${i} of ${total} —`, PAGE_W / 2, PAGE_H - 28, { align: "center" });
+    doc.text(footerPageText(i, total), PAGE_W / 2, FOOTER_Y, { align: "center" });
     doc.setTextColor(0);
   }
 }
 
 const TIMELINE_FALLBACK: TimelineStep[] = [
-  { title: "Order", detail: "Confirm scope & schedule" },
+  { title: "Order", detail: "1–3 business days" },
   { title: "Install", detail: "20–45 min / vehicle" },
   { title: "Go live", detail: "Same day when online" },
 ];
 
-function ensureVisualSpace(doc: jsPDF, y: number, minBelow: number): number {
-  if (y > PAGE_H - MARGIN - minBelow) {
-    doc.addPage();
-    return MARGIN;
+function ensureVisualSpace(doc: jsPDF, y: number, minBelow: number, ctx: ProposalLayoutCtx): number {
+  if (y > CONTENT_BOTTOM - minBelow) {
+    return newPage(doc, ctx);
   }
   return y;
 }
@@ -241,11 +257,13 @@ function renderSingleMediaBlock(
   y: number,
   widthFactor: number,
   assets: Map<string, LogoImage>,
+  ctx: ProposalLayoutCtx,
 ): number {
-  let yy = ensureVisualSpace(doc, y, 130);
+  let yy = ensureVisualSpace(doc, y, 130, ctx);
   const areaW = innerW * widthFactor;
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
   doc.text(vis.title, x0, yy);
   yy += 16;
   doc.setFont("helvetica", "normal");
@@ -254,7 +272,7 @@ function renderSingleMediaBlock(
   const h = renderMediaArea(doc, vis, x0, yy, areaW, boxH, assets);
   yy += h + 6;
   if (vis.caption?.trim()) {
-    yy = addParagraph(doc, vis.caption.trim(), x0, yy, areaW, LINE - 2);
+    yy = addParagraph(doc, vis.caption.trim(), x0, yy, areaW, LINE - 2, ctx);
   }
   return yy + 12;
 }
@@ -265,8 +283,9 @@ function renderHalfPair(
   right: ProposalVisualBlock,
   y: number,
   assets: Map<string, LogoImage>,
+  ctx: ProposalLayoutCtx,
 ): number {
-  let yy = ensureVisualSpace(doc, y, 150);
+  let yy = ensureVisualSpace(doc, y, 150, ctx);
   const innerW = PAGE_W - 2 * MARGIN;
   const gap = 14;
   const colW = (innerW - gap) / 2;
@@ -286,10 +305,10 @@ function renderHalfPair(
   let yLeftEnd = yCap;
   let yRightEnd = yCap;
   if (left.caption?.trim()) {
-    yLeftEnd = addParagraph(doc, left.caption.trim(), MARGIN, yCap, colW - 4, 11);
+    yLeftEnd = addParagraph(doc, left.caption.trim(), MARGIN, yCap, colW - 4, 11, ctx);
   }
   if (right.caption?.trim()) {
-    yRightEnd = addParagraph(doc, right.caption.trim(), MARGIN + colW + gap, yCap, colW - 4, 11);
+    yRightEnd = addParagraph(doc, right.caption.trim(), MARGIN + colW + gap, yCap, colW - 4, 11, ctx);
   }
   return Math.max(yLeftEnd, yRightEnd) + 12;
 }
@@ -300,10 +319,12 @@ function renderTimelineStrip(
   caption: string | null,
   steps: TimelineStep[],
   yStart: number,
+  ctx: ProposalLayoutCtx,
 ): number {
-  let y = ensureVisualSpace(doc, yStart, 120);
+  let y = ensureVisualSpace(doc, yStart, 120, ctx);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
   doc.text(title, MARGIN, y);
   y += 16;
   doc.setFont("helvetica", "normal");
@@ -319,8 +340,8 @@ function renderTimelineStrip(
 
   for (let i = 0; i < n; i++) {
     const x = MARGIN + i * (boxW + gap);
-    doc.setDrawColor(200);
-    doc.setFillColor(252, 252, 252);
+    doc.setDrawColor(...NEUTRAL.border);
+    doc.setFillColor(...NEUTRAL.stripe);
     doc.roundedRect(x, yBoxes, boxW, boxH, 4, 4, "FD");
     doc.setTextColor(30);
     doc.setFont("helvetica", "bold");
@@ -353,7 +374,7 @@ function renderTimelineStrip(
 
   y = yBoxes + boxH + 10;
   if (caption?.trim()) {
-    y = addParagraph(doc, caption.trim(), MARGIN, y, innerW, LINE - 2);
+    y = addParagraph(doc, caption.trim(), MARGIN, y, innerW, LINE - 2, ctx);
   }
   return y + 12;
 }
@@ -363,6 +384,7 @@ function renderProposalVisuals(
   visuals: ProposalVisualBlock[],
   yStart: number,
   assets: Map<string, LogoImage>,
+  ctx: ProposalLayoutCtx,
 ): number {
   const sorted = [...visuals].sort((a, b) => a.sortOrder - b.sortOrder);
   const innerW = PAGE_W - 2 * MARGIN;
@@ -373,7 +395,7 @@ function renderProposalVisuals(
     const vis = sorted[idx]!;
     if (vis.kind === "timeline") {
       const steps = parseTimelineSteps(vis.timelineSteps);
-      y = renderTimelineStrip(doc, vis.title, vis.caption, steps, y);
+      y = renderTimelineStrip(doc, vis.title, vis.caption, steps, y, ctx);
       idx += 1;
       continue;
     }
@@ -385,22 +407,78 @@ function renderProposalVisuals(
       next.kind === "media" &&
       next.layout === "half_width"
     ) {
-      y = renderHalfPair(doc, vis, next, y, assets);
+      y = renderHalfPair(doc, vis, next, y, assets, ctx);
       idx += 2;
       continue;
     }
 
     if (vis.layout === "half_width") {
-      y = renderSingleMediaBlock(doc, vis, MARGIN, innerW, y, 0.52, assets);
+      y = renderSingleMediaBlock(doc, vis, MARGIN, innerW, y, 0.52, assets, ctx);
       idx += 1;
       continue;
     }
 
-    y = renderSingleMediaBlock(doc, vis, MARGIN, innerW, y, 1, assets);
+    y = renderSingleMediaBlock(doc, vis, MARGIN, innerW, y, 1, assets, ctx);
     idx += 1;
   }
 
   return y;
+}
+
+type TableCell = string | { content: string; colSpan?: number; styles?: Record<string, unknown> };
+
+function buildPricingTableBody(proposal: ProposalForPdf, currency: string): TableCell[][] {
+  const sorted = [...proposal.lineItems].sort((a, b) => a.sortOrder - b.sortOrder);
+  const pre = sorted.slice(0, Math.min(2, sorted.length));
+  const post = sorted.slice(pre.length);
+
+  const body: TableCell[][] = [];
+
+  for (const row of pre) {
+    body.push([row.description.trim(), formatQty(row.quantity), money(lineTotal(row), currency)]);
+  }
+
+  if (proposal.includedFeatures?.trim()) {
+    const feats = proposal.includedFeatures
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const featText =
+      `${PROPOSAL_TEMPLATE.applicationFeatureSetHeading}\n` + feats.map((f) => `\u2022 ${f}`).join("\n");
+    body.push([
+      {
+        content: featText,
+        colSpan: 3,
+        styles: { halign: "left", valign: "top", fontStyle: "normal" },
+      },
+    ]);
+  }
+
+  if (post.length > 0) {
+    body.push([
+      {
+        content: PROPOSAL_TEMPLATE.installationSectionTitle,
+        colSpan: 3,
+        styles: { halign: "left", valign: "top", fontStyle: "bold" },
+      },
+    ]);
+    body.push([
+      {
+        content: PROPOSAL_TEMPLATE.installationSectionSubtitle,
+        colSpan: 3,
+        styles: { halign: "left", valign: "top", fontStyle: "normal" },
+      },
+    ]);
+    for (const row of post) {
+      body.push([row.description.trim(), formatQty(row.quantity), money(lineTotal(row), currency)]);
+    }
+  }
+
+  if (body.length === 0) {
+    body.push(["—", "", ""]);
+  }
+
+  return body;
 }
 
 export function buildProposalPdfBuffer(
@@ -408,71 +486,32 @@ export function buildProposalPdfBuffer(
   assets: { logo: LogoImage | null; visualImages: Map<string, LogoImage> },
 ): Buffer {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  const issuer = getProposalIssuerBlock();
   const currency = proposal.currencyCode?.trim() || "XCD";
   const subject = proposalSubjectLine(proposal);
 
-  let y = MARGIN;
-  const hasLogo = Boolean(assets.logo);
-  y = addLogo(doc, assets.logo, y, hasLogo ? "center" : "left");
+  const ctx: ProposalLayoutCtx = {
+    pageNum: 1,
+    logo: assets.logo,
+    continuedContentY: MARGIN + 40,
+  };
 
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...THEME.primaryDark);
-  if (hasLogo) {
-    doc.text(issuer.legalName, PAGE_W / 2, y, { align: "center" });
-    y += LINE - 2;
-    if (issuer.brandLine) {
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(9);
-      doc.setTextColor(...THEME.primary);
-      doc.text(issuer.brandLine, PAGE_W / 2, y, { align: "center" });
-      y += LINE - 1;
-      doc.setFont("helvetica", "normal");
-    }
-    doc.setFontSize(9);
-    doc.setTextColor(...THEME.mutedText);
-    for (const line of issuer.addressLines) {
-      doc.text(line, PAGE_W / 2, y, { align: "center" });
-      y += LINE - 2;
-    }
-  } else {
-    doc.text(issuer.legalName, MARGIN, y);
-    y += LINE - 2;
-    if (issuer.brandLine) {
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(9);
-      doc.setTextColor(...THEME.primary);
-      doc.text(issuer.brandLine, MARGIN, y);
-      y += LINE - 1;
-      doc.setFont("helvetica", "normal");
-    }
-    doc.setFontSize(9);
-    doc.setTextColor(...THEME.mutedText);
-    for (const line of issuer.addressLines) {
-      doc.text(line, MARGIN, y);
-      y += LINE - 2;
-    }
-  }
-  doc.setTextColor(0);
-  y += 12;
+  let y = drawFirstPageLetterhead(doc, assets.logo);
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...THEME.mutedText);
-  doc.text("Proposal for", MARGIN, y);
+  doc.setTextColor(...NEUTRAL.muted);
+  doc.text(PROPOSAL_TEMPLATE.proposalForLabel, MARGIN, y);
   y += LINE + 2;
-  doc.setTextColor(...THEME.primaryDark);
+  doc.setTextColor(0);
   doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
   doc.text(subject, MARGIN, y);
   y += 22;
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(0);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Prepared for", MARGIN, y);
+  doc.text(PROPOSAL_TEMPLATE.preparedForLabel, MARGIN, y);
   y += LINE;
   doc.setFont("helvetica", "normal");
   const clientLines: string[] = [];
@@ -495,87 +534,70 @@ export function buildProposalPdfBuffer(
 
   if (proposal.executiveSummary?.trim()) {
     doc.setFont("helvetica", "bold");
-    doc.text("Overview", MARGIN, y);
+    doc.text(PROPOSAL_TEMPLATE.overviewHeading, MARGIN, y);
     y += LINE;
     doc.setFont("helvetica", "normal");
-    y = addParagraph(doc, proposal.executiveSummary.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1);
+    y = addParagraph(doc, proposal.executiveSummary.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1, ctx);
     y += 10;
   }
 
-  if (y > PAGE_H - MARGIN - 140) {
-    doc.addPage();
-    y = MARGIN;
+  if (y > CONTENT_BOTTOM - 160) {
+    y = newPage(doc, ctx);
   }
 
   const innerW = PAGE_W - 2 * MARGIN;
-  const priceColW = Math.round(innerW * 0.28);
-  const detailColW = innerW - priceColW;
+  const colWQty = Math.round(innerW * 0.12);
+  const colWPrice = Math.round(innerW * 0.22);
+  const colWDetail = innerW - colWQty - colWPrice;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.setTextColor(...THEME.primaryDark);
-  const pricingTitle = "Solution pricing";
-  doc.text(pricingTitle, MARGIN, y);
-  const titleW = doc.getTextWidth(pricingTitle);
-  doc.setDrawColor(...THEME.primary);
-  doc.setLineWidth(0.85);
-  doc.line(MARGIN, y + 3, MARGIN + titleW, y + 3);
-  y += 20;
-  doc.setFontSize(10);
   doc.setTextColor(0);
-  doc.text(`Commercial proposal – ${subject}`, PAGE_W / 2, y, { align: "center" });
-  y += 18;
+  doc.text(PROPOSAL_TEMPLATE.solutionPricingHeading, MARGIN, y);
+  y += LINE + 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  y = addParagraph(doc, pricingIntroLine(currency), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1, ctx);
+  y += 8;
 
-  const sortedLines = [...proposal.lineItems].sort((a, b) => a.sortOrder - b.sortOrder);
-  const subtotal = sortedLines.reduce((acc, row) => acc + lineTotal(row), 0);
-
-  type Cell = string | { content: string; styles?: Record<string, unknown> };
-  const body: Cell[][] = sortedLines.map((row) => [
-    lineItemDescriptionCell(row, currency),
-    {
-      content: money(lineTotal(row), currency),
-      styles: { fontStyle: "bold", halign: "center", valign: "middle" },
-    },
-  ]);
-  body.push([
-    {
-      content: "Total (estimate)",
-      styles: { fontStyle: "bold", fillColor: THEME.headerBg },
-    },
-    {
-      content: money(subtotal, currency),
-      styles: { fontStyle: "bold", halign: "center", fillColor: THEME.headerBg },
-    },
-  ]);
+  const tableBody = buildPricingTableBody(proposal, currency);
 
   autoTable(doc, {
     startY: y,
-    head: [["Product / service details", `Price in ${currency} (per-unit)`]],
-    body,
-    margin: { left: MARGIN, right: MARGIN },
+    head: [[PROPOSAL_TEMPLATE.tableHeadCol1, PROPOSAL_TEMPLATE.tableHeadCol2, tableHeadCol3(currency)]],
+    body: tableBody,
+    margin: { top: MARGIN + 36, left: MARGIN, right: MARGIN, bottom: MARGIN },
     tableWidth: innerW,
+    showHead: "everyPage",
     theme: "plain",
+    willDrawPage: (data) => {
+      if (data.pageNumber > 1 && data.cursor) {
+        drawContinuedLetterhead(data.doc);
+        data.cursor.y = MARGIN + 40;
+      }
+    },
     styles: {
       fontSize: 9,
-      cellPadding: { top: 7, right: 10, bottom: 7, left: 10 },
+      cellPadding: { top: 7, right: 8, bottom: 7, left: 8 },
       valign: "top",
-      lineColor: THEME.border,
-      lineWidth: 0.35,
+      lineColor: NEUTRAL.border,
+      lineWidth: 0.25,
       textColor: [24, 24, 27],
     },
     headStyles: {
-      fillColor: THEME.headerBg,
-      textColor: THEME.primaryDark,
+      fillColor: NEUTRAL.headBg,
+      textColor: [24, 24, 27],
       fontStyle: "bold",
       halign: "center",
       valign: "middle",
-      lineColor: THEME.primary,
-      lineWidth: 0.5,
+      lineColor: NEUTRAL.border,
+      lineWidth: 0.35,
     },
-    alternateRowStyles: { fillColor: THEME.rowStripe },
+    alternateRowStyles: { fillColor: NEUTRAL.stripe },
     columnStyles: {
-      0: { cellWidth: detailColW, halign: "left" },
-      1: { cellWidth: priceColW, halign: "center" },
+      0: { cellWidth: colWDetail, halign: "left" },
+      1: { cellWidth: colWQty, halign: "center" },
+      2: { cellWidth: colWPrice, halign: "center" },
     },
   });
 
@@ -585,87 +607,55 @@ export function buildProposalPdfBuffer(
     doc.setFontSize(8);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(70);
-    y = addParagraph(doc, proposal.pricingFootnote.trim(), MARGIN, y, PAGE_W - MARGIN * 2, 11);
+    y = addParagraph(doc, proposal.pricingFootnote.trim(), MARGIN, y, PAGE_W - MARGIN * 2, 11, ctx);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(0);
     y += 8;
   }
 
-  if (proposal.includedFeatures?.trim()) {
-    if (y > PAGE_H - MARGIN - 80) {
-      doc.addPage();
-      y = MARGIN;
-    }
-       doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...THEME.primaryDark);
-    const featTitle = "Application feature set";
-    doc.text(featTitle, MARGIN, y);
-    doc.setDrawColor(...THEME.primary);
-    doc.setLineWidth(0.65);
-    doc.line(MARGIN, y + 3, MARGIN + doc.getTextWidth(featTitle), y + 3);
-    doc.setTextColor(0);
-    y += LINE + 4;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    const bullets = proposal.includedFeatures.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    for (const b of bullets) {
-      if (y > PAGE_H - MARGIN - 20) {
-        doc.addPage();
-        y = MARGIN;
-      }
-      doc.text(`• ${b}`, MARGIN + 6, y);
-      y += LINE - 2;
-    }
-    y += 10;
-  }
-
-  y = renderProposalVisuals(doc, proposal.visuals, y, assets.visualImages);
+  y = renderProposalVisuals(doc, proposal.visuals, y, assets.visualImages, ctx);
 
   if (proposal.assumptionsText?.trim()) {
-    if (y > PAGE_H - MARGIN - 60) {
-      doc.addPage();
-      y = MARGIN;
+    if (y > CONTENT_BOTTOM - 60) {
+      y = newPage(doc, ctx);
     }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text("Assumptions", MARGIN, y);
+    doc.setTextColor(0);
+    doc.text(PROPOSAL_TEMPLATE.assumptionsHeading, MARGIN, y);
     y += LINE;
     doc.setFont("helvetica", "normal");
-    y = addParagraph(doc, proposal.assumptionsText.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1);
+    y = addParagraph(doc, proposal.assumptionsText.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1, ctx);
     y += 8;
   }
 
   if (proposal.nextStepsText?.trim()) {
-    if (y > PAGE_H - MARGIN - 60) {
-      doc.addPage();
-      y = MARGIN;
+    if (y > CONTENT_BOTTOM - 60) {
+      y = newPage(doc, ctx);
     }
     doc.setFont("helvetica", "bold");
-    doc.text("Next steps", MARGIN, y);
+    doc.text(PROPOSAL_TEMPLATE.nextStepsHeading, MARGIN, y);
     y += LINE;
     doc.setFont("helvetica", "normal");
-    y = addParagraph(doc, proposal.nextStepsText.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1);
+    y = addParagraph(doc, proposal.nextStepsText.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1, ctx);
     y += 8;
   }
 
   if (proposal.termsText?.trim()) {
-    if (y > PAGE_H - MARGIN - 48) {
-      doc.addPage();
-      y = MARGIN;
+    if (y > CONTENT_BOTTOM - 48) {
+      y = newPage(doc, ctx);
     }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("Terms & conditions", MARGIN, y);
+    doc.text(PROPOSAL_TEMPLATE.termsMainHeading, MARGIN, y);
     y += LINE + 4;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
 
     const blocks = parseTermsBlocks(proposal.termsText);
     for (const block of blocks) {
-      if (y > PAGE_H - MARGIN - 36) {
-        doc.addPage();
-        y = MARGIN;
+      if (y > CONTENT_BOTTOM - 36) {
+        y = newPage(doc, ctx);
       }
       if (block.heading) {
         doc.setFont("helvetica", "bold");
@@ -674,56 +664,59 @@ export function buildProposalPdfBuffer(
       }
       doc.setFont("helvetica", "normal");
       if (block.body) {
-        y = addParagraph(doc, block.body, MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1);
+        y = addParagraph(doc, block.body, MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1, ctx);
       }
       y += 6;
     }
   }
 
   const validDays = proposal.validityDays > 0 ? proposal.validityDays : 14;
-  if (y > PAGE_H - MARGIN - 72) {
-    doc.addPage();
-    y = MARGIN;
+  if (y > CONTENT_BOTTOM - 72) {
+    y = newPage(doc, ctx);
   }
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("Validity of proposal", MARGIN, y);
+  doc.text(PROPOSAL_TEMPLATE.validityHeading, MARGIN, y);
   y += LINE;
   doc.setFont("helvetica", "normal");
   y = addParagraph(
     doc,
-    `This proposal is valid for ${validDays} days from the date of issue unless withdrawn earlier. ${issuer.legalName} reserves the right to adjust pricing if costs or regulations change before acceptance.`,
+    formatValidityBody(validDays),
     MARGIN,
     y,
     PAGE_W - MARGIN * 2,
     LINE - 1,
+    ctx,
   );
   y += 4;
 
   if (
     proposal.salesContactName?.trim() ||
     proposal.salesContactEmail?.trim() ||
-    proposal.salesContactPhone?.trim()
+    proposal.salesContactPhone?.trim() ||
+    proposal.salesContactTitle?.trim()
   ) {
-    if (y > PAGE_H - MARGIN - 56) {
-      doc.addPage();
-      y = MARGIN;
+    if (y > CONTENT_BOTTOM - 56) {
+      y = newPage(doc, ctx);
     }
     doc.setFont("helvetica", "bold");
-    doc.text("Designated contact", MARGIN, y);
-    y += LINE;
+    doc.text(PROPOSAL_TEMPLATE.designatedContactHeading, MARGIN, y);
+    y += LINE + 4;
     doc.setFont("helvetica", "normal");
-    if (proposal.salesContactName?.trim()) {
-      const role = proposal.salesContactTitle?.trim() ? ` — ${proposal.salesContactTitle.trim()}` : "";
-      doc.text(`${proposal.salesContactName.trim()}${role}`, MARGIN, y);
+    const labelX = MARGIN;
+    const dashX = MARGIN + 130;
+    const valX = MARGIN + 150;
+    const rows: { label: string; value: string }[] = [
+      { label: "Contact Person", value: proposal.salesContactName?.trim() ?? "" },
+      { label: "Designation", value: proposal.salesContactTitle?.trim() ?? "" },
+      { label: "Telephone", value: proposal.salesContactPhone?.trim() ?? "" },
+      { label: "Email", value: proposal.salesContactEmail?.trim() ?? "" },
+    ];
+    for (const row of rows) {
+      doc.text(row.label, labelX, y);
+      doc.text("-", dashX, y);
+      doc.text(row.value, valX, y);
       y += LINE - 2;
-    }
-    if (proposal.salesContactEmail?.trim()) {
-      doc.text(proposal.salesContactEmail.trim(), MARGIN, y);
-      y += LINE - 2;
-    }
-    if (proposal.salesContactPhone?.trim()) {
-      doc.text(proposal.salesContactPhone.trim(), MARGIN, y);
     }
   }
 

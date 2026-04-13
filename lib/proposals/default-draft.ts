@@ -1,11 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
-const DEFAULT_TERMS = `Parties and branding
-• This proposal is issued by Ellodane Enterprises. “Track Lucia” is our vehicle and fleet visibility product and service brand.
-
----
-
-Installation and maintenance
+/** Matches the approved proposal template; `---` separates terms subsections for PDF/DOCX rendering. */
+const DEFAULT_TERMS = `Terms & conditions
 • Installations are scheduled with your operations team. Typical on-site work is about 20–45 minutes per vehicle when the vehicle is accessible.
 • Standard installations use discreet placement to reduce tampering risk. Non-standard vehicles or retrofits may need a separate scope.
 • Remote configuration and monitoring reduce unnecessary field visits for routine troubleshooting.
@@ -18,14 +14,8 @@ Warranty (hardware)
 
 ---
 
-Annual maintenance (optional)
-• After the initial warranty period, annual maintenance may be purchased to extend hardware coverage and include a defined number of preventive and support interactions (quoted separately).
-• Scope of AMC is described in the service schedule attached to your order.
-
----
-
 Payment
-• Subscription charges are generally billed in advance according to the term selected (e.g. monthly or annual).
+• Subscription charges are generally billed in accordance with the desired billing period selected (e.g. monthly or annual).
 • Hardware may be invoiced on order confirmation or prior to shipment/delivery as agreed.
 • Travel, lodging, or after-hours work outside the agreed service footprint may be invoiced separately.
 
@@ -44,16 +34,16 @@ Service level (support)
 ---
 
 Limitations
-• Ellodane Enterprises is not responsible for indirect, consequential, or economic loss, including lost profits or business interruption, except where such limitation is prohibited by law.
+• Track Lucia is not responsible for indirect, consequential, or economic loss, including lost profits or business interruption, except where such limitation is prohibited by law.
 • Map, cellular, and third-party platform outages outside our control may affect real-time views without constituting a breach of this proposal.
 
 ---
 
 Liability
 • Liability is limited to fees paid for the specific service giving rise to the claim during the twelve (12) months before the event, except for liability that cannot be limited by law.
-• This proposal is an offer only; a signed order or master agreement with Ellodane Enterprises governs the commercial relationship.`;
+• This proposal is an offer only; a signed order or master agreement governs the commercial relationship.`;
 
-const DEFAULT_EXEC_SUMMARY = `Ellodane Enterprises is pleased to offer the Track Lucia fleet visibility package: live map tracking, geo-fence and movement-related alerts, trip history, and multi-vehicle administration — all using dedicated mobile data so vehicles are not dependent on customer Wi-Fi. The commercial summary below lists typical hardware, subscription, installation, and optional maintenance lines; quantities and travel can be adjusted before you move to formal estimate and invoice.`;
+const DEFAULT_EXEC_SUMMARY = `We are pleased to offer a Track Lucia fleet visibility package: live map tracking, geo-fence and movement-related alerts, trip history, and multi-vehicle administration — all using dedicated mobile data so vehicles are not dependent on customer Wi-Fi. The commercial summary below lists typical hardware, subscription, installation, and optional maintenance lines; quantities and travel can be adjusted before you move to formal estimate and invoice.`;
 
 const DEFAULT_FEATURES = `Live tracking on map with multi-vehicle dashboard
 Geo-fence, movement, and power-disconnect style alerts
@@ -65,19 +55,20 @@ Optional FleetGuardian after-hours monitoring for critical events`;
 
 const DEFAULT_ASSUMPTIONS = `Pricing assumes the fleet size, territory, and installation model discussed with your team. Duties, taxes, regulatory levies, or carrier surcharges may apply and will be shown on invoice unless explicitly included here.`;
 
-const DEFAULT_NEXT_STEPS = `1. Confirm vehicle count, installation windows, and billing term.
-2. Accept this proposal within the validity window below.
-3. We will issue estimate and invoice through our billing workflow (e.g. Invoiless) and schedule deployment.`;
+const DEFAULT_NEXT_STEPS = `• Confirm vehicle count, installation windows, and billing term.
+• Accept this proposal within the validity window below.
+• We will issue estimate and invoice through our billing workflow and schedule deployment.`;
 
 const DEFAULT_PRICING_FOOTNOTE = `* Line totals are indicative only until quantities and taxes are finalized on invoice.
 ** Government taxes, regulatory fees, or carrier pass-through charges may apply in addition to the amounts above.
-*** Travel, lodging, or premium after-hours work outside the agreed service area may be quoted separately.`;
+*** Travel, lodging, or premium after-hours work outside the agreed service area may be quoted separately.
+{Include the ability to include terms regarding deposit and payment.}`;
 
 export function buildDefaultProposalNestedCreate(
   createdById: string | null,
 ): Prisma.ProposalCreateInput {
   return {
-    title: "Vehicle tracking — commercial proposal",
+    title: "Vehicle Fleet Tracking Solution",
     status: "draft",
     validityDays: 14,
     currencyCode: "XCD",
@@ -93,7 +84,8 @@ export function buildDefaultProposalNestedCreate(
         {
           sortOrder: 0,
           category: "hardware",
-          description: "Track Lucia GPS device (supply, configuration, per vehicle)",
+          description:
+            "Track Lucia – Wired GPS Device\n• Supply, Configuration, per vehicle",
           quantity: 1,
           unitLabel: "per vehicle",
           unitPrice: 0,
@@ -102,15 +94,15 @@ export function buildDefaultProposalNestedCreate(
           sortOrder: 1,
           category: "subscription",
           description:
-            "Software subscription — maps, hosting, cellular data allowance, alerts, backups (annual, per vehicle)",
+            "Software Subscription Charges (per-vehicle/per-unit)\n• Monthly (Payable in Advance)\n(Including Activated SIM, GPRS, Reports, Web Hosting, Data Backup & Storage, Google Enterprise Maps, Fixed Alerts)",
           quantity: 1,
-          unitLabel: "per vehicle / year",
+          unitLabel: "per vehicle",
           unitPrice: 0,
         },
         {
           sortOrder: 2,
           category: "installation",
-          description: "Professional installation — standard service area (wiring, test, handover)",
+          description: "Fleet installation — standard on-site visit (per vehicle)",
           quantity: 1,
           unitLabel: "per vehicle",
           unitPrice: 0,
@@ -121,14 +113,6 @@ export function buildDefaultProposalNestedCreate(
           description: "Travel / extended territory installation surcharge (if applicable)",
           quantity: 0,
           unitLabel: "per vehicle",
-          unitPrice: 0,
-        },
-        {
-          sortOrder: 4,
-          category: "service",
-          description: "Annual maintenance after year one — hardware coverage + scheduled support (optional)",
-          quantity: 0,
-          unitLabel: "per vehicle / year",
           unitPrice: 0,
         },
       ],
@@ -169,6 +153,17 @@ export function buildDefaultProposalNestedCreate(
           sortOrder: 3,
           kind: "media",
           layout: "full_width",
+          title: "Install",
+          caption: "20–45 min / vehicle",
+          placeholderHint:
+            "[Photo: discreet install example (non-identifying vehicle) — or diagram: device + vehicle power]",
+          imageUrl: null,
+          imageAlt: "Vehicle tracker installation or power connection diagram",
+        },
+        {
+          sortOrder: 4,
+          kind: "media",
+          layout: "full_width",
           title: "Trip history and accountability",
           caption: "Replay where vehicles went and when — useful for rentals and dispute resolution.",
           placeholderHint: "[Screenshot: route playback or trip history]",
@@ -176,7 +171,7 @@ export function buildDefaultProposalNestedCreate(
           imageAlt: "Trip history or route playback screen",
         },
         {
-          sortOrder: 4,
+          sortOrder: 5,
           kind: "media",
           layout: "full_width",
           title: "Installation and hardware",
@@ -188,7 +183,7 @@ export function buildDefaultProposalNestedCreate(
           imageAlt: "Vehicle tracker installation or power connection diagram",
         },
         {
-          sortOrder: 5,
+          sortOrder: 6,
           kind: "timeline",
           layout: "full_width",
           title: "Typical rollout timeline",

@@ -16,45 +16,39 @@ import {
   TableLayoutType,
   TableRow,
   TextRun,
+  TabStopType,
   VerticalAlignTable,
   WidthType,
   type FileChild,
 } from "docx";
 
-import { getProposalIssuerBlock } from "@/lib/proposals/issuer";
 import type { LogoImage, ProposalForPdf } from "@/lib/proposals/pdf";
+import {
+  formatValidityBody,
+  pricingIntroLine,
+  PROPOSAL_TEMPLATE,
+} from "@/lib/proposals/proposal-template";
 import { parseTimelineSteps, type TimelineStep } from "@/lib/proposals/visual-timeline";
 
-const THEME = {
-  primary: "047857",
-  primaryDark: "065F46",
+const NEUTRAL = {
   muted: "52525B",
-  headerBg: "ECFDF5",
-  rowStripe: "FAFDFB",
-  border: "A7F3D0",
+  headBg: "F5F5F5",
+  rowStripe: "FCFCFC",
+  border: "C8C8C8",
+  text: "18181B",
 };
 
 const PAGE_CONTENT_TWIPS = Math.round(6.5 * 72 * 20);
 
 const TIMELINE_FALLBACK: TimelineStep[] = [
-  { title: "Order", detail: "Confirm scope & schedule" },
+  { title: "Order", detail: "1–3 business days" },
   { title: "Install", detail: "20–45 min / vehicle" },
   { title: "Go live", detail: "Same day when online" },
 ];
 
-function categoryLabel(c: ProposalLineItem["category"]): string {
-  switch (c) {
-    case "hardware":
-      return "Hardware";
-    case "subscription":
-      return "Subscription";
-    case "installation":
-      return "Installation";
-    case "service":
-      return "Service";
-    default:
-      return "Other";
-  }
+function formatQty(q: unknown): string {
+  const n = Number(q);
+  return String(Number.isFinite(n) ? n : 0);
 }
 
 function money(amount: number, currency: string): string {
@@ -66,16 +60,6 @@ function money(amount: number, currency: string): string {
   return `${currency} ${formatted}`;
 }
 
-function lineItemDescriptionCell(row: ProposalLineItem, currency: string): string {
-  const cat = categoryLabel(row.category);
-  const desc = row.description.trim();
-  const qty = Number(row.quantity);
-  const qtyStr = Number.isFinite(qty) ? String(qty) : "1";
-  const unit = row.unitLabel?.trim() || "unit";
-  const unitPrice = money(Number(row.unitPrice), currency);
-  return `${cat} — ${desc}\n(${qtyStr} × ${unit} @ ${unitPrice} each)`;
-}
-
 function lineTotal(item: ProposalLineItem): number {
   const q = Number(item.quantity);
   const p = Number(item.unitPrice);
@@ -84,10 +68,7 @@ function lineTotal(item: ProposalLineItem): number {
 
 function proposalSubjectLine(proposal: ProposalForPdf): string {
   const t = proposal.title.trim();
-  if (!t) return "Vehicle tracking solution";
-  const parts = t.split("—").map((s) => s.trim()).filter(Boolean);
-  if (parts.length >= 2) return parts[0] ?? "Vehicle tracking solution";
-  return parts[0] ?? "Vehicle tracking solution";
+  return t || PROPOSAL_TEMPLATE.defaultSubject;
 }
 
 /** Same rule as PDF: blocks separated by a line containing only `---`. */
@@ -135,7 +116,7 @@ function imageBufferAndDims(logo: LogoImage): { buf: Buffer; type: "png" | "jpg"
 }
 
 function softCellBorders() {
-  const edge = { style: BorderStyle.SINGLE, size: 1, color: THEME.border } as const;
+  const edge = { style: BorderStyle.SINGLE, size: 1, color: NEUTRAL.border } as const;
   return { top: edge, bottom: edge, left: edge, right: edge };
 }
 
@@ -160,7 +141,7 @@ function parasFromPlainText(text: string, runOpts: { size?: number; color?: stri
 function sectionHeading(text: string): Paragraph {
   return new Paragraph({
     spacing: { before: 240, after: 120 },
-    children: [new TextRun({ text, bold: true, size: 24, color: THEME.primaryDark })],
+    children: [new TextRun({ text, bold: true, size: 24, color: NEUTRAL.text })],
   });
 }
 
@@ -170,7 +151,6 @@ function logoParagraph(logo: LogoImage | null): Paragraph | null {
   if (!img) return null;
   const dim = scaleToMaxBox(img.w, img.h, 360, 100);
   return new Paragraph({
-    alignment: AlignmentType.CENTER,
     spacing: { after: 160 },
     children: [
       new ImageRun({
@@ -182,34 +162,17 @@ function logoParagraph(logo: LogoImage | null): Paragraph | null {
   });
 }
 
-function letterheadBlock(issuer: ReturnType<typeof getProposalIssuerBlock>, centered: boolean): Paragraph[] {
-  const align = centered ? AlignmentType.CENTER : AlignmentType.LEFT;
-  const paras: Paragraph[] = [
+function letterheadBlock(): Paragraph[] {
+  return [
     new Paragraph({
-      alignment: align,
       spacing: { after: 40 },
-      children: [new TextRun({ text: issuer.legalName, bold: true, size: 20, color: THEME.primaryDark })],
+      children: [new TextRun({ text: PROPOSAL_TEMPLATE.headerLine1, bold: true, size: 20, color: NEUTRAL.text })],
+    }),
+    new Paragraph({
+      spacing: { after: 40 },
+      children: [new TextRun({ text: PROPOSAL_TEMPLATE.headerLine2, size: 18, color: NEUTRAL.muted })],
     }),
   ];
-  if (issuer.brandLine) {
-    paras.push(
-      new Paragraph({
-        alignment: align,
-        spacing: { after: 40 },
-        children: [new TextRun({ text: issuer.brandLine, italics: true, size: 18, color: THEME.primary })],
-      }),
-    );
-  }
-  for (const line of issuer.addressLines) {
-    paras.push(
-      new Paragraph({
-        alignment: align,
-        spacing: { after: 20 },
-        children: [new TextRun({ text: line, size: 18, color: THEME.muted })],
-      }),
-    );
-  }
-  return paras;
 }
 
 function mediaBlocksForVisual(
@@ -271,7 +234,7 @@ function timelineSection(title: string, caption: string | null, steps: TimelineS
           ...(s.detail?.trim()
             ? [
                 new Paragraph({
-                  children: [new TextRun({ text: s.detail.trim(), size: 16, color: THEME.muted })],
+                  children: [new TextRun({ text: s.detail.trim(), size: 16, color: NEUTRAL.muted })],
                 }),
               ]
             : []),
@@ -304,101 +267,224 @@ function timelineSection(title: string, caption: string | null, steps: TimelineS
   return out;
 }
 
-function buildPricingTable(sortedLines: ProposalLineItem[], currency: string, subtotal: number): Table {
-  const detailW = 6739;
-  const priceW = 2621;
+function buildPricingTableDocx(proposal: ProposalForPdf, currency: string): Table {
+  const sorted = [...proposal.lineItems].sort((a, b) => a.sortOrder - b.sortOrder);
+  const pre = sorted.slice(0, Math.min(2, sorted.length));
+  const post = sorted.slice(pre.length);
+
+  const detailW = Math.round(PAGE_CONTENT_TWIPS * 0.58);
+  const qtyW = Math.round(PAGE_CONTENT_TWIPS * 0.12);
+  const priceW = PAGE_CONTENT_TWIPS - detailW - qtyW;
 
   const head = new TableRow({
     tableHeader: true,
     children: [
       new TableCell({
-        shading: { fill: THEME.headerBg },
+        shading: { fill: NEUTRAL.headBg },
         borders: softCellBorders(),
         width: { size: detailW, type: WidthType.DXA },
         children: [
           new Paragraph({
             alignment: AlignmentType.CENTER,
             children: [
-              new TextRun({ text: "Product / service details", bold: true, size: 18, color: THEME.primaryDark }),
+              new TextRun({ text: PROPOSAL_TEMPLATE.tableHeadCol1, bold: true, size: 18, color: NEUTRAL.text }),
             ],
           }),
         ],
       }),
       new TableCell({
-        shading: { fill: THEME.headerBg },
+        shading: { fill: NEUTRAL.headBg },
+        borders: softCellBorders(),
+        width: { size: qtyW, type: WidthType.DXA },
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [
+              new TextRun({ text: PROPOSAL_TEMPLATE.tableHeadCol2, bold: true, size: 18, color: NEUTRAL.text }),
+            ],
+          }),
+        ],
+      }),
+      new TableCell({
+        shading: { fill: NEUTRAL.headBg },
         borders: softCellBorders(),
         width: { size: priceW, type: WidthType.DXA },
         children: [
           new Paragraph({
             alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: "Price", bold: true, size: 18, color: NEUTRAL.text })],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: `(${currency}) Total`, bold: true, size: 18, color: NEUTRAL.text })],
+          }),
+        ],
+      }),
+    ],
+  });
+
+  const bodyRows: TableRow[] = [];
+  let stripe = 0;
+  const nextFill = () => (stripe++ % 2 === 1 ? NEUTRAL.rowStripe : "FFFFFF");
+
+  for (const row of pre) {
+    const fill = nextFill();
+    bodyRows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            shading: { fill },
+            borders: softCellBorders(),
+            verticalAlign: VerticalAlignTable.TOP,
+            children: parasFromPlainText(row.description.trim(), { size: 18 }),
+          }),
+          new TableCell({
+            shading: { fill },
+            borders: softCellBorders(),
+            verticalAlign: VerticalAlignTable.CENTER,
             children: [
-              new TextRun({
-                text: `Price in ${currency} (per-unit)`,
-                bold: true,
-                size: 18,
-                color: THEME.primaryDark,
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: formatQty(row.quantity), size: 18 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            shading: { fill },
+            borders: softCellBorders(),
+            verticalAlign: VerticalAlignTable.CENTER,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: money(lineTotal(row), currency), size: 18 })],
               }),
             ],
           }),
         ],
       }),
-    ],
-  });
+    );
+  }
 
-  const bodyRows = sortedLines.map((row, i) => {
-    const fill = i % 2 === 1 ? THEME.rowStripe : "FFFFFF";
-    return new TableRow({
-      children: [
-        new TableCell({
-          shading: { fill },
-          borders: softCellBorders(),
-          verticalAlign: VerticalAlignTable.TOP,
-          children: parasFromPlainText(lineItemDescriptionCell(row, currency), { size: 18 }),
-        }),
-        new TableCell({
-          shading: { fill },
-          borders: softCellBorders(),
-          verticalAlign: VerticalAlignTable.CENTER,
+  if (proposal.includedFeatures?.trim()) {
+    const feats = proposal.includedFeatures
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const featText =
+      `${PROPOSAL_TEMPLATE.applicationFeatureSetHeading}\n` + feats.map((f) => `\u2022 ${f}`).join("\n");
+    const fill = nextFill();
+    bodyRows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 3,
+            shading: { fill },
+            borders: softCellBorders(),
+            verticalAlign: VerticalAlignTable.TOP,
+            children: parasFromPlainText(featText, { size: 18 }),
+          }),
+        ],
+      }),
+    );
+  }
+
+  if (post.length > 0) {
+    const fillTitle = nextFill();
+    bodyRows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 3,
+            shading: { fill: fillTitle },
+            borders: softCellBorders(),
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: PROPOSAL_TEMPLATE.installationSectionTitle, bold: true, size: 18 }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+    const fillSub = nextFill();
+    bodyRows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 3,
+            shading: { fill: fillSub },
+            borders: softCellBorders(),
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: PROPOSAL_TEMPLATE.installationSectionSubtitle, size: 18 })],
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+    for (const row of post) {
+      const fill = nextFill();
+      bodyRows.push(
+        new TableRow({
           children: [
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [new TextRun({ text: money(lineTotal(row), currency), bold: true, size: 18 })],
+            new TableCell({
+              shading: { fill },
+              borders: softCellBorders(),
+              verticalAlign: VerticalAlignTable.TOP,
+              children: parasFromPlainText(row.description.trim(), { size: 18 }),
+            }),
+            new TableCell({
+              shading: { fill },
+              borders: softCellBorders(),
+              verticalAlign: VerticalAlignTable.CENTER,
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: formatQty(row.quantity), size: 18 })],
+                }),
+              ],
+            }),
+            new TableCell({
+              shading: { fill },
+              borders: softCellBorders(),
+              verticalAlign: VerticalAlignTable.CENTER,
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: money(lineTotal(row), currency), size: 18 })],
+                }),
+              ],
             }),
           ],
         }),
-      ],
-    });
-  });
+      );
+    }
+  }
 
-  const totalRow = new TableRow({
-    children: [
-      new TableCell({
-        shading: { fill: THEME.headerBg },
-        borders: softCellBorders(),
+  if (bodyRows.length === 0) {
+    bodyRows.push(
+      new TableRow({
         children: [
-          new Paragraph({
-            children: [new TextRun({ text: "Total (estimate)", bold: true, size: 18, color: THEME.primaryDark })],
+          new TableCell({
+            shading: { fill: "FFFFFF" },
+            borders: softCellBorders(),
+            children: [new Paragraph({ children: [new TextRun({ text: "\u2014", size: 18 })] })],
           }),
+          new TableCell({ shading: { fill: "FFFFFF" }, borders: softCellBorders(), children: [new Paragraph({})] }),
+          new TableCell({ shading: { fill: "FFFFFF" }, borders: softCellBorders(), children: [new Paragraph({})] }),
         ],
       }),
-      new TableCell({
-        shading: { fill: THEME.headerBg },
-        borders: softCellBorders(),
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: money(subtotal, currency), bold: true, size: 18, color: THEME.primaryDark })],
-          }),
-        ],
-      }),
-    ],
-  });
+    );
+  }
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     layout: TableLayoutType.FIXED,
-    columnWidths: [detailW, priceW],
-    rows: [head, ...bodyRows, totalRow],
+    columnWidths: [detailW, qtyW, priceW],
+    rows: [head, ...bodyRows],
   });
 }
 
@@ -406,7 +492,7 @@ function singleMediaSection(vis: ProposalVisualBlock, assets: Map<string, LogoIm
   const out: FileChild[] = [
     new Paragraph({
       spacing: { before: 200, after: 120 },
-      children: [new TextRun({ text: vis.title, bold: true, size: 22, color: THEME.primaryDark })],
+      children: [new TextRun({ text: vis.title, bold: true, size: 22, color: NEUTRAL.text })],
     }),
     ...mediaBlocksForVisual(vis, assets, innerMaxW, 200),
   ];
@@ -426,7 +512,7 @@ function halfPairSection(left: ProposalVisualBlock, right: ProposalVisualBlock, 
       children: [
         new Paragraph({
           spacing: { after: 100 },
-          children: [new TextRun({ text: vis.title, bold: true, size: 20, color: THEME.primaryDark })],
+          children: [new TextRun({ text: vis.title, bold: true, size: 20, color: NEUTRAL.text })],
         }),
         ...mediaBlocksForVisual(vis, assets, 380, 160),
         ...captionParas(vis.caption),
@@ -471,11 +557,11 @@ const defaultFooter = new Footer({
     new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [
-        new TextRun({ text: "— ", size: 16, color: "828282" }),
+        new TextRun({ text: "-- ", size: 16, color: "828282" }),
         new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "828282" }),
         new TextRun({ text: " of ", size: 16, color: "828282" }),
         new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: "828282" }),
-        new TextRun({ text: " —", size: 16, color: "828282" }),
+        new TextRun({ text: " --", size: 16, color: "828282" }),
       ],
     }),
   ],
@@ -485,29 +571,27 @@ export async function buildProposalDocxBuffer(
   proposal: ProposalForPdf,
   assets: { logo: LogoImage | null; visualImages: Map<string, LogoImage> },
 ): Promise<Buffer> {
-  const issuer = getProposalIssuerBlock();
   const currency = proposal.currencyCode?.trim() || "XCD";
   const subject = proposalSubjectLine(proposal);
-  const hasLogo = Boolean(assets.logo);
 
   const children: FileChild[] = [];
 
+  children.push(...letterheadBlock());
   const lp = logoParagraph(assets.logo);
   if (lp) children.push(lp);
-  children.push(...letterheadBlock(issuer, hasLogo));
 
   children.push(
     new Paragraph({
       spacing: { before: 120, after: 60 },
-      children: [new TextRun({ text: "Proposal for", size: 20, color: THEME.muted })],
+      children: [new TextRun({ text: PROPOSAL_TEMPLATE.proposalForLabel, size: 20, color: NEUTRAL.muted })],
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun({ text: subject, bold: true, size: 30, color: THEME.primaryDark })],
+      children: [new TextRun({ text: subject, bold: true, size: 30, color: NEUTRAL.text })],
     }),
     new Paragraph({
       spacing: { after: 40 },
-      children: [new TextRun({ text: "Prepared for", bold: true, size: 20 })],
+      children: [new TextRun({ text: PROPOSAL_TEMPLATE.preparedForLabel, bold: true, size: 20 })],
     }),
   );
 
@@ -533,25 +617,21 @@ export async function buildProposalDocxBuffer(
   }
 
   if (proposal.executiveSummary?.trim()) {
-    children.push(sectionHeading("Overview"));
+    children.push(sectionHeading(PROPOSAL_TEMPLATE.overviewHeading));
     children.push(...parasFromPlainText(proposal.executiveSummary.trim(), { size: 20 }));
   }
 
   children.push(
     new Paragraph({
       spacing: { before: 200, after: 80 },
-      children: [new TextRun({ text: "Solution pricing", bold: true, size: 24, color: THEME.primaryDark })],
+      children: [
+        new TextRun({ text: PROPOSAL_TEMPLATE.solutionPricingHeading, bold: true, size: 24, color: NEUTRAL.text }),
+      ],
     }),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 160 },
-      children: [new TextRun({ text: `Commercial proposal – ${subject}`, size: 20 })],
-    }),
+    ...parasFromPlainText(pricingIntroLine(currency), { size: 20 }),
   );
 
-  const sortedLines = [...proposal.lineItems].sort((a, b) => a.sortOrder - b.sortOrder);
-  const subtotal = sortedLines.reduce((acc, row) => acc + lineTotal(row), 0);
-  children.push(buildPricingTable(sortedLines, currency, subtotal));
+  children.push(buildPricingTableDocx(proposal, currency));
 
   if (proposal.pricingFootnote?.trim()) {
     const fnLines = proposal.pricingFootnote.trim().split(/\r?\n/);
@@ -565,29 +645,15 @@ export async function buildProposalDocxBuffer(
     });
   }
 
-  if (proposal.includedFeatures?.trim()) {
-    children.push(sectionHeading("Application feature set"));
-    const bullets = proposal.includedFeatures.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    for (const b of bullets) {
-      children.push(
-        new Paragraph({
-          spacing: { after: 60 },
-          indent: { left: 360 },
-          children: [new TextRun({ text: `• ${b}`, size: 20 })],
-        }),
-      );
-    }
-  }
-
   appendVisuals(children, proposal.visuals, assets.visualImages);
 
   if (proposal.assumptionsText?.trim()) {
-    children.push(sectionHeading("Assumptions"));
+    children.push(sectionHeading(PROPOSAL_TEMPLATE.assumptionsHeading));
     children.push(...parasFromPlainText(proposal.assumptionsText.trim(), { size: 20 }));
   }
 
   if (proposal.nextStepsText?.trim()) {
-    children.push(sectionHeading("Next steps"));
+    children.push(sectionHeading(PROPOSAL_TEMPLATE.nextStepsHeading));
     children.push(...parasFromPlainText(proposal.nextStepsText.trim(), { size: 20 }));
   }
 
@@ -595,7 +661,9 @@ export async function buildProposalDocxBuffer(
     children.push(
       new Paragraph({
         spacing: { before: 240, after: 120 },
-        children: [new TextRun({ text: "Terms & conditions", bold: true, size: 24, color: THEME.primaryDark })],
+        children: [
+          new TextRun({ text: PROPOSAL_TEMPLATE.termsMainHeading, bold: true, size: 24, color: NEUTRAL.text }),
+        ],
       }),
     );
     const blocks = parseTermsBlocks(proposal.termsText);
@@ -618,46 +686,44 @@ export async function buildProposalDocxBuffer(
   children.push(
     new Paragraph({
       spacing: { before: 240, after: 80 },
-      children: [new TextRun({ text: "Validity of proposal", bold: true, size: 20 })],
+      children: [new TextRun({ text: PROPOSAL_TEMPLATE.validityHeading, bold: true, size: 20 })],
     }),
-    ...parasFromPlainText(
-      `This proposal is valid for ${validDays} days from the date of issue unless withdrawn earlier. ${issuer.legalName} reserves the right to adjust pricing if costs or regulations change before acceptance.`,
-      { size: 18 },
-    ),
+    ...parasFromPlainText(formatValidityBody(validDays), { size: 18 }),
   );
 
   if (
     proposal.salesContactName?.trim() ||
     proposal.salesContactEmail?.trim() ||
-    proposal.salesContactPhone?.trim()
+    proposal.salesContactPhone?.trim() ||
+    proposal.salesContactTitle?.trim()
   ) {
     children.push(
       new Paragraph({
         spacing: { before: 200, after: 80 },
-        children: [new TextRun({ text: "Designated contact", bold: true, size: 20 })],
+        children: [new TextRun({ text: PROPOSAL_TEMPLATE.designatedContactHeading, bold: true, size: 20 })],
       }),
     );
-    if (proposal.salesContactName?.trim()) {
-      const role = proposal.salesContactTitle?.trim() ? ` — ${proposal.salesContactTitle.trim()}` : "";
+    const rows: { label: string; value: string }[] = [
+      { label: "Contact Person", value: proposal.salesContactName?.trim() ?? "" },
+      { label: "Designation", value: proposal.salesContactTitle?.trim() ?? "" },
+      { label: "Telephone", value: proposal.salesContactPhone?.trim() ?? "" },
+      { label: "Email", value: proposal.salesContactEmail?.trim() ?? "" },
+    ];
+    for (const row of rows) {
       children.push(
         new Paragraph({
           spacing: { after: 40 },
-          children: [new TextRun({ text: `${proposal.salesContactName.trim()}${role}`, size: 20 })],
-        }),
-      );
-    }
-    if (proposal.salesContactEmail?.trim()) {
-      children.push(
-        new Paragraph({
-          spacing: { after: 40 },
-          children: [new TextRun({ text: proposal.salesContactEmail.trim(), size: 20 })],
-        }),
-      );
-    }
-    if (proposal.salesContactPhone?.trim()) {
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: proposal.salesContactPhone.trim(), size: 20 })],
+          tabStops: [
+            { type: TabStopType.LEFT, position: 2800 },
+            { type: TabStopType.LEFT, position: 3200 },
+          ],
+          children: [
+            new TextRun({ text: row.label, size: 20 }),
+            new TextRun({ text: "\t" }),
+            new TextRun({ text: "-", size: 20 }),
+            new TextRun({ text: "\t" }),
+            new TextRun({ text: row.value, size: 20 }),
+          ],
         }),
       );
     }
