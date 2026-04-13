@@ -11,6 +11,7 @@ import {
   PROPOSAL_TEMPLATE,
   tableHeadCol3,
 } from "@/lib/proposals/proposal-template";
+import { buildPage2SampleProposalForPdf } from "@/lib/proposals/page2-sample-proposal";
 import { parseTimelineSteps, type TimelineStep } from "@/lib/proposals/visual-timeline";
 
 export type ProposalForPdf = Proposal & {
@@ -578,27 +579,14 @@ function buildPricingTableBody(proposal: ProposalForPdf, currency: string): Tabl
   return body;
 }
 
-export function buildProposalPdfBuffer(
+/** Inner page: Overview, pricing table, pricing footnotes (matches real proposal page 2 when cover is page 1). */
+function drawOverviewPricingTableAndFootnotes(
+  doc: jsPDF,
   proposal: ProposalForPdf,
-  assets: {
-    headerLogo: LogoImage | null;
-    centerBrandLogo: LogoImage | null;
-    visualImages: Map<string, LogoImage>;
-  },
-): Buffer {
-  const doc = new jsPDF({ unit: "pt", format: "letter" });
-  const currency = proposal.currencyCode?.trim() || "XCD";
-
-  const ctx: ProposalLayoutCtx = {
-    pageNum: 1,
-    continuedContentY: MARGIN + 40,
-  };
-
-  let y = drawProposalCoverPage(doc, proposal, {
-    headerLogo: assets.headerLogo,
-    centerBrandLogo: assets.centerBrandLogo,
-  });
-
+  currency: string,
+  y: number,
+  ctx: ProposalLayoutCtx,
+): number {
   if (proposal.executiveSummary?.trim()) {
     doc.setFont("helvetica", "bold");
     doc.text(PROPOSAL_TEMPLATE.overviewHeading, MARGIN, y);
@@ -679,6 +667,58 @@ export function buildProposalPdfBuffer(
     doc.setTextColor(0);
     y += 8;
   }
+
+  return y;
+}
+
+/** Footer for inner pages only (`-- n of m --`), for single-page layout samples. */
+function addInnerPageOnlyFooters(doc: jsPDF): void {
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(130);
+    doc.text(footerPageText(i, total), PAGE_W / 2, FOOTER_Y, { align: "center" });
+    doc.setTextColor(0);
+  }
+}
+
+/** One-page PDF: letterhead + default-draft Overview + pricing table + footnotes (verify vs. template page 2). */
+export function buildProposalPage2SamplePdfBuffer(): Buffer {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const ctx: ProposalLayoutCtx = { pageNum: 1, continuedContentY: MARGIN + 40 };
+  drawContinuedLetterhead(doc);
+  let y = MARGIN + 40;
+  const proposal = buildPage2SampleProposalForPdf();
+  const currency = proposal.currencyCode?.trim() || "XCD";
+  drawOverviewPricingTableAndFootnotes(doc, proposal, currency, y, ctx);
+  addInnerPageOnlyFooters(doc);
+  return Buffer.from(doc.output("arraybuffer"));
+}
+
+export function buildProposalPdfBuffer(
+  proposal: ProposalForPdf,
+  assets: {
+    headerLogo: LogoImage | null;
+    centerBrandLogo: LogoImage | null;
+    visualImages: Map<string, LogoImage>;
+  },
+): Buffer {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const currency = proposal.currencyCode?.trim() || "XCD";
+
+  const ctx: ProposalLayoutCtx = {
+    pageNum: 1,
+    continuedContentY: MARGIN + 40,
+  };
+
+  let y = drawProposalCoverPage(doc, proposal, {
+    headerLogo: assets.headerLogo,
+    centerBrandLogo: assets.centerBrandLogo,
+  });
+
+  y = drawOverviewPricingTableAndFootnotes(doc, proposal, currency, y, ctx);
 
   y = renderProposalVisuals(doc, proposal.visuals, y, assets.visualImages, ctx);
 
