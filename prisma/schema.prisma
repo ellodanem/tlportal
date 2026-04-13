@@ -64,6 +64,19 @@ enum DeviceObjectType {
   speed_boat
 }
 
+enum ProposalStatus {
+  draft
+  sent
+}
+
+enum ProposalLineCategory {
+  hardware
+  subscription
+  installation
+  service
+  other
+}
+
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
@@ -93,6 +106,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   reviewedRegistrationRequests RegistrationRequest[] @relation("RegistrationReviewedBy")
+  proposalsCreated           Proposal[]
 }
 
 // --- Core domain ---
@@ -132,6 +146,7 @@ model Customer {
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
   createdFromRegistration    RegistrationRequest?  @relation("RegistrationCreatedCustomer")
+  proposals                  Proposal[]
 
   @@index([email])
 }
@@ -291,4 +306,84 @@ model ServiceAssignment {
   @@index([deviceId])
   @@index([status])
   @@index([nextDueDate])
+}
+
+/// Sales proposal (PDF to client). Estimate/invoice flow is separate (e.g. Invoiless).
+model Proposal {
+  id     String         @id @default(uuid())
+  status ProposalStatus @default(draft)
+
+  title String
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  /// Primary display name on cover (company or contact).
+  clientLabel       String?
+  clientCompany     String?
+  clientContactName String?
+  clientEmail       String?
+  clientPhone       String?
+  clientAddress     String? @db.Text
+
+  executiveSummary String? @db.Text
+  /// Plain text: one bullet per line for the “included capabilities” section.
+  includedFeatures String? @db.Text
+  assumptionsText  String? @db.Text
+  nextStepsText    String? @db.Text
+  termsText        String? @db.Text
+  pricingFootnote  String? @db.Text
+
+  currencyCode String @default("XCD")
+  validityDays Int    @default(14)
+
+  salesContactName  String?
+  salesContactTitle String?
+  salesContactEmail String?
+  salesContactPhone String?
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  lineItems ProposalLineItem[]
+  visuals   ProposalVisualBlock[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model ProposalLineItem {
+  id String @id @default(uuid())
+
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  sortOrder Int                  @default(0)
+  category  ProposalLineCategory @default(other)
+
+  description String
+  quantity    Decimal @default(1) @db.Decimal(12, 4)
+  unitLabel   String?
+  unitPrice   Decimal @db.Decimal(12, 2)
+
+  @@index([proposalId])
+}
+
+model ProposalVisualBlock {
+  id String @id @default(uuid())
+
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  sortOrder Int     @default(0)
+  title           String
+  caption         String? @db.Text
+  imageUrl        String?
+  placeholderHint String?
+
+  @@index([proposalId])
 }

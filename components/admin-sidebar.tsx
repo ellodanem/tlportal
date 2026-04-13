@@ -13,6 +13,7 @@ import {
   IconNavInbox,
   IconNavInvoice,
   IconNavPackage,
+  IconNavProposal,
   IconNavSettings,
   IconNavSim,
 } from "@/components/admin-nav-icons";
@@ -23,6 +24,7 @@ const STORAGE_KEY = "tl-admin-sidebar-collapsed";
 const links = [
   { href: "/admin", label: "Dashboard", Icon: IconNavDashboard },
   { href: "/admin/customers", label: "Customers", Icon: IconUsers },
+  { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
   { href: "/admin/invoices", label: "Invoices", Icon: IconNavInvoice },
   { href: "/admin/devices", label: "Devices", Icon: IconDevice },
   { href: "/admin/sims", label: "SIMs", Icon: IconNavSim },

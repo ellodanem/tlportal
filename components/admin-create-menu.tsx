@@ -5,6 +5,11 @@ import { useEffect, useRef, useState } from "react";
 
 const items = [
   {
+    href: "/admin/proposals/new",
+    label: "Proposal",
+    description: "Start a sales proposal with default sections.",
+  },
+  {
     href: "/admin/customers/new",
     label: "Customer",
     description: "Add a company or person for billing.",
