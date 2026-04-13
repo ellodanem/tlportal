@@ -180,10 +180,10 @@ function placeHeaderLogoTopLeft(doc: jsPDF, logo: LogoImage | null): void {
 function placeCenterBrandLogo(doc: jsPDF, logo: LogoImage | null, yTop: number): number {
   if (!logo) return yTop + 4;
   try {
-    const maxW = 440;
-    const maxH = 144;
+    const maxW = PAGE_W - 2 * MARGIN;
+    const maxH = 288;
     const props = doc.getImageProperties(logo.dataUrl);
-    const scale = Math.min(maxW / props.width, maxH / props.height, 2);
+    const scale = Math.min(maxW / props.width, maxH / props.height, 4);
     const dw = props.width * scale;
     const dh = props.height * scale;
     const x = (PAGE_W - dw) / 2;

@@ -174,10 +174,10 @@ function coverCenterBrandParagraph(logo: LogoImage | null): Paragraph | null {
   if (!logo) return null;
   const img = imageBufferAndDims(logo);
   if (!img) return null;
-  const dim = scaleToMaxBox(img.w, img.h, 440, 144, 2);
+  const dim = scaleToMaxBox(img.w, img.h, 516, 288, 4);
   return new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { after: 360 },
+    spacing: { after: 480 },
     children: [
       new ImageRun({
         type: img.type,
