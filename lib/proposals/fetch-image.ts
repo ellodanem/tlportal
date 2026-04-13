@@ -1,5 +1,8 @@
 import "server-only";
 
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import { get } from "@vercel/blob";
 
 import {
@@ -12,6 +15,44 @@ import { resolvePublicAssetUrl } from "@/lib/proposals/resolve-asset-url";
 function toDataUrl(buf: ArrayBuffer, mime: string): string {
   const b64 = Buffer.from(buf).toString("base64");
   return `data:${mime};base64,${b64}`;
+}
+
+function logoFromBuffer(buf: Buffer, mime: "image/png" | "image/jpeg"): LogoImage {
+  const b64 = buf.toString("base64");
+  const dataUrl = `data:${mime};base64,${b64}`;
+  return { dataUrl, format: mime === "image/png" ? "PNG" : "JPEG" };
+}
+
+/** Read `public/...` from disk so PDF/DOCX export works when `APP_URL` points at another host (no HTTP round-trip). */
+async function tryLoadPublicStaticImage(sitePath: string): Promise<LogoImage | null> {
+  const posix = sitePath.trim().replace(/\\/g, "/");
+  if (!posix.startsWith("/") || posix.startsWith("//")) return null;
+  const segments = posix.split("/").filter(Boolean);
+  if (segments.some((s) => s === "..")) return null;
+
+  const rel = segments.join(path.sep);
+  const publicRoot = path.resolve(process.cwd(), "public");
+  const abs = path.resolve(publicRoot, rel);
+  if (!abs.startsWith(publicRoot + path.sep) && abs !== publicRoot) return null;
+
+  let st;
+  try {
+    st = await fs.stat(abs);
+  } catch {
+    return null;
+  }
+  if (!st.isFile()) return null;
+
+  const ext = path.extname(abs).toLowerCase();
+  const mime = ext === ".png" ? ("image/png" as const) : ext === ".jpg" || ext === ".jpeg" ? ("image/jpeg" as const) : null;
+  if (!mime) return null;
+
+  try {
+    const buf = await fs.readFile(abs);
+    return logoFromBuffer(buf, mime);
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchImageAsLogo(origin: string, pathOrUrl: string | null | undefined): Promise<LogoImage | null> {
@@ -39,6 +80,13 @@ export async function fetchImageAsLogo(origin: string, pathOrUrl: string | null 
     } catch {
       return null;
     }
+  }
+
+  const isHttp = trimmed.startsWith("http://") || trimmed.startsWith("https://");
+  if (!isHttp) {
+    const sitePath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    const fromDisk = await tryLoadPublicStaticImage(sitePath);
+    if (fromDisk) return fromDisk;
   }
 
   const url = resolvePublicAssetUrl(origin, trimmed);

@@ -115,7 +115,8 @@ export function drawProposalCoverPage(
   doc.setFontSize(10);
   yc = placeCenterBrandLogo(doc, assets.centerBrandLogo, yc);
 
-  const yPrepared = Math.max(yc + 52, 312);
+  /* Lower “Prepared for” so it sits mid–lower page; keep clearance under center mark / title. */
+  const yPrepared = Math.max(yc + 72, 408);
   let y = yPrepared;
 
   doc.setFont("helvetica", "bold");

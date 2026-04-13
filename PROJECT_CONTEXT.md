@@ -1121,3 +1121,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - fix(proposals): cover page layout — header logo, centered title and product mark, footer
 - **Agent notes:** Page 1 only: Ellodane (or `PROPOSAL_PDF_HEADER_LOGO`) top-left; centered grey “Proposal for”, bold title, then Track Lucia mark from `PROPOSAL_PDF_CENTER_LOGO` or default fetch `public/proposals/track-lucia-cover.png` (add PNG there); left “Prepared for” + client fields (only variable block on cover). Footer on page 1: centered Ellodane + contact line above `-- n of m --`; inner pages unchanged (top letterhead + page footer). `lib/proposals/proposal-cover-assets.ts`. Word export mirrors the same cover order.
 
+
+### 2026-04-13 20:15 UTC — commit `37ec8e9`
+
+- feat(proposals): cover sample PDF route and editor link
+
+
+### 2026-04-13 20:15 UTC — pre-push (`main` → origin) @ `37ec8e9`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
