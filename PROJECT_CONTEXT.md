@@ -1176,3 +1176,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - docs: PROJECT_CONTEXT for 643b529
 
+
+### 2026-04-13 20:30 UTC — commit `2f390e2`
+
+- fix(proposals): larger cover mark, lower Prepared-for
+
+
+### 2026-04-13 20:30 UTC — pre-push (`main` → origin) @ `2f390e2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
