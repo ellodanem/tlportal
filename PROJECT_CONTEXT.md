@@ -1037,3 +1037,18 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - style(proposals): PDF pricing like sample — emerald theme, 2-col table
 - **Agent notes:** Letterhead: centered logo + issuer when logo exists. **Solution pricing** underlined; **Commercial proposal – …** centered above table. Two-column pricing (`Product / service details` | `Price in {currency} (per-unit)`), line detail + qty breakdown in left cell, bold line total right; emerald-50 header / borders / stripes (`lib/proposals/pdf.ts` `THEME`). Amounts `toLocaleString('en-029')` for Caribbean-style grouping.
 
+
+### 2026-04-13 18:16 UTC — commit `8954d5b`
+
+- docs: PROJECT_CONTEXT for 473cb0d
+
+
+### 2026-04-13 18:16 UTC — pre-push (`main` → origin) @ `8954d5b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-13 18:21 UTC — commit `60ddf00`
+
+- fix(proposals): Ellodane Enterprises legal entity vs Track Lucia brand
+
