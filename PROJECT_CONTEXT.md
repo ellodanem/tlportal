@@ -1070,7 +1070,12 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - **Agent notes:** `lib/proposals/docx.ts` mirrors PDF sections (issuer/letterhead, client block, overview, solution pricing table, footnote, feature bullets, visual blocks including half-width pairs and timeline strip, assumptions, next steps, `---`-split terms, validity, designated contact; footer “— n of m —”). `GET /api/admin/proposals/[id]/docx` returns `application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Admin editor: **Download Word** next to **Download PDF**. Dependency: `docx` (^9.6.1).
 
 
-### 2026-04-13 19:00 UTC — commit `dcc0b2a`
+### 2026-04-13 19:00 UTC — commit `935b159`
 
-- feat(proposals): export proposals as Word (.docx)
+- docs: PROJECT_CONTEXT for dcc0b2a
+
+
+### 2026-04-13 19:00 UTC — pre-push (`main` → origin) @ `935b159`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
