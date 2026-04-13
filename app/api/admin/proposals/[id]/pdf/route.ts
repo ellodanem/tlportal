@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth/get-session";
-import { getBrandingLogoUrl } from "@/lib/branding/app-settings";
+import { getBrandingLogoStored } from "@/lib/branding/app-settings";
 import { prisma } from "@/lib/db";
 import { fetchImageAsLogo } from "@/lib/proposals/fetch-image";
 import { buildProposalPdfBuffer, type LogoImage } from "@/lib/proposals/pdf";
@@ -33,8 +33,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const origin = getServerOriginFromEnv();
-  const logoUrl = await getBrandingLogoUrl();
-  const logo = await fetchImageAsLogo(origin, logoUrl);
+  const logoStored = await getBrandingLogoStored();
+  const logo = await fetchImageAsLogo(origin, logoStored);
 
   const visualImages = new Map<string, LogoImage>();
   for (const v of proposal.visuals) {

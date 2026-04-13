@@ -1005,3 +1005,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(proposals): visual blocks — timeline, half-width pairs, alt text
 - **Agent notes:** Migration `20260414120000_proposal_visual_kind_layout`. `ProposalVisualBlock`: `kind`, `layout`, `imageAlt`, `timelineSteps` (JSON). PDF pairs consecutive `half_width` media blocks; `timeline` renders a 3+ step strip. Default proposal seeds six visuals (platform, alerts + FleetGuardian pair, trip, install, timeline) with placeholders and alts. Existing proposals: new columns default to media/full; re-save to add timeline/steps in DB.
 
+
+### 2026-04-13 17:59 UTC — commit `b12af52`
+
+- docs: PROJECT_CONTEXT for b3e9a86
+
+
+### 2026-04-13 17:59 UTC — pre-push (`main` → origin) @ `b12af52`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

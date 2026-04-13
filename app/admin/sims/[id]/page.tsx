@@ -16,10 +16,7 @@ import {
   summarizeUsageSeries,
   type UsageSeriesPoint,
 } from "@/lib/nce/sim-api";
-import {
-  SIM_USAGE_RANGE_MAX_SPAN_DAYS,
-  resolveSimUsageRangeFromQuery,
-} from "@/lib/nce/sim-usage-range";
+import { resolveSimUsageRangeFromQuery } from "@/lib/nce/sim-usage-range";
 import { prisma } from "@/lib/db";
 
 type Props = {
@@ -115,7 +112,6 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
   const displayTotalMb = liveTotalMb ?? sim.totalDataMB;
   const displayUsedMb = liveUsedMb ?? sim.usedDataMB;
   const usageSummary = summarizeUsageSeries(usagePoints);
-  const usageRangeSummary = `1NCE usage range: ${usageRange.usageFrom} → ${usageRange.usageTo} (UTC calendar dates). Share this view with query params usageFrom & usageTo.`;
 
   const title = sim.label?.trim() || sim.iccid;
   const linkedDeviceSummary = sim.device ? (
@@ -194,14 +190,6 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Usage over time</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Daily data from 1NCE (max ~{SIM_USAGE_RANGE_MAX_SPAN_DAYS} days per request). Pick a range below; URLs
-            support{" "}
-            <code className="rounded bg-zinc-200 px-1 font-mono text-[10px] dark:bg-zinc-800">usageFrom</code> /{" "}
-            <code className="rounded bg-zinc-200 px-1 font-mono text-[10px] dark:bg-zinc-800">usageTo</code> as{" "}
-            <code className="rounded bg-zinc-200 px-1 font-mono text-[10px] dark:bg-zinc-800">YYYY-MM-DD</code>. First
-            activity is the earliest day with reported usage in this window—not the exact attach time.
-          </p>
           {oneNceConfigured ? (
             <>
               <div className="mt-3">
@@ -209,7 +197,6 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
                   simId={sim.id}
                   usageFrom={usageRange.usageFrom}
                   usageTo={usageRange.usageTo}
-                  rangeSummary={usageRangeSummary}
                   isDefaultRange={!usageRange.usedQueryParams}
                 />
               </div>

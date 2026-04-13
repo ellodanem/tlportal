@@ -24,7 +24,6 @@ type Props = {
   simId: string;
   usageFrom: string;
   usageTo: string;
-  rangeSummary: string;
   /** True when the page URL has no usage range query (server default window). */
   isDefaultRange: boolean;
 };
@@ -33,7 +32,6 @@ export function SimUsageRangeControls({
   simId,
   usageFrom,
   usageTo,
-  rangeSummary,
   isDefaultRange,
 }: Props) {
   const router = useRouter();
@@ -81,7 +79,6 @@ export function SimUsageRangeControls({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-zinc-600 dark:text-zinc-400">{rangeSummary}</p>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Presets</span>
         {PRESETS.map(({ label, days }) => {

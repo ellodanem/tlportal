@@ -9,6 +9,10 @@ import { del, put } from "@vercel/blob";
 import type { Prisma } from "@prisma/client";
 
 import { getSession } from "@/lib/auth/get-session";
+import {
+  BRANDING_PRIVATE_BLOB_PREFIX,
+  stripBrandingPrivateBlobPrefix,
+} from "@/lib/branding/app-settings";
 import { prisma } from "@/lib/db";
 
 const SETTINGS_ID = "default";
@@ -28,6 +32,11 @@ function isBlobLogoUrl(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
 }
 
+function isVercelBlobPrivateStorePublicAccessError(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e);
+  return m.includes("Cannot use public access on a private store");
+}
+
 function blobToken(): string | undefined {
   const t = process.env.BLOB_READ_WRITE_TOKEN?.trim();
   return t || undefined;
@@ -38,10 +47,11 @@ function useVercelBlob(): boolean {
 }
 
 async function removeStoredBrandingFile(logoUrl: string): Promise<void> {
-  if (isBlobLogoUrl(logoUrl)) {
+  const blobTarget = stripBrandingPrivateBlobPrefix(logoUrl);
+  if (isBlobLogoUrl(blobTarget)) {
     const token = blobToken();
     if (!token) return;
-    await del(logoUrl, { token }).catch(() => {});
+    await del(blobTarget, { token }).catch(() => {});
     return;
   }
   await unlink(publicPathToFs(logoUrl)).catch(() => {});
@@ -95,12 +105,24 @@ export async function uploadBrandingLogo(
     if (useVercelBlob()) {
       const token = blobToken()!;
       const pathname = `branding/${randomUUID()}.${ext}`;
-      const blob = await put(pathname, bytes, {
-        access: "public",
+      const putOpts = {
         token,
         contentType: mime || undefined,
-      });
-      logoUrl = blob.url;
+      } as const;
+      try {
+        const blob = await put(pathname, bytes, {
+          ...putOpts,
+          access: "public" as const,
+        });
+        logoUrl = blob.url;
+      } catch (e) {
+        if (!isVercelBlobPrivateStorePublicAccessError(e)) throw e;
+        const blob = await put(pathname, bytes, {
+          ...putOpts,
+          access: "private" as const,
+        });
+        logoUrl = `${BRANDING_PRIVATE_BLOB_PREFIX}${blob.url}`;
+      }
     } else {
       if (process.env.VERCEL === "1") {
         return {
@@ -141,7 +163,7 @@ export async function uploadBrandingLogo(
         ? " Request was too large for the server action limit — try a smaller file or redeploy after next.config bodySizeLimit."
         : "";
     return {
-      error: `Logo upload failed: ${raw.slice(0, 280)}${raw.length > 280 ? "…" : ""}${hint} If you use Vercel Blob, confirm BLOB_READ_WRITE_TOKEN matches the store and redeploy.`,
+      error: `Logo upload failed: ${raw.slice(0, 280)}${raw.length > 280 ? "…" : ""}${hint} If you use Vercel Blob, confirm BLOB_READ_WRITE_TOKEN is linked to your Blob store and redeploy.`,
     };
   }
 
