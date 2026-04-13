@@ -1021,3 +1021,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(admin): private Blob branding; trim SIM usage copy; responsive note
 - **Agent notes:** Vercel Blob private stores: `put` retries with `access: "private"` when public is rejected; DB uses `private:` prefix on blob URL; `GET /api/branding/logo` streams via `@vercel/blob` `get` for signed-in admins; proposal PDF uses `getBrandingLogoStored` + SDK `get` in `fetchImageAsLogo`. SIM detail page: removed usage help paragraph and `rangeSummary` from `SimUsageRangeControls`. `AGENTS.md` responsive layout note; `.env.example` mentions private Blob stores.
 
+
+### 2026-04-13 18:03 UTC — commit `00f35dc`
+
+- docs: PROJECT_CONTEXT for c278b5c
+
+
+### 2026-04-13 18:03 UTC — pre-push (`main` → origin) @ `00f35dc`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-13 18:16 UTC — commit `473cb0d`
+
+- style(proposals): PDF pricing like sample — emerald theme, 2-col table
+- **Agent notes:** Letterhead: centered logo + issuer when logo exists. **Solution pricing** underlined; **Commercial proposal – …** centered above table. Two-column pricing (`Product / service details` | `Price in {currency} (per-unit)`), line detail + qty breakdown in left cell, bold line total right; emerald-50 header / borders / stripes (`lib/proposals/pdf.ts` `THEME`). Amounts `toLocaleString('en-029')` for Caribbean-style grouping.
+
