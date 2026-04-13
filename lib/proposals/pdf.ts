@@ -5,6 +5,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import { getProposalIssuerBlock } from "@/lib/proposals/issuer";
+import { parseTimelineSteps, type TimelineStep } from "@/lib/proposals/visual-timeline";
 
 export type ProposalForPdf = Proposal & {
   lineItems: ProposalLineItem[];
@@ -142,6 +143,239 @@ function addPageFooters(doc: jsPDF) {
     doc.text(`— ${i} of ${total} —`, PAGE_W / 2, PAGE_H - 28, { align: "center" });
     doc.setTextColor(0);
   }
+}
+
+const TIMELINE_FALLBACK: TimelineStep[] = [
+  { title: "Order", detail: "Confirm scope & schedule" },
+  { title: "Install", detail: "20–45 min / vehicle" },
+  { title: "Go live", detail: "Same day when online" },
+];
+
+function ensureVisualSpace(doc: jsPDF, y: number, minBelow: number): number {
+  if (y > PAGE_H - MARGIN - minBelow) {
+    doc.addPage();
+    return MARGIN;
+  }
+  return y;
+}
+
+function renderMediaArea(
+  doc: jsPDF,
+  vis: ProposalVisualBlock,
+  x: number,
+  y: number,
+  areaW: number,
+  boxH: number,
+  assets: Map<string, LogoImage>,
+): number {
+  const hint = vis.placeholderHint?.trim() || "[Image placeholder]";
+  const visImg = assets.get(vis.id);
+  let usedH = 0;
+  if (visImg) {
+    try {
+      const props = doc.getImageProperties(visImg.dataUrl);
+      const scale = Math.min(areaW / props.width, boxH / props.height);
+      const dw = props.width * scale;
+      const dh = props.height * scale;
+      doc.addImage(visImg.dataUrl, visImg.format, x, y, dw, dh);
+      usedH = dh;
+    } catch {
+      drawPlaceholder(doc, x, y, areaW, boxH, hint);
+      usedH = boxH;
+    }
+  } else if (vis.imageUrl?.trim()) {
+    drawPlaceholder(doc, x, y, areaW, boxH, `${hint}\n(Image URL set but could not be loaded.)`);
+    usedH = boxH;
+  } else {
+    drawPlaceholder(doc, x, y, areaW, boxH, hint);
+    usedH = boxH;
+  }
+
+  if (vis.imageAlt?.trim()) {
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    const altLines = doc.splitTextToSize(`Alt: ${vis.imageAlt.trim()}`, areaW);
+    let ay = y + usedH + 3;
+    for (const ln of altLines) {
+      doc.text(ln, x, ay);
+      ay += 9;
+    }
+    usedH = ay - y;
+    doc.setTextColor(0);
+  }
+
+  return usedH;
+}
+
+function renderSingleMediaBlock(
+  doc: jsPDF,
+  vis: ProposalVisualBlock,
+  x0: number,
+  innerW: number,
+  y: number,
+  widthFactor: number,
+  assets: Map<string, LogoImage>,
+): number {
+  let yy = ensureVisualSpace(doc, y, 130);
+  const areaW = innerW * widthFactor;
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(vis.title, x0, yy);
+  yy += 16;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const boxH = 118;
+  const h = renderMediaArea(doc, vis, x0, yy, areaW, boxH, assets);
+  yy += h + 6;
+  if (vis.caption?.trim()) {
+    yy = addParagraph(doc, vis.caption.trim(), x0, yy, areaW, LINE - 2);
+  }
+  return yy + 12;
+}
+
+function renderHalfPair(
+  doc: jsPDF,
+  left: ProposalVisualBlock,
+  right: ProposalVisualBlock,
+  y: number,
+  assets: Map<string, LogoImage>,
+): number {
+  let yy = ensureVisualSpace(doc, y, 150);
+  const innerW = PAGE_W - 2 * MARGIN;
+  const gap = 14;
+  const colW = (innerW - gap) / 2;
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(left.title, MARGIN, yy);
+  doc.text(right.title, MARGIN + colW + gap, yy);
+  yy += 14;
+  doc.setFont("helvetica", "normal");
+  const boxH = 100;
+  const hL = renderMediaArea(doc, left, MARGIN, yy, colW, boxH, assets);
+  const hR = renderMediaArea(doc, right, MARGIN + colW + gap, yy, colW, boxH, assets);
+  yy += Math.max(hL, hR) + 8;
+
+  const yCap = yy;
+  let yLeftEnd = yCap;
+  let yRightEnd = yCap;
+  if (left.caption?.trim()) {
+    yLeftEnd = addParagraph(doc, left.caption.trim(), MARGIN, yCap, colW - 4, 11);
+  }
+  if (right.caption?.trim()) {
+    yRightEnd = addParagraph(doc, right.caption.trim(), MARGIN + colW + gap, yCap, colW - 4, 11);
+  }
+  return Math.max(yLeftEnd, yRightEnd) + 12;
+}
+
+function renderTimelineStrip(
+  doc: jsPDF,
+  title: string,
+  caption: string | null,
+  steps: TimelineStep[],
+  yStart: number,
+): number {
+  let y = ensureVisualSpace(doc, yStart, 120);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(title, MARGIN, y);
+  y += 16;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+
+  const innerW = PAGE_W - 2 * MARGIN;
+  const useSteps = steps.length ? steps : TIMELINE_FALLBACK;
+  const n = useSteps.length;
+  const gap = 10;
+  const boxW = (innerW - gap * (n - 1)) / n;
+  const boxH = 56;
+  const yBoxes = y;
+
+  for (let i = 0; i < n; i++) {
+    const x = MARGIN + i * (boxW + gap);
+    doc.setDrawColor(200);
+    doc.setFillColor(252, 252, 252);
+    doc.roundedRect(x, yBoxes, boxW, boxH, 4, 4, "FD");
+    doc.setTextColor(30);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    const step = useSteps[i]!;
+    const titleLines = doc.splitTextToSize(step.title, boxW - 16);
+    let ty = yBoxes + 14;
+    for (const tl of titleLines) {
+      doc.text(tl, x + 8, ty);
+      ty += 10;
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(80);
+    if (step.detail) {
+      const dLines = doc.splitTextToSize(step.detail, boxW - 16);
+      for (const dl of dLines) {
+        doc.text(dl, x + 8, ty);
+        ty += 9;
+      }
+    }
+    doc.setTextColor(0);
+    if (i < n - 1) {
+      doc.setFontSize(11);
+      doc.setTextColor(140);
+      doc.text("\u2192", x + boxW + gap / 2 - 5, yBoxes + boxH / 2 + 4);
+      doc.setTextColor(0);
+    }
+  }
+
+  y = yBoxes + boxH + 10;
+  if (caption?.trim()) {
+    y = addParagraph(doc, caption.trim(), MARGIN, y, innerW, LINE - 2);
+  }
+  return y + 12;
+}
+
+function renderProposalVisuals(
+  doc: jsPDF,
+  visuals: ProposalVisualBlock[],
+  yStart: number,
+  assets: Map<string, LogoImage>,
+): number {
+  const sorted = [...visuals].sort((a, b) => a.sortOrder - b.sortOrder);
+  const innerW = PAGE_W - 2 * MARGIN;
+  let y = yStart;
+  let idx = 0;
+
+  while (idx < sorted.length) {
+    const vis = sorted[idx]!;
+    if (vis.kind === "timeline") {
+      const steps = parseTimelineSteps(vis.timelineSteps);
+      y = renderTimelineStrip(doc, vis.title, vis.caption, steps, y);
+      idx += 1;
+      continue;
+    }
+
+    const next = sorted[idx + 1];
+    if (
+      vis.layout === "half_width" &&
+      next &&
+      next.kind === "media" &&
+      next.layout === "half_width"
+    ) {
+      y = renderHalfPair(doc, vis, next, y, assets);
+      idx += 2;
+      continue;
+    }
+
+    if (vis.layout === "half_width") {
+      y = renderSingleMediaBlock(doc, vis, MARGIN, innerW, y, 0.52, assets);
+      idx += 1;
+      continue;
+    }
+
+    y = renderSingleMediaBlock(doc, vis, MARGIN, innerW, y, 1, assets);
+    idx += 1;
+  }
+
+  return y;
 }
 
 export function buildProposalPdfBuffer(
@@ -305,50 +539,7 @@ export function buildProposalPdfBuffer(
     y += 10;
   }
 
-  const sortedVisuals = [...proposal.visuals].sort((a, b) => a.sortOrder - b.sortOrder);
-  for (const vis of sortedVisuals) {
-    if (y > PAGE_H - MARGIN - 140) {
-      doc.addPage();
-      y = MARGIN;
-    }
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text(vis.title, MARGIN, y);
-    y += 16;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-
-    const boxW = PAGE_W - MARGIN * 2;
-    const boxH = 120;
-    const hint = vis.placeholderHint?.trim() || "[Image placeholder]";
-    const visImg = assets.visualImages.get(vis.id);
-    if (visImg) {
-      try {
-        const props = doc.getImageProperties(visImg.dataUrl);
-        const rw = props.width;
-        const rh = props.height;
-        const scale = Math.min(boxW / rw, boxH / rh);
-        const dw = rw * scale;
-        const dh = rh * scale;
-        doc.addImage(visImg.dataUrl, visImg.format, MARGIN, y, dw, dh);
-        y += dh + 6;
-      } catch {
-        drawPlaceholder(doc, MARGIN, y, boxW, boxH, hint);
-        y += boxH + 6;
-      }
-    } else if (vis.imageUrl?.trim()) {
-      drawPlaceholder(doc, MARGIN, y, boxW, boxH, `${hint}\n(Image URL set but could not be loaded.)`);
-      y += boxH + 6;
-    } else {
-      drawPlaceholder(doc, MARGIN, y, boxW, boxH, hint);
-      y += boxH + 6;
-    }
-
-    if (vis.caption?.trim()) {
-      y = addParagraph(doc, vis.caption.trim(), MARGIN, y, boxW, LINE - 2);
-    }
-    y += 12;
-  }
+  y = renderProposalVisuals(doc, proposal.visuals, y, assets.visualImages);
 
   if (proposal.assumptionsText?.trim()) {
     if (y > PAGE_H - MARGIN - 60) {

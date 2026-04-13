@@ -77,6 +77,16 @@ enum ProposalLineCategory {
   other
 }
 
+enum ProposalVisualKind {
+  media
+  timeline
+}
+
+enum ProposalVisualLayout {
+  full_width
+  half_width
+}
+
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
@@ -384,6 +394,12 @@ model ProposalVisualBlock {
   caption         String? @db.Text
   imageUrl        String?
   placeholderHint String?
+  /// Accessibility / PDF note when an image is present.
+  imageAlt        String?
+  kind            ProposalVisualKind   @default(media)
+  layout          ProposalVisualLayout @default(full_width)
+  /// When `kind` is `timeline`, JSON array of { "title": string, "detail"?: string }.
+  timelineSteps   Json?
 
   @@index([proposalId])
 }

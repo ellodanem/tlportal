@@ -9,6 +9,7 @@ import {
   type ProposalEditorVisual,
 } from "@/components/admin/proposal-editor-form";
 import { prisma } from "@/lib/db";
+import { parseTimelineSteps } from "@/lib/proposals/visual-timeline";
 
 function toEditorInitial(
   proposal: NonNullable<Awaited<ReturnType<typeof loadProposal>>>,
@@ -22,13 +23,28 @@ function toEditorInitial(
     unitPrice: Number(li.unitPrice),
   }));
 
-  const visuals: ProposalEditorVisual[] = proposal.visuals.map((v) => ({
-    key: v.id,
-    title: v.title,
-    caption: v.caption ?? "",
-    imageUrl: v.imageUrl ?? "",
-    placeholderHint: v.placeholderHint ?? "",
-  }));
+  const visuals: ProposalEditorVisual[] = proposal.visuals.map((v) => {
+    const parsed = parseTimelineSteps(v.timelineSteps);
+    const timelineSteps =
+      parsed.length > 0
+        ? parsed.map((s) => ({ title: s.title, detail: s.detail }))
+        : [
+            { title: "Order", detail: "" },
+            { title: "Install", detail: "" },
+            { title: "Go live", detail: "" },
+          ];
+    return {
+      key: v.id,
+      title: v.title,
+      caption: v.caption ?? "",
+      imageUrl: v.imageUrl ?? "",
+      placeholderHint: v.placeholderHint ?? "",
+      imageAlt: v.imageAlt ?? "",
+      kind: v.kind,
+      layout: v.layout,
+      timelineSteps,
+    };
+  });
 
   return {
     id: proposal.id,

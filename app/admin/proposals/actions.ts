@@ -1,6 +1,12 @@
 "use server";
 
-import type { ProposalLineCategory, ProposalStatus } from "@prisma/client";
+import type {
+  ProposalLineCategory,
+  ProposalStatus,
+  ProposalVisualKind,
+  ProposalVisualLayout,
+} from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -67,11 +73,26 @@ function parseLineItemsJson(raw: string): Array<{
   });
 }
 
+function parseVisualKind(raw: unknown): ProposalVisualKind {
+  const s = String(raw ?? "media").toLowerCase();
+  return s === "timeline" ? "timeline" : "media";
+}
+
+function parseVisualLayout(raw: unknown): ProposalVisualLayout {
+  const s = String(raw ?? "full_width").toLowerCase();
+  if (s === "half_width" || s === "half") return "half_width";
+  return "full_width";
+}
+
 function parseVisualsJson(raw: string): Array<{
   title: string;
   caption: string | null;
   imageUrl: string | null;
   placeholderHint: string | null;
+  imageAlt: string | null;
+  kind: ProposalVisualKind;
+  layout: ProposalVisualLayout;
+  timelineSteps: { title: string; detail: string }[];
 }> {
   let parsed: unknown;
   try {
@@ -94,11 +115,44 @@ function parseVisualsJson(raw: string): Array<{
     const caption = String(r.caption ?? "").trim();
     const imageUrl = String(r.imageUrl ?? "").trim();
     const placeholderHint = String(r.placeholderHint ?? "").trim();
+    const imageAlt = String(r.imageAlt ?? "").trim();
+    const kind = parseVisualKind(r.kind);
+    let layout = parseVisualLayout(r.layout);
+    if (kind === "timeline") {
+      layout = "full_width";
+    }
+
+    let timelineSteps: { title: string; detail: string }[] = [];
+    if (r.timelineSteps != null) {
+      if (!Array.isArray(r.timelineSteps)) {
+        throw new Error(`Visual ${i + 1}: timeline steps must be an array.`);
+      }
+      timelineSteps = r.timelineSteps
+        .map((step, j) => {
+          if (!step || typeof step !== "object") {
+            throw new Error(`Visual ${i + 1} step ${j + 1} is invalid.`);
+          }
+          const st = step as Record<string, unknown>;
+          const stTitle = String(st.title ?? "").trim();
+          const detail = String(st.detail ?? "").trim();
+          return { title: stTitle, detail };
+        })
+        .filter((s) => s.title.length > 0)
+        .slice(0, 8);
+    }
+    if (kind === "timeline" && timelineSteps.length === 0) {
+      throw new Error(`Visual ${i + 1}: timeline blocks need at least one step with a title.`);
+    }
+
     return {
       title,
       caption: caption.length ? caption : null,
       imageUrl: imageUrl.length ? imageUrl : null,
       placeholderHint: placeholderHint.length ? placeholderHint : null,
+      imageAlt: imageAlt.length ? imageAlt : null,
+      kind,
+      layout,
+      timelineSteps,
     };
   });
 }
@@ -220,6 +274,13 @@ export async function saveProposal(formData: FormData): Promise<SaveProposalStat
             caption: row.caption,
             imageUrl: row.imageUrl,
             placeholderHint: row.placeholderHint,
+            imageAlt: row.imageAlt,
+            kind: row.kind,
+            layout: row.layout,
+            timelineSteps:
+              row.kind === "timeline" && row.timelineSteps.length > 0
+                ? (row.timelineSteps as unknown as Prisma.InputJsonValue)
+                : Prisma.DbNull,
           })),
         });
       }

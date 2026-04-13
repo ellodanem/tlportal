@@ -1,6 +1,11 @@
 "use client";
 
-import type { ProposalLineCategory, ProposalStatus } from "@prisma/client";
+import type {
+  ProposalLineCategory,
+  ProposalStatus,
+  ProposalVisualKind,
+  ProposalVisualLayout,
+} from "@prisma/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -32,12 +37,18 @@ export type ProposalEditorLine = {
   unitPrice: number;
 };
 
+export type TimelineStepDraft = { title: string; detail: string };
+
 export type ProposalEditorVisual = {
   key: string;
   title: string;
   caption: string;
   imageUrl: string;
   placeholderHint: string;
+  imageAlt: string;
+  kind: ProposalVisualKind;
+  layout: ProposalVisualLayout;
+  timelineSteps: TimelineStepDraft[];
 };
 
 export type ProposalEditorInitial = {
@@ -78,6 +89,14 @@ function emptyLine(): ProposalEditorLine {
   };
 }
 
+function defaultTimelineSteps(): TimelineStepDraft[] {
+  return [
+    { title: "Order", detail: "" },
+    { title: "Install", detail: "" },
+    { title: "Go live", detail: "" },
+  ];
+}
+
 function emptyVisual(): ProposalEditorVisual {
   return {
     key: crypto.randomUUID(),
@@ -85,6 +104,10 @@ function emptyVisual(): ProposalEditorVisual {
     caption: "",
     imageUrl: "",
     placeholderHint: "",
+    imageAlt: "",
+    kind: "media",
+    layout: "full_width",
+    timelineSteps: defaultTimelineSteps(),
   };
 }
 
@@ -168,6 +191,10 @@ export function ProposalEditorForm({
       caption: row.caption,
       imageUrl: row.imageUrl,
       placeholderHint: row.placeholderHint,
+      imageAlt: row.imageAlt,
+      kind: row.kind,
+      layout: row.layout,
+      timelineSteps: row.timelineSteps,
     }));
     fd.set("visualsJson", JSON.stringify(visualsPayload));
 
@@ -449,14 +476,65 @@ export function ProposalEditorForm({
           </button>
         </div>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Leave image URL empty to show the placeholder hint in the PDF. Use a public URL or a site path such as{" "}
-          <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">/uploads/…</code> (resolved using{" "}
+          <strong>Media:</strong> leave image URL empty to use the placeholder hint. <strong>Half width:</strong> two
+          consecutive half-width media blocks render side-by-side in the PDF. <strong>Timeline:</strong> diagram strip
+          (no image). Paths resolve using{" "}
           <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">NEXT_PUBLIC_APP_URL</code> or{" "}
-          <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">APP_ORIGIN</code>).
+          <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">APP_ORIGIN</code>.
         </p>
         <div className="mt-3 flex flex-col gap-4">
           {visuals.map((row, idx) => (
             <div key={row.key} className="grid gap-3 rounded-md border border-zinc-100 p-3 dark:border-zinc-800">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                  Block type
+                  <select
+                    className={inputClass}
+                    value={row.kind}
+                    onChange={(e) => {
+                      const kind = e.target.value as ProposalVisualKind;
+                      setVisuals((prev) =>
+                        prev.map((r, i) =>
+                          i === idx
+                            ? {
+                                ...r,
+                                kind,
+                                layout: kind === "timeline" ? "full_width" : r.layout,
+                                timelineSteps:
+                                  kind === "timeline" && r.timelineSteps.length === 0
+                                    ? defaultTimelineSteps()
+                                    : r.timelineSteps,
+                              }
+                            : r,
+                        ),
+                      );
+                    }}
+                  >
+                    <option value="media">Screenshot / image</option>
+                    <option value="timeline">Timeline diagram</option>
+                  </select>
+                </label>
+                {row.kind === "media" ? (
+                  <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    Layout (PDF)
+                    <select
+                      className={inputClass}
+                      value={row.layout}
+                      onChange={(e) => {
+                        const layout = e.target.value as ProposalVisualLayout;
+                        setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, layout } : r)));
+                      }}
+                    >
+                      <option value="full_width">Full width</option>
+                      <option value="half_width">Half width (pair with next half-width block)</option>
+                    </select>
+                  </label>
+                ) : (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 sm:mt-8">
+                    Timeline blocks always use the full content width.
+                  </p>
+                )}
+              </div>
               <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
                 Section title
                 <input
@@ -479,28 +557,127 @@ export function ProposalEditorForm({
                   }}
                 />
               </label>
-              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                Image URL (optional)
-                <input
-                  className={inputClass}
-                  value={row.imageUrl}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, imageUrl: v } : r)));
-                  }}
-                />
-              </label>
-              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                Placeholder hint (shown when no image)
-                <input
-                  className={inputClass}
-                  value={row.placeholderHint}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, placeholderHint: v } : r)));
-                  }}
-                />
-              </label>
+              {row.kind === "media" ? (
+                <>
+                  <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    Image URL (optional)
+                    <input
+                      className={inputClass}
+                      value={row.imageUrl}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, imageUrl: v } : r)));
+                      }}
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    Placeholder hint (when no image)
+                    <input
+                      className={inputClass}
+                      value={row.placeholderHint}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, placeholderHint: v } : r)));
+                      }}
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    Image description (alt text for PDF)
+                    <input
+                      className={inputClass}
+                      value={row.imageAlt}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, imageAlt: v } : r)));
+                      }}
+                    />
+                  </label>
+                </>
+              ) : (
+                <div className="rounded-md border border-dashed border-zinc-200 p-3 dark:border-zinc-700">
+                  <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Timeline steps</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {row.timelineSteps.map((step, si) => (
+                      <div key={si} className="grid gap-2 sm:grid-cols-2">
+                        <input
+                          className={inputClass}
+                          placeholder="Step title"
+                          value={step.title}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setVisuals((prev) =>
+                              prev.map((r, i) =>
+                                i === idx
+                                  ? {
+                                      ...r,
+                                      timelineSteps: r.timelineSteps.map((t, j) =>
+                                        j === si ? { ...t, title: v } : t,
+                                      ),
+                                    }
+                                  : r,
+                              ),
+                            );
+                          }}
+                        />
+                        <input
+                          className={inputClass}
+                          placeholder="Detail (e.g. duration)"
+                          value={step.detail}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setVisuals((prev) =>
+                              prev.map((r, i) =>
+                                i === idx
+                                  ? {
+                                      ...r,
+                                      timelineSteps: r.timelineSteps.map((t, j) =>
+                                        j === si ? { ...t, detail: v } : t,
+                                      ),
+                                    }
+                                  : r,
+                              ),
+                            );
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                      onClick={() =>
+                        setVisuals((prev) =>
+                          prev.map((r, i) =>
+                            i === idx && r.timelineSteps.length < 8
+                              ? { ...r, timelineSteps: [...r.timelineSteps, { title: "", detail: "" }] }
+                              : r,
+                          ),
+                        )
+                      }
+                      disabled={row.timelineSteps.length >= 8}
+                    >
+                      + Add step
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-red-700 hover:underline dark:text-red-400"
+                      onClick={() =>
+                        setVisuals((prev) =>
+                          prev.map((r, i) =>
+                            i === idx && r.timelineSteps.length > 1
+                              ? { ...r, timelineSteps: r.timelineSteps.slice(0, -1) }
+                              : r,
+                          ),
+                        )
+                      }
+                      disabled={row.timelineSteps.length <= 1}
+                    >
+                      Remove last step
+                    </button>
+                  </div>
+                </div>
+              )}
               <button
                 type="button"
                 className="text-left text-sm text-red-700 hover:underline dark:text-red-400"
