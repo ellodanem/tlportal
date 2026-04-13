@@ -1131,3 +1131,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-13 20:23 UTC — commit `4942377`
+
+- fix(proposals): load public logos from disk; lower cover Prepared-for
+
+
+### 2026-04-13 20:23 UTC — pre-push (`main` → origin) @ `4942377`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
