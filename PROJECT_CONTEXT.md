@@ -957,3 +957,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(admin): sidebar icons + collapsible nav
 - `components/admin-nav-icons.tsx`: sidebar SVG set; `AdminSidebar` collapse toggle + `localStorage`; `AdminCreateMenu` positions flyout to the right when collapsed.
 
+
+### 2026-04-12 18:51 UTC — commit `efec546`
+
+- docs: PROJECT_CONTEXT for 65130a0
+
+
+### 2026-04-12 18:51 UTC — pre-push (`main` → origin) @ `efec546`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-13 17:37 UTC — commit `07fae0e`
+
+- feat(admin): sales proposals with PDF export
+- **Agent notes:** Prisma models `Proposal`, `ProposalLineItem`, `ProposalVisualBlock` + migration `20260413180000_proposals`. Admin UI under `/admin/proposals` (list, new draft with defaults, full editor). PDF export `GET /api/admin/proposals/[id]/pdf` (jsPDF + autotable; optional logo + visual images). Env: `PROPOSAL_ISSUER_NAME`, `PROPOSAL_ISSUER_ADDRESS`; asset URLs for PDF use `NEXT_PUBLIC_APP_URL` or `APP_ORIGIN` when resolving relative paths.
+
