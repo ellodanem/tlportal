@@ -227,6 +227,13 @@ export function ProposalEditorForm({
             Download PDF
           </a>
           <a
+            href="/api/admin/proposals/cover-sample/pdf"
+            className="inline-flex justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            title="Page 1 only, with sample client lines — check layout vs. your template"
+          >
+            Cover sample (page 1)
+          </a>
+          <a
             href={`/api/admin/proposals/${initial.id}/docx`}
             className="inline-flex justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
           >

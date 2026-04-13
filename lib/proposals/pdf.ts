@@ -52,11 +52,6 @@ function lineTotal(item: ProposalLineItem): number {
   return (Number.isFinite(q) ? q : 0) * (Number.isFinite(p) ? p : 0);
 }
 
-function proposalSubjectLine(proposal: ProposalForPdf): string {
-  const t = proposal.title.trim();
-  return t || PROPOSAL_TEMPLATE.defaultSubject;
-}
-
 function formatQty(q: unknown): string {
   const n = Number(q);
   return String(Number.isFinite(n) ? n : 0);
@@ -78,6 +73,91 @@ function newPage(doc: jsPDF, ctx: ProposalLayoutCtx): number {
   drawContinuedLetterhead(doc);
   return ctx.continuedContentY;
 }
+
+export type CoverPageAssets = {
+  headerLogo: LogoImage | null;
+  centerBrandLogo: LogoImage | null;
+};
+
+type CoverProposalFields = Pick<
+  ProposalForPdf,
+  | "title"
+  | "clientLabel"
+  | "clientCompany"
+  | "clientContactName"
+  | "clientEmail"
+  | "clientPhone"
+  | "clientAddress"
+>;
+
+/** Cover page 1 only (header logo, centered title + product mark, Prepared for). Returns Y after client block. */
+export function drawProposalCoverPage(
+  doc: jsPDF,
+  proposal: CoverProposalFields,
+  assets: CoverPageAssets,
+): number {
+  placeHeaderLogoTopLeft(doc, assets.headerLogo);
+
+  const subject = proposal.title.trim() || PROPOSAL_TEMPLATE.defaultSubject;
+
+  let yc = MARGIN + 108;
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...NEUTRAL.muted);
+  doc.text(PROPOSAL_TEMPLATE.proposalForLabel, PAGE_W / 2, yc, { align: "center" });
+  yc += 18;
+  doc.setTextColor(0);
+  doc.setFontSize(17);
+  doc.setFont("helvetica", "bold");
+  doc.text(subject, PAGE_W / 2, yc, { align: "center" });
+  yc += 22;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  yc = placeCenterBrandLogo(doc, assets.centerBrandLogo, yc);
+
+  const yPrepared = Math.max(yc + 52, 312);
+  let y = yPrepared;
+
+  doc.setFont("helvetica", "bold");
+  doc.text(PROPOSAL_TEMPLATE.preparedForLabel, MARGIN, y);
+  y += LINE;
+  doc.setFont("helvetica", "normal");
+  const clientLines: string[] = [];
+  if (proposal.clientLabel?.trim()) clientLines.push(proposal.clientLabel.trim());
+  if (proposal.clientCompany?.trim()) clientLines.push(proposal.clientCompany.trim());
+  if (proposal.clientContactName?.trim()) clientLines.push(`Attn: ${proposal.clientContactName.trim()}`);
+  const addrParts = [proposal.clientEmail, proposal.clientPhone].filter((s) => s?.trim());
+  if (addrParts.length) clientLines.push(addrParts.join(" · "));
+  if (proposal.clientAddress?.trim()) {
+    clientLines.push(...proposal.clientAddress.trim().split(/\r?\n/).filter(Boolean));
+  }
+  if (clientLines.length === 0) {
+    clientLines.push("(Client details — edit in TL Portal)");
+  }
+  for (const line of clientLines) {
+    doc.text(line, MARGIN, y);
+    y += LINE - 1;
+  }
+  return y + 12;
+}
+
+/** One-page PDF to verify cover layout (sample “Prepared for” copy). */
+export function buildProposalCoverSamplePdfBuffer(assets: CoverPageAssets): Buffer {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  drawProposalCoverPage(doc, COVER_SAMPLE_PROPOSAL_FIELDS, assets);
+  addPageFooters(doc);
+  return Buffer.from(doc.output("arraybuffer"));
+}
+
+const COVER_SAMPLE_PROPOSAL_FIELDS: CoverProposalFields = {
+  title: PROPOSAL_TEMPLATE.defaultSubject,
+  clientLabel: "Sample Contact",
+  clientCompany: "Sample Fleet Co.",
+  clientContactName: "Alex Example",
+  clientEmail: "alex@example.com",
+  clientPhone: "(758) 555-0100",
+  clientAddress: null,
+};
 
 /** Ellodane / company mark — top-left of cover page. */
 function placeHeaderLogoTopLeft(doc: jsPDF, logo: LogoImage | null): void {
@@ -507,54 +587,16 @@ export function buildProposalPdfBuffer(
 ): Buffer {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const currency = proposal.currencyCode?.trim() || "XCD";
-  const subject = proposalSubjectLine(proposal);
 
   const ctx: ProposalLayoutCtx = {
     pageNum: 1,
     continuedContentY: MARGIN + 40,
   };
 
-  placeHeaderLogoTopLeft(doc, assets.headerLogo);
-
-  let yc = MARGIN + 108;
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...NEUTRAL.muted);
-  doc.text(PROPOSAL_TEMPLATE.proposalForLabel, PAGE_W / 2, yc, { align: "center" });
-  yc += 18;
-  doc.setTextColor(0);
-  doc.setFontSize(17);
-  doc.setFont("helvetica", "bold");
-  doc.text(subject, PAGE_W / 2, yc, { align: "center" });
-  yc += 22;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  yc = placeCenterBrandLogo(doc, assets.centerBrandLogo, yc);
-
-  const yPrepared = Math.max(yc + 52, 312);
-  let y = yPrepared;
-
-  doc.setFont("helvetica", "bold");
-  doc.text(PROPOSAL_TEMPLATE.preparedForLabel, MARGIN, y);
-  y += LINE;
-  doc.setFont("helvetica", "normal");
-  const clientLines: string[] = [];
-  if (proposal.clientLabel?.trim()) clientLines.push(proposal.clientLabel.trim());
-  if (proposal.clientCompany?.trim()) clientLines.push(proposal.clientCompany.trim());
-  if (proposal.clientContactName?.trim()) clientLines.push(`Attn: ${proposal.clientContactName.trim()}`);
-  const addrParts = [proposal.clientEmail, proposal.clientPhone].filter((s) => s?.trim());
-  if (addrParts.length) clientLines.push(addrParts.join(" · "));
-  if (proposal.clientAddress?.trim()) {
-    clientLines.push(...proposal.clientAddress.trim().split(/\r?\n/).filter(Boolean));
-  }
-  if (clientLines.length === 0) {
-    clientLines.push("(Client details — edit in TL Portal)");
-  }
-  for (const line of clientLines) {
-    doc.text(line, MARGIN, y);
-    y += LINE - 1;
-  }
-  y += 12;
+  let y = drawProposalCoverPage(doc, proposal, {
+    headerLogo: assets.headerLogo,
+    centerBrandLogo: assets.centerBrandLogo,
+  });
 
   if (proposal.executiveSummary?.trim()) {
     doc.setFont("helvetica", "bold");
