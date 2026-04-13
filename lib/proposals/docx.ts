@@ -145,13 +145,14 @@ function sectionHeading(text: string): Paragraph {
   });
 }
 
-function logoParagraph(logo: LogoImage | null): Paragraph | null {
+/** Ellodane / company logo — top-left of cover (Word flow). */
+function coverHeaderLogoParagraph(logo: LogoImage | null): Paragraph | null {
   if (!logo) return null;
   const img = imageBufferAndDims(logo);
   if (!img) return null;
-  const dim = scaleToMaxBox(img.w, img.h, 360, 100);
+  const dim = scaleToMaxBox(img.w, img.h, 300, 96);
   return new Paragraph({
-    spacing: { after: 160 },
+    spacing: { after: 200 },
     children: [
       new ImageRun({
         type: img.type,
@@ -162,17 +163,23 @@ function logoParagraph(logo: LogoImage | null): Paragraph | null {
   });
 }
 
-function letterheadBlock(): Paragraph[] {
-  return [
-    new Paragraph({
-      spacing: { after: 40 },
-      children: [new TextRun({ text: PROPOSAL_TEMPLATE.headerLine1, bold: true, size: 20, color: NEUTRAL.text })],
-    }),
-    new Paragraph({
-      spacing: { after: 40 },
-      children: [new TextRun({ text: PROPOSAL_TEMPLATE.headerLine2, size: 18, color: NEUTRAL.muted })],
-    }),
-  ];
+/** Track Lucia mark — centered under title. */
+function coverCenterBrandParagraph(logo: LogoImage | null): Paragraph | null {
+  if (!logo) return null;
+  const img = imageBufferAndDims(logo);
+  if (!img) return null;
+  const dim = scaleToMaxBox(img.w, img.h, 440, 144);
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 280 },
+    children: [
+      new ImageRun({
+        type: img.type,
+        data: img.buf,
+        transformation: { width: dim.w, height: dim.h },
+      }),
+    ],
+  });
 }
 
 function mediaBlocksForVisual(
@@ -569,28 +576,39 @@ const defaultFooter = new Footer({
 
 export async function buildProposalDocxBuffer(
   proposal: ProposalForPdf,
-  assets: { logo: LogoImage | null; visualImages: Map<string, LogoImage> },
+  assets: {
+    headerLogo: LogoImage | null;
+    centerBrandLogo: LogoImage | null;
+    visualImages: Map<string, LogoImage>;
+  },
 ): Promise<Buffer> {
   const currency = proposal.currencyCode?.trim() || "XCD";
   const subject = proposalSubjectLine(proposal);
 
   const children: FileChild[] = [];
 
-  children.push(...letterheadBlock());
-  const lp = logoParagraph(assets.logo);
-  if (lp) children.push(lp);
+  const hlp = coverHeaderLogoParagraph(assets.headerLogo);
+  if (hlp) children.push(hlp);
 
   children.push(
     new Paragraph({
-      spacing: { before: 120, after: 60 },
+      spacing: { before: 80, after: 60 },
+      alignment: AlignmentType.CENTER,
       children: [new TextRun({ text: PROPOSAL_TEMPLATE.proposalForLabel, size: 20, color: NEUTRAL.muted })],
     }),
     new Paragraph({
+      alignment: AlignmentType.CENTER,
       spacing: { after: 120 },
       children: [new TextRun({ text: subject, bold: true, size: 30, color: NEUTRAL.text })],
     }),
+  );
+
+  const clp = coverCenterBrandParagraph(assets.centerBrandLogo);
+  if (clp) children.push(clp);
+
+  children.push(
     new Paragraph({
-      spacing: { after: 40 },
+      spacing: { before: 160, after: 40 },
       children: [new TextRun({ text: PROPOSAL_TEMPLATE.preparedForLabel, bold: true, size: 20 })],
     }),
   );

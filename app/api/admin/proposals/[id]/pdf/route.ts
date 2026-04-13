@@ -2,6 +2,10 @@ import { getSession } from "@/lib/auth/get-session";
 import { getBrandingLogoStored } from "@/lib/branding/app-settings";
 import { prisma } from "@/lib/db";
 import { fetchImageAsLogo } from "@/lib/proposals/fetch-image";
+import {
+  resolveProposalCenterLogoPath,
+  resolveProposalHeaderLogoStored,
+} from "@/lib/proposals/proposal-cover-assets";
 import { buildProposalPdfBuffer, type LogoImage } from "@/lib/proposals/pdf";
 import { proposalForPdfWithCustomerFallback } from "@/lib/proposals/resolve-client-for-pdf";
 import { getServerOriginFromEnv } from "@/lib/proposals/resolve-asset-url";
@@ -33,8 +37,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const origin = getServerOriginFromEnv();
-  const logoStored = await getBrandingLogoStored();
-  const logo = await fetchImageAsLogo(origin, logoStored);
+  const brandingStored = await getBrandingLogoStored();
+  const headerLogo = await fetchImageAsLogo(origin, resolveProposalHeaderLogoStored(brandingStored));
+  const centerBrandLogo = await fetchImageAsLogo(origin, resolveProposalCenterLogoPath());
 
   const visualImages = new Map<string, LogoImage>();
   for (const v of proposal.visuals) {
@@ -46,7 +51,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const forPdf = proposalForPdfWithCustomerFallback(proposal);
-  const buf = buildProposalPdfBuffer(forPdf, { logo, visualImages });
+  const buf = buildProposalPdfBuffer(forPdf, { headerLogo, centerBrandLogo, visualImages });
 
   const safeName = `proposal-${id.slice(0, 8)}.pdf`;
   return new Response(new Uint8Array(buf), {

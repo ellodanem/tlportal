@@ -34,7 +34,6 @@ const NEUTRAL = {
 
 type ProposalLayoutCtx = {
   pageNum: number;
-  logo: LogoImage | null;
   continuedContentY: number;
 };
 
@@ -80,31 +79,38 @@ function newPage(doc: jsPDF, ctx: ProposalLayoutCtx): number {
   return ctx.continuedContentY;
 }
 
-function addLogoBelow(doc: jsPDF, logo: LogoImage | null, yStart: number): number {
-  let y = yStart;
-  if (!logo) return y;
+/** Ellodane / company mark — top-left of cover page. */
+function placeHeaderLogoTopLeft(doc: jsPDF, logo: LogoImage | null): void {
+  if (!logo) return;
   try {
-    const maxW = 160;
-    const maxH = 52;
+    const maxW = 150;
+    const maxH = 48;
     const props = doc.getImageProperties(logo.dataUrl);
-    const rw = props.width;
-    const rh = props.height;
-    const scale = Math.min(maxW / rw, maxH / rh, 1);
-    const dw = rw * scale;
-    const dh = rh * scale;
-    doc.addImage(logo.dataUrl, logo.format, MARGIN, y, dw, dh);
-    y += dh + 10;
+    const scale = Math.min(maxW / props.width, maxH / props.height, 1);
+    const dw = props.width * scale;
+    const dh = props.height * scale;
+    doc.addImage(logo.dataUrl, logo.format, MARGIN, MARGIN, dw, dh);
   } catch {
     /* ignore broken image */
   }
-  return y;
 }
 
-function drawFirstPageLetterhead(doc: jsPDF, logo: LogoImage | null): number {
-  drawContinuedLetterhead(doc);
-  let y = MARGIN + 34;
-  y = addLogoBelow(doc, logo, y);
-  return y + 8;
+/** Track Lucia (or product) mark — centered under the proposal title. Returns Y below the image. */
+function placeCenterBrandLogo(doc: jsPDF, logo: LogoImage | null, yTop: number): number {
+  if (!logo) return yTop + 4;
+  try {
+    const maxW = 220;
+    const maxH = 72;
+    const props = doc.getImageProperties(logo.dataUrl);
+    const scale = Math.min(maxW / props.width, maxH / props.height, 1);
+    const dw = props.width * scale;
+    const dh = props.height * scale;
+    const x = (PAGE_W - dw) / 2;
+    doc.addImage(logo.dataUrl, logo.format, x, yTop, dw, dh);
+    return yTop + dh + 14;
+  } catch {
+    return yTop + 4;
+  }
 }
 
 function addParagraph(
@@ -179,6 +185,16 @@ function addPageFooters(doc: jsPDF) {
   const total = doc.getNumberOfPages();
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
+    if (i === 1) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100);
+      doc.text(PROPOSAL_TEMPLATE.headerLine1, PAGE_W / 2, PAGE_H - 50, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(130);
+      doc.text(PROPOSAL_TEMPLATE.headerLine2, PAGE_W / 2, PAGE_H - 36, { align: "center" });
+    }
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(130);
@@ -483,7 +499,11 @@ function buildPricingTableBody(proposal: ProposalForPdf, currency: string): Tabl
 
 export function buildProposalPdfBuffer(
   proposal: ProposalForPdf,
-  assets: { logo: LogoImage | null; visualImages: Map<string, LogoImage> },
+  assets: {
+    headerLogo: LogoImage | null;
+    centerBrandLogo: LogoImage | null;
+    visualImages: Map<string, LogoImage>;
+  },
 ): Buffer {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const currency = proposal.currencyCode?.trim() || "XCD";
@@ -491,24 +511,28 @@ export function buildProposalPdfBuffer(
 
   const ctx: ProposalLayoutCtx = {
     pageNum: 1,
-    logo: assets.logo,
     continuedContentY: MARGIN + 40,
   };
 
-  let y = drawFirstPageLetterhead(doc, assets.logo);
+  placeHeaderLogoTopLeft(doc, assets.headerLogo);
 
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...NEUTRAL.muted);
-  doc.text(PROPOSAL_TEMPLATE.proposalForLabel, MARGIN, y);
-  y += LINE + 2;
-  doc.setTextColor(0);
-  doc.setFontSize(15);
-  doc.setFont("helvetica", "bold");
-  doc.text(subject, MARGIN, y);
-  y += 22;
+  let yc = MARGIN + 108;
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
+  doc.setTextColor(...NEUTRAL.muted);
+  doc.text(PROPOSAL_TEMPLATE.proposalForLabel, PAGE_W / 2, yc, { align: "center" });
+  yc += 18;
+  doc.setTextColor(0);
+  doc.setFontSize(17);
+  doc.setFont("helvetica", "bold");
+  doc.text(subject, PAGE_W / 2, yc, { align: "center" });
+  yc += 22;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  yc = placeCenterBrandLogo(doc, assets.centerBrandLogo, yc);
+
+  const yPrepared = Math.max(yc + 52, 312);
+  let y = yPrepared;
 
   doc.setFont("helvetica", "bold");
   doc.text(PROPOSAL_TEMPLATE.preparedForLabel, MARGIN, y);

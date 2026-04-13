@@ -8,7 +8,7 @@ import "server-only";
 export const PROPOSAL_TEMPLATE = {
   headerLine1: "Ellodane Enterprises",
   headerLine2:
-    "Bois D\u2019Orange Castries | + (758) 723-9209 | tracklucia758@gmail.com",
+    "Bois D\u2019Orange Castries | (758) 723-9209 | tracklucia758@gmail.com",
 
   proposalForLabel: "Proposal for",
   defaultSubject: "Vehicle Fleet Tracking Solution",
