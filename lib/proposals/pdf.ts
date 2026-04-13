@@ -17,6 +17,16 @@ const LINE = 14;
 const PAGE_W = 612;
 const PAGE_H = 792;
 
+/** Track Lucia / TL Portal emerald theme (aligned with admin UI accents). */
+const THEME = {
+  primary: [4, 120, 87] as [number, number, number], // emerald-700
+  primaryDark: [6, 95, 70] as [number, number, number], // emerald-800
+  headerBg: [236, 253, 245] as [number, number, number], // emerald-50
+  rowStripe: [250, 253, 251] as [number, number, number],
+  border: [167, 243, 208] as [number, number, number], // emerald-200
+  mutedText: [82, 82, 91] as [number, number, number],
+};
+
 function categoryLabel(c: ProposalLineItem["category"]): string {
   switch (c) {
     case "hardware":
@@ -34,7 +44,21 @@ function categoryLabel(c: ProposalLineItem["category"]): string {
 
 function money(amount: number, currency: string): string {
   const safe = Number.isFinite(amount) ? amount : 0;
-  return `${currency} ${safe.toFixed(2)}`;
+  const formatted = safe.toLocaleString("en-029", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${currency} ${formatted}`;
+}
+
+function lineItemDescriptionCell(row: ProposalLineItem, currency: string): string {
+  const cat = categoryLabel(row.category);
+  const desc = row.description.trim();
+  const qty = Number(row.quantity);
+  const qtyStr = Number.isFinite(qty) ? String(qty) : "1";
+  const unit = row.unitLabel?.trim() || "unit";
+  const unitPrice = money(Number(row.unitPrice), currency);
+  return `${cat} — ${desc}\n(${qtyStr} × ${unit} @ ${unitPrice} each)`;
 }
 
 function lineTotal(item: ProposalLineItem): number {
@@ -113,20 +137,21 @@ export type LogoImage = { dataUrl: string; format: "PNG" | "JPEG" };
 
 type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
 
-function addLogo(doc: jsPDF, logo: LogoImage | null, yStart: number): number {
+function addLogo(doc: jsPDF, logo: LogoImage | null, yStart: number, align: "left" | "center"): number {
   let y = yStart;
   if (!logo) return y;
   try {
-    const maxW = 140;
-    const maxH = 44;
+    const maxW = 160;
+    const maxH = 52;
     const props = doc.getImageProperties(logo.dataUrl);
     const rw = props.width;
     const rh = props.height;
     const scale = Math.min(maxW / rw, maxH / rh, 1);
     const dw = rw * scale;
     const dh = rh * scale;
-    doc.addImage(logo.dataUrl, logo.format, MARGIN, y, dw, dh);
-    y += dh + 12;
+    const x = align === "center" ? (PAGE_W - dw) / 2 : MARGIN;
+    doc.addImage(logo.dataUrl, logo.format, x, y, dw, dh);
+    y += dh + 14;
   } catch {
     /* ignore broken image */
   }
@@ -388,34 +413,49 @@ export function buildProposalPdfBuffer(
   const subject = proposalSubjectLine(proposal);
 
   let y = MARGIN;
-  y = addLogo(doc, assets.logo, y);
+  const hasLogo = Boolean(assets.logo);
+  y = addLogo(doc, assets.logo, y, hasLogo ? "center" : "left");
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text(issuer.name, MARGIN, y);
-  y += LINE - 2;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  for (const line of issuer.addressLines) {
-    doc.text(line, MARGIN, y);
+  doc.setTextColor(...THEME.primaryDark);
+  if (hasLogo) {
+    doc.text(issuer.name, PAGE_W / 2, y, { align: "center" });
     y += LINE - 2;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...THEME.mutedText);
+    for (const line of issuer.addressLines) {
+      doc.text(line, PAGE_W / 2, y, { align: "center" });
+      y += LINE - 2;
+    }
+  } else {
+    doc.text(issuer.name, MARGIN, y);
+    y += LINE - 2;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...THEME.mutedText);
+    for (const line of issuer.addressLines) {
+      doc.text(line, MARGIN, y);
+      y += LINE - 2;
+    }
   }
-  y += 10;
+  doc.setTextColor(0);
+  y += 12;
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80);
+  doc.setTextColor(...THEME.mutedText);
   doc.text("Proposal for", MARGIN, y);
   y += LINE + 2;
-  doc.setTextColor(0);
+  doc.setTextColor(...THEME.primaryDark);
   doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
   doc.text(subject, MARGIN, y);
-  y += 20;
+  y += 22;
   doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text(`Commercial proposal – ${subject}`, MARGIN, y);
-  y += 18;
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0);
 
   doc.setFont("helvetica", "bold");
   doc.text("Prepared for", MARGIN, y);
@@ -453,54 +493,75 @@ export function buildProposalPdfBuffer(
     y = MARGIN;
   }
 
+  const innerW = PAGE_W - 2 * MARGIN;
+  const priceColW = Math.round(innerW * 0.28);
+  const detailColW = innerW - priceColW;
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("Solution pricing", MARGIN, y);
-  y += 4;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(90);
-  doc.text(`Amounts in ${currency} unless noted. Per-unit pricing; extend quantities in the table as needed.`, MARGIN, y +10);
+  doc.setFontSize(12);
+  doc.setTextColor(...THEME.primaryDark);
+  const pricingTitle = "Solution pricing";
+  doc.text(pricingTitle, MARGIN, y);
+  const titleW = doc.getTextWidth(pricingTitle);
+  doc.setDrawColor(...THEME.primary);
+  doc.setLineWidth(0.85);
+  doc.line(MARGIN, y + 3, MARGIN + titleW, y + 3);
+  y += 20;
+  doc.setFontSize(10);
   doc.setTextColor(0);
-  y += 22;
+  doc.text(`Commercial proposal – ${subject}`, PAGE_W / 2, y, { align: "center" });
+  y += 18;
 
   const sortedLines = [...proposal.lineItems].sort((a, b) => a.sortOrder - b.sortOrder);
   const subtotal = sortedLines.reduce((acc, row) => acc + lineTotal(row), 0);
 
-  type Cell = string | { content: string; colSpan?: number; styles?: Record<string, unknown> };
-  const body: Cell[][] = sortedLines.map((row) => {
-    const desc = `${categoryLabel(row.category)} — ${row.description}`;
-    const qty = Number(row.quantity);
-    const qtyStr = Number.isFinite(qty) ? String(qty) : "1";
-    const unit = row.unitLabel?.trim() || "—";
-    return [desc, qtyStr, unit, money(Number(row.unitPrice), currency), money(lineTotal(row), currency)];
-  });
+  type Cell = string | { content: string; styles?: Record<string, unknown> };
+  const body: Cell[][] = sortedLines.map((row) => [
+    lineItemDescriptionCell(row, currency),
+    {
+      content: money(lineTotal(row), currency),
+      styles: { fontStyle: "bold", halign: "center", valign: "middle" },
+    },
+  ]);
   body.push([
     {
       content: "Total (estimate)",
-      colSpan: 4,
-      styles: { fontStyle: "bold", halign: "right", fillColor: [245, 250, 248] },
+      styles: { fontStyle: "bold", fillColor: THEME.headerBg },
     },
     {
       content: money(subtotal, currency),
-      styles: { fontStyle: "bold", halign: "right", fillColor: [245, 250, 248] },
+      styles: { fontStyle: "bold", halign: "center", fillColor: THEME.headerBg },
     },
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [["Product / service details", "Qty", "Unit", `Unit price (${currency})`, `Line total (${currency})`]],
+    head: [["Product / service details", `Price in ${currency} (per-unit)`]],
     body,
     margin: { left: MARGIN, right: MARGIN },
-    styles: { fontSize: 8, cellPadding: 4, valign: "top" },
-    headStyles: { fillColor: [16, 120, 72], textColor: 255, fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [252, 252, 252] },
+    tableWidth: innerW,
+    theme: "plain",
+    styles: {
+      fontSize: 9,
+      cellPadding: { top: 7, right: 10, bottom: 7, left: 10 },
+      valign: "top",
+      lineColor: THEME.border,
+      lineWidth: 0.35,
+      textColor: [24, 24, 27],
+    },
+    headStyles: {
+      fillColor: THEME.headerBg,
+      textColor: THEME.primaryDark,
+      fontStyle: "bold",
+      halign: "center",
+      valign: "middle",
+      lineColor: THEME.primary,
+      lineWidth: 0.5,
+    },
+    alternateRowStyles: { fillColor: THEME.rowStripe },
     columnStyles: {
-      0: { cellWidth: 222 },
-      1: { cellWidth: 34, halign: "right" },
-      2: { cellWidth: 68 },
-      3: { halign: "right" },
-      4: { halign: "right" },
+      0: { cellWidth: detailColW, halign: "left" },
+      1: { cellWidth: priceColW, halign: "center" },
     },
   });
 
@@ -521,10 +582,16 @@ export function buildProposalPdfBuffer(
       doc.addPage();
       y = MARGIN;
     }
-    doc.setFontSize(10);
+       doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("Application feature set", MARGIN, y);
-    y += LINE + 2;
+    doc.setTextColor(...THEME.primaryDark);
+    const featTitle = "Application feature set";
+    doc.text(featTitle, MARGIN, y);
+    doc.setDrawColor(...THEME.primary);
+    doc.setLineWidth(0.65);
+    doc.line(MARGIN, y + 3, MARGIN + doc.getTextWidth(featTitle), y + 3);
+    doc.setTextColor(0);
+    y += LINE + 4;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     const bullets = proposal.includedFeatures.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
