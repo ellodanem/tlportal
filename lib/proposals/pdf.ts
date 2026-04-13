@@ -115,8 +115,8 @@ export function drawProposalCoverPage(
   doc.setFontSize(10);
   yc = placeCenterBrandLogo(doc, assets.centerBrandLogo, yc);
 
-  /* Lower “Prepared for” so it sits mid–lower page; keep clearance under center mark / title. */
-  const yPrepared = Math.max(yc + 72, 408);
+  /* “Prepared for” sits low on the page, above the footer band; keep clearance under center mark. */
+  const yPrepared = Math.max(yc + 48, 492, PAGE_H - 248);
   let y = yPrepared;
 
   doc.setFont("helvetica", "bold");
@@ -180,10 +180,10 @@ function placeHeaderLogoTopLeft(doc: jsPDF, logo: LogoImage | null): void {
 function placeCenterBrandLogo(doc: jsPDF, logo: LogoImage | null, yTop: number): number {
   if (!logo) return yTop + 4;
   try {
-    const maxW = 220;
-    const maxH = 72;
+    const maxW = 440;
+    const maxH = 144;
     const props = doc.getImageProperties(logo.dataUrl);
-    const scale = Math.min(maxW / props.width, maxH / props.height, 1);
+    const scale = Math.min(maxW / props.width, maxH / props.height, 2);
     const dw = props.width * scale;
     const dh = props.height * scale;
     const x = (PAGE_W - dw) / 2;

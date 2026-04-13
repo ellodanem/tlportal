@@ -99,8 +99,14 @@ function pngPixelSize(buf: Buffer): { w: number; h: number } | null {
   return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
 }
 
-function scaleToMaxBox(w: number, h: number, maxW: number, maxH: number): { w: number; h: number } {
-  const s = Math.min(maxW / w, maxH / h, 1);
+function scaleToMaxBox(
+  w: number,
+  h: number,
+  maxW: number,
+  maxH: number,
+  maxScale = 1,
+): { w: number; h: number } {
+  const s = Math.min(maxW / w, maxH / h, maxScale);
   return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
 }
 
@@ -168,10 +174,10 @@ function coverCenterBrandParagraph(logo: LogoImage | null): Paragraph | null {
   if (!logo) return null;
   const img = imageBufferAndDims(logo);
   if (!img) return null;
-  const dim = scaleToMaxBox(img.w, img.h, 440, 144);
+  const dim = scaleToMaxBox(img.w, img.h, 440, 144, 2);
   return new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { after: 280 },
+    spacing: { after: 360 },
     children: [
       new ImageRun({
         type: img.type,
@@ -608,7 +614,7 @@ export async function buildProposalDocxBuffer(
 
   children.push(
     new Paragraph({
-      spacing: { before: 160, after: 40 },
+      spacing: { before: 400, after: 40 },
       children: [new TextRun({ text: PROPOSAL_TEMPLATE.preparedForLabel, bold: true, size: 20 })],
     }),
   );
