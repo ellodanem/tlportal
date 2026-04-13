@@ -973,3 +973,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(admin): sales proposals with PDF export
 - **Agent notes:** Prisma models `Proposal`, `ProposalLineItem`, `ProposalVisualBlock` + migration `20260413180000_proposals`. Admin UI under `/admin/proposals` (list, new draft with defaults, full editor). PDF export `GET /api/admin/proposals/[id]/pdf` (jsPDF + autotable; optional logo + visual images). Env: `PROPOSAL_ISSUER_NAME`, `PROPOSAL_ISSUER_ADDRESS`; asset URLs for PDF use `NEXT_PUBLIC_APP_URL` or `APP_ORIGIN` when resolving relative paths.
 
+
+### 2026-04-13 17:38 UTC — commit `f35598d`
+
+- docs: PROJECT_CONTEXT agent notes for 07fae0e
+
+
+### 2026-04-13 17:44 UTC — pre-push (`main` → origin) @ `f35598d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-13 17:52 UTC — commit `ee782a0`
+
+- feat(proposals): PDF closer to commercial sample layout
+- **Agent notes:** Cover mirrors sample flow (Proposal for / subject / commercial line); **Solution pricing** table + total row + italic footnotes; **Application feature set**; **Terms & conditions** with `---` block headings; page “— n of m —”; **Validity** + **Designated contact**. Default draft adds travel + AMC lines and longer terms. Existing DB proposals keep old text until edited.
+
