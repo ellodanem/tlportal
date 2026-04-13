@@ -989,3 +989,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(proposals): PDF closer to commercial sample layout
 - **Agent notes:** Cover mirrors sample flow (Proposal for / subject / commercial line); **Solution pricing** table + total row + italic footnotes; **Application feature set**; **Terms & conditions** with `---` block headings; page “— n of m —”; **Validity** + **Designated contact**. Default draft adds travel + AMC lines and longer terms. Existing DB proposals keep old text until edited.
 
+
+### 2026-04-13 17:52 UTC — commit `eb11fc3`
+
+- docs: PROJECT_CONTEXT for ee782a0
+
+
+### 2026-04-13 17:52 UTC — pre-push (`main` → origin) @ `eb11fc3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-13 17:59 UTC — commit `b3e9a86`
+
+- feat(proposals): visual blocks — timeline, half-width pairs, alt text
+- **Agent notes:** Migration `20260414120000_proposal_visual_kind_layout`. `ProposalVisualBlock`: `kind`, `layout`, `imageAlt`, `timelineSteps` (JSON). PDF pairs consecutive `half_width` media blocks; `timeline` renders a 3+ step strip. Default proposal seeds six visuals (platform, alerts + FleetGuardian pair, trip, install, timeline) with placeholders and alts. Existing proposals: new columns default to media/full; re-save to add timeline/steps in DB.
+
