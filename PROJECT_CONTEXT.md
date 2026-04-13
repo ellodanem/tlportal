@@ -1109,3 +1109,9 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - docs: PROJECT_CONTEXT for ccd9987
 
+
+### 2026-04-13 19:55 UTC — commit `6e885c1`
+
+- fix(proposals): PDF/DOCX match approved template copy and layout
+- **Agent notes:** `lib/proposals/proposal-template.ts` holds static template strings (letterhead, headings, footer `-- n of m --`, validity Track Lucia + `{{days}}`, designated-contact labels). PDF/DOCX: repeating two-line letterhead;3-column pricing + QTY + `Price/(currency) Total`; feature block + installation subsection inside table; neutral gray styling (no emerald); footer and validity wording per template. Default draft (`default-draft.ts`) text, terms, line-item descriptions, visuals order (incl. Install block + timeline steps), and pricing footnote line aligned to the approved PDF. **Existing proposals** in DB keep prior field values until edited.
+
