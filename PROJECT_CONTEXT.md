@@ -1206,3 +1206,20 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-13 — Proposal PDF visual images: snapshot + reliability plan (agent; uncommitted until you commit)
+
+- **Snapshot of what was “working” before this pass:** Upload wrote files under `public/uploads/proposals/`, the editor saved `/uploads/…` in `ProposalVisualBlock.imageUrl`, auto-save-after-upload ran, PDF/DOCX used `fetchImageAsLogo` (read `public/` from disk first, then HTTP from `resolveAssetFetchOrigin`), and visual bitmaps were keyed by `sortOrder`. Origin resolution used `Host` (and env fallbacks). Despite that, some environments (e.g. dev on non-default ports, `cwd` vs real `public/`, or subtle map/type issues) still produced PDFs with placeholders only.
+- **New plan (implemented in this pass):**
+  - **Inline embed for typical screenshots:** Local uploads of **PNG/JPEG ≤ ~2.5 MB** now set `imageUrl` to a **`data:image/...;base64,...`** string (file is still written to `public/uploads/proposals/` as a backup). PDF export parses data URLs directly — **no disk path, no HTTP, no port**.
+  - **`fetchImageAsLogo`:** Handles `data:image/png` and `data:image/jpeg` first; tries multiple candidate `public/` roots (`TL_PUBLIC_ROOT`, `cwd/public`, `cwd/../public`); keeps blob + http paths as before.
+  - **Stable map keys:** PDF/DOCX use `Number(sortOrder)` when populating and reading the visual image map.
+  - **Origin fallback:** `resolveAssetFetchOrigin` also uses **`Referer`** when `Host` is missing.
+  - **Editor:** If `imageUrl` is inline (`data:image/…`), show a short confirmation + **Remove image** instead of a huge text field.
+
+
+### 2026-04-14 — Proposal PDF: static “Platform at a glance” image (agent; uncommitted until you commit)
+
+- **Committed asset:** `public/uploads/proposals/static/platform-at-a-glance.png` (dashboard screenshot; replace file to update art).
+- **Export behavior:** `lib/proposals/proposal-static-visuals.ts` maps title **Platform at a glance** (case-insensitive) to that path; PDF and DOCX routes use `effectiveVisualImageUrlForExport()` so this **overrides** DB `imageUrl` for that section.
+

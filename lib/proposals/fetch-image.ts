@@ -23,7 +23,39 @@ function logoFromBuffer(buf: Buffer, mime: "image/png" | "image/jpeg"): LogoImag
   return { dataUrl, format: mime === "image/png" ? "PNG" : "JPEG" };
 }
 
-/** Read `public/...` from disk so PDF/DOCX export works when `APP_URL` points at another host (no HTTP round-trip). */
+/** `process.cwd()` can differ from the real app root in some setups — try a few roots. */
+function candidatePublicRoots(): string[] {
+  const cwd = process.cwd();
+  const fromEnv = process.env.TL_PUBLIC_ROOT?.trim();
+  const roots = new Set<string>();
+  if (fromEnv) roots.add(path.resolve(fromEnv));
+  roots.add(path.resolve(cwd, "public"));
+  roots.add(path.resolve(cwd, "..", "public"));
+  return [...roots];
+}
+
+function parseInlineDataImage(trimmed: string): LogoImage | null {
+  const t = trimmed.trim();
+  if (!t.startsWith("data:image/")) return null;
+  const comma = t.indexOf(",");
+  if (comma === -1) return null;
+  const header = t.slice(0, comma);
+  const b64 = t.slice(comma + 1).trim();
+  const mimeMatch = /^data:(image\/png|image\/jpeg|image\/jpg)(;[^,]*)?$/i.exec(header);
+  if (!mimeMatch || !b64) return null;
+  try {
+    const mimeRaw = mimeMatch[1]!.toLowerCase();
+    const mime: "image/png" | "image/jpeg" =
+      mimeRaw === "image/png" ? "image/png" : "image/jpeg";
+    const buf = Buffer.from(b64, "base64");
+    if (!buf.length) return null;
+    return logoFromBuffer(buf, mime);
+  } catch {
+    return null;
+  }
+}
+
+/** Read `public/...` from disk so PDF/DOCX export works without HTTP (no port / Host issues). */
 async function tryLoadPublicStaticImage(sitePath: string): Promise<LogoImage | null> {
   const posix = sitePath.trim().replace(/\\/g, "/");
   if (!posix.startsWith("/") || posix.startsWith("//")) return null;
@@ -31,33 +63,46 @@ async function tryLoadPublicStaticImage(sitePath: string): Promise<LogoImage | n
   if (segments.some((s) => s === "..")) return null;
 
   const rel = segments.join(path.sep);
-  const publicRoot = path.resolve(process.cwd(), "public");
-  const abs = path.resolve(publicRoot, rel);
-  if (!abs.startsWith(publicRoot + path.sep) && abs !== publicRoot) return null;
 
-  let st;
-  try {
-    st = await fs.stat(abs);
-  } catch {
-    return null;
+  for (const publicRoot of candidatePublicRoots()) {
+    const abs = path.resolve(publicRoot, rel);
+    const relFromPublic = path.relative(publicRoot, abs);
+    if (relFromPublic.startsWith("..") || path.isAbsolute(relFromPublic)) continue;
+
+    let st;
+    try {
+      st = await fs.stat(abs);
+    } catch {
+      continue;
+    }
+    if (!st.isFile()) continue;
+
+    const ext = path.extname(abs).toLowerCase();
+    const mime =
+      ext === ".png"
+        ? ("image/png" as const)
+        : ext === ".jpg" || ext === ".jpeg"
+          ? ("image/jpeg" as const)
+          : null;
+    if (!mime) continue;
+
+    try {
+      const buf = await fs.readFile(abs);
+      return logoFromBuffer(buf, mime);
+    } catch {
+      continue;
+    }
   }
-  if (!st.isFile()) return null;
 
-  const ext = path.extname(abs).toLowerCase();
-  const mime = ext === ".png" ? ("image/png" as const) : ext === ".jpg" || ext === ".jpeg" ? ("image/jpeg" as const) : null;
-  if (!mime) return null;
-
-  try {
-    const buf = await fs.readFile(abs);
-    return logoFromBuffer(buf, mime);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export async function fetchImageAsLogo(origin: string, pathOrUrl: string | null | undefined): Promise<LogoImage | null> {
   if (!pathOrUrl?.trim()) return null;
   const trimmed = pathOrUrl.trim();
+
+  const inline = parseInlineDataImage(trimmed);
+  if (inline) return inline;
 
   if (trimmed.startsWith(BRANDING_PRIVATE_BLOB_PREFIX)) {
     const blobUrl = stripBrandingPrivateBlobPrefix(trimmed);

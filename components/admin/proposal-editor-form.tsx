@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { deleteProposal, saveProposal } from "@/app/admin/proposals/actions";
+import { deleteProposal, saveProposal, uploadProposalVisualImage } from "@/app/admin/proposals/actions";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
@@ -150,9 +150,10 @@ export function ProposalEditorForm({
   const [visuals, setVisuals] = useState<ProposalEditorVisual[]>(
     initial.visuals.length ? initial.visuals : [emptyVisual()],
   );
+  const [visualUploadError, setVisualUploadError] = useState<Record<string, string>>({});
+  const [visualUploadingKey, setVisualUploadingKey] = useState<string | null>(null);
 
-  function submit() {
-    setError(null);
+  function buildSaveFormData(nextVisuals: ProposalEditorVisual[]): FormData {
     const fd = new FormData();
     fd.set("proposalId", initial.id);
     fd.set("title", title);
@@ -186,7 +187,7 @@ export function ProposalEditorForm({
     }));
     fd.set("lineItemsJson", JSON.stringify(linesPayload));
 
-    const visualsPayload = visuals.map((row) => ({
+    const visualsPayload = nextVisuals.map((row) => ({
       title: row.title,
       caption: row.caption,
       imageUrl: row.imageUrl,
@@ -197,6 +198,51 @@ export function ProposalEditorForm({
       timelineSteps: row.timelineSteps,
     }));
     fd.set("visualsJson", JSON.stringify(visualsPayload));
+    return fd;
+  }
+
+  async function handleVisualImageUpload(idx: number, file: File | undefined) {
+    const row = visuals[idx];
+    if (!file || !row) return;
+    setVisualUploadError((prev) => {
+      const next = { ...prev };
+      delete next[row.key];
+      return next;
+    });
+    setVisualUploadingKey(row.key);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const prevUrl = row.imageUrl?.trim() ?? "";
+      if (prevUrl) fd.set("previousUrl", prevUrl);
+      const res = await uploadProposalVisualImage(fd);
+      if (res.error) {
+        setVisualUploadError((prev) => ({ ...prev, [row.key]: res.error! }));
+        return;
+      }
+      if (!res.url) return;
+
+      const nextVisuals = visuals.map((r, i) => (i === idx ? { ...r, imageUrl: res.url! } : r));
+      const saveFd = buildSaveFormData(nextVisuals);
+      const saveRes = await saveProposal(saveFd);
+      if (saveRes.error) {
+        setVisualUploadError((prev) => ({
+          ...prev,
+          [row.key]: `${saveRes.error} (Image uploaded; fix this, then save or re-upload.)`,
+        }));
+        return;
+      }
+      setError(null);
+      setVisuals(nextVisuals);
+      router.refresh();
+    } finally {
+      setVisualUploadingKey(null);
+    }
+  }
+
+  function submit() {
+    setError(null);
+    const fd = buildSaveFormData(visuals);
 
     startTransition(async () => {
       const res = await saveProposal(fd);
@@ -227,18 +273,25 @@ export function ProposalEditorForm({
             Download PDF
           </a>
           <a
-            href="/api/admin/proposals/cover-sample/pdf"
+            href={`/api/admin/proposals/cover-sample/pdf?proposalId=${encodeURIComponent(initial.id)}`}
             className="inline-flex justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            title="Page 1 only, with sample client lines — check layout vs. your template"
+            title="Page 1 only — this proposal’s title and client fields (save first if you changed them)"
           >
             Cover sample (page 1)
           </a>
           <a
-            href="/api/admin/proposals/page-2-sample/pdf"
+            href={`/api/admin/proposals/page-2-sample/pdf?proposalId=${encodeURIComponent(initial.id)}`}
             className="inline-flex justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            title="Inner page: Overview + pricing + footnotes using default draft copy"
+            title="Overview + pricing + footnotes — this proposal’s copy (save first)"
           >
             Inner sample (page 2)
+          </a>
+          <a
+            href={`/api/admin/proposals/page-3-sample/pdf?proposalId=${encodeURIComponent(initial.id)}`}
+            className="inline-flex justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            title="Page 3 layout uses the latest template; your images/captions merge by section title. Save for full PDF."
+          >
+            Inner sample (page 3)
           </a>
           <a
             href={`/api/admin/proposals/${initial.id}/docx`}
@@ -579,17 +632,56 @@ export function ProposalEditorForm({
               </label>
               {row.kind === "media" ? (
                 <>
-                  <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                    Image URL (optional)
+                  <div className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    <span className="block">Upload image (optional)</span>
                     <input
-                      className={inputClass}
-                      value={row.imageUrl}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      disabled={visualUploadingKey === row.key}
+                      className="mt-1 block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-zinc-50 file:px-3 file:py-1.5 file:text-sm file:font-medium dark:text-zinc-200 dark:file:border-zinc-600 dark:file:bg-zinc-900"
                       onChange={(e) => {
-                        const v = e.target.value;
-                        setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, imageUrl: v } : r)));
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        void handleVisualImageUpload(idx, f);
                       }}
                     />
-                  </label>
+                    {visualUploadingKey === row.key ? (
+                      <p className="mt-1 text-xs text-zinc-500">Uploading and saving proposal…</p>
+                    ) : null}
+                    {visualUploadError[row.key] ? (
+                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">{visualUploadError[row.key]}</p>
+                    ) : null}
+                  </div>
+                  <div className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    Image URL (optional)
+                    {row.imageUrl.startsWith("data:image/") ? (
+                      <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-normal text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+                        <p>Image is stored inline on this proposal (PNG/JPEG) so the PDF always embeds it — no path or port issues.</p>
+                        <button
+                          type="button"
+                          className="mt-2 text-xs font-medium text-emerald-800 underline hover:no-underline dark:text-emerald-300"
+                          onClick={() => setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, imageUrl: "" } : r)))}
+                        >
+                          Remove image
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        className={inputClass}
+                        value={row.imageUrl}
+                        placeholder="/uploads/proposals/your-file.png or https://…"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setVisuals((prev) => prev.map((r, i) => (i === idx ? { ...r, imageUrl: v } : r)));
+                        }}
+                      />
+                    )}
+                    <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                      <strong>Upload</strong> saves the proposal and, for PNG/JPEG under ~2.5&nbsp;MB, stores the image{" "}
+                      <strong>inline</strong> for PDF. You can still paste <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">/uploads/…</code> or{" "}
+                      <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">https://…</code> manually.
+                    </span>
+                  </div>
                   <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
                     Placeholder hint (when no image)
                     <input

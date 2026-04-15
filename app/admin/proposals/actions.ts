@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import type {
   ProposalLineCategory,
   ProposalStatus,
@@ -9,12 +10,34 @@ import type {
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import path from "path";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
 import { buildDefaultProposalNestedCreate } from "@/lib/proposals/default-draft";
 
 export type SaveProposalState = { error?: string; ok?: boolean };
+
+export type UploadProposalVisualImageState = { error?: string; ok?: boolean; url?: string };
+
+const VISUAL_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+/** PNG/JPEG at or below this size are stored as `data:image/...;base64,...` in `imageUrl` so PDF export never depends on disk paths or HTTP. */
+const VISUAL_IMAGE_INLINE_MAX_BYTES = 2.5 * 1024 * 1024;
+const VISUAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+function blobToken(): string | undefined {
+  const t = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+  return t || undefined;
+}
+
+function useVercelBlob(): boolean {
+  return Boolean(blobToken());
+}
+
+function isVercelBlobPrivateStorePublicAccessError(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e);
+  return m.includes("Cannot use public access on a private store");
+}
 
 const LINE_CATEGORIES: ProposalLineCategory[] = [
   "hardware",
@@ -164,6 +187,87 @@ function readOptionalText(formData: FormData, key: string): string | null {
 
 function readText(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
+}
+
+/** Upload a PNG/JPEG/WebP for a proposal visual block. Returns a path (`/uploads/proposals/...`) or Blob URL. Client should set `imageUrl` and save the proposal. */
+export async function uploadProposalVisualImage(
+  formData: FormData,
+): Promise<UploadProposalVisualImageState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const file = formData.get("file");
+  if (!file || !(file instanceof File)) {
+    return { error: "Choose an image file." };
+  }
+  if (file.size === 0) {
+    return { error: "The file is empty." };
+  }
+  if (file.size > VISUAL_IMAGE_MAX_BYTES) {
+    return { error: "Image must be 5 MB or smaller." };
+  }
+  const mime = file.type || "";
+  if (!VISUAL_IMAGE_TYPES.has(mime)) {
+    return { error: "Use PNG, JPEG, or WebP." };
+  }
+
+  const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const previousUrl = String(formData.get("previousUrl") ?? "").trim();
+
+  let imageUrl: string;
+  try {
+    if (previousUrl.startsWith("/uploads/proposals/")) {
+      const { unlink } = await import("fs/promises");
+      const rel = previousUrl.replace(/^\/+/, "");
+      await unlink(path.join(process.cwd(), "public", rel)).catch(() => {});
+    }
+
+    if (useVercelBlob()) {
+      const { put } = await import("@vercel/blob");
+      const token = blobToken()!;
+      const pathname = `proposals/${randomUUID()}.${ext}`;
+      const putOpts = { token, contentType: mime || undefined } as const;
+      try {
+        const blob = await put(pathname, bytes, { ...putOpts, access: "public" as const });
+        imageUrl = blob.url;
+      } catch (e) {
+        if (!isVercelBlobPrivateStorePublicAccessError(e)) throw e;
+        const blob = await put(pathname, bytes, { ...putOpts, access: "private" as const });
+        imageUrl = blob.url;
+      }
+    } else {
+      if (process.env.VERCEL === "1") {
+        return {
+          error:
+            "Image upload on Vercel needs Vercel Blob (BLOB_READ_WRITE_TOKEN). Or paste a full https:// image URL.",
+        };
+      }
+
+      const { mkdir, writeFile } = await import("fs/promises");
+      const dir = path.join(process.cwd(), "public", "uploads", "proposals");
+      await mkdir(dir, { recursive: true });
+      const filename = `${randomUUID()}.${ext}`;
+      await writeFile(path.join(dir, filename), bytes);
+
+      const canInline =
+        bytes.length <= VISUAL_IMAGE_INLINE_MAX_BYTES &&
+        (mime === "image/png" || mime === "image/jpeg");
+      if (canInline) {
+        const mimePart = mime === "image/png" ? "image/png" : "image/jpeg";
+        imageUrl = `data:${mimePart};base64,${bytes.toString("base64")}`;
+      } else {
+        imageUrl = `/uploads/proposals/${filename}`;
+      }
+    }
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    return { error: `Upload failed: ${raw.slice(0, 240)}${raw.length > 240 ? "…" : ""}` };
+  }
+
+  return { ok: true, url: imageUrl };
 }
 
 export async function createProposal(): Promise<void> {

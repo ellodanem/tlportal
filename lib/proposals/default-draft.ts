@@ -132,7 +132,7 @@ export function buildDefaultProposalNestedCreate(
         {
           sortOrder: 1,
           kind: "media",
-          layout: "half_width",
+          layout: "full_width",
           title: "Alerts and notifications",
           caption: "Geofence, movement, and power-disconnect alerts so you see critical events quickly.",
           placeholderHint: "[Screenshot: alert or notification — geofence or power disconnect]",
@@ -141,16 +141,6 @@ export function buildDefaultProposalNestedCreate(
         },
         {
           sortOrder: 2,
-          kind: "media",
-          layout: "half_width",
-          title: "FleetGuardian monitoring",
-          caption: "Optional after-hours monitoring for escalation on serious events.",
-          placeholderHint: "[Screenshot: monitoring / escalation or branded FleetGuardian graphic]",
-          imageUrl: null,
-          imageAlt: "FleetGuardian monitoring concept",
-        },
-        {
-          sortOrder: 3,
           kind: "media",
           layout: "full_width",
           title: "Install",
@@ -161,7 +151,7 @@ export function buildDefaultProposalNestedCreate(
           imageAlt: "Vehicle tracker installation or power connection diagram",
         },
         {
-          sortOrder: 4,
+          sortOrder: 3,
           kind: "media",
           layout: "full_width",
           title: "Trip history and accountability",
@@ -171,7 +161,7 @@ export function buildDefaultProposalNestedCreate(
           imageAlt: "Trip history or route playback screen",
         },
         {
-          sortOrder: 5,
+          sortOrder: 4,
           kind: "media",
           layout: "full_width",
           title: "Installation and hardware",
@@ -183,7 +173,7 @@ export function buildDefaultProposalNestedCreate(
           imageAlt: "Vehicle tracker installation or power connection diagram",
         },
         {
-          sortOrder: 6,
+          sortOrder: 5,
           kind: "timeline",
           layout: "full_width",
           title: "Typical rollout timeline",

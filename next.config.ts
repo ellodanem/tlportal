@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   // Logo upload uses a Server Action with multipart body; default limit (~1MB) rejects before `uploadBrandingLogo` runs.
   experimental: {
     serverActions: {
-      bodySizeLimit: "3mb",
+      // Branding logo + proposal visual uploads (see actions max sizes).
+      bodySizeLimit: "6mb",
     },
   },
 };

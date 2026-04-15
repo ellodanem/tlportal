@@ -22,6 +22,8 @@ export const PROPOSAL_TEMPLATE = {
 
   applicationFeatureSetHeading: "Application Feature Set: -",
 
+  hardwareSubscriptionSectionTitle: "1. Hardware and Subscription",
+
   installationSectionTitle: "2. Installation (Per Vehicle / One Time)",
   installationSectionSubtitle: "Travel Installation: Wiring and other charges included",
 

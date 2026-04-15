@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { useDeferredValue, useMemo, useState } from "react";
 
+import { CopyValueButton } from "@/components/admin/copy-value-button";
 import { PurposeScopeFilter } from "@/components/admin/device/purpose-scope-filter";
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
@@ -171,11 +172,11 @@ export function DevicesTableClient({ rows }: Props) {
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full min-w-[960px] text-left text-sm">
+        <table className="w-full min-w-[1080px] text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50/80 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-400">
             <tr>
               <th className="px-4 py-3">Model</th>
-              <th className="px-4 py-3">Name &amp; identifiers</th>
+              <th className="min-w-[16rem] px-4 py-3">Name &amp; identifiers</th>
               <th className="px-4 py-3 w-24">Manage</th>
               <th className="px-4 py-3">Purpose</th>
               <th className="px-4 py-3">
@@ -198,8 +199,8 @@ export function DevicesTableClient({ rows }: Props) {
                   <SortIcon col="assignedTo" active={sortCol} dir={sortDir} />
                 </button>
               </th>
-              <th className="px-4 py-3">SIM</th>
-              <th className="px-4 py-3">Carrier sync</th>
+              <th className="min-w-[14rem] px-4 py-3">SIM</th>
+              <th className="min-w-[11rem] px-4 py-3">Carrier sync</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -243,12 +244,15 @@ export function DevicesTableClient({ rows }: Props) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="min-w-[16rem] px-4 py-3 align-top">
                     <p className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-50">
                       <ObjectTypeIcon type={row.objectType} className="h-5 w-5 text-zinc-500 dark:text-zinc-400" />
                       <span>{row.label?.trim() || "Unnamed device"}</span>
                     </p>
-                    <p className="mt-0.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">IMEI {row.imei}</p>
+                    <p className="mt-0.5 flex items-center gap-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                      <span className="whitespace-nowrap">IMEI {row.imei}</span>
+                      <CopyValueButton value={row.imei} kind="IMEI" />
+                    </p>
                     {row.serialNumber?.trim() ? (
                       <p className="mt-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-500">
                         S/N {row.serialNumber.trim()}
@@ -310,24 +314,35 @@ export function DevicesTableClient({ rows }: Props) {
                       <span className="text-zinc-500 dark:text-zinc-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="min-w-[14rem] px-4 py-3 align-top">
                     {row.sim ? (
-                      <Link
-                        href={`/admin/sims/${row.sim.id}`}
-                        className="group block font-mono text-xs text-emerald-800 hover:underline dark:text-emerald-300"
-                      >
-                        <span className="block break-all">{row.sim.iccid}</span>
+                      <div className="space-y-0.5 font-mono text-xs">
+                        <div className="flex items-center gap-1">
+                          <Link
+                            href={`/admin/sims/${row.sim.id}`}
+                            className="text-emerald-800 hover:underline dark:text-emerald-300"
+                          >
+                            <span className="whitespace-nowrap tabular-nums">{row.sim.iccid}</span>
+                          </Link>
+                          <CopyValueButton value={row.sim.iccid} kind="ICCID" />
+                        </div>
                         {row.sim.msisdn?.trim() ? (
-                          <span className="mt-0.5 block text-zinc-600 group-hover:text-emerald-700 dark:text-zinc-400 dark:group-hover:text-emerald-300">
-                            {row.sim.msisdn.trim()}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <Link
+                              href={`/admin/sims/${row.sim.id}`}
+                              className="text-zinc-600 hover:text-emerald-700 hover:underline dark:text-zinc-400 dark:hover:text-emerald-300"
+                            >
+                              {row.sim.msisdn.trim()}
+                            </Link>
+                            <CopyValueButton value={row.sim.msisdn.trim()} kind="MSISDN" />
+                          </div>
                         ) : null}
-                      </Link>
+                      </div>
                     ) : (
                       <span className="text-zinc-500 dark:text-zinc-400">No SIM linked</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 align-top text-zinc-700 dark:text-zinc-300">
+                  <td className="min-w-[11rem] whitespace-nowrap px-4 py-3 align-top text-zinc-700 dark:text-zinc-300">
                     {row.sim?.lastSyncedAt ? (
                       <span title={row.sim.lastSyncedAt.toISOString()}>
                         {formatDistanceToNow(row.sim.lastSyncedAt, { addSuffix: true })}

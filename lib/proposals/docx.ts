@@ -7,6 +7,7 @@ import {
   convertInchesToTwip,
   Document,
   Footer,
+  Header,
   ImageRun,
   Packer,
   PageNumber,
@@ -22,7 +23,7 @@ import {
   type FileChild,
 } from "docx";
 
-import type { LogoImage, ProposalForPdf } from "@/lib/proposals/pdf";
+import type { LogoImage, ProposalForPdf, ProposalVisualImageAssets } from "@/lib/proposals/pdf";
 import {
   formatValidityBody,
   pricingIntroLine,
@@ -126,7 +127,10 @@ function softCellBorders() {
   return { top: edge, bottom: edge, left: edge, right: edge };
 }
 
-function parasFromPlainText(text: string, runOpts: { size?: number; color?: string; italics?: boolean } = {}): Paragraph[] {
+function parasFromPlainText(
+  text: string,
+  runOpts: { size?: number; color?: string; italics?: boolean; font?: string } = {},
+): Paragraph[] {
   const lines = text.split(/\r?\n/);
   return lines.map(
     (line) =>
@@ -138,6 +142,7 @@ function parasFromPlainText(text: string, runOpts: { size?: number; color?: stri
             size: runOpts.size ?? 20,
             color: runOpts.color,
             italics: runOpts.italics,
+            ...(runOpts.font ? { font: runOpts.font } : {}),
           }),
         ],
       }),
@@ -151,19 +156,22 @@ function sectionHeading(text: string): Paragraph {
   });
 }
 
-/** Ellodane / company logo — top-left of cover (Word flow). */
-function coverHeaderLogoParagraph(logo: LogoImage | null): Paragraph | null {
+/** Ellodane / company logo — document header (repeats on every page). */
+function proposalDocumentHeader(logo: LogoImage | null): Header | null {
   if (!logo) return null;
   const img = imageBufferAndDims(logo);
   if (!img) return null;
   const dim = scaleToMaxBox(img.w, img.h, 300, 96);
-  return new Paragraph({
-    spacing: { after: 200 },
+  return new Header({
     children: [
-      new ImageRun({
-        type: img.type,
-        data: img.buf,
-        transformation: { width: dim.w, height: dim.h },
+      new Paragraph({
+        children: [
+          new ImageRun({
+            type: img.type,
+            data: img.buf,
+            transformation: { width: dim.w, height: dim.h },
+          }),
+        ],
       }),
     ],
   });
@@ -188,19 +196,34 @@ function coverCenterBrandParagraph(logo: LogoImage | null): Paragraph | null {
   });
 }
 
+const DEFAULT_DOCX_FULL_WIDTH_MEDIA_MAX_H = 200;
+const HERO_DOCX_FULL_WIDTH_MEDIA_MAX_H = DEFAULT_DOCX_FULL_WIDTH_MEDIA_MAX_H * 2;
+
+const DOCX_HERO_FULL_WIDTH_TITLES = new Set([
+  "platform at a glance",
+  "alerts and notifications",
+]);
+
+function docxMediaMaxHeight(vis: ProposalVisualBlock, innerMaxW: number): number {
+  const fullWidth = innerMaxW >= 500;
+  if (fullWidth && DOCX_HERO_FULL_WIDTH_TITLES.has(vis.title.trim().toLowerCase())) {
+    return HERO_DOCX_FULL_WIDTH_MEDIA_MAX_H;
+  }
+  return fullWidth ? DEFAULT_DOCX_FULL_WIDTH_MEDIA_MAX_H : 200;
+}
+
 function mediaBlocksForVisual(
   vis: ProposalVisualBlock,
-  assets: Map<string, LogoImage>,
+  assets: ProposalVisualImageAssets,
   maxW: number,
   maxH: number,
 ): Paragraph[] {
   const hint = vis.placeholderHint?.trim() || "[Image placeholder]";
-  const logo = assets.get(vis.id);
+  const logo = assets.get(Number(vis.sortOrder));
   if (logo) {
     const img = imageBufferAndDims(logo);
     if (img) {
       const dim = scaleToMaxBox(img.w, img.h, maxW, maxH);
-      const alt = vis.imageAlt?.trim();
       return [
         new Paragraph({
           spacing: { after: 80 },
@@ -209,7 +232,6 @@ function mediaBlocksForVisual(
               type: img.type,
               data: img.buf,
               transformation: { width: dim.w, height: dim.h },
-              altText: alt ? { name: alt.slice(0, 120) } : undefined,
             }),
           ],
         }),
@@ -339,6 +361,33 @@ function buildPricingTableDocx(proposal: ProposalForPdf, currency: string): Tabl
   const bodyRows: TableRow[] = [];
   let stripe = 0;
   const nextFill = () => (stripe++ % 2 === 1 ? NEUTRAL.rowStripe : "FFFFFF");
+
+  const hasFirstSection = pre.length > 0 || Boolean(proposal.includedFeatures?.trim());
+  if (hasFirstSection) {
+    const fill = nextFill();
+    bodyRows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 3,
+            shading: { fill },
+            borders: softCellBorders(),
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: PROPOSAL_TEMPLATE.hardwareSubscriptionSectionTitle,
+                    bold: true,
+                    size: 18,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+  }
 
   for (const row of pre) {
     const fill = nextFill();
@@ -501,13 +550,14 @@ function buildPricingTableDocx(proposal: ProposalForPdf, currency: string): Tabl
   });
 }
 
-function singleMediaSection(vis: ProposalVisualBlock, assets: Map<string, LogoImage>, innerMaxW: number): FileChild[] {
+function singleMediaSection(vis: ProposalVisualBlock, assets: ProposalVisualImageAssets, innerMaxW: number): FileChild[] {
+  const maxH = docxMediaMaxHeight(vis, innerMaxW);
   const out: FileChild[] = [
     new Paragraph({
       spacing: { before: 200, after: 120 },
       children: [new TextRun({ text: vis.title, bold: true, size: 22, color: NEUTRAL.text })],
     }),
-    ...mediaBlocksForVisual(vis, assets, innerMaxW, 200),
+    ...mediaBlocksForVisual(vis, assets, innerMaxW, maxH),
   ];
   for (const p of captionParas(vis.caption)) {
     out.push(p);
@@ -515,7 +565,11 @@ function singleMediaSection(vis: ProposalVisualBlock, assets: Map<string, LogoIm
   return out;
 }
 
-function halfPairSection(left: ProposalVisualBlock, right: ProposalVisualBlock, assets: Map<string, LogoImage>): FileChild[] {
+function halfPairSection(
+  left: ProposalVisualBlock,
+  right: ProposalVisualBlock,
+  assets: ProposalVisualImageAssets,
+): FileChild[] {
   const half = Math.floor(PAGE_CONTENT_TWIPS / 2);
   const cell = (vis: ProposalVisualBlock) =>
     new TableCell({
@@ -542,7 +596,7 @@ function halfPairSection(left: ProposalVisualBlock, right: ProposalVisualBlock, 
   ];
 }
 
-function appendVisuals(blocks: FileChild[], visuals: ProposalVisualBlock[], assets: Map<string, LogoImage>) {
+function appendVisuals(blocks: FileChild[], visuals: ProposalVisualBlock[], assets: ProposalVisualImageAssets) {
   const sorted = [...visuals].sort((a, b) => a.sortOrder - b.sortOrder);
   let idx = 0;
   while (idx < sorted.length) {
@@ -570,11 +624,35 @@ const defaultFooter = new Footer({
     new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [
-        new TextRun({ text: "-- ", size: 16, color: "828282" }),
-        new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "828282" }),
-        new TextRun({ text: " of ", size: 16, color: "828282" }),
-        new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: "828282" }),
-        new TextRun({ text: " --", size: 16, color: "828282" }),
+        new TextRun({
+          text: PROPOSAL_TEMPLATE.headerLine1,
+          bold: true,
+          size: 18,
+          color: "646464",
+          font: "Arial",
+        }),
+      ],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 80 },
+      children: [
+        new TextRun({
+          text: PROPOSAL_TEMPLATE.headerLine2,
+          size: 16,
+          color: "828282",
+          font: "Arial",
+        }),
+      ],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({ text: "-- ", size: 16, color: "828282", font: "Arial" }),
+        new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "828282", font: "Arial" }),
+        new TextRun({ text: " of ", size: 16, color: "828282", font: "Arial" }),
+        new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: "828282", font: "Arial" }),
+        new TextRun({ text: " --", size: 16, color: "828282", font: "Arial" }),
       ],
     }),
   ],
@@ -585,16 +663,13 @@ export async function buildProposalDocxBuffer(
   assets: {
     headerLogo: LogoImage | null;
     centerBrandLogo: LogoImage | null;
-    visualImages: Map<string, LogoImage>;
+    visualImages: ProposalVisualImageAssets;
   },
 ): Promise<Buffer> {
   const currency = proposal.currencyCode?.trim() || "XCD";
   const subject = proposalSubjectLine(proposal);
 
   const children: FileChild[] = [];
-
-  const hlp = coverHeaderLogoParagraph(assets.headerLogo);
-  if (hlp) children.push(hlp);
 
   children.push(
     new Paragraph({
@@ -641,18 +716,37 @@ export async function buildProposalDocxBuffer(
   }
 
   if (proposal.executiveSummary?.trim()) {
-    children.push(sectionHeading(PROPOSAL_TEMPLATE.overviewHeading));
-    children.push(...parasFromPlainText(proposal.executiveSummary.trim(), { size: 20 }));
+    children.push(
+      new Paragraph({
+        spacing: { before: 240, after: 120 },
+        children: [
+          new TextRun({
+            text: PROPOSAL_TEMPLATE.overviewHeading,
+            bold: true,
+            size: 20,
+            font: "Arial",
+            color: NEUTRAL.text,
+          }),
+        ],
+      }),
+    );
+    children.push(...parasFromPlainText(proposal.executiveSummary.trim(), { size: 20, font: "Arial" }));
   }
 
   children.push(
     new Paragraph({
       spacing: { before: 200, after: 80 },
       children: [
-        new TextRun({ text: PROPOSAL_TEMPLATE.solutionPricingHeading, bold: true, size: 24, color: NEUTRAL.text }),
+        new TextRun({
+          text: PROPOSAL_TEMPLATE.solutionPricingHeading,
+          bold: true,
+          size: 20,
+          font: "Arial",
+          color: NEUTRAL.text,
+        }),
       ],
     }),
-    ...parasFromPlainText(pricingIntroLine(currency), { size: 20 }),
+    ...parasFromPlainText(pricingIntroLine(currency), { size: 20, font: "Arial" }),
   );
 
   children.push(buildPricingTableDocx(proposal, currency));
@@ -753,6 +847,8 @@ export async function buildProposalDocxBuffer(
     }
   }
 
+  const defaultHeader = proposalDocumentHeader(assets.headerLogo);
+
   const doc = new Document({
     sections: [
       {
@@ -766,6 +862,7 @@ export async function buildProposalDocxBuffer(
             },
           },
         },
+        ...(defaultHeader ? { headers: { default: defaultHeader } } : {}),
         footers: { default: defaultFooter },
         children,
       },

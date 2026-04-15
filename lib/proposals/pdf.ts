@@ -12,6 +12,7 @@ import {
   tableHeadCol3,
 } from "@/lib/proposals/proposal-template";
 import { buildPage2SampleProposalForPdf } from "@/lib/proposals/page2-sample-proposal";
+import { buildPage3SampleProposalForPdf } from "@/lib/proposals/page3-sample-proposal";
 import { parseTimelineSteps, type TimelineStep } from "@/lib/proposals/visual-timeline";
 
 export type ProposalForPdf = Proposal & {
@@ -24,7 +25,18 @@ const LINE = 14;
 const PAGE_W = 612;
 const PAGE_H = 792;
 const FOOTER_Y = PAGE_H - 28;
-const CONTENT_BOTTOM = PAGE_H - 40;
+/** Keep body text above centered footer (company + contact + page line). */
+const CONTENT_BOTTOM = PAGE_H - 70;
+/** Must match `placeHeaderLogoTopLeft` max height so inner text clears the mark. */
+const HEADER_LOGO_INNER_MAX_H = 48;
+const INNER_PAGE_CONTENT_TOP = MARGIN + HEADER_LOGO_INNER_MAX_H + 18;
+/** Inner narrative = Word10 pt Arial equivalent (PDF standard font is Helvetica). */
+const INNER_BODY_PT = 10;
+const INNER_BODY_LINE_HEIGHT = 12;
+/** Space below the image before caption text; included in page-fit estimates for stacked visuals. */
+const MEDIA_IMAGE_TO_CAPTION_GAP = 12;
+/** Space after the caption before the next block (section title). */
+const MEDIA_BLOCK_TAIL_PAD = 16;
 
 const NEUTRAL = {
   border: [200, 200, 200] as [number, number, number],
@@ -58,20 +70,9 @@ function formatQty(q: unknown): string {
   return String(Number.isFinite(n) ? n : 0);
 }
 
-function drawContinuedLetterhead(doc: jsPDF): void {
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(0);
-  doc.text(PROPOSAL_TEMPLATE.headerLine1, MARGIN, MARGIN + 10);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(PROPOSAL_TEMPLATE.headerLine2, MARGIN, MARGIN + 22);
-}
-
 function newPage(doc: jsPDF, ctx: ProposalLayoutCtx): number {
   doc.addPage();
   ctx.pageNum += 1;
-  drawContinuedLetterhead(doc);
   return ctx.continuedContentY;
 }
 
@@ -91,14 +92,12 @@ type CoverProposalFields = Pick<
   | "clientAddress"
 >;
 
-/** Cover page 1 only (header logo, centered title + product mark, Prepared for). Returns Y after client block. */
+/** Cover page 1 only (centered title + product mark, Prepared for). Header logo/text is applied in `applyHeaderOnAllPages` after all content. */
 export function drawProposalCoverPage(
   doc: jsPDF,
   proposal: CoverProposalFields,
   assets: CoverPageAssets,
 ): number {
-  placeHeaderLogoTopLeft(doc, assets.headerLogo);
-
   const subject = proposal.title.trim() || PROPOSAL_TEMPLATE.defaultSubject;
 
   let yc = MARGIN + 108;
@@ -148,6 +147,25 @@ export function buildProposalCoverSamplePdfBuffer(assets: CoverPageAssets): Buff
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   drawProposalCoverPage(doc, COVER_SAMPLE_PROPOSAL_FIELDS, assets);
   addPageFooters(doc);
+  applyHeaderOnAllPages(doc, assets.headerLogo);
+  return Buffer.from(doc.output("arraybuffer"));
+}
+
+/** Cover page 1 using this proposal’s title + client fields (matches full export page 1). */
+export function buildProposalCoverPreviewPdfBuffer(proposal: ProposalForPdf, assets: CoverPageAssets): Buffer {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const fields: CoverProposalFields = {
+    title: proposal.title,
+    clientLabel: proposal.clientLabel,
+    clientCompany: proposal.clientCompany,
+    clientContactName: proposal.clientContactName,
+    clientEmail: proposal.clientEmail,
+    clientPhone: proposal.clientPhone,
+    clientAddress: proposal.clientAddress,
+  };
+  drawProposalCoverPage(doc, fields, assets);
+  addPageFooters(doc);
+  applyHeaderOnAllPages(doc, assets.headerLogo);
   return Buffer.from(doc.output("arraybuffer"));
 }
 
@@ -161,19 +179,45 @@ const COVER_SAMPLE_PROPOSAL_FIELDS: CoverProposalFields = {
   clientAddress: null,
 };
 
-/** Ellodane / company mark — top-left of cover page. */
+/** Top-left text header when no logo image (or image failed). */
+function drawHeaderTextTopLeft(doc: jsPDF): void {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30);
+  doc.text(PROPOSAL_TEMPLATE.headerLine1, MARGIN, MARGIN + 12);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(70);
+  doc.text(PROPOSAL_TEMPLATE.headerLine2, MARGIN, MARGIN + 26);
+  doc.setTextColor(0);
+}
+
+/** Ellodane / company mark — top-left (image). Falls back to text on failure. */
 function placeHeaderLogoTopLeft(doc: jsPDF, logo: LogoImage | null): void {
-  if (!logo) return;
+  if (!logo) {
+    drawHeaderTextTopLeft(doc);
+    return;
+  }
   try {
     const maxW = 150;
-    const maxH = 48;
+    const maxH = HEADER_LOGO_INNER_MAX_H;
     const props = doc.getImageProperties(logo.dataUrl);
     const scale = Math.min(maxW / props.width, maxH / props.height, 1);
     const dw = props.width * scale;
     const dh = props.height * scale;
-    doc.addImage(logo.dataUrl, logo.format, MARGIN, MARGIN, dw, dh);
+    const fmt = logo.format === "JPEG" ? "JPEG" : "PNG";
+    doc.addImage(logo.dataUrl, fmt, MARGIN, MARGIN, dw, dh);
   } catch {
-    /* ignore broken image */
+    drawHeaderTextTopLeft(doc);
+  }
+}
+
+/** Header on every page — last paint step so tables/body do not cover it; logo or text fallback. */
+function applyHeaderOnAllPages(doc: jsPDF, logo: LogoImage | null): void {
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    placeHeaderLogoTopLeft(doc, logo);
   }
 }
 
@@ -261,22 +305,27 @@ function drawPlaceholder(doc: jsPDF, x: number, y: number, w: number, h: number,
 
 export type LogoImage = { dataUrl: string; format: "PNG" | "JPEG" };
 
+/** Loaded proposal images keyed by `ProposalVisualBlock.sortOrder` (stable vs row UUID after re-saves). */
+export type ProposalVisualImageAssets = Map<number, LogoImage>;
+
 type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
+
+function drawFooterCompanyContactCentered(doc: jsPDF): void {
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(100);
+  doc.text(PROPOSAL_TEMPLATE.headerLine1, PAGE_W / 2, PAGE_H - 50, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(130);
+  doc.text(PROPOSAL_TEMPLATE.headerLine2, PAGE_W / 2, PAGE_H - 36, { align: "center" });
+}
 
 function addPageFooters(doc: jsPDF) {
   const total = doc.getNumberOfPages();
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
-    if (i === 1) {
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(100);
-      doc.text(PROPOSAL_TEMPLATE.headerLine1, PAGE_W / 2, PAGE_H - 50, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(130);
-      doc.text(PROPOSAL_TEMPLATE.headerLine2, PAGE_W / 2, PAGE_H - 36, { align: "center" });
-    }
+    drawFooterCompanyContactCentered(doc);
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(130);
@@ -298,6 +347,64 @@ function ensureVisualSpace(doc: jsPDF, y: number, minBelow: number, ctx: Proposa
   return y;
 }
 
+function estimateMediaCaptionHeight(
+  doc: jsPDF,
+  areaW: number,
+  caption: string | null | undefined,
+): number {
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  const cap = caption?.trim() ?? "";
+  const captionLines = cap ? doc.splitTextToSize(cap, areaW).length : 0;
+  return captionLines * (LINE - 2);
+}
+
+/** Tight pre-check so a second full-width visual can follow the dashboard on the same page. */
+function ensureSpaceForSingleMediaBlock(
+  doc: jsPDF,
+  y: number,
+  boxH: number,
+  areaW: number,
+  caption: string | null | undefined,
+  ctx: ProposalLayoutCtx,
+): number {
+  const captionH = estimateMediaCaptionHeight(doc, areaW, caption);
+  const estimated = 16 + boxH + MEDIA_IMAGE_TO_CAPTION_GAP + captionH + MEDIA_BLOCK_TAIL_PAD;
+  if (y + estimated > CONTENT_BOTTOM) {
+    return newPage(doc, ctx);
+  }
+  return y;
+}
+
+const DEFAULT_FULL_WIDTH_MEDIA_BOX_H = 118;
+/** Full-width hero image slot (2× default) — primary dashboard shot only; alerts stay default height to pair on one page. */
+const HERO_FULL_WIDTH_MEDIA_BOX_H = DEFAULT_FULL_WIDTH_MEDIA_BOX_H * 2;
+
+const HERO_FULL_WIDTH_TITLES = new Set(["platform at a glance"]);
+
+const ALERTS_SECTION_TITLE_LC = "alerts and notifications";
+
+/** Largest image slot that still fits title + image + caption above `CONTENT_BOTTOM` (used after platform on same page). */
+function maxAlertsFullWidthBoxH(
+  doc: jsPDF,
+  y: number,
+  areaW: number,
+  caption: string | null | undefined,
+): number {
+  const captionH = estimateMediaCaptionHeight(doc, areaW, caption);
+  const overhead = 16 + MEDIA_IMAGE_TO_CAPTION_GAP + captionH + MEDIA_BLOCK_TAIL_PAD;
+  const raw = CONTENT_BOTTOM - y - overhead;
+  return Math.max(DEFAULT_FULL_WIDTH_MEDIA_BOX_H, Math.floor(raw));
+}
+
+function pdfMediaBoxHeight(vis: ProposalVisualBlock, widthFactor: number): number {
+  const fullWidth = widthFactor >= 0.95;
+  if (fullWidth && HERO_FULL_WIDTH_TITLES.has(vis.title.trim().toLowerCase())) {
+    return HERO_FULL_WIDTH_MEDIA_BOX_H;
+  }
+  return DEFAULT_FULL_WIDTH_MEDIA_BOX_H;
+}
+
 function renderMediaArea(
   doc: jsPDF,
   vis: ProposalVisualBlock,
@@ -305,10 +412,10 @@ function renderMediaArea(
   y: number,
   areaW: number,
   boxH: number,
-  assets: Map<string, LogoImage>,
+  assets: ProposalVisualImageAssets,
 ): number {
   const hint = vis.placeholderHint?.trim() || "[Image placeholder]";
-  const visImg = assets.get(vis.id);
+  const visImg = assets.get(Number(vis.sortOrder));
   let usedH = 0;
   if (visImg) {
     try {
@@ -319,7 +426,14 @@ function renderMediaArea(
       doc.addImage(visImg.dataUrl, visImg.format, x, y, dw, dh);
       usedH = dh;
     } catch {
-      drawPlaceholder(doc, x, y, areaW, boxH, hint);
+      drawPlaceholder(
+        doc,
+        x,
+        y,
+        areaW,
+        boxH,
+        `${hint}\n(PDF could not embed this image — try a standard RGB PNG or JPEG.)`,
+      );
       usedH = boxH;
     }
   } else if (vis.imageUrl?.trim()) {
@@ -328,20 +442,6 @@ function renderMediaArea(
   } else {
     drawPlaceholder(doc, x, y, areaW, boxH, hint);
     usedH = boxH;
-  }
-
-  if (vis.imageAlt?.trim()) {
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100);
-    const altLines = doc.splitTextToSize(`Alt: ${vis.imageAlt.trim()}`, areaW);
-    let ay = y + usedH + 3;
-    for (const ln of altLines) {
-      doc.text(ln, x, ay);
-      ay += 9;
-    }
-    usedH = ay - y;
-    doc.setTextColor(0);
   }
 
   return usedH;
@@ -354,11 +454,29 @@ function renderSingleMediaBlock(
   innerW: number,
   y: number,
   widthFactor: number,
-  assets: Map<string, LogoImage>,
+  assets: ProposalVisualImageAssets,
   ctx: ProposalLayoutCtx,
 ): number {
-  let yy = ensureVisualSpace(doc, y, 130, ctx);
   const areaW = innerW * widthFactor;
+  const fullWidth = widthFactor >= 0.95;
+  const isAlerts = fullWidth && vis.title.trim().toLowerCase() === ALERTS_SECTION_TITLE_LC;
+
+  let boxH: number;
+  let yy: number;
+  if (isAlerts) {
+    yy = ensureSpaceForSingleMediaBlock(
+      doc,
+      y,
+      DEFAULT_FULL_WIDTH_MEDIA_BOX_H,
+      areaW,
+      vis.caption,
+      ctx,
+    );
+    boxH = maxAlertsFullWidthBoxH(doc, yy, areaW, vis.caption);
+  } else {
+    boxH = pdfMediaBoxHeight(vis, widthFactor);
+    yy = ensureSpaceForSingleMediaBlock(doc, y, boxH, areaW, vis.caption, ctx);
+  }
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0);
@@ -366,13 +484,12 @@ function renderSingleMediaBlock(
   yy += 16;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  const boxH = 118;
   const h = renderMediaArea(doc, vis, x0, yy, areaW, boxH, assets);
-  yy += h + 6;
+  yy += h + MEDIA_IMAGE_TO_CAPTION_GAP;
   if (vis.caption?.trim()) {
     yy = addParagraph(doc, vis.caption.trim(), x0, yy, areaW, LINE - 2, ctx);
   }
-  return yy + 12;
+  return yy + MEDIA_BLOCK_TAIL_PAD;
 }
 
 function renderHalfPair(
@@ -380,7 +497,7 @@ function renderHalfPair(
   left: ProposalVisualBlock,
   right: ProposalVisualBlock,
   y: number,
-  assets: Map<string, LogoImage>,
+  assets: ProposalVisualImageAssets,
   ctx: ProposalLayoutCtx,
 ): number {
   let yy = ensureVisualSpace(doc, y, 150, ctx);
@@ -481,7 +598,7 @@ function renderProposalVisuals(
   doc: jsPDF,
   visuals: ProposalVisualBlock[],
   yStart: number,
-  assets: Map<string, LogoImage>,
+  assets: ProposalVisualImageAssets,
   ctx: ProposalLayoutCtx,
 ): number {
   const sorted = [...visuals].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -531,6 +648,17 @@ function buildPricingTableBody(proposal: ProposalForPdf, currency: string): Tabl
   const post = sorted.slice(pre.length);
 
   const body: TableCell[][] = [];
+
+  const hasFirstSection = pre.length > 0 || Boolean(proposal.includedFeatures?.trim());
+  if (hasFirstSection) {
+    body.push([
+      {
+        content: PROPOSAL_TEMPLATE.hardwareSubscriptionSectionTitle,
+        colSpan: 3,
+        styles: { halign: "left", valign: "top", fontStyle: "bold" },
+      },
+    ]);
+  }
 
   for (const row of pre) {
     body.push([row.description.trim(), formatQty(row.quantity), money(lineTotal(row), currency)]);
@@ -589,11 +717,22 @@ function drawOverviewPricingTableAndFootnotes(
 ): number {
   if (proposal.executiveSummary?.trim()) {
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(INNER_BODY_PT);
+    doc.setTextColor(0);
     doc.text(PROPOSAL_TEMPLATE.overviewHeading, MARGIN, y);
-    y += LINE;
+    y += INNER_BODY_LINE_HEIGHT;
     doc.setFont("helvetica", "normal");
-    y = addParagraph(doc, proposal.executiveSummary.trim(), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1, ctx);
-    y += 10;
+    doc.setFontSize(INNER_BODY_PT);
+    y = addParagraph(
+      doc,
+      proposal.executiveSummary.trim(),
+      MARGIN,
+      y,
+      PAGE_W - MARGIN * 2,
+      INNER_BODY_LINE_HEIGHT,
+      ctx,
+    );
+    y += 32;
   }
 
   if (y > CONTENT_BOTTOM - 160) {
@@ -606,13 +745,21 @@ function drawOverviewPricingTableAndFootnotes(
   const colWDetail = innerW - colWQty - colWPrice;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
+  doc.setFontSize(INNER_BODY_PT);
   doc.setTextColor(0);
   doc.text(PROPOSAL_TEMPLATE.solutionPricingHeading, MARGIN, y);
-  y += LINE + 4;
+  y += INNER_BODY_LINE_HEIGHT + 4;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  y = addParagraph(doc, pricingIntroLine(currency), MARGIN, y, PAGE_W - MARGIN * 2, LINE - 1, ctx);
+  doc.setFontSize(INNER_BODY_PT);
+  y = addParagraph(
+    doc,
+    pricingIntroLine(currency),
+    MARGIN,
+    y,
+    PAGE_W - MARGIN * 2,
+    INNER_BODY_LINE_HEIGHT,
+    ctx,
+  );
   y += 8;
 
   const tableBody = buildPricingTableBody(proposal, currency);
@@ -621,14 +768,13 @@ function drawOverviewPricingTableAndFootnotes(
     startY: y,
     head: [[PROPOSAL_TEMPLATE.tableHeadCol1, PROPOSAL_TEMPLATE.tableHeadCol2, tableHeadCol3(currency)]],
     body: tableBody,
-    margin: { top: MARGIN + 36, left: MARGIN, right: MARGIN, bottom: MARGIN },
+    margin: { top: MARGIN + 36, left: MARGIN, right: MARGIN, bottom: 92 },
     tableWidth: innerW,
     showHead: "everyPage",
     theme: "plain",
     willDrawPage: (data) => {
       if (data.pageNumber > 1 && data.cursor) {
-        drawContinuedLetterhead(data.doc);
-        data.cursor.y = MARGIN + 40;
+        data.cursor.y = INNER_PAGE_CONTENT_TOP;
       }
     },
     styles: {
@@ -671,29 +817,60 @@ function drawOverviewPricingTableAndFootnotes(
   return y;
 }
 
-/** Footer for inner pages only (`-- n of m --`), for single-page layout samples. */
-function addInnerPageOnlyFooters(doc: jsPDF): void {
-  const total = doc.getNumberOfPages();
-  for (let i = 1; i <= total; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(130);
-    doc.text(footerPageText(i, total), PAGE_W / 2, FOOTER_Y, { align: "center" });
-    doc.setTextColor(0);
-  }
+/** One-page PDF: default visual blocks that follow pricing (trimmed), for template page 3. */
+export function buildProposalPage3SamplePdfBuffer(headerLogo: LogoImage | null = null): Buffer {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const ctx: ProposalLayoutCtx = { pageNum: 1, continuedContentY: INNER_PAGE_CONTENT_TOP };
+  const proposal = buildPage3SampleProposalForPdf();
+  const visualImages: ProposalVisualImageAssets = new Map();
+  renderProposalVisuals(doc, proposal.visuals, INNER_PAGE_CONTENT_TOP, visualImages, ctx);
+  addPageFooters(doc);
+  applyHeaderOnAllPages(doc, headerLogo);
+  return Buffer.from(doc.output("arraybuffer"));
 }
 
-/** One-page PDF: letterhead + default-draft Overview + pricing table + footnotes (verify vs. template page 2). */
-export function buildProposalPage2SamplePdfBuffer(): Buffer {
+/**
+ * Page 3 slice: first visual blocks after pricing (`sortOrder` ≤ 3), same trim as the default sample.
+ * Uses real proposal data + `visualImages` from export.
+ */
+export function buildProposalPage3PreviewPdfBuffer(
+  proposal: ProposalForPdf,
+  headerLogo: LogoImage | null,
+  visualImages: ProposalVisualImageAssets,
+): Buffer {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  const ctx: ProposalLayoutCtx = { pageNum: 1, continuedContentY: MARGIN + 40 };
-  drawContinuedLetterhead(doc);
-  let y = MARGIN + 40;
+  const ctx: ProposalLayoutCtx = { pageNum: 1, continuedContentY: INNER_PAGE_CONTENT_TOP };
+  const sorted = [...proposal.visuals].sort((a, b) => a.sortOrder - b.sortOrder);
+  const trimmed = sorted.filter((v) => v.sortOrder <= 3);
+  renderProposalVisuals(doc, trimmed, INNER_PAGE_CONTENT_TOP, visualImages, ctx);
+  addPageFooters(doc);
+  applyHeaderOnAllPages(doc, headerLogo);
+  return Buffer.from(doc.output("arraybuffer"));
+}
+
+/** One-page PDF: inner-style body + default-draft Overview + pricing + footnotes; company/contact in footer only. */
+export function buildProposalPage2SamplePdfBuffer(headerLogo: LogoImage | null = null): Buffer {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const ctx: ProposalLayoutCtx = { pageNum: 1, continuedContentY: INNER_PAGE_CONTENT_TOP };
+  let y = INNER_PAGE_CONTENT_TOP;
   const proposal = buildPage2SampleProposalForPdf();
   const currency = proposal.currencyCode?.trim() || "XCD";
   drawOverviewPricingTableAndFootnotes(doc, proposal, currency, y, ctx);
-  addInnerPageOnlyFooters(doc);
+  addPageFooters(doc);
+  applyHeaderOnAllPages(doc, headerLogo);
+  return Buffer.from(doc.output("arraybuffer"));
+}
+
+/** Page 2 slice: Overview + pricing + footnotes for a real proposal (no visual blocks). */
+export function buildProposalPage2PreviewPdfBuffer(proposal: ProposalForPdf, headerLogo: LogoImage | null): Buffer {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const ctx: ProposalLayoutCtx = { pageNum: 1, continuedContentY: INNER_PAGE_CONTENT_TOP };
+  let y = INNER_PAGE_CONTENT_TOP;
+  const currency = proposal.currencyCode?.trim() || "XCD";
+  const withoutVisuals = { ...proposal, visuals: [] as ProposalVisualBlock[] };
+  drawOverviewPricingTableAndFootnotes(doc, withoutVisuals, currency, y, ctx);
+  addPageFooters(doc);
+  applyHeaderOnAllPages(doc, headerLogo);
   return Buffer.from(doc.output("arraybuffer"));
 }
 
@@ -702,7 +879,7 @@ export function buildProposalPdfBuffer(
   assets: {
     headerLogo: LogoImage | null;
     centerBrandLogo: LogoImage | null;
-    visualImages: Map<string, LogoImage>;
+    visualImages: ProposalVisualImageAssets;
   },
 ): Buffer {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
@@ -710,7 +887,7 @@ export function buildProposalPdfBuffer(
 
   const ctx: ProposalLayoutCtx = {
     pageNum: 1,
-    continuedContentY: MARGIN + 40,
+    continuedContentY: INNER_PAGE_CONTENT_TOP,
   };
 
   let y = drawProposalCoverPage(doc, proposal, {
@@ -828,6 +1005,7 @@ export function buildProposalPdfBuffer(
   }
 
   addPageFooters(doc);
+  applyHeaderOnAllPages(doc, assets.headerLogo);
 
   const out = doc.output("arraybuffer");
   return Buffer.from(out);

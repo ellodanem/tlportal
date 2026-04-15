@@ -7,12 +7,13 @@ import {
   resolveProposalHeaderLogoStored,
 } from "@/lib/proposals/proposal-cover-assets";
 import { buildProposalPdfBuffer, type LogoImage } from "@/lib/proposals/pdf";
+import { effectiveVisualImageUrlForExport } from "@/lib/proposals/proposal-static-visuals";
 import { proposalForPdfWithCustomerFallback } from "@/lib/proposals/resolve-client-for-pdf";
-import { getServerOriginFromEnv } from "@/lib/proposals/resolve-asset-url";
+import { resolveAssetFetchOrigin } from "@/lib/proposals/resolve-asset-url";
 
 export const runtime = "nodejs";
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) {
     return new Response("Unauthorized", { status: 401 });
@@ -26,8 +27,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const proposal = await prisma.proposal.findUnique({
     where: { id },
     include: {
-      lineItems: true,
-      visuals: true,
+      lineItems: { orderBy: { sortOrder: "asc" } },
+      visuals: { orderBy: { sortOrder: "asc" } },
       customer: true,
     },
   });
@@ -36,17 +37,18 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return new Response("Not found", { status: 404 });
   }
 
-  const origin = getServerOriginFromEnv();
+  const origin = resolveAssetFetchOrigin(req);
   const brandingStored = await getBrandingLogoStored();
   const headerLogo = await fetchImageAsLogo(origin, resolveProposalHeaderLogoStored(brandingStored));
   const centerBrandLogo = await fetchImageAsLogo(origin, resolveProposalCenterLogoPath());
 
-  const visualImages = new Map<string, LogoImage>();
+  const visualImages = new Map<number, LogoImage>();
   for (const v of proposal.visuals) {
-    if (!v.imageUrl?.trim()) continue;
-    const img = await fetchImageAsLogo(origin, v.imageUrl);
+    const url = effectiveVisualImageUrlForExport(v);
+    if (!url) continue;
+    const img = await fetchImageAsLogo(origin, url);
     if (img) {
-      visualImages.set(v.id, img);
+      visualImages.set(Number(v.sortOrder), img);
     }
   }
 
