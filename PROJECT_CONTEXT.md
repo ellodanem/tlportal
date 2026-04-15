@@ -1233,3 +1233,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-15 11:15 UTC — commit `baacfd4`
+
+- docs: project context log (commit + pre-push for dcda859)
+
+
+### 2026-04-15 11:15 UTC — pre-push (`main` → origin) @ `baacfd4`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-15 11:18 UTC — commit `cdf90cc`
+
+- Revert "docs: project context log (baacfd4 push)"
+
+
+### 2026-04-15 11:18 UTC — pre-push (`main` → origin) @ `cdf90cc`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
