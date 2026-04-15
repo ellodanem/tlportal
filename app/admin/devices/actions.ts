@@ -13,6 +13,57 @@ import type { DeviceFormActionState } from "./device-form-state";
 
 const CONDITIONS = new Set<string>(["new", "refurbished", "faulty"]);
 
+async function simLinkErrorForNewDevice(simCardId: string): Promise<string | null> {
+  const sim = await prisma.simCard.findFirst({
+    where: { id: simCardId },
+    select: { id: true, device: { select: { id: true } } },
+  });
+  if (!sim) {
+    return "Selected SIM was not found.";
+  }
+  if (sim.device) {
+    return "That SIM is already linked to another device.";
+  }
+  const openAssignment = await prisma.serviceAssignment.findFirst({
+    where: {
+      simCardId,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    select: { id: true },
+  });
+  if (openAssignment) {
+    return "That SIM is tied to an active service assignment.";
+  }
+  return null;
+}
+
+async function simLinkErrorForExistingDevice(deviceId: string, simCardId: string): Promise<string | null> {
+  const sim = await prisma.simCard.findFirst({
+    where: { id: simCardId },
+    select: { id: true, device: { select: { id: true } } },
+  });
+  if (!sim) {
+    return "Selected SIM was not found.";
+  }
+  if (sim.device && sim.device.id !== deviceId) {
+    return "That SIM is already linked to another device.";
+  }
+  const otherAssignment = await prisma.serviceAssignment.findFirst({
+    where: {
+      simCardId,
+      endDate: null,
+      status: { not: "cancelled" },
+      deviceId: { not: deviceId },
+    },
+    select: { id: true },
+  });
+  if (otherAssignment) {
+    return "That SIM is tied to another active service assignment.";
+  }
+  return null;
+}
+
 function parseOptionalString(formData: FormData, key: string): string | null {
   const v = String(formData.get(key) ?? "").trim();
   return v.length ? v : null;
@@ -79,15 +130,9 @@ export async function registerDevice(
   }
 
   if (simCardId) {
-    const sim = await prisma.simCard.findFirst({
-      where: { id: simCardId },
-      select: { id: true, device: { select: { id: true } } },
-    });
-    if (!sim) {
-      return { error: "Selected SIM was not found." };
-    }
-    if (sim.device) {
-      return { error: "That SIM is already linked to another device." };
+    const simErr = await simLinkErrorForNewDevice(simCardId);
+    if (simErr) {
+      return { error: simErr };
     }
   }
 
@@ -427,6 +472,166 @@ export async function unassignDeviceFromCustomer(
   revalidatePath(`/admin/customers/${assignment.customerId}`);
   if (device.simCardId) {
     revalidatePath(`/admin/sims/${device.simCardId}`);
+  }
+  redirect(`/admin/devices/${deviceId}/edit`);
+}
+
+function deviceBlockedForSimEdit(status: string): boolean {
+  return status === "decommissioned" || status === "lost";
+}
+
+/**
+ * Remove the SIM link from a device (and from its active service assignment, if any).
+ */
+export async function clearDeviceSimCard(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  if (!deviceId) {
+    return { error: "Missing device id." };
+  }
+
+  const device = await prisma.device.findUnique({
+    where: { id: deviceId },
+    select: { id: true, status: true, simCardId: true },
+  });
+  if (!device) {
+    return { error: "Device not found." };
+  }
+  if (deviceBlockedForSimEdit(device.status)) {
+    return { error: "Cannot change SIM on a decommissioned or lost device." };
+  }
+  if (!device.simCardId) {
+    return { error: "This device has no linked SIM to remove." };
+  }
+
+  const prevSimId = device.simCardId;
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: {
+      deviceId,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    select: { id: true, customerId: true },
+  });
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.device.update({
+        where: { id: deviceId },
+        data: { simCardId: null },
+      });
+      if (assignment) {
+        await tx.serviceAssignment.update({
+          where: { id: assignment.id },
+          data: { simCardId: null },
+        });
+      }
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg || "Could not remove SIM link." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${deviceId}/edit`);
+  revalidatePath("/admin/sims");
+  revalidatePath(`/admin/sims/${prevSimId}`);
+  if (assignment) {
+    revalidatePath(`/admin/customers/${assignment.customerId}`);
+  }
+  redirect(`/admin/devices/${deviceId}/edit`);
+}
+
+/**
+ * Link or swap the SIM on a device; updates the active service assignment to match when present.
+ */
+export async function updateDeviceLinkedSim(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  const simCardIdRaw = String(formData.get("simCardId") ?? "").trim();
+  if (!deviceId) {
+    return { error: "Missing device id." };
+  }
+  if (!simCardIdRaw) {
+    return {
+      error: "Select a SIM from the list, or use Remove SIM to unlink the current card.",
+    };
+  }
+
+  const device = await prisma.device.findUnique({
+    where: { id: deviceId },
+    select: { id: true, status: true, simCardId: true },
+  });
+  if (!device) {
+    return { error: "Device not found." };
+  }
+  if (deviceBlockedForSimEdit(device.status)) {
+    return { error: "Cannot change SIM on a decommissioned or lost device." };
+  }
+
+  const simErr = await simLinkErrorForExistingDevice(deviceId, simCardIdRaw);
+  if (simErr) {
+    return { error: simErr };
+  }
+
+  if (device.simCardId === simCardIdRaw) {
+    redirect(`/admin/devices/${deviceId}/edit`);
+  }
+
+  const prevSimId = device.simCardId;
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: {
+      deviceId,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    select: { id: true, customerId: true },
+  });
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.device.update({
+        where: { id: deviceId },
+        data: { simCardId: simCardIdRaw },
+      });
+      if (assignment) {
+        await tx.serviceAssignment.update({
+          where: { id: assignment.id },
+          data: { simCardId: simCardIdRaw },
+        });
+      }
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg || "Could not update linked SIM." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${deviceId}/edit`);
+  revalidatePath("/admin/sims");
+  if (prevSimId) {
+    revalidatePath(`/admin/sims/${prevSimId}`);
+  }
+  revalidatePath(`/admin/sims/${simCardIdRaw}`);
+  if (assignment) {
+    revalidatePath(`/admin/customers/${assignment.customerId}`);
   }
   redirect(`/admin/devices/${deviceId}/edit`);
 }

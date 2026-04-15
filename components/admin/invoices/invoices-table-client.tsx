@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useMemo, useState, useTransition } from "react";
+import { useEffect, useDeferredValue, useMemo, useRef, useState, useTransition } from "react";
 
+import { InvoiceDeleteForm } from "@/components/admin/invoices/invoice-delete-form";
 import { IconSearch } from "@/components/dashboard/dashboard-icons";
 import type { InvoilessInvoiceListRow } from "@/lib/invoiless/invoices-list";
 
@@ -14,6 +15,8 @@ const PAGE_LIMITS = [25, 50, 100] as const;
 type Props = {
   rows: InvoilessInvoiceListRow[];
   tlCustomerByInvoilessId: Record<string, TlCustomerLink>;
+  /** Lowercase email → linked TL customer (bill-to match when Invoiless customer id differs) */
+  tlCustomerByEmail?: Record<string, TlCustomerLink>;
   page: number;
   totalPages: number;
   totalItems: number;
@@ -21,10 +24,13 @@ type Props = {
   search: string;
   invoilessConfigured: boolean;
   invoilessDashboardUrl: string;
+  /** When set, list was loaded by pulling from Invoiless for this linked TL customer only. */
+  scopedToCustomer?: { portalId: string; name: string } | null;
 };
 
-function invoicesHref(opts: { page?: number; search?: string; limit?: number }) {
+function invoicesHref(opts: { page?: number; search?: string; limit?: number; customer?: string }) {
   const params = new URLSearchParams();
+  if (opts.customer?.trim()) params.set("customer", opts.customer.trim());
   if (opts.page != null && opts.page > 1) params.set("page", String(opts.page));
   if (opts.search != null && opts.search.trim()) params.set("q", opts.search.trim());
   if (opts.limit != null && opts.limit !== 50) params.set("limit", String(opts.limit));
@@ -135,6 +141,39 @@ function IconOutLink(props: { className?: string }) {
   );
 }
 
+function IconShare(props: { className?: string }) {
+  return (
+    <svg className={props.className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="1.75" />
+      <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="1.75" />
+      <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        d="M8.6 13.5 15.4 17.5M15.4 6.5 8.6 10.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Shown in mail body when we have no client email from Invoiless (inbox not wired yet). */
+const MAILTO_PLACEHOLDER_NOTE =
+  "(Add the client's email in the To field — TL Portal inbox is not connected yet, so you send from your own mail app.)";
+
+function buildInvoiceMailtoHref(previewUrl: string, invoiceLabel: string, clientEmail: string | null | undefined): string {
+  const subject = encodeURIComponent(`Invoice ${invoiceLabel}`);
+  const to = clientEmail?.trim();
+  const bodyLines = to
+    ? ["Hi,", "", "Your invoice is ready to view:", previewUrl, "", "Thank you."]
+    : ["Hi,", "", MAILTO_PLACEHOLDER_NOTE, "", "Invoice link:", previewUrl, ""];
+  const body = encodeURIComponent(bodyLines.join("\n"));
+  if (to) {
+    return `mailto:${encodeURIComponent(to)}?subject=${subject}&body=${body}`;
+  }
+  return `mailto:?subject=${subject}&body=${body}`;
+}
+
 type StatMiniProps = {
   label: string;
   value: string | number;
@@ -177,6 +216,7 @@ function StatMini({ label, value, hint, icon, tone }: StatMiniProps) {
 export function InvoicesTableClient({
   rows,
   tlCustomerByInvoilessId,
+  tlCustomerByEmail = {},
   page,
   totalPages,
   totalItems,
@@ -184,11 +224,46 @@ export function InvoicesTableClient({
   search,
   invoilessConfigured,
   invoilessDashboardUrl,
+  scopedToCustomer = null,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState(search);
   const deferredQ = useDeferredValue(query);
+  const [openShareMenuId, setOpenShareMenuId] = useState<string | null>(null);
+  const [copyFeedbackId, setCopyFeedbackId] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (openShareMenuId == null) return;
+    const onDocMouseDown = () => setOpenShareMenuId(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenShareMenuId(null);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openShareMenuId]);
+
+  async function copyInvoiceLink(invoiceId: string, url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      setCopyFeedbackId(invoiceId);
+      copyTimerRef.current = setTimeout(() => setCopyFeedbackId(null), 2200);
+    } catch {
+      window.prompt("Copy invoice link:", url);
+    }
+  }
 
   const limitSelectValue = PAGE_LIMITS.includes(limit as (typeof PAGE_LIMITS)[number]) ? limit : 50;
 
@@ -199,14 +274,32 @@ export function InvoicesTableClient({
       const num = (r.number ?? "").toLowerCase();
       const st = (r.status ?? "").toLowerCase();
       const cl = (r.customerLabel ?? "").toLowerCase();
+      const be = (r.billToEmail ?? "").toLowerCase();
+      const bp = (r.billToPhone ?? "").replace(/\D/g, "");
+      const qDigits = q.replace(/\D/g, "");
       const id = r.id.toLowerCase();
-      const tl =
+      const tlName =
         r.customerInvoilessId && tlCustomerByInvoilessId[r.customerInvoilessId]
           ? tlCustomerByInvoilessId[r.customerInvoilessId]!.name.toLowerCase()
           : "";
-      return num.includes(q) || st.includes(q) || cl.includes(q) || id.includes(q) || tl.includes(q);
+      const tlByEm =
+        r.billToEmail && tlCustomerByEmail[r.billToEmail.trim().toLowerCase()]
+          ? tlCustomerByEmail[r.billToEmail.trim().toLowerCase()]!.name.toLowerCase()
+          : "";
+      const phoneMatch = qDigits.length >= 4 && bp.length > 0 && bp.includes(qDigits);
+      return (
+        num.includes(q) ||
+        st.includes(q) ||
+        cl.includes(q) ||
+        be.includes(q) ||
+        (r.billToPhone ?? "").toLowerCase().includes(q) ||
+        phoneMatch ||
+        id.includes(q) ||
+        tlName.includes(q) ||
+        tlByEm.includes(q)
+      );
     });
-  }, [rows, deferredQ, tlCustomerByInvoilessId]);
+  }, [rows, deferredQ, tlCustomerByInvoilessId, tlCustomerByEmail]);
 
   const pageStats = useMemo(() => {
     let paid = 0;
@@ -231,6 +324,7 @@ export function InvoicesTableClient({
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
+    if (scopedToCustomer) return;
     startTransition(() => {
       router.push(invoicesHref({ page: 1, search: query, limit }));
     });
@@ -252,9 +346,13 @@ export function InvoicesTableClient({
     <div className="flex flex-col gap-8">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatMini
-          label="In Invoiless"
+          label={scopedToCustomer ? "Pulled for customer" : "In Invoiless"}
           value={totalItems.toLocaleString()}
-          hint="Invoices in your workspace (all pages)."
+          hint={
+            scopedToCustomer
+              ? `Invoices in Invoiless that match this customer's linked id (up to 100 on load).`
+              : "Invoices in your workspace (all pages)."
+          }
           icon={<IconLayersStack className="h-5 w-5" />}
           tone="slate"
         />
@@ -280,6 +378,30 @@ export function InvoicesTableClient({
           tone="violet"
         />
       </section>
+
+      {scopedToCustomer ? (
+        <div className="rounded-xl border border-sky-200/90 bg-sky-50/80 p-4 text-sm text-sky-950 shadow-sm dark:border-sky-900/40 dark:bg-sky-950/25 dark:text-sky-100">
+          <p className="font-medium text-sky-900 dark:text-sky-50">Pulled for one linked customer</p>
+          <p className="mt-1 text-sky-900/85 dark:text-sky-100/85">
+            These rows came from Invoiless using{" "}
+            <Link
+              href={`/admin/customers/${scopedToCustomer.portalId}`}
+              className="font-semibold text-emerald-800 underline-offset-2 hover:underline dark:text-emerald-300"
+            >
+              {scopedToCustomer.name}
+            </Link>
+            {"'s linked Invoiless customer id. You do not link invoices one by one in TL Portal."}
+          </p>
+          <p className="mt-2">
+            <Link
+              href="/admin/invoices"
+              className="text-sm font-semibold text-emerald-800 underline-offset-2 hover:underline dark:text-emerald-300"
+            >
+              Clear filter — full workspace list
+            </Link>
+          </p>
+        </div>
+      ) : null}
 
       {rows.length > 0 && pageStats.sum > 0 ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -310,14 +432,23 @@ export function InvoicesTableClient({
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-            >
-              {pending ? "Searching…" : "Run search"}
-            </button>
-            {search.trim() ? (
+            {scopedToCustomer ? (
+              <Link
+                href={query.trim() ? `/admin/invoices?q=${encodeURIComponent(query.trim())}` : "/admin/invoices"}
+                className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              >
+                Search workspace
+              </Link>
+            ) : (
+              <button
+                type="submit"
+                disabled={pending}
+                className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              >
+                {pending ? "Searching…" : "Run search"}
+              </button>
+            )}
+            {!scopedToCustomer && search.trim() ? (
               <Link
                 href={invoicesHref({ page: 1, limit })}
                 className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -329,46 +460,66 @@ export function InvoicesTableClient({
         </form>
 
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="whitespace-nowrap">Rows</span>
-            <select
-              value={limitSelectValue}
-              onChange={(e) => {
-                const next = parseInt(e.target.value, 10);
-                startTransition(() => {
-                  router.push(invoicesHref({ page: 1, search, limit: next }));
-                });
-              }}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+          {!scopedToCustomer ? (
+            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <span className="whitespace-nowrap">Rows</span>
+              <select
+                value={limitSelectValue}
+                onChange={(e) => {
+                  const next = parseInt(e.target.value, 10);
+                  startTransition(() => {
+                    router.push(invoicesHref({ page: 1, search, limit: next }));
+                  });
+                }}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+              >
+                {PAGE_LIMITS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
+            <Link
+              href="/admin/invoices/new"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400"
             >
-              {PAGE_LIMITS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-          <a
-            href={invoilessDashboardUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400"
-          >
-            <span className="text-lg leading-none">+</span>
-            New invoice
-          </a>
+              <span className="text-lg leading-none">+</span>
+              New invoice
+            </Link>
+            <a
+              href={invoilessDashboardUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-center text-xs font-medium text-zinc-500 underline-offset-2 hover:text-zinc-700 hover:underline dark:text-zinc-400 dark:hover:text-zinc-300 sm:text-right"
+            >
+              Open in Invoiless app
+            </a>
+          </div>
         </div>
       </div>
 
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        <span className="font-medium text-zinc-600 dark:text-zinc-300">Tip:</span> Run search sends your text to
-        Invoiless (number, client name, tags). The field above also filters loaded rows in your browser.
-        {search.trim() ? (
+        {scopedToCustomer ? (
           <>
-            {" "}
-            Active API filter: <span className="font-mono text-zinc-700 dark:text-zinc-300">“{search.trim()}”</span>
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">Tip:</span> The search field filters this
+            table in your browser only. Use <span className="font-medium">Search workspace</span> to query all invoices
+            via Invoiless.
           </>
-        ) : null}
+        ) : (
+          <>
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">Tip:</span> Run search sends your text to
+            Invoiless (number, client name, tags). The field above also filters loaded rows in your browser.
+            {search.trim() ? (
+              <>
+                {" "}
+                Active API filter: <span className="font-mono text-zinc-700 dark:text-zinc-300">“{search.trim()}”</span>
+              </>
+            ) : null}
+          </>
+        )}
       </p>
 
       <section className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -388,7 +539,7 @@ export function InvoicesTableClient({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[820px] text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-100 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
                 <th className="px-4 py-3 font-medium">Number</th>
@@ -409,8 +560,14 @@ export function InvoicesTableClient({
                 </tr>
               ) : (
                 filtered.map((r) => {
-                  const tl =
-                    r.customerInvoilessId != null ? tlCustomerByInvoilessId[r.customerInvoilessId] : undefined;
+                  const em = r.billToEmail?.trim().toLowerCase();
+                  const tl = scopedToCustomer
+                    ? { portalId: scopedToCustomer.portalId, name: scopedToCustomer.name }
+                    : r.customerInvoilessId != null
+                      ? tlCustomerByInvoilessId[r.customerInvoilessId]
+                      : em
+                        ? tlCustomerByEmail[em]
+                        : undefined;
                   const displayNum = r.number?.trim() || r.id;
                   return (
                     <tr
@@ -450,20 +607,90 @@ export function InvoicesTableClient({
                         {formatMoney(r.total, r.currency)}
                       </td>
                       <td className="px-4 py-3.5 align-middle text-right">
-                        {r.previewUrl ? (
-                          <a
-                            href={r.previewUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-                            title={r.id}
-                          >
-                            View
-                            <IconOutLink className="opacity-70" />
-                          </a>
-                        ) : (
-                          <span className="text-zinc-400">—</span>
-                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {invoilessConfigured ? (
+                            <Link
+                              href={`/admin/invoices/${encodeURIComponent(r.id)}/edit`}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                              title={`Edit invoice ${displayNum}`}
+                            >
+                              Edit
+                              <IconPenLine className="h-3.5 w-3.5 opacity-70" />
+                            </Link>
+                          ) : null}
+                          {r.previewUrl ? (
+                            <>
+                              <a
+                                href={r.previewUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                                title={r.id}
+                              >
+                                View
+                                <IconOutLink className="opacity-70" />
+                              </a>
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenShareMenuId((x) => (x === r.id ? null : r.id));
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                  title="Email or copy invoice link"
+                                  aria-label={`Share invoice ${displayNum}`}
+                                  aria-expanded={openShareMenuId === r.id}
+                                  aria-haspopup="true"
+                                >
+                                  {copyFeedbackId === r.id ? "Copied" : "Share"}
+                                  <IconShare className="opacity-80" />
+                                </button>
+                                {openShareMenuId === r.id ? (
+                                  <div
+                                    role="menu"
+                                    className="absolute right-0 top-full z-50 mt-1 min-w-[13.5rem] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                  >
+                                    <a
+                                      role="menuitem"
+                                      href={buildInvoiceMailtoHref(r.previewUrl, displayNum, r.billToEmail)}
+                                      className="block px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                      onClick={() => setOpenShareMenuId(null)}
+                                    >
+                                      <span className="font-medium">Email invoice…</span>
+                                      <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                                        {r.billToEmail?.trim()
+                                          ? `Opens mail to ${r.billToEmail.trim()}`
+                                          : "Opens mail — add To: (inbox in TL not wired yet)"}
+                                      </span>
+                                    </a>
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      className="w-full px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                      onClick={() => {
+                                        void copyInvoiceLink(r.id, r.previewUrl!);
+                                        setOpenShareMenuId(null);
+                                      }}
+                                    >
+                                      <span className="font-medium">Copy link</span>
+                                      <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                                        Public invoice URL
+                                      </span>
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                              <InvoiceDeleteForm invoiceId={r.id} displayNum={displayNum} />
+                            </>
+                          ) : invoilessConfigured ? (
+                            <InvoiceDeleteForm invoiceId={r.id} displayNum={displayNum} />
+                          ) : (
+                            <span className="text-zinc-400">—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -482,7 +709,12 @@ export function InvoicesTableClient({
             <div className="flex gap-2">
               {page > 1 ? (
                 <Link
-                  href={invoicesHref({ page: page - 1, search, limit })}
+                  href={invoicesHref({
+                    page: page - 1,
+                    search,
+                    limit,
+                    customer: scopedToCustomer?.portalId,
+                  })}
                   className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
                   Previous
@@ -490,7 +722,12 @@ export function InvoicesTableClient({
               ) : null}
               {page < totalPages ? (
                 <Link
-                  href={invoicesHref({ page: page + 1, search, limit })}
+                  href={invoicesHref({
+                    page: page + 1,
+                    search,
+                    limit,
+                    customer: scopedToCustomer?.portalId,
+                  })}
                   className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
                   Next

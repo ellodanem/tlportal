@@ -39,3 +39,44 @@ export async function fetchSimsAvailableForDeviceLink(): Promise<UnlinkedSimRow[
     select: { id: true, iccid: true, label: true, msisdn: true },
   });
 }
+
+/**
+ * SIMs safe to link when swapping the card on an existing device: excludes only *other*
+ * devices and *other* open assignments, so the current device's SIM stays selectable.
+ */
+export async function fetchSimsAvailableForDeviceSwap(deviceId: string): Promise<UnlinkedSimRow[]> {
+  const [deviceLinked, assignmentLinked] = await Promise.all([
+    prisma.device.findMany({
+      where: { simCardId: { not: null }, id: { not: deviceId } },
+      select: { simCardId: true },
+    }),
+    prisma.serviceAssignment.findMany({
+      where: {
+        endDate: null,
+        status: { not: "cancelled" },
+        simCardId: { not: null },
+        deviceId: { not: deviceId },
+      },
+      select: { simCardId: true },
+    }),
+  ]);
+
+  const busy = new Set<string>();
+  for (const d of deviceLinked) {
+    if (d.simCardId) {
+      busy.add(d.simCardId);
+    }
+  }
+  for (const a of assignmentLinked) {
+    if (a.simCardId) {
+      busy.add(a.simCardId);
+    }
+  }
+
+  const busyIds = [...busy];
+  return prisma.simCard.findMany({
+    where: busyIds.length > 0 ? { id: { notIn: busyIds } } : {},
+    orderBy: { iccid: "asc" },
+    select: { id: true, iccid: true, label: true, msisdn: true },
+  });
+}

@@ -1,4 +1,4 @@
-import { InvoilessConfigError, invoilessJson } from "@/lib/invoiless/client";
+import { clampInvoilessListLimit, InvoilessConfigError, invoilessJson } from "@/lib/invoiless/client";
 
 export const runtime = "nodejs";
 
@@ -9,7 +9,13 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const qs = url.searchParams.toString();
+    const params = url.searchParams;
+    const limRaw = params.get("limit");
+    if (limRaw != null) {
+      const n = parseInt(limRaw, 10);
+      params.set("limit", String(clampInvoilessListLimit(Number.isFinite(n) ? n : null)));
+    }
+    const qs = params.toString();
     const path = qs ? `/invoices?${qs}` : "/invoices";
     const data = await invoilessJson<unknown>(path);
     return Response.json({ source: "invoiless", data });

@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 
 import { DeviceAssignToCustomerForm } from "@/components/admin/device-assign-customer-form";
 import { DeviceCommercialEditForm } from "@/components/admin/device-commercial-edit-form";
+import { DeviceSimEditSection } from "@/components/admin/device-sim-edit-section";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-service-assignment-edit-form";
 import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
+import { fetchSimsAvailableForDeviceSwap } from "@/lib/admin/sims-available-for-device";
 import { prisma } from "@/lib/db";
 
 type Props = { params: Promise<{ id: string }> };
@@ -20,10 +22,10 @@ function dateInputValue(d: Date | null | undefined): string {
 
 export default async function EditDeviceCommercialPage({ params }: Props) {
   const { id } = await params;
-  const [device, customerRows, openAssignment] = await Promise.all([
+  const [device, customerRows, openAssignment, simsForSwap] = await Promise.all([
     prisma.device.findUnique({
       where: { id },
-      include: { deviceModel: true },
+      include: { deviceModel: true, simCard: true },
     }),
     prisma.customer.findMany({
       orderBy: [{ company: "asc" }, { lastName: "asc" }],
@@ -46,6 +48,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
         },
       },
     }),
+    fetchSimsAvailableForDeviceSwap(id),
   ]);
 
   if (!device) {
@@ -104,6 +107,22 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
           ) : null}
         </section>
       ) : null}
+
+      <DeviceSimEditSection
+        deviceId={device.id}
+        canEditSim={device.status !== "decommissioned" && device.status !== "lost"}
+        currentSim={
+          device.simCard
+            ? {
+                id: device.simCard.id,
+                iccid: device.simCard.iccid,
+                msisdn: device.simCard.msisdn,
+                label: device.simCard.label,
+              }
+            : null
+        }
+        swapSims={simsForSwap}
+      />
 
       <section
         id="assign-customer"

@@ -1,5 +1,22 @@
 const BASE = "https://api.invoiless.com/v1";
 
+/** Invoiless list APIs return 400 if `limit` is below this (e.g. GET /v1/invoices). */
+export const INVOILESS_LIST_LIMIT_MIN = 10;
+
+/** Clamp page size for Invoiless list endpoints (min 10, max 100 by default). */
+export function clampInvoilessListLimit(
+  limit: number | undefined | null,
+  fallback = 50,
+  max = 100,
+): number {
+  const raw = limit == null ? fallback : Number(limit);
+  const x = Math.floor(raw);
+  if (!Number.isFinite(x)) {
+    return Math.min(max, Math.max(INVOILESS_LIST_LIMIT_MIN, fallback));
+  }
+  return Math.min(max, Math.max(INVOILESS_LIST_LIMIT_MIN, x));
+}
+
 export class InvoilessConfigError extends Error {
   constructor(message = "INVOILESS_API_KEY is not set") {
     super(message);

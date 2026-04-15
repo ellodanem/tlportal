@@ -82,9 +82,14 @@ export default async function CustomerDetailPage({ params }: Props) {
   let recentInvoices: Awaited<ReturnType<typeof fetchInvoicesForInvoilessCustomerId>> = [];
   if (invoilessApi && customer.invoilessCustomerId) {
     try {
+      const hints = [name, customer.email?.trim()].filter(Boolean) as string[];
       recentInvoices = await fetchInvoicesForInvoilessCustomerId(customer.invoilessCustomerId, {
-        maxInvoices: 10,
-        maxPages: 4,
+        maxInvoices: 15,
+        searchHints: hints,
+        matchEmails: customer.email?.trim() ? [customer.email.trim()] : [],
+        matchPhones: customer.phone?.trim() ? [customer.phone.trim()] : [],
+        maxPagesPerSearchTerm: 4,
+        fallbackScanMaxPages: 6,
       });
     } catch {
       recentInvoices = [];
@@ -217,17 +222,22 @@ export default async function CustomerDetailPage({ params }: Props) {
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recent invoices (Invoiless)</h2>
             <Link
-              href="/admin/invoices"
+              href={`/admin/invoices?customer=${customer.id}`}
               className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
             >
-              All invoices
+              All invoices for this customer
             </Link>
           </div>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Pulled from your latest Invoiless pages and matched to this linked customer. Open the full list to search.
+            Pulled from Invoiless on each page load. Rows match the linked Invoiless customer id, or the same bill-to
+            email as this profile (in case the invoice was created against another Invoiless customer record). Open the
+            full list for up to 100 rows or use workspace search from there.
           </p>
           {recentInvoices.length === 0 ? (
-            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">No matching invoices found in recent pages.</p>
+            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+              No matching invoices yet. Confirm invoices in Invoiless use this same customer (the one TL sync created or
+              linked), then refresh. You can also open the full customer invoice list to pull a broader search.
+            </p>
           ) : (
             <ul className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">
               {recentInvoices.map((inv) => (

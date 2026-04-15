@@ -7,7 +7,17 @@ import { type UnlinkedSimRow, filterUnlinkedSims } from "@/lib/admin/unlinked-si
 const inputClass =
   "w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
 
-export function UnlinkedSimPicker({ sims }: { sims: UnlinkedSimRow[] }) {
+const defaultAvailabilityHint =
+  "Only SIMs not already on a device (or an open service) are listed. Type to narrow, click a row to link, or leave unset for no SIM.";
+
+export function UnlinkedSimPicker({
+  sims,
+  availabilityHint = defaultAvailabilityHint,
+}: {
+  sims: UnlinkedSimRow[];
+  /** Replaces the default explanation under the filter field (e.g. swap vs new device). */
+  availabilityHint?: string;
+}) {
   const listId = useId();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -71,8 +81,7 @@ export function UnlinkedSimPicker({ sims }: { sims: UnlinkedSimRow[] }) {
           aria-describedby={`${listId}-hint`}
         />
         <p id={`${listId}-hint`} className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Only SIMs not already on a device (or an open service) are listed. Type to narrow, click a row to link, or leave
-          unset for no SIM.
+          {availabilityHint}
         </p>
       </div>
 
