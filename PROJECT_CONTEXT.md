@@ -1223,3 +1223,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - **Committed asset:** `public/uploads/proposals/static/platform-at-a-glance.png` (dashboard screenshot; replace file to update art).
 - **Export behavior:** `lib/proposals/proposal-static-visuals.ts` maps title **Platform at a glance** (case-insensitive) to that path; PDF and DOCX routes use `effectiveVisualImageUrlForExport()` so this **overrides** DB `imageUrl` for that section.
 
+
+### 2026-04-15 11:14 UTC — commit `dcda859`
+
+- feat: device list copy controls; proposal PDFs and static visuals
+
+
+### 2026-04-15 11:14 UTC — pre-push (`main` → origin) @ `dcda859`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
