@@ -1263,3 +1263,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-16 16:45 UTC — commit `5482ca3`
+
+- feat(admin): billing terms, device names, Invoiless retainers, renewal doc
+
+
+### 2026-04-16 16:45 UTC — pre-push (`main` → origin) @ `5482ca3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
