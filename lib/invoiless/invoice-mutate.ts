@@ -116,6 +116,8 @@ function toDateInputValue(iso: unknown): string {
   return d.toISOString().slice(0, 10);
 }
 
+export type InvoilessInvoiceScheduleKind = "standard" | "retainer";
+
 export type InvoilessInvoiceForEdit = {
   id: string;
   /** Invoice number for display when present */
@@ -128,6 +130,7 @@ export type InvoilessInvoiceForEdit = {
   invoiceDateInput: string;
   dueDateInput: string;
   isRetainer: boolean;
+  isRecurring: boolean;
 };
 
 /**
@@ -173,6 +176,11 @@ export async function fetchInvoilessInvoiceForEdit(invoiceId: string): Promise<I
     root.dueDate ?? root.due_date ?? root.due ?? root.paymentDueDate ?? root.payment_due_date;
   const dueDateInput = toDateInputValue(dueRaw);
   const isRetainer = root.isRetainer === true || root.isRetainer === "true";
+  const isRecurring =
+    root.isRecurring === true ||
+    root.isRecurring === "true" ||
+    root.makeRecurring === true ||
+    root.makeRecurring === "true";
 
   return {
     id: invId,
@@ -184,6 +192,7 @@ export async function fetchInvoilessInvoiceForEdit(invoiceId: string): Promise<I
     invoiceDateInput,
     dueDateInput,
     isRetainer,
+    isRecurring,
   };
 }
 
@@ -210,7 +219,8 @@ function mapItemsForApi(items: CreateInvoilessInvoiceItem[]) {
 }
 
 /**
- * PATCH /v1/invoices/:id — partial update (line items, status, notes, due date, retainer flag).
+ * PATCH /v1/invoices/:id — partial update (line items, status, notes, due date).
+ * `isRetainer` / recurring flags are omitted: Invoiless returns 403 if `isRetainer` is sent after create.
  */
 export async function updateInvoilessInvoiceApi(params: {
   invoiceId: string;
@@ -222,7 +232,6 @@ export async function updateInvoilessInvoiceApi(params: {
   /** Invoice issue date (YYYY-MM-DD from form); required for Joi `dueDate` vs `date` rules. */
   invoiceDate?: string | null;
   dueDate?: string | null;
-  isRetainer?: boolean;
 }): Promise<void> {
   const invoiceId = params.invoiceId.trim();
   if (!invoiceId) {
@@ -240,7 +249,6 @@ export async function updateInvoilessInvoiceApi(params: {
     items,
     status: (params.status?.trim() || "Draft") as string,
     notes: params.notes != null ? params.notes.trim().slice(0, 1000) : "",
-    isRetainer: params.isRetainer === true,
     date: issueYmd,
     dueDate: dueYmd,
   };
@@ -300,6 +308,9 @@ function parseCreateInvoiceResponse(body: unknown): { id: string; url: string } 
 
 /**
  * POST /v1/invoices — create invoice with an existing Invoiless customer id (string form per API docs).
+ *
+ * Note: Public Invoiless docs only list `isRetainer` as a special type on this endpoint; recurring (“Make recurring”)
+ * is not accepted here (`isRecurring` returns validation “not allowed”). Set up recurring in the Invoiless app instead.
  */
 export async function createInvoilessInvoiceApi(params: {
   invoilessCustomerId: string;
@@ -310,7 +321,8 @@ export async function createInvoilessInvoiceApi(params: {
   /** Invoice issue date; defaults to today (UTC) so `dueDate` validation can reference `date`. */
   invoiceDate?: string | null;
   dueDate?: string | null;
-  isRetainer?: boolean;
+  /** Standard one-off invoice vs Invoiless retainer (`isRetainer`). */
+  scheduleType?: InvoilessInvoiceScheduleKind;
 }): Promise<{ id: string; url: string }> {
   const cid = params.invoilessCustomerId.trim();
   if (!cid) {
@@ -323,6 +335,7 @@ export async function createInvoilessInvoiceApi(params: {
 
   const issueYmd = userDateInputToYmd(params.invoiceDate) ?? todayYmdUtc();
   const dueYmd = userDateInputToYmd(params.dueDate);
+  const schedule = params.scheduleType ?? "standard";
 
   const body: Record<string, unknown> = {
     customer: cid,
@@ -334,11 +347,16 @@ export async function createInvoilessInvoiceApi(params: {
   if (params.notes?.trim()) {
     body.notes = params.notes.trim().slice(0, 1000);
   }
-  if (dueYmd) {
-    body.dueDate = dueYmd;
-  }
-  if (params.isRetainer) {
+
+  if (schedule === "retainer") {
     body.isRetainer = true;
+    if (dueYmd) {
+      body.dueDate = dueYmd;
+    }
+  } else {
+    if (dueYmd) {
+      body.dueDate = dueYmd;
+    }
   }
 
   const res = await invoilessFetch("/invoices", {

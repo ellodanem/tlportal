@@ -34,6 +34,7 @@ export function InvoiceEditForm({
   initialDueDate,
   initialNotes,
   initialIsRetainer,
+  initialIsRecurring,
 }: {
   invoiceId: string;
   invoilessCustomerId: string;
@@ -45,6 +46,7 @@ export function InvoiceEditForm({
   initialDueDate: string;
   initialNotes: string;
   initialIsRetainer: boolean;
+  initialIsRecurring: boolean;
 }) {
   const [state, formAction] = useActionState(updateInvoiceFromPortal, invoiceCreateInitialState);
   const lineIdRef = useRef(0);
@@ -66,11 +68,27 @@ export function InvoiceEditForm({
       <input type="hidden" name="invoilessCustomerId" value={invoilessCustomerId} />
       <input type="hidden" name="invoiceDate" value={initialInvoiceDate} />
 
-      <div>
+           <div>
         <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Customer</p>
         <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">{customerLabel}</p>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
           Customer is stored in Invoiless; change it there or re-link in TL if needed.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/50">
+        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Billing type</p>
+        <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
+          {initialIsRecurring
+            ? "Recurring (Invoiless automation)"
+            : initialIsRetainer
+              ? "Retainer (prepaid / budget)"
+              : "Standard"}
+        </p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Retainer / recurring template flags cannot be changed from TL after creation (Invoiless API). Adjust in the
+          Invoiless app if needed. New recurring schedules are created in their Invoice Builder, not via{" "}
+          <code className="rounded bg-zinc-100 px-0.5 dark:bg-zinc-800">POST /v1/invoices</code>.
         </p>
       </div>
 
@@ -207,23 +225,6 @@ export function InvoiceEditForm({
           className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
         />
       </div>
-
-      <label className="flex cursor-pointer items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-        <input
-          type="checkbox"
-          name="isRetainer"
-          value="true"
-          defaultChecked={initialIsRetainer}
-          className="mt-1 rounded border-zinc-300"
-        />
-        <span>
-          <span className="font-medium">Retainer / recurring (Invoiless)</span>
-          <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
-            Sets <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">isRetainer</code> on the invoice per
-            Invoiless API.
-          </span>
-        </span>
-      </label>
 
       {state.error ? (
         <p

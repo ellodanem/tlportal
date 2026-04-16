@@ -6,6 +6,7 @@ import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { prisma } from "@/lib/db";
 import { buildInvoilessBillToAddress } from "@/lib/invoiless/customer-sync";
 import { fetchInvoicesForInvoilessCustomerId, isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
+import { formatPlanTerm } from "@/lib/subscription-options/display";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -326,6 +327,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                   <th className="px-4 py-3">Device</th>
                   <th className="px-4 py-3">SIM</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Term</th>
                   <th className="px-4 py-3">Billing</th>
                   <th className="px-4 py-3">Next due</th>
                   <th className="px-4 py-3">Started</th>
@@ -391,6 +393,9 @@ export default async function CustomerDetailPage({ params }: Props) {
                         )}
                       </td>
                       <td className="px-4 py-3">{statusPill(a.status)}</td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                        {a.intervalMonths != null ? formatPlanTerm(a.intervalMonths) : "—"}
+                      </td>
                       <td className="px-4 py-3">
                         {a.invoilessRecurringId ? (
                           <span

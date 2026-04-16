@@ -141,6 +141,64 @@ export function InvoiceCreateForm({ customers }: { customers: InvoiceCreateCusto
         </button>
       </fieldset>
 
+      <fieldset className="min-w-0 border-0 p-0">
+        <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Billing type</legend>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <strong className="font-medium text-zinc-600 dark:text-zinc-300">Retainer</strong> uses Invoiless prepayment /
+          budget invoices (Invoices → Retainers). That is separate from{" "}
+          <strong className="font-medium text-zinc-600 dark:text-zinc-300">recurring</strong> automation (Invoices →
+          Recurring).
+        </p>
+        <div className="mt-3 flex flex-col gap-2.5 text-sm text-zinc-800 dark:text-zinc-200">
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="radio"
+              name="invoiceScheduleType"
+              value="standard"
+              defaultChecked
+              className="mt-1 border-zinc-300"
+            />
+            <span>
+              <span className="font-medium">Standard</span>
+              <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                One-off invoice; optional calendar due date below.
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2">
+            <input type="radio" name="invoiceScheduleType" value="retainer" className="mt-1 border-zinc-300" />
+            <span>
+              <span className="font-medium">Retainer</span>
+              <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                Sets <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">isRetainer</code> on create (Invoiless
+                API).
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div className="rounded-xl border border-sky-200/90 bg-sky-50/50 p-4 text-sm dark:border-sky-900/40 dark:bg-sky-950/25">
+        <p className="font-medium text-zinc-800 dark:text-zinc-200">Recurring invoices</p>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+          Invoiless rejects <code className="rounded bg-white px-1 dark:bg-zinc-900">isRecurring</code> on{" "}
+          <code className="rounded bg-white px-1 dark:bg-zinc-900">POST /v1/invoices</code> (their public schema only
+          lists recurring setup in the app). Use{" "}
+          <strong className="font-medium text-zinc-700 dark:text-zinc-300">Make recurring</strong> in the Invoiless
+          Invoice Builder for schedules, due offset, and frequency.
+        </p>
+        <p className="mt-2">
+          <a
+            href="https://app.invoiless.com/invoices/create"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-semibold text-sky-800 underline underline-offset-2 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200"
+          >
+            Open Invoiless Invoice Builder →
+          </a>
+        </p>
+      </div>
+
       <div>
         <label htmlFor="status" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Status in Invoiless
@@ -181,17 +239,6 @@ export function InvoiceCreateForm({ customers }: { customers: InvoiceCreateCusto
           className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
         />
       </div>
-
-      <label className="flex cursor-pointer items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-        <input type="checkbox" name="isRetainer" value="true" className="mt-1 rounded border-zinc-300" />
-        <span>
-          <span className="font-medium">Retainer / recurring (Invoiless)</span>
-          <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
-            Sets <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">isRetainer</code> on the invoice per
-            Invoiless API.
-          </span>
-        </span>
-      </label>
 
       {state.error ? (
         <p

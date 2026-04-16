@@ -40,6 +40,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
       select: {
         id: true,
         customerId: true,
+        intervalMonths: true,
         startDate: true,
         nextDueDate: true,
         invoilessRecurringId: true,
@@ -91,12 +92,13 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
             >
               {customerDisplayName(openAssignment.customer)}
             </Link>
-            . Adjust billing dates for this assignment below.
+            . Set billing term and dates for this assignment below.
           </p>
           <div className="mt-4">
             <DeviceServiceAssignmentEditForm
               deviceId={device.id}
               assignmentId={openAssignment.id}
+              defaultIntervalMonths={openAssignment.intervalMonths}
               defaultStartDate={dateInputValue(openAssignment.startDate)}
               defaultNextDueDate={dateInputValue(openAssignment.nextDueDate)}
               defaultInvoilessRecurringId={openAssignment.invoilessRecurringId ?? ""}
@@ -152,14 +154,15 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
       </section>
 
       <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Purpose &amp; tags</h2>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Device name, purpose &amp; tags</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Commercial classification and labels for search and reporting.
+          Friendly name, commercial classification, and labels for search and reporting.
         </p>
         <div className="mt-4">
           <DeviceCommercialEditForm
             key={device.updatedAt.toISOString()}
             deviceId={device.id}
+            defaultLabel={device.label ?? ""}
             objectType={device.objectType}
             usagePurpose={device.usagePurpose}
             tags={device.tags}

@@ -575,10 +575,19 @@ export function InvoicesTableClient({
                       className="border-b border-zinc-50 transition last:border-b-0 hover:bg-zinc-50/70 dark:border-zinc-800/80 dark:hover:bg-zinc-950/50"
                     >
                       <td className="px-4 py-3.5 align-middle">
-                        <span className="text-xs text-zinc-400 dark:text-zinc-500">#</span>
-                        <span className="font-mono text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                          {displayNum}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span>
+                            <span className="text-xs text-zinc-400 dark:text-zinc-500">#</span>
+                            <span className="font-mono text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                              {displayNum}
+                            </span>
+                          </span>
+                          {r.isRetainer ? (
+                            <span className="inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-900 dark:bg-sky-950/60 dark:text-sky-200">
+                              Retainer
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="max-w-[14rem] px-4 py-3.5 align-middle text-zinc-800 dark:text-zinc-200">
                         {tl ? (

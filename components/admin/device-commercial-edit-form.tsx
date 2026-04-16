@@ -39,11 +39,14 @@ function SubmitButton() {
 
 export function DeviceCommercialEditForm({
   deviceId,
+  defaultLabel,
   objectType,
   usagePurpose,
   tags,
 }: {
   deviceId: string;
+  /** Friendly name in lists (maps to `Device.label`). */
+  defaultLabel: string;
   objectType: DeviceObjectType | null;
   usagePurpose: DeviceUsagePurpose;
   tags: string[];
@@ -54,6 +57,24 @@ export function DeviceCommercialEditForm({
   return (
     <form action={formAction} className="max-w-2xl space-y-6">
       <input type="hidden" name="deviceId" value={deviceId} />
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="device-label">
+          Device name
+        </label>
+        <input
+          id="device-label"
+          name="label"
+          type="text"
+          defaultValue={defaultLabel}
+          placeholder="e.g. TJ2756 - Changan"
+          autoComplete="off"
+          className={inputClass}
+        />
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Shown in the devices list and customer views. Leave blank to show only IMEI.
+        </p>
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="objectType">

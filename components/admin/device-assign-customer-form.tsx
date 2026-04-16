@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { assignDeviceToCustomer } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { formatPlanTerm, SUBSCRIPTION_PLAN_MONTHS } from "@/lib/subscription-options/display";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
@@ -84,6 +85,21 @@ export function DeviceAssignToCustomerForm({
         </label>
         <input id="assign-startDate" name="startDate" type="date" className={inputClass} />
         <p className="mt-1 text-xs text-zinc-500">Optional.</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="assign-intervalMonths">
+          Billing term
+        </label>
+        <select id="assign-intervalMonths" name="intervalMonths" defaultValue="" className={inputClass}>
+          <option value="">Not set (add later on Manage device)</option>
+          {SUBSCRIPTION_PLAN_MONTHS.map((m) => (
+            <option key={m} value={String(m)}>
+              {formatPlanTerm(m)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-zinc-500">How often this device renews. You can change it anytime under Manage device.</p>
       </div>
 
       <SubmitButton disabled={noCustomers} />

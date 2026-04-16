@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import { updateServiceAssignmentDates } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { formatPlanTerm, SUBSCRIPTION_PLAN_MONTHS } from "@/lib/subscription-options/display";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
@@ -25,12 +26,15 @@ function SubmitButton() {
 export function DeviceServiceAssignmentEditForm({
   deviceId,
   assignmentId,
+  defaultIntervalMonths,
   defaultStartDate,
   defaultNextDueDate,
   defaultInvoilessRecurringId,
 }: {
   deviceId: string;
   assignmentId: string;
+  /** null = not set in DB */
+  defaultIntervalMonths: number | null;
   defaultStartDate: string;
   defaultNextDueDate: string;
   defaultInvoilessRecurringId: string;
@@ -50,6 +54,28 @@ export function DeviceServiceAssignmentEditForm({
           {state.error}
         </p>
       ) : null}
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="svc-intervalMonths">
+          Billing term
+        </label>
+        <select
+          id="svc-intervalMonths"
+          name="intervalMonths"
+          defaultValue={defaultIntervalMonths == null ? "" : String(defaultIntervalMonths)}
+          className={inputClass}
+        >
+          <option value="">Not set</option>
+          {SUBSCRIPTION_PLAN_MONTHS.map((m) => (
+            <option key={m} value={String(m)}>
+              {formatPlanTerm(m)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-zinc-500">
+          How often this device renews (1 / 3 / 6 / 12 months). You can set this before start and next-due dates.
+        </p>
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="svc-startDate">

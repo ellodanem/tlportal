@@ -1253,3 +1253,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-15 17:26 UTC — commit `8c0701c`
+
+- feat(admin): Invoiless invoices in TL Portal and device SIM workflows
+
+
+### 2026-04-15 17:26 UTC — pre-push (`main` → origin) @ `8c0701c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

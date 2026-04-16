@@ -83,6 +83,7 @@ export default async function EditInvoicePage({ params }: Props) {
           initialDueDate={data.dueDateInput}
           initialNotes={data.notes}
           initialIsRetainer={data.isRetainer}
+          initialIsRecurring={data.isRecurring}
         />
       )}
 

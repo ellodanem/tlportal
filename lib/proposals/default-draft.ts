@@ -21,6 +21,11 @@ Payment
 
 ---
 
+Contract commitment
+• For a project of this scale, a signed contract with a twelve (12) month minimum commitment is required; the commitment period begins once eighty percent (80%) of the contracted devices are installed and reporting.
+
+---
+
 Delivery and go-live
 • Hardware shipment or staging dates depend on stock and import lead times; we will confirm a window after order acceptance.
 • Service activation (SIM / data / portal access) is coordinated with installation or as soon as devices report in.

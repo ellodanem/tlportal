@@ -118,9 +118,10 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Invoices</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Read-only mirror of Invoiless. Build and send invoices there; use this view to scan status, totals, and jump
-          to customers linked in TL Portal. Invoice rows attach to those customers automatically by Invoiless customer
-          id — nothing is linked per invoice.
+          Read-only mirror of Invoiless. Lists both standard invoices and retainers (Invoiless keeps retainers on a
+          separate screen, but the API exposes them to TL). Build and send there; use this view to scan status, totals,
+          and jump to customers linked in TL Portal. Rows attach by Invoiless customer id — nothing is linked per
+          invoice in TL.
         </p>
       </div>
 

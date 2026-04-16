@@ -10,6 +10,7 @@ import {
   createInvoilessInvoiceApi,
   deleteInvoilessInvoiceApi,
   updateInvoilessInvoiceApi,
+  type InvoilessInvoiceScheduleKind,
 } from "@/lib/invoiless/invoice-mutate";
 import { parseLineItemsFromFormData } from "@/lib/invoiless/invoice-line-items";
 import { prisma } from "@/lib/db";
@@ -57,7 +58,8 @@ export async function createInvoiceFromPortal(
   const status = String(formData.get("status") ?? "Draft").trim() || "Draft";
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const dueDateRaw = String(formData.get("dueDate") ?? "").trim() || null;
-  const isRetainer = formData.get("isRetainer") === "on" || formData.get("isRetainer") === "true";
+  const scheduleRaw = String(formData.get("invoiceScheduleType") ?? "standard").trim();
+  const scheduleType: InvoilessInvoiceScheduleKind = scheduleRaw === "retainer" ? "retainer" : "standard";
 
   try {
     await createInvoilessInvoiceApi({
@@ -66,7 +68,7 @@ export async function createInvoiceFromPortal(
       status,
       notes,
       dueDate: dueDateRaw,
-      isRetainer,
+      scheduleType,
     });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create invoice in Invoiless." };
@@ -108,7 +110,6 @@ export async function updateInvoiceFromPortal(
   const status = String(formData.get("status") ?? "Draft").trim() || "Draft";
   const notes = String(formData.get("notes") ?? "").trim();
   const dueDateRaw = String(formData.get("dueDate") ?? "").trim() || null;
-  const isRetainer = formData.get("isRetainer") === "on" || formData.get("isRetainer") === "true";
   const invoilessCustomerId = String(formData.get("invoilessCustomerId") ?? "").trim() || null;
 
   const invoiceDateRaw = String(formData.get("invoiceDate") ?? "").trim() || null;
@@ -122,7 +123,6 @@ export async function updateInvoiceFromPortal(
       notes,
       invoiceDate: invoiceDateRaw,
       dueDate: dueDateRaw,
-      isRetainer,
     });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update invoice in Invoiless." };

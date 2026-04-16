@@ -18,6 +18,7 @@ import {
 } from "@/lib/nce/sim-api";
 import { resolveSimUsageRangeFromQuery } from "@/lib/nce/sim-usage-range";
 import { prisma } from "@/lib/db";
+import { formatPlanTerm } from "@/lib/subscription-options/display";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -302,6 +303,17 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
                       {assignmentStatusPill(a.status)}
                     </div>
                     <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{dev}</p>
+                    <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                      <span className="font-medium text-zinc-700 dark:text-zinc-300">Term:</span>{" "}
+                      {a.intervalMonths != null ? formatPlanTerm(a.intervalMonths) : "—"}
+                      {" · "}
+                      <Link
+                        href={`/admin/devices/${a.device.id}/edit#active-service`}
+                        className="font-medium text-emerald-800 hover:underline dark:text-emerald-300"
+                      >
+                        Billing &amp; dates
+                      </Link>
+                    </p>
                     <p className="mt-1 font-mono text-[10px] text-zinc-400">{a.id}</p>
                   </li>
                 );

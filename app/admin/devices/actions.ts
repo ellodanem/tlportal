@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth/get-session";
 import { parseDeviceObjectType } from "@/lib/admin/device-object-type";
 import { parseDeviceTagsInput, parseDeviceUsagePurpose } from "@/lib/admin/device-usage-purpose";
 import { prisma } from "@/lib/db";
+import { parseSubscriptionIntervalMonths } from "@/lib/subscription-options/display";
 
 import type { DeviceFormActionState } from "./device-form-state";
 
@@ -104,6 +105,7 @@ export async function registerDevice(
   const customerId = customerIdRaw.length ? customerIdRaw : null;
 
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
+  const intervalRaw = String(formData.get("intervalMonths") ?? "");
 
   if (!deviceModelId) {
     return { error: "Select a device model." };
@@ -120,6 +122,12 @@ export async function registerDevice(
     }
     startDate = d;
   }
+
+  const intervalParsed = parseSubscriptionIntervalMonths(intervalRaw);
+  if (!intervalParsed.ok) {
+    return { error: intervalParsed.error };
+  }
+  const intervalMonths = customerId ? intervalParsed.value : null;
 
   const model = await prisma.deviceModel.findFirst({
     where: { id: deviceModelId, isActive: true },
@@ -173,6 +181,7 @@ export async function registerDevice(
             customerId,
             deviceId: device.id,
             startDate,
+            intervalMonths,
             status: "active",
             simCardId,
           },
@@ -209,6 +218,7 @@ export async function updateDeviceCommercialFields(
     return { error: "Missing device id." };
   }
 
+  const label = parseOptionalString(formData, "label");
   const usagePurpose = parseDeviceUsagePurpose(String(formData.get("usagePurpose") ?? ""));
   const objectType = parseDeviceObjectType(String(formData.get("objectType") ?? ""));
   const tags = parseDeviceTagsInput(String(formData.get("tags") ?? ""));
@@ -216,7 +226,7 @@ export async function updateDeviceCommercialFields(
   try {
     const updated = await prisma.device.update({
       where: { id: deviceId },
-      data: { usagePurpose, objectType, tags },
+      data: { label, usagePurpose, objectType, tags },
       select: { id: true, simCardId: true },
     });
     if (updated.simCardId) {
@@ -260,6 +270,7 @@ export async function assignDeviceToCustomer(
   const deviceId = String(formData.get("deviceId") ?? "").trim();
   const customerId = String(formData.get("customerId") ?? "").trim();
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
+  const intervalRaw = String(formData.get("intervalMonths") ?? "");
 
   if (!deviceId) {
     return { error: "Missing device id." };
@@ -267,6 +278,12 @@ export async function assignDeviceToCustomer(
   if (!customerId) {
     return { error: "Select a customer." };
   }
+
+  const intervalParsed = parseSubscriptionIntervalMonths(intervalRaw);
+  if (!intervalParsed.ok) {
+    return { error: intervalParsed.error };
+  }
+  const intervalMonths = intervalParsed.value;
 
   let startDate: Date | null = null;
   if (startDateRaw) {
@@ -315,6 +332,7 @@ export async function assignDeviceToCustomer(
           customerId,
           deviceId,
           startDate,
+          intervalMonths,
           status: "active",
           simCardId: device.simCardId,
         },
@@ -352,12 +370,19 @@ export async function updateServiceAssignmentDates(
   const deviceId = String(formData.get("deviceId") ?? "").trim();
   const startRaw = String(formData.get("startDate") ?? "").trim();
   const nextDueRaw = String(formData.get("nextDueDate") ?? "").trim();
+  const intervalRaw = String(formData.get("intervalMonths") ?? "");
   const invoilessRecurringIdRaw = String(formData.get("invoilessRecurringId") ?? "").trim();
   const invoilessRecurringId = invoilessRecurringIdRaw.length ? invoilessRecurringIdRaw : null;
 
   if (!assignmentId || !deviceId) {
     return { error: "Missing assignment or device." };
   }
+
+  const intervalParsed = parseSubscriptionIntervalMonths(intervalRaw);
+  if (!intervalParsed.ok) {
+    return { error: intervalParsed.error };
+  }
+  const intervalMonths = intervalParsed.value;
 
   let startDate: Date | null = null;
   if (startRaw) {
@@ -393,7 +418,7 @@ export async function updateServiceAssignmentDates(
   try {
     await prisma.serviceAssignment.update({
       where: { id: assignmentId },
-      data: { startDate, nextDueDate, invoilessRecurringId },
+      data: { startDate, nextDueDate, intervalMonths, invoilessRecurringId },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

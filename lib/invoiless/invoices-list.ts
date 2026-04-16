@@ -22,6 +22,8 @@ export type InvoilessInvoiceListRow = {
   billToEmail: string | null;
   billToPhone: string | null;
   previewUrl: string | null;
+  /** True when Invoiless treats the row as a retainer (`isRetainer` or retainer-only list). */
+  isRetainer?: boolean;
 };
 
 export type InvoilessInvoicesPageResult = {
@@ -220,11 +222,18 @@ async function fetchInvoilessCustomerContactHints(customerId: string): Promise<{
   return out;
 }
 
-function normalizeInvoiceRow(row: unknown): InvoilessInvoiceListRow | null {
+function normalizeInvoiceRow(row: unknown, fromRetainerList = false): InvoilessInvoiceListRow | null {
   if (!row || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
   const id = pickString(r.id) ?? pickString(r._id);
   if (!id) return null;
+
+  const payloadRetainer =
+    r.isRetainer === true ||
+    r.isRetainer === "true" ||
+    r.is_retainer === true ||
+    r.is_retainer === "true";
+  const isRetainer = Boolean(payloadRetainer || fromRetainerList);
 
   const number =
     pickString(r.number) ?? pickString(r.invoiceNumber) ?? pickString(r.invoice_number) ?? null;
@@ -283,6 +292,7 @@ function normalizeInvoiceRow(row: unknown): InvoilessInvoiceListRow | null {
     billToEmail,
     billToPhone,
     previewUrl,
+    isRetainer: isRetainer || undefined,
   };
 }
 
@@ -301,21 +311,26 @@ export type FetchInvoicesPageParams = {
 };
 
 /**
- * GET /v1/invoices — paginated list (Invoiless Management API).
+ * GET /v1/invoices — one page. Retainers use the same endpoint with `isRetainer=true` (Invoiless docs).
  */
-export async function fetchInvoicesPage(params: FetchInvoicesPageParams = {}): Promise<InvoilessInvoicesPageResult> {
-  const page = Math.max(1, params.page ?? 1);
-  const limit = clampInvoilessListLimit(params.limit ?? 50, 50, 100);
+async function fetchInvoicesPageSingle(
+  page: number,
+  limit: number,
+  search: string | undefined,
+  retainerOnly: boolean,
+): Promise<InvoilessInvoicesPageResult> {
   const qs = new URLSearchParams();
   qs.set("page", String(page));
   qs.set("limit", String(limit));
-  const search = params.search?.trim();
   if (search) qs.set("search", search);
+  if (retainerOnly) qs.set("isRetainer", "true");
 
   const path = `/invoices?${qs.toString()}`;
   const body = await invoilessJson<unknown>(path);
   const rawRows = extractInvoicesArray(body);
-  const rows = rawRows.map(normalizeInvoiceRow).filter((x): x is InvoilessInvoiceListRow => x != null);
+  const rows = rawRows
+    .map((row) => normalizeInvoiceRow(row, retainerOnly))
+    .filter((x): x is InvoilessInvoiceListRow => x != null);
   const pagination = extractPagination(body, page, limit);
 
   if (pagination.totalItems === 0 && rows.length > 0) {
@@ -323,6 +338,74 @@ export async function fetchInvoicesPage(params: FetchInvoicesPageParams = {}): P
   }
 
   return { rows, pagination };
+}
+
+function mergeInvoiceRowsPreferRetainerFlag(
+  a: InvoilessInvoiceListRow,
+  b: InvoilessInvoiceListRow,
+): InvoilessInvoiceListRow {
+  const isRetainer = Boolean(a.isRetainer || b.isRetainer);
+  return { ...a, isRetainer: isRetainer || undefined };
+}
+
+/**
+ * GET /v1/invoices — paginated list (Invoiless Management API).
+ * Merges the default invoice stream with `isRetainer=true` so retainers appear alongside standard invoices.
+ */
+export async function fetchInvoicesPage(params: FetchInvoicesPageParams = {}): Promise<InvoilessInvoicesPageResult> {
+  const page = Math.max(1, params.page ?? 1);
+  const limit = clampInvoilessListLimit(params.limit ?? 50, 50, 100);
+  const search = params.search?.trim();
+
+  const chunksDefault: InvoilessInvoiceListRow[] = [];
+  const chunksRetainer: InvoilessInvoiceListRow[] = [];
+  let lastDefaultPagination = extractPagination(null, page, limit);
+  let lastRetainerPagination = extractPagination(null, page, limit);
+
+  for (let p = 1; p <= page; p++) {
+    const [def, ret] = await Promise.all([
+      fetchInvoicesPageSingle(p, limit, search, false),
+      fetchInvoicesPageSingle(p, limit, search, true).catch((): InvoilessInvoicesPageResult => ({
+        rows: [],
+        pagination: { page: p, limit, totalPages: 1, totalItems: 0 },
+      })),
+    ]);
+    chunksDefault.push(...def.rows);
+    chunksRetainer.push(...ret.rows);
+    if (p === page) {
+      lastDefaultPagination = def.pagination;
+      lastRetainerPagination = ret.pagination;
+    }
+  }
+
+  const byId = new Map<string, InvoilessInvoiceListRow>();
+  for (const r of chunksDefault) {
+    byId.set(r.id, r);
+  }
+  for (const r of chunksRetainer) {
+    const prev = byId.get(r.id);
+    if (prev) {
+      byId.set(r.id, mergeInvoiceRowsPreferRetainerFlag(prev, r));
+    } else {
+      byId.set(r.id, r);
+    }
+  }
+
+  const mergedSorted = sortInvoiceRowsDesc([...byId.values()]);
+  const rows = mergedSorted.slice((page - 1) * limit, page * limit);
+
+  const totalItems = lastDefaultPagination.totalItems + lastRetainerPagination.totalItems;
+  const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+
+  return {
+    rows,
+    pagination: {
+      page,
+      limit,
+      totalPages,
+      totalItems,
+    },
+  };
 }
 
 export function isInvoilessConfigured(): boolean {
