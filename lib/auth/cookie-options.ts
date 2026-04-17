@@ -11,13 +11,14 @@ export function isHttpsRequest(req: Request): boolean {
   return proto === "https";
 }
 
-export function sessionCookieFlags(req: Request) {
+export function sessionCookieFlags(req: Request, rememberMe = true) {
   const secure = process.env.NODE_ENV === "production" && isHttpsRequest(req);
+  const maxAge = 60 * 60 * 24 * 7;
   return {
     httpOnly: true as const,
     secure,
     sameSite: "lax" as const,
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    ...(rememberMe ? { maxAge } : {}),
   };
 }

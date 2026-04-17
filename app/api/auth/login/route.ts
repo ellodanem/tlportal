@@ -51,6 +51,7 @@ export async function POST(req: Request) {
     .trim()
     .toLowerCase();
   const password = String((body as { password?: string }).password ?? "");
+  const rememberMe = (body as { rememberMe?: boolean }).rememberMe !== false;
 
   if (!email || !password) {
     return Response.json({ error: "Email and password required" }, { status: 400 });
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
 
   const token = await signSession({ sub: user.id, email: user.email });
   const jar = await cookies();
-  const flags = sessionCookieFlags(req);
+  const flags = sessionCookieFlags(req, rememberMe);
   jar.set(SESSION_COOKIE, token, flags);
   // #region agent log
   fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
       sessionId: "79eeac",
       location: "app/api/auth/login/route.ts:cookieSet",
       message: "session_cookie_set",
-      data: { secure: flags.secure, sameSite: flags.sameSite },
+      data: { secure: flags.secure, sameSite: flags.sameSite, persistent: Boolean(flags.maxAge) },
       timestamp: Date.now(),
       hypothesisId: "H3",
       runId: "pre-fix",
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
   debugAgentLog({
     location: "app/api/auth/login/route.ts:cookieSet",
     message: "session_cookie_set",
-    data: { secure: flags.secure, sameSite: flags.sameSite },
+    data: { secure: flags.secure, sameSite: flags.sameSite, persistent: Boolean(flags.maxAge) },
     hypothesisId: "H3",
     runId: "post-fix",
   });

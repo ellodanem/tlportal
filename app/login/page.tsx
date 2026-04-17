@@ -5,6 +5,7 @@ import { useState } from "react";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -19,7 +20,7 @@ export default function LoginPage() {
         sessionId: "79eeac",
         location: "app/login/page.tsx:signIn",
         message: "submit_start",
-        data: { hasEmail: Boolean(email?.trim()), hasPassword: Boolean(password?.length) },
+        data: { hasEmail: Boolean(email?.trim()), hasPassword: Boolean(password?.length), rememberMe },
         timestamp: Date.now(),
         hypothesisId: "H1",
         runId: "pre-fix",
@@ -30,7 +31,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
         credentials: "same-origin",
       });
       // #region agent log
@@ -139,6 +140,17 @@ export default function LoginPage() {
               className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none ring-emerald-500 focus:border-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300" htmlFor="remember-me">
+            <input
+              id="remember-me"
+              name="rememberMe"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+            />
+            Remember me
+          </label>
           {error ? (
             <p className="text-sm text-red-600 dark:text-red-400" role="alert">
               {error}

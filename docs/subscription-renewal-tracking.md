@@ -79,6 +79,7 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 | Register new device + optional assign | `components/admin/device-register-form.tsx` |
 | Customer service table (term column) | `app/admin/customers/[id]/page.tsx` |
 | SIM detail (term + link) | `app/admin/sims/[id]/page.tsx` |
+| Invoiless webhooks (inspect last payload) | `app/api/webhooks/invoiless/route.ts`, `lib/invoiless/verify-webhook-signature.ts` |
 | Dashboard | `lib/admin/dashboard-stats.ts`, `app/admin/page.tsx` |
 | Customer rollup | `lib/admin/customer-list.ts`, `app/admin/customers/*` |
 | Interval parse / labels | `lib/subscription-options/display.ts` |
@@ -89,3 +90,4 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 |------|------|
 | 2026-04-15 | Doc added: hybrid baseline + ladder, manual paid first; automatic paid and invoice linking explicitly deferred. |
 | 2026-04-15 | Billing term (`intervalMonths`) editable on Manage device; also on assign/register flows; SIM detail shows term + link. |
+| 2026-04-16 | Invoiless webhook receiver `POST /api/webhooks/invoiless` + signature helper; GET inspect last payload (dev / debug token). |
