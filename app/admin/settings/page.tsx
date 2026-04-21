@@ -1,10 +1,10 @@
 import { BrandingForm } from "@/components/admin/settings/branding-form";
 import { SmtpSettingsForm } from "@/components/admin/settings/smtp-settings-form";
-import { getBrandingLogoUrl } from "@/lib/branding/app-settings";
+import { getBrandingSettings } from "@/lib/branding/app-settings";
 import { getSmtpSettingsForForm } from "@/lib/email/smtp-settings";
 
 export default async function AdminSettingsPage() {
-  const [logoUrl, smtpInitial] = await Promise.all([getBrandingLogoUrl(), getSmtpSettingsForForm()]);
+  const [branding, smtpInitial] = await Promise.all([getBrandingSettings(), getSmtpSettingsForForm()]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -16,7 +16,11 @@ export default async function AdminSettingsPage() {
         </p>
       </div>
 
-      <BrandingForm initialLogoUrl={logoUrl} />
+      <BrandingForm
+        key={`${branding.logoUrl ?? "none"}-${branding.logoSize}`}
+        initialLogoUrl={branding.logoUrl}
+        initialLogoSize={branding.logoSize}
+      />
       <SmtpSettingsForm initial={smtpInitial} />
     </div>
   );

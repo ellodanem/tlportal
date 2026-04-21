@@ -13,6 +13,7 @@ import {
   BRANDING_PRIVATE_BLOB_PREFIX,
   stripBrandingPrivateBlobPrefix,
 } from "@/lib/branding/app-settings";
+import { parseBrandingLogoSize } from "@/lib/branding/logo-size";
 import { prisma } from "@/lib/db";
 
 const SETTINGS_ID = "default";
@@ -20,6 +21,8 @@ const MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 
 export type BrandingFormState = { ok?: boolean; error?: string };
+
+export type BrandingLogoSizeFormState = { ok?: boolean; error?: string };
 
 export type SmtpSettingsFormState = { ok?: boolean; error?: string };
 
@@ -65,6 +68,8 @@ export async function uploadBrandingLogo(
   if (!session) {
     return { error: "You must be signed in." };
   }
+
+  const logoSize = parseBrandingLogoSize(formData.get("logoSize"));
 
   const file = formData.get("logo");
   if (!file || !(file instanceof File)) {
@@ -153,8 +158,8 @@ export async function uploadBrandingLogo(
 
     await prisma.appSettings.upsert({
       where: { id: SETTINGS_ID },
-      create: { id: SETTINGS_ID, logoUrl },
-      update: { logoUrl },
+      create: { id: SETTINGS_ID, logoUrl, logoSize },
+      update: { logoUrl, logoSize },
     });
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
@@ -166,6 +171,28 @@ export async function uploadBrandingLogo(
       error: `Logo upload failed: ${raw.slice(0, 280)}${raw.length > 280 ? "…" : ""}${hint} If you use Vercel Blob, confirm BLOB_READ_WRITE_TOKEN is linked to your Blob store and redeploy.`,
     };
   }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+export async function updateBrandingLogoSize(
+  _prev: BrandingLogoSizeFormState,
+  formData: FormData,
+): Promise<BrandingLogoSizeFormState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const logoSize = parseBrandingLogoSize(formData.get("logoSize"));
+
+  await prisma.appSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID, logoSize },
+    update: { logoSize },
+  });
 
   revalidatePath("/admin");
   revalidatePath("/admin/settings");
@@ -188,8 +215,8 @@ export async function removeBrandingLogo(_formData: FormData): Promise<void> {
 
   await prisma.appSettings.upsert({
     where: { id: SETTINGS_ID },
-    create: { id: SETTINGS_ID, logoUrl: null },
-    update: { logoUrl: null },
+    create: { id: SETTINGS_ID, logoUrl: null, logoSize: "m" },
+    update: { logoUrl: null, logoSize: "m" },
   });
 
   revalidatePath("/admin");

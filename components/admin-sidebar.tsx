@@ -1,8 +1,9 @@
 "use client";
 
+import type { BrandingLogoSize } from "@prisma/client";
 import type { ComponentType } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { AdminCreateMenu } from "@/components/admin-create-menu";
@@ -18,6 +19,7 @@ import {
   IconNavSim,
 } from "@/components/admin-nav-icons";
 import { IconDevice, IconLayers, IconUsers } from "@/components/dashboard/dashboard-icons";
+import { brandingLogoHeightClass } from "@/lib/branding/logo-size";
 
 const STORAGE_KEY = "tl-admin-sidebar-collapsed";
 
@@ -43,7 +45,11 @@ function isCustomerSection(pathname: string): boolean {
 
 /** Settings + subscription plan prices share one nav group. */
 function isSettingsSection(pathname: string): boolean {
-  return pathname.startsWith("/admin/settings") || pathname.startsWith("/admin/subscription-options");
+  return (
+    pathname.startsWith("/admin/settings") ||
+    pathname.startsWith("/admin/subscription-options") ||
+    pathname.startsWith("/admin/users")
+  );
 }
 
 function navClass(active: boolean, collapsed: boolean) {
@@ -72,19 +78,21 @@ function NavIcon({
   return <Icon className={`h-5 w-5 shrink-0 opacity-90 ${className ?? ""}`} />;
 }
 
-export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | null }) {
+export function AdminSidebar({
+  brandingLogoUrl,
+  brandingLogoSize = "m",
+}: {
+  brandingLogoUrl?: string | null;
+  brandingLogoSize?: BrandingLogoSize;
+}) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
+  const [collapsed, setCollapsed] = useState(() => {
     try {
-      if (typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY) === "1") {
-        setCollapsed(true);
-      }
+      return typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY) === "1";
     } catch {
-      /* ignore */
+      return false;
     }
-  }, []);
+  });
 
   function toggleCollapsed() {
     setCollapsed((c) => {
@@ -122,9 +130,10 @@ export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | n
               <img
                 src={brandingLogoUrl}
                 alt=""
-                className={`w-auto max-w-full object-contain object-left dark:brightness-[1.02] ${
-                  collapsed ? "mx-auto h-10" : "h-16"
-                }`}
+                className={`w-auto max-w-full object-contain object-left dark:brightness-[1.02] ${brandingLogoHeightClass(
+                  brandingLogoSize,
+                  collapsed,
+                )} ${collapsed ? "mx-auto" : ""}`}
               />
             </>
           ) : (
@@ -222,6 +231,7 @@ export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | n
           if (href === "/admin/settings") {
             const settingsParentActive = isSettingsSection(pathname);
             const plansActive = pathname.startsWith("/admin/subscription-options");
+            const usersActive = pathname.startsWith("/admin/users");
             const showSub = isSettingsSection(pathname) && !collapsed;
             return (
               <div key={href} className="flex flex-col gap-0.5">
@@ -230,10 +240,16 @@ export function AdminSidebar({ brandingLogoUrl }: { brandingLogoUrl?: string | n
                   <span className={collapsed ? "sr-only" : ""}>{label}</span>
                 </Link>
                 {showSub ? (
-                  <Link href="/admin/subscription-options" className={subNavClass(plansActive)}>
-                    <IconLayers className="h-4 w-4 shrink-0 opacity-80" />
-                    <span>Plans</span>
-                  </Link>
+                  <>
+                    <Link href="/admin/subscription-options" className={subNavClass(plansActive)}>
+                      <IconLayers className="h-4 w-4 shrink-0 opacity-80" />
+                      <span>Plans</span>
+                    </Link>
+                    <Link href="/admin/users" className={subNavClass(usersActive)}>
+                      <IconUsers className="h-4 w-4 shrink-0 opacity-80" />
+                      <span>Users</span>
+                    </Link>
+                  </>
                 ) : null}
               </div>
             );

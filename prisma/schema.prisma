@@ -87,11 +87,20 @@ enum ProposalVisualLayout {
   half_width
 }
 
+/// Sidebar logo height preset (admin branding).
+enum BrandingLogoSize {
+  s
+  m
+  l
+  xl
+}
+
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
   id      String   @id
   logoUrl String?
+  logoSize BrandingLogoSize @default(m)
   /// Outgoing mail (SMTP). When `smtpHost` is null, other SMTP fields are ignored.
   smtpHost      String?
   smtpPort      Int @default(587)
