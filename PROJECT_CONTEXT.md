@@ -1358,3 +1358,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - feat: prioritize billing visibility and persist login choice
 
+
+### 2026-04-17 14:27 UTC — commit `8836a3f`
+
+- docs: project context log (59a8a83)
+
+
+### 2026-04-17 14:27 UTC — pre-push (`main` → origin) @ `8836a3f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-21 21:30 UTC — commit `5a8de5c`
+
+- feat(admin): configurable branding logo size (XL/L/M/S)
+
+
+### 2026-04-21 21:31 UTC — pre-push (`main` → origin) @ `5a8de5c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
