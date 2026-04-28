@@ -49,7 +49,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
         },
       },
     }),
-    fetchSimsAvailableForDeviceSwap(id),
+    fetchSimsAvailableForDeviceSwap(),
   ]);
 
   if (!device) {

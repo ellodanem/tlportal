@@ -10,7 +10,7 @@ import { UnlinkedSimPicker } from "@/components/admin/unlinked-sim-picker";
 import type { UnlinkedSimRow } from "@/lib/admin/unlinked-sim-filter";
 
 const swapAvailabilityHint =
-  "SIMs already on this device stay selectable; other devices and active assignments reserve a card. Choose one and save, or remove the link below.";
+  "Only SIMs not already allocated to a device or active assignment are listed. Choose one and save, or remove the link below.";
 
 function PrimarySubmit({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -107,7 +107,7 @@ export function DeviceSimEditSection({
               ) : null}
               {swapSims.length === 0 ? (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  No SIM cards are available to link (all are on other devices or open assignments). Free a SIM
+                  No SIM cards are available to link (all are already allocated to devices or open assignments). Free a SIM
                   elsewhere first, or remove the current link below.
                 </p>
               ) : (
