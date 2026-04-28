@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 
+import { SESSION_MAX_AGE_SEC } from "./constants";
 import { getAuthSecretBytes } from "./env";
 
 export type SessionPayload = {
@@ -11,7 +12,7 @@ export type SessionPayload = {
 const ISS = "tl-portal";
 const AUD = "admin";
 
-export async function signSession(payload: SessionPayload, maxAgeSec = 60 * 60 * 24 * 7): Promise<string> {
+export async function signSession(payload: SessionPayload, maxAgeSec = SESSION_MAX_AGE_SEC): Promise<string> {
   const secret = getAuthSecretBytes();
   return new SignJWT({ email: payload.email })
     .setProtectedHeader({ alg: "HS256" })

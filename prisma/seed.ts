@@ -1,14 +1,16 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+import { DEFAULT_SUPER_ADMIN_EMAIL } from "../lib/auth/constants";
+
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD;
+  const email = (process.env.SUPER_ADMIN_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim() || DEFAULT_SUPER_ADMIN_EMAIL).toLowerCase();
+  const password = process.env.SUPER_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD;
 
-  if (!email || !password) {
-    console.info("Seed skipped: set ADMIN_EMAIL and ADMIN_PASSWORD to create an admin user.");
+  if (!password) {
+    console.info("Seed skipped: set SUPER_ADMIN_PASSWORD (or ADMIN_PASSWORD) to create/update the super admin user.");
     return;
   }
 
@@ -16,10 +18,10 @@ async function main() {
   await prisma.user.upsert({
     where: { email },
     update: { passwordHash },
-    create: { email, passwordHash, name: "Admin" },
+    create: { email, passwordHash, name: "Super Admin" },
   });
 
-  console.info(`Seeded admin user: ${email}`);
+  console.info(`Seeded super admin user: ${email}`);
 
   const planCount = await prisma.subscriptionOption.count();
   if (planCount === 0) {

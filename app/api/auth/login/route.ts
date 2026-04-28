@@ -6,6 +6,7 @@ import { debugAgentLog } from "@/lib/debug-agent-log";
 import { isAuthConfigured } from "@/lib/auth/env";
 import { verifyPassword } from "@/lib/auth/password";
 import { signSession } from "@/lib/auth/session";
+import { normalizeEmail } from "@/lib/auth/super-admin";
 import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -47,11 +48,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const email = String((body as { email?: string }).email ?? "")
-    .trim()
-    .toLowerCase();
+  const email = normalizeEmail(String((body as { email?: string }).email ?? ""));
   const password = String((body as { password?: string }).password ?? "");
-  const rememberMe = (body as { rememberMe?: boolean }).rememberMe !== false;
 
   if (!email || !password) {
     return Response.json({ error: "Email and password required" }, { status: 400 });
@@ -87,7 +85,7 @@ export async function POST(req: Request) {
 
   const token = await signSession({ sub: user.id, email: user.email });
   const jar = await cookies();
-  const flags = sessionCookieFlags(req, rememberMe);
+  const flags = sessionCookieFlags(req);
   jar.set(SESSION_COOKIE, token, flags);
   // #region agent log
   fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {

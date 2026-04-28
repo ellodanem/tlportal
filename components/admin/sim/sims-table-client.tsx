@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useDeferredValue, useMemo, useState } from "react";
 
+import { CopyValueButton } from "@/components/admin/copy-value-button";
 import { PurposeScopeFilter } from "@/components/admin/device/purpose-scope-filter";
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { formatMegabytes } from "@/lib/format/mbytes";
@@ -190,17 +191,20 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
               filtered.map((sim) => (
                 <tr key={sim.id} className="transition hover:bg-zinc-50/80 dark:hover:bg-zinc-950/40">
                   <td className="px-4 py-3 align-top">
-                    <Link
-                      href={`/admin/sims/${sim.id}`}
-                      className="group block font-medium text-emerald-800 hover:underline dark:text-emerald-300"
-                    >
-                      <span className="block font-mono text-xs text-zinc-600 group-hover:text-emerald-700 dark:text-zinc-400 dark:group-hover:text-emerald-300">
-                        {sim.iccid}
-                      </span>
-                      {sim.label?.trim() ? (
-                        <span className="mt-0.5 block text-sm text-zinc-900 dark:text-zinc-50">{sim.label.trim()}</span>
-                      ) : null}
-                    </Link>
+                    <div className="flex items-start justify-between gap-2">
+                      <Link
+                        href={`/admin/sims/${sim.id}`}
+                        className="group min-w-0 flex-1 font-medium text-emerald-800 hover:underline dark:text-emerald-300"
+                      >
+                        <span className="block break-all font-mono text-xs text-zinc-600 group-hover:text-emerald-700 dark:text-zinc-400 dark:group-hover:text-emerald-300">
+                          {sim.iccid}
+                        </span>
+                        {sim.label?.trim() ? (
+                          <span className="mt-0.5 block text-sm text-zinc-900 dark:text-zinc-50">{sim.label.trim()}</span>
+                        ) : null}
+                      </Link>
+                      <CopyValueButton value={sim.iccid} kind="ICCID" className="mt-0.5" />
+                    </div>
                   </td>
                   <td className="px-4 py-3 align-top">
                     <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium capitalize text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">

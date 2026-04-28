@@ -1398,3 +1398,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-21 22:28 UTC — commit `d5eccda`
+
+- fix(build): add InactivityTimeout client and auth touch API
+
+
+### 2026-04-21 22:28 UTC — pre-push (`main` → origin) @ `d5eccda`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-04-28 14:05 UTC — commit `baa2302`
+
+- fix(admin): show only unallocated SIMs in device swap list
+
+
+### 2026-04-28 14:05 UTC — pre-push (`main` → origin) @ `baa2302`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

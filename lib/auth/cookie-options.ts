@@ -1,3 +1,5 @@
+import { SESSION_MAX_AGE_SEC } from "./constants";
+
 /**
  * Secure session cookies only over HTTPS so `next start` / LAN access on http:// still works.
  * Browsers ignore Set-Cookie with Secure=true on plain HTTP.
@@ -11,14 +13,14 @@ export function isHttpsRequest(req: Request): boolean {
   return proto === "https";
 }
 
-export function sessionCookieFlags(req: Request, rememberMe = true) {
+export function sessionCookieFlags(req: Request) {
   const secure = process.env.NODE_ENV === "production" && isHttpsRequest(req);
-  const maxAge = 60 * 60 * 24 * 7;
+  const maxAge = SESSION_MAX_AGE_SEC;
   return {
     httpOnly: true as const,
     secure,
     sameSite: "lax" as const,
     path: "/",
-    ...(rememberMe ? { maxAge } : {}),
+    maxAge,
   };
 }
