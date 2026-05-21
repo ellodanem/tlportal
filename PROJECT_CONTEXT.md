@@ -1429,9 +1429,14 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
 
-### 2026-05-21 13:15 UTC — commit `f9e94e2`
+### 2026-05-21 13:15 UTC — commit `aa67d52`
 
 - feat(billing): Phase 1 Stripe subscriptions and TL CustomerSubscription
 - Vendor foundation: BillingAccount, BillingInvoice mirror, Stripe Checkout/webhooks, admin billing tab, CustomerSubscription (TL source of truth), fleet health, GPS device links, billing ports/adapters, and architecture docs.
 - Prisma migrations: vendor foundation, Stripe billing, stripe monthly rate, billing invoice mirror, customer subscription.
+
+
+### 2026-05-21 13:15 UTC — pre-push (`main` → origin) @ `aa67d52`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
