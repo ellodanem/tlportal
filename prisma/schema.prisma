@@ -95,6 +95,44 @@ enum BrandingLogoSize {
   xl
 }
 
+/// How the customer is billed (TL ops view; provider details on BillingAccount).
+enum CustomerBillingMode {
+  manual_legacy
+  stripe_subscription
+}
+
+enum BillingProvider {
+  invoiless
+  stripe
+}
+
+enum BillingInvoiceKind {
+  subscription
+  one_time
+}
+
+/// TL-owned subscription lifecycle (Stripe mirrors payment; this is ops source of truth).
+enum CustomerSubscriptionStatus {
+  pending_payment
+  active
+  past_due
+  unpaid
+  canceled
+  trialing
+  paused
+}
+
+/// GPS / telematics platform linked to a device.
+enum GpsProvider {
+  traqcare
+}
+
+enum DeviceLinkRole {
+  primary
+  secondary
+  migrating
+}
+
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
@@ -149,8 +187,13 @@ model Customer {
   invoiceCc           String?
   /// Comma-separated Bcc emails (Invoiless max 3).
   invoiceBcc          String?
+  /// Preferred billing path for new workflows (legacy rows default manual_legacy).
+  billingMode CustomerBillingMode @default(manual_legacy)
+  /// Custom Stripe subscription monthly rate (XCD). Null = default catalog / env Price ids.
+  stripeMonthlyRateXcd Decimal? @db.Decimal(10, 2)
+  /// @deprecated Prefer BillingAccount — kept for backward compatibility during Phase 1.
   invoilessCustomerId String?   @unique
-  /// Traqcare GPS portal login (optional).
+  /// @deprecated Prefer ProviderDeviceLink on Device — kept during Phase 1 migration.
   traqcareUsername    String?
   /// Stored in DB as plain text — restrict DB access; prefer env/secret store for production.
   traqcarePassword    String?
@@ -162,6 +205,10 @@ model Customer {
   updatedAt           DateTime  @updatedAt
 
   serviceAssignments ServiceAssignment[]
+  billingAccounts       BillingAccount[]
+  billingInvoices       BillingInvoice[]
+  customerSubscriptions CustomerSubscription[]
+  operationalEvents     OperationalEvent[]
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
   createdFromRegistration    RegistrationRequest?  @relation("RegistrationCreatedCustomer")
@@ -176,6 +223,8 @@ model SubscriptionOption {
   /// Billing term length in months; exactly one row per value in { 1, 3, 6, 12 }.
   durationMonths Int      @unique
   priceXcd       Decimal  @db.Decimal(10, 2)
+  /// Stripe Price id (`price_…`) for Checkout; overrides env `STRIPE_PRICE_ID_*` when set.
+  stripePriceId  String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -267,7 +316,9 @@ model Device {
   simCardId String?  @unique
   simCard   SimCard? @relation(fields: [simCardId], references: [id], onDelete: SetNull)
 
-  serviceAssignments ServiceAssignment[]
+  serviceAssignments   ServiceAssignment[]
+  providerDeviceLinks  ProviderDeviceLink[]
+  operationalEvents    OperationalEvent[]
 
   @@index([deviceModelId])
   @@index([status])
@@ -411,4 +462,122 @@ model ProposalVisualBlock {
   timelineSteps   Json?
 
   @@index([proposalId])
+}
+
+// --- Vendor abstraction (Phase 1) ---
+
+/// External billing identity per customer (Invoiless, Stripe, …).
+model BillingAccount {
+  id                 String              @id @default(uuid())
+  customerId         String
+  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider           BillingProvider
+  externalCustomerId String
+  mode               CustomerBillingMode @default(manual_legacy)
+  /// Provider-specific status mirror (e.g. Stripe subscription status).
+  status             String?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([customerId, provider])
+  @@unique([provider, externalCustomerId])
+  @@index([customerId])
+}
+
+/// Mirrored invoice from a billing provider (Stripe subscription/one-time, future Invoiless).
+model BillingInvoice {
+  id                     String             @id @default(uuid())
+  customerId             String
+  customer               Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider               BillingProvider
+  externalInvoiceId      String
+  kind                   BillingInvoiceKind @default(subscription)
+  status                 String
+  amountXcd              Decimal            @db.Decimal(12, 2)
+  currency               String             @default("xcd")
+  invoiceNumber          String?
+  periodStart            DateTime?
+  periodEnd              DateTime?
+  hostedInvoiceUrl       String?
+  invoicePdfUrl          String?
+  stripeSubscriptionId   String?
+  paidAt                 DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@unique([provider, externalInvoiceId])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+/// Idempotency for Stripe webhooks (`evt_…` primary key).
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+
+  @@index([processedAt])
+}
+
+/// Customer-level subscription (TL source of truth; Stripe id when linked).
+model CustomerSubscription {
+  id                   String                     @id @default(uuid())
+  customerId           String
+  customer             Customer                   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status               CustomerSubscriptionStatus @default(pending_payment)
+  /// Billing term length in months (1, 3, 6, 12).
+  planTermMonths       Int
+  /// Monthly rate in XCD used for this subscription (null = catalog default at checkout).
+  monthlyRateXcd       Decimal?                   @db.Decimal(10, 2)
+  /// Billed vehicle/device quantity when set; otherwise derived from active assignments in UI.
+  vehicleCount         Int?
+  stripeSubscriptionId String?                    @unique
+  stripeCustomerId     String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAt             DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@index([customerId, updatedAt(sort: Desc)])
+  @@index([status])
+}
+
+/// Maps a TL device to a vendor GPS/telematics identity.
+model ProviderDeviceLink {
+  id                 String         @id @default(uuid())
+  deviceId           String
+  device             Device         @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  provider           GpsProvider
+  externalDeviceId   String?
+  externalAccountRef String?
+  portalUrl          String?
+  role               DeviceLinkRole @default(primary)
+  linkedAt           DateTime       @default(now())
+  unlinkedAt         DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@unique([deviceId, provider])
+  @@index([deviceId])
+  @@index([provider])
+}
+
+/// TL-native audit trail for ops and future automation (not vendor telemetry).
+model OperationalEvent {
+  id          String    @id @default(uuid())
+  occurredAt  DateTime  @default(now())
+  category    String
+  summary     String
+  payload     Json?
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  deviceId    String?
+  device      Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  actorUserId String?
+
+  @@index([customerId, occurredAt])
+  @@index([deviceId, occurredAt])
+  @@index([category, occurredAt])
 }

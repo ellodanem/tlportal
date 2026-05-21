@@ -15,7 +15,9 @@ import {
   IconSearch,
   IconUsers,
 } from "@/components/dashboard/dashboard-icons";
+import { FleetHealthSummary } from "@/components/dashboard/fleet-health-summary";
 import { getDashboardStats } from "@/lib/admin/dashboard-stats";
+import { reviewReasonLabel } from "@/lib/admin/fleet-health";
 import { formatMegabytes } from "@/lib/format/mbytes";
 
 function toneRowClass(tone: "urgent" | "warning" | "info") {
@@ -162,6 +164,50 @@ export default async function AdminPage() {
         />
       </section>
 
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <FleetHealthSummary
+          counts={s.fleetHealth.counts}
+          title="Fleet attention"
+          subtitle="Open service assignments across all customers (TL ops signals, not live GPS telemetry)"
+          generatedAt={new Date()}
+        />
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Devices needing review</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Suspended units, missing SIM/GPS link, or Stripe payment issues
+          </p>
+          <ul className="mt-4 space-y-3">
+            {s.fleetHealth.reviewRows.length === 0 ? (
+              <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
+                No assignments flagged for review.
+              </li>
+            ) : (
+              s.fleetHealth.reviewRows.map((row) => (
+                <li
+                  key={row.assignmentId}
+                  className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass("warning")}`}
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                      {row.deviceLabel} — {row.customerName}
+                    </p>
+                    <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
+                      IMEI {row.imei} · {row.reasons.map(reviewReasonLabel).join(", ")}
+                    </p>
+                    </div>
+                  <Link
+                    href={row.href}
+                    className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                  >
+                    Open customer
+                  </Link>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      </section>
+
       {/* Fleet + billing signals — high on the page after KPIs */}
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -181,7 +227,7 @@ export default async function AdminPage() {
               <div>
                 <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Exceptions across services and Invoiless linkage
+                  Overdue services, Stripe payment issues, and Invoiless gaps
                 </p>
               </div>
             </div>

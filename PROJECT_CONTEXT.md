@@ -1418,3 +1418,20 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-04-28 14:32 UTC — commit `90b30c2`
+
+- feat(admin): add super-admin user management and SIM ICCID copy action
+
+
+### 2026-04-28 14:33 UTC — pre-push (`main` → origin) @ `90b30c2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-21 13:15 UTC — commit `f9e94e2`
+
+- feat(billing): Phase 1 Stripe subscriptions and TL CustomerSubscription
+- Vendor foundation: BillingAccount, BillingInvoice mirror, Stripe Checkout/webhooks, admin billing tab, CustomerSubscription (TL source of truth), fleet health, GPS device links, billing ports/adapters, and architecture docs.
+- Prisma migrations: vendor foundation, Stripe billing, stripe monthly rate, billing invoice mirror, customer subscription.
+

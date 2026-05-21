@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 
 import { DeviceAssignToCustomerForm } from "@/components/admin/device-assign-customer-form";
 import { DeviceCommercialEditForm } from "@/components/admin/device-commercial-edit-form";
+import { DeviceGpsLinkForm } from "@/components/admin/device-gps-link-form";
 import { DeviceSimEditSection } from "@/components/admin/device-sim-edit-section";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-service-assignment-edit-form";
 import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { fetchSimsAvailableForDeviceSwap } from "@/lib/admin/sims-available-for-device";
+import { getGpsLink, resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { prisma } from "@/lib/db";
 
 type Props = { params: Promise<{ id: string }> };
@@ -22,7 +24,7 @@ function dateInputValue(d: Date | null | undefined): string {
 
 export default async function EditDeviceCommercialPage({ params }: Props) {
   const { id } = await params;
-  const [device, customerRows, openAssignment, simsForSwap] = await Promise.all([
+  const [device, customerRows, openAssignment, simsForSwap, gpsLink] = await Promise.all([
     prisma.device.findUnique({
       where: { id },
       include: { deviceModel: true, simCard: true },
@@ -50,6 +52,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
       },
     }),
     fetchSimsAvailableForDeviceSwap(),
+    getGpsLink(id, "traqcare"),
   ]);
 
   if (!device) {
@@ -60,6 +63,15 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
   const customers = customerRows.map((c) => ({ id: c.id, label: customerDisplayName(c) }));
   const canAssign =
     !openAssignment && device.status !== "decommissioned" && device.status !== "lost";
+
+  const openTrackingUrl = gpsLink
+    ? resolveGpsPortalUrl(gpsLink)
+    : resolveGpsPortalUrl({
+        provider: "traqcare",
+        portalUrl: null,
+        externalAccountRef: null,
+        externalDeviceId: null,
+      });
 
   return (
     <div className="flex flex-col gap-8">
@@ -109,6 +121,22 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
           ) : null}
         </section>
       ) : null}
+
+      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">GPS provider (Traqcare)</h2>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Tracking portal for this device. API integration is not connected yet — staff use the vendor portal directly.
+        </p>
+        <DeviceGpsLinkForm
+          deviceId={device.id}
+          defaults={{
+            portalUrl: gpsLink?.portalUrl ?? "",
+            externalDeviceId: gpsLink?.externalDeviceId ?? "",
+            externalAccountRef: gpsLink?.externalAccountRef ?? "",
+          }}
+          openTrackingUrl={openTrackingUrl}
+        />
+      </section>
 
       <DeviceSimEditSection
         deviceId={device.id}

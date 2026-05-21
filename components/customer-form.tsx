@@ -269,10 +269,10 @@ function CustomerFormInner({
       </div>
 
       <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
-        <h2 className={sectionTitleClass}>Traqcare (GPS)</h2>
+        <h2 className={sectionTitleClass}>Traqcare (GPS) — legacy</h2>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Optional login for the Traqcare tracking portal. Values are stored in the database as plain text — limit who can
-          access this admin app.
+          Prefer GPS settings per device under Manage device → GPS provider. These customer fields remain during
+          migration. Passwords are stored as plain text — limit who can access this admin app.
         </p>
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="traqcareUsername">

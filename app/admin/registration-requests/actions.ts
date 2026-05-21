@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/get-session";
 import { buildRegistrationCustomerNotes } from "@/lib/register/build-registration-notes";
 import { prisma } from "@/lib/db";
+import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { formatSubscriptionChoiceLabel } from "@/lib/subscription-options/display";
 
 import type { RegistrationReviewState } from "./registration-review-state";
@@ -98,6 +99,14 @@ export async function approveRegistrationRequest(
     return { error: message, next: null };
   }
 
+  await recordOperationalEvent({
+    category: "registration.approved",
+    summary: `Registration approved for ${reg.email}`,
+    customerId,
+    actorUserId: session.sub,
+    payload: { registrationRequestId: id },
+  });
+
   revalidatePath("/admin/registration-requests");
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}/edit`);
@@ -147,6 +156,13 @@ export async function rejectRegistrationRequest(
     const message = e instanceof Error ? e.message : "Could not reject registration.";
     return { error: message, next: null };
   }
+
+  await recordOperationalEvent({
+    category: "registration.rejected",
+    summary: `Registration rejected for ${reg.email}`,
+    actorUserId: session.sub,
+    payload: { registrationRequestId: id },
+  });
 
   revalidatePath("/admin/registration-requests");
   revalidatePath(`/admin/registration-requests/${id}`);

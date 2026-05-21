@@ -1,4 +1,4 @@
-import type { ServiceAssignmentStatus } from "@prisma/client";
+import type { CustomerBillingMode, ServiceAssignmentStatus } from "@prisma/client";
 
 import type { CustomerTableRow } from "@/components/admin/customers-table";
 import {
@@ -17,8 +17,10 @@ type CustomerWithAssignments = {
   email: string | null;
   phone: string | null;
   invoilessCustomerId: string | null;
+  billingMode: CustomerBillingMode;
   tags: string[];
   updatedAt: Date;
+  billingAccounts: { provider: "invoiless" | "stripe"; externalCustomerId: string | null; status: string | null }[];
   serviceAssignments: {
     status: ServiceAssignmentStatus;
     endDate: Date | null;
@@ -32,6 +34,9 @@ export function buildCustomerTableRows(customers: CustomerWithAssignments[]): Cu
     const open = c.serviceAssignments.filter((a) => a.endDate == null && a.status !== "cancelled");
     const distinctDevices = new Set(open.map((a) => a.deviceId)).size;
     const nextDue = earliestNextDue(open);
+    const stripeAccount = c.billingAccounts.find((a) => a.provider === "stripe");
+    const invoilessAccount = c.billingAccounts.find((a) => a.provider === "invoiless");
+    const invoilessLinked = Boolean(c.invoilessCustomerId || invoilessAccount?.externalCustomerId);
     return {
       id: c.id,
       displayName: customerDisplayName(c),
@@ -41,7 +46,9 @@ export function buildCustomerTableRows(customers: CustomerWithAssignments[]): Cu
       activeServices: open.length,
       distinctDevices,
       nextDue,
-      invoilessLinked: Boolean(c.invoilessCustomerId),
+      billingMode: c.billingMode,
+      invoilessLinked,
+      stripeStatus: stripeAccount?.status ?? null,
       rollup: rollupFromAssignments(open),
       updatedAt: c.updatedAt,
     };

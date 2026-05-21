@@ -2,6 +2,10 @@
 ALTER TABLE "SubscriptionOption" ADD COLUMN "durationMonths" INTEGER;
 ALTER TABLE "SubscriptionOption" ADD COLUMN "priceUsd" DECIMAL(10,2);
 
+-- Legacy label/sortOrder are NOT NULL; relax before INSERT/UPDATE that omits them (shadow DB + fresh replays).
+ALTER TABLE "SubscriptionOption" ALTER COLUMN "label" DROP NOT NULL;
+ALTER TABLE "SubscriptionOption" ALTER COLUMN "sortOrder" DROP NOT NULL;
+
 -- Default seed sort orders from repo
 UPDATE "SubscriptionOption" SET "durationMonths" = 1, "priceUsd" = 30 WHERE "sortOrder" = 10;
 UPDATE "SubscriptionOption" SET "durationMonths" = 3, "priceUsd" = 90 WHERE "sortOrder" = 20;

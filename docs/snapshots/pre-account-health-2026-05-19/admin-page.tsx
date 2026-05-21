@@ -1,0 +1,288 @@
+import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+
+import {
+  FleetSnapshot,
+  FLEET_SEGMENT_ORDER,
+  type FleetSnapshotRow,
+} from "@/components/dashboard/fleet-snapshot";
+import { StatCard, type StatBadge } from "@/components/dashboard/stat-card";
+import {
+  IconAlert,
+  IconDataUsage,
+  IconDevice,
+  IconLayers,
+  IconSearch,
+  IconUsers,
+} from "@/components/dashboard/dashboard-icons";
+import { getDashboardStats } from "@/lib/admin/dashboard-stats";
+import { formatMegabytes } from "@/lib/format/mbytes";
+
+function toneRowClass(tone: "urgent" | "warning" | "info") {
+  switch (tone) {
+    case "urgent":
+      return "border-l-4 border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20";
+    case "warning":
+      return "border-l-4 border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20";
+    default:
+      return "border-l-4 border-l-sky-500 bg-sky-50/40 dark:bg-sky-950/20";
+  }
+}
+
+export default async function AdminPage() {
+  const s = await getDashboardStats();
+
+  const assignedBadges: { label: string; variant: "neutral" | "amber" | "rose" }[] = [
+    { label: `In stock · ${s.inStockDeviceCount}`, variant: "neutral" },
+  ];
+  if (s.suspendedDeviceCount > 0) {
+    assignedBadges.push({ label: `Suspended · ${s.suspendedDeviceCount}`, variant: "amber" });
+  }
+
+  const simDataBadges: StatBadge[] = [];
+  if (s.simCardCount > 0) {
+    simDataBadges.push({ label: `${s.simCardCount.toLocaleString()} SIMs`, variant: "emerald" });
+  }
+  if (s.simTotalSumMb > 0) {
+    simDataBadges.push({ label: `Allowance · ${formatMegabytes(s.simTotalSumMb)}`, variant: "sky" });
+  }
+
+  const fleetRows: FleetSnapshotRow[] = FLEET_SEGMENT_ORDER.map((key) => ({
+    key,
+    count: s.fleetSegments[key],
+  })).filter((r) => r.count > 0);
+
+  const totalDevices = FLEET_SEGMENT_ORDER.reduce((sum, k) => sum + s.fleetSegments[k], 0);
+  const upcomingBillingCount = s.upcomingBillItems.length;
+  const upcomingBillingHref = s.upcomingBillItems[0]?.href ?? "/admin/customers";
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* Breadcrumb + title */}
+      <div>
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          <span className="text-zinc-400 dark:text-zinc-500">Admin</span>
+          <span className="mx-2 text-zinc-300 dark:text-zinc-600">/</span>
+          <span className="text-zinc-700 dark:text-zinc-300">Dashboard</span>
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Operations overview
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
+          Customers, assigned hardware, and billing signals in one place. Tiles link through to detail where routes exist.
+        </p>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Link
+          href="/admin/customers"
+          className="flex w-full max-w-md items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-500 shadow-sm transition hover:border-zinc-300 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600 dark:hover:text-zinc-300 sm:w-auto"
+        >
+          <IconSearch className="shrink-0 opacity-60" />
+          <span>Search or browse customers…</span>
+        </Link>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {s.pendingRegistrationCount > 0 ? (
+            <Link
+              href="/admin/registration-requests"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 font-medium text-amber-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:border-amber-700 dark:hover:bg-amber-950/60"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
+              {s.pendingRegistrationCount} registration
+              {s.pendingRegistrationCount === 1 ? "" : "s"} to review
+            </Link>
+          ) : null}
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-2.5 py-1 font-medium text-emerald-900 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/35 dark:text-emerald-200">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40 dark:bg-emerald-500" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+            </span>
+            Live data
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200/80 bg-sky-50/90 px-2.5 py-1 text-sky-950 shadow-sm dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-100">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500 dark:bg-sky-400" aria-hidden />
+            <span>
+              Device registry live · SIMs on{" "}
+              <Link href="/admin/sims" className="font-medium text-sky-800 underline-offset-2 hover:underline dark:text-sky-300">
+                SIM cards
+              </Link>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* KPI strip */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          label="Customers"
+          value={s.customerCount}
+          href="/admin/customers"
+          accent="emerald"
+          icon={<IconUsers className="h-5 w-5" />}
+          hint="Accounts in TL Portal"
+        />
+        <StatCard
+          label="Assigned devices"
+          value={s.assignedDeviceCount}
+          href="/admin/devices"
+          accent="sky"
+          icon={<IconDevice className="h-5 w-5" />}
+          badges={assignedBadges}
+          hint="In the field vs warehouse (badges)"
+        />
+        <StatCard
+          label="SIM data used"
+          value={formatMegabytes(s.simUsedSumMb)}
+          href="/admin/sims"
+          accent="violet"
+          icon={<IconDataUsage className="h-5 w-5" />}
+          badges={simDataBadges.length > 0 ? simDataBadges : undefined}
+          hint={
+            s.simCardCount === 0
+              ? "No SIM records yet; totals come from synced usage fields"
+              : "Summed usedDataMB across SIMs (where sync populated values)"
+          }
+        />
+        <StatCard
+          label="Active services"
+          value={s.activeServiceCount}
+          href="/admin/customers"
+          accent="cyan"
+          icon={<IconLayers className="h-5 w-5" />}
+          hint="Open assignments (not ended / cancelled)"
+        />
+        <StatCard
+          label="Upcoming billing"
+          value={upcomingBillingCount}
+          href={upcomingBillingHref}
+          accent={upcomingBillingCount > 0 ? "amber" : "zinc"}
+          icon={<IconAlert className="h-5 w-5" />}
+          hint="Services with next due dates to review"
+        />
+      </section>
+
+      {/* Fleet + billing signals — high on the page after KPIs */}
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Device inventory by fleet segment ({totalDevices.toLocaleString()} total)
+          </p>
+          <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+                <IconAlert className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Overdue services, Stripe payment issues, and Invoiless gaps
+                </p>
+              </div>
+            </div>
+            {s.attentionCount > 0 ? (
+              <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
+                {s.attentionCount} open
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                All clear
+              </span>
+            )}
+          </div>
+
+          <ul className="mt-4 space-y-3">
+            {s.attentionItems.length === 0 ? (
+              <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
+                No overdue services or Invoiless gaps surfaced. Data will populate as you add assignments and sync
+                billing.
+              </li>
+            ) : (
+              s.attentionItems.map((item) => (
+                <li
+                  key={item.id}
+                  className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
+                    <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p>
+                  </div>
+                  <Link
+                    href={item.href}
+                    className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                  >
+                    Open
+                  </Link>
+                </li>
+              ))
+            )}
+          </ul>
+
+          {s.upcomingBillItems.length > 0 ? (
+            <>
+              <div className="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Upcoming bill dates</h3>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Active services with a next due date (soonest first). Amounts live in Invoiless when linked.
+                </p>
+              </div>
+              <ul className="mt-4 space-y-3">
+                {s.upcomingBillItems.map((item) => (
+                  <li
+                    key={item.id}
+                    className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
+                      <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p>
+                    </div>
+                    <Link
+                      href={item.href}
+                      className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                    >
+                      Open
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recent activity</h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Latest customer record updates</p>
+        <ul className="mt-4 space-y-3">
+          {s.recentItems.length === 0 ? (
+            <li className="text-sm text-zinc-600 dark:text-zinc-400">No customers yet.</li>
+          ) : (
+            s.recentItems.map((r) => (
+              <li key={r.id}>
+                <Link href={r.href} className="group block rounded-lg p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                  <p className="text-sm font-medium text-zinc-900 group-hover:text-emerald-700 dark:text-zinc-50 dark:group-hover:text-emerald-400">
+                    {r.label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                    {r.sub} · {formatDistanceToNow(r.at, { addSuffix: true })}
+                  </p>
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
+
+      <p className="text-sm text-zinc-500">
+        <Link href="/" className="text-emerald-700 hover:underline dark:text-emerald-400">
+          ← Public home
+        </Link>
+      </p>
+    </div>
+  );
+}

@@ -17,8 +17,12 @@ export default async function CustomersPage() {
       email: true,
       phone: true,
       invoilessCustomerId: true,
+      billingMode: true,
       tags: true,
       updatedAt: true,
+      billingAccounts: {
+        select: { provider: true, externalCustomerId: true, status: true },
+      },
       serviceAssignments: {
         where: { endDate: null, status: { not: "cancelled" } },
         select: { status: true, endDate: true, nextDueDate: true, deviceId: true },
@@ -34,8 +38,8 @@ export default async function CustomersPage() {
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{customersTableTitle(rows.length)}</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Local records; use Sync on a customer when Invoiless is configured. Rows with a next due date sort to the
-            top (soonest first).
+            Local records; billing mode shows Stripe vs manual/Invoiless. Rows with a next due date sort to the top
+            (soonest first).
           </p>
         </div>
         <Link

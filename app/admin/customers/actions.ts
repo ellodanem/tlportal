@@ -4,8 +4,9 @@ import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createInvoilessCustomer, updateInvoilessCustomer } from "@/lib/invoiless/customer-sync";
+import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
+import { syncCustomerToInvoilessBilling } from "@/lib/services/billing-service";
 
 import type { CustomerFormActionState } from "./customer-form-state";
 
@@ -171,30 +172,11 @@ export async function deleteCustomer(formData: FormData): Promise<void> {
 }
 
 export async function syncCustomerToInvoiless(customerId: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!process.env.INVOILESS_API_KEY?.trim()) {
-    return { ok: false, error: "INVOILESS_API_KEY is not set." };
-  }
-
-  const c = await prisma.customer.findUnique({ where: { id: customerId } });
-  if (!c) {
-    return { ok: false, error: "Customer not found." };
-  }
-
-  try {
-    if (c.invoilessCustomerId) {
-      await updateInvoilessCustomer(c);
-    } else {
-      const { id: remoteId } = await createInvoilessCustomer(c);
-      await prisma.customer.update({
-        where: { id: c.id },
-        data: { invoilessCustomerId: remoteId },
-      });
-    }
+  const session = await getSession();
+  const result = await syncCustomerToInvoilessBilling(customerId, session?.sub ?? null);
+  if (result.ok) {
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${customerId}`);
-    return { ok: true };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Sync failed.";
-    return { ok: false, error: message };
   }
+  return result;
 }

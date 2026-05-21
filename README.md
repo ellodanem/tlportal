@@ -82,6 +82,12 @@ Import the repo, set `DATABASE_URL` and other secrets in the Vercel project sett
 
 **Branding / Vercel Blob:** set `BLOB_READ_WRITE_TOKEN` from the Blob store. Logo upload uses a Server Action; `next.config.ts` raises `experimental.serverActions.bodySizeLimit` so files up to **2 MB** are not rejected by the default **~1 MB** multipart limit — **redeploy** after changing that config.
 
+## Architecture docs
+
+- [Vendor-agnostic architecture](docs/vendor-agnostic-architecture.md) — control layer above providers.
+- [Phase 1 foundation plan](docs/phase-1-vendor-foundation-plan.md) — approved implementation sequence.
+- [Subscription renewal tracking](docs/subscription-renewal-tracking.md) — billing mirror / renewal ladder design.
+
 ## Project context log
 
 `**PROJECT_CONTEXT.md`** is an append-only local log of commits and pushes. Cursor is configured (`.cursor/rules/project-context-log.mdc`) to keep it updated when you work in this repo.

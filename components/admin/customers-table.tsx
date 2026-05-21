@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
+import type { CustomerBillingMode } from "@prisma/client";
+
 import type { AssignmentRollup } from "@/lib/admin/customer-list";
 
 export type CustomerTableRow = {
@@ -12,7 +14,9 @@ export type CustomerTableRow = {
   activeServices: number;
   distinctDevices: number;
   nextDue: Date | null;
+  billingMode: CustomerBillingMode;
   invoilessLinked: boolean;
+  stripeStatus: string | null;
   rollup: AssignmentRollup;
   updatedAt: Date;
 };
@@ -49,6 +53,31 @@ function RollupPill({ rollup }: { rollup: AssignmentRollup }) {
       {x.label}
     </span>
   );
+}
+
+function BillingModeBadge({
+  billingMode,
+  stripeStatus,
+}: {
+  billingMode: CustomerBillingMode;
+  stripeStatus: string | null;
+}) {
+  if (billingMode === "stripe_subscription") {
+    const troubled = stripeStatus === "past_due" || stripeStatus === "unpaid";
+    return (
+      <span
+        className={`inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+          troubled
+            ? "bg-rose-100 text-rose-900 dark:bg-rose-950/50 dark:text-rose-200"
+            : "bg-violet-100 text-violet-900 dark:bg-violet-950/50 dark:text-violet-200"
+        }`}
+        title={stripeStatus ? `Stripe · ${stripeStatus}` : "Stripe billing"}
+      >
+        Stripe{stripeStatus ? ` · ${stripeStatus}` : ""}
+      </span>
+    );
+  }
+  return null;
 }
 
 /** Inline next to customer name when Invoiless is configured. */
@@ -149,7 +178,10 @@ export function CustomersTable({
                         <span className="min-w-0 truncate font-semibold text-zinc-900 group-hover:text-emerald-800 dark:text-zinc-50 dark:group-hover:text-emerald-300">
                           {r.displayName}
                         </span>
-                        {invoilessConfigured ? <InvoilessLinkIcon linked={r.invoilessLinked} /> : null}
+                        <BillingModeBadge billingMode={r.billingMode} stripeStatus={r.stripeStatus} />
+                        {invoilessConfigured && r.billingMode !== "stripe_subscription" ? (
+                          <InvoilessLinkIcon linked={r.invoilessLinked} />
+                        ) : null}
                       </span>
                       <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">{r.subtitle}</span>
                       {r.tagsLine ? (

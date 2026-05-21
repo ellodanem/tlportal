@@ -1,5 +1,7 @@
 import type { ServiceAssignmentStatus } from "@prisma/client";
 
+import { displayAssignmentOpsStatus } from "@/lib/admin/assignment-ops-urgency";
+
 export type AssignmentRollup = "overdue" | "due_soon" | "suspended" | "active" | "none";
 
 export function customerDisplayName(c: {
@@ -40,14 +42,18 @@ export function tagsPreview(tags: string[], max = 2): string | null {
 }
 
 export function rollupFromAssignments(
-  assignments: { status: ServiceAssignmentStatus }[],
+  assignments: { status: ServiceAssignmentStatus; nextDueDate: Date | null }[],
 ): AssignmentRollup {
   if (assignments.length === 0) return "none";
-  const set = new Set(assignments.map((a) => a.status));
-  if (set.has("overdue")) return "overdue";
-  if (set.has("due_soon")) return "due_soon";
-  if (set.has("suspended")) return "suspended";
-  return "active";
+
+  let rollup: AssignmentRollup = "active";
+  for (const a of assignments) {
+    const display = displayAssignmentOpsStatus(a.status, a.nextDueDate);
+    if (display === "overdue") return "overdue";
+    if (display === "due_soon") rollup = "due_soon";
+    else if (display === "suspended" && rollup === "active") rollup = "suspended";
+  }
+  return rollup;
 }
 
 export function earliestNextDue(assignments: { nextDueDate: Date | null }[]): Date | null {

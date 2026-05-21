@@ -2,23 +2,38 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
+import { FleetHealthSummary, type FleetHealthFilter } from "@/components/dashboard/fleet-health-summary";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { prisma } from "@/lib/db";
 import { buildInvoilessBillToAddress } from "@/lib/invoiless/customer-sync";
 import { fetchInvoicesForInvoilessCustomerId, isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
+import { customerDisplayName } from "@/lib/admin/customer-display";
+import { displayAssignmentOpsStatus } from "@/lib/admin/assignment-ops-urgency";
+import {
+  classifyCustomerAssignments,
+  fleetHealthCountsFromClassifications,
+  reviewReasonLabel,
+  type FleetHealthBucket,
+} from "@/lib/admin/fleet-health";
+import { CustomerSubnav } from "@/components/admin/customer-subnav";
+import { CUSTOMER_SUBSCRIPTION_STATUS_LABEL } from "@/lib/domain/customer-subscription";
+import { getStripeBillingAccount, isStripeConfigured } from "@/lib/services/billing-service";
+import {
+  getCurrentCustomerSubscription,
+  isSubscriptionAttentionStatus,
+} from "@/lib/services/customer-subscription-service";
+import { resolveGpsPortalUrl } from "@/lib/services/device-link-service";
+import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ fleet?: string }>;
+};
 
-function displayName(c: {
-  company: string | null;
-  firstName: string | null;
-  lastName: string | null;
-}) {
-  const co = c.company?.trim();
-  if (co) return co;
-  const person = [c.firstName, c.lastName].filter(Boolean).join(" ");
-  return person || "Customer";
+function parseFleetFilter(raw: string | undefined): FleetHealthFilter {
+  if (raw === "healthy" || raw === "renewal" || raw === "review") return raw;
+  return "all";
 }
 
 function formatDate(d: Date | null | undefined) {
@@ -43,8 +58,11 @@ function statusPill(status: string) {
   );
 }
 
-export default async function CustomerDetailPage({ params }: Props) {
+export default async function CustomerDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { fleet: fleetParam } = await searchParams;
+  const fleetFilter = parseFleetFilter(fleetParam);
+
   const customer = await prisma.customer.findUnique({
     where: { id },
     include: {
@@ -55,6 +73,9 @@ export default async function CustomerDetailPage({ params }: Props) {
             include: {
               deviceModel: true,
               simCard: true,
+              providerDeviceLinks: {
+                where: { unlinkedAt: null },
+              },
             },
           },
           simCard: true,
@@ -67,11 +88,59 @@ export default async function CustomerDetailPage({ params }: Props) {
     notFound();
   }
 
-  const name = displayName(customer);
+  const name = customerDisplayName(customer);
+  const [stripeAccount, customerSubscription] = await Promise.all([
+    isStripeConfigured() ? getStripeBillingAccount(customer.id) : Promise.resolve(null),
+    getCurrentCustomerSubscription(customer.id),
+  ]);
   const openAssignments = customer.serviceAssignments.filter(
     (a) => a.endDate == null && a.status !== "cancelled",
   );
   const activeServices = openAssignments.length;
+
+  const stripeBillingAttention =
+    customerSubscription != null
+      ? isSubscriptionAttentionStatus(customerSubscription.status)
+      : stripeAccount != null &&
+        (stripeAccount.status === "past_due" || stripeAccount.status === "unpaid");
+
+  const openHealthInputs = openAssignments.map((a) => ({
+    id: a.id,
+    status: a.status,
+    nextDueDate: a.nextDueDate,
+    device: {
+      id: a.device.id,
+      status: a.device.status,
+      simCard: a.device.simCard,
+      providerDeviceLinks: a.device.providerDeviceLinks,
+    },
+    simCard: a.simCard,
+  }));
+
+  const openClassifications = classifyCustomerAssignments(openHealthInputs, {
+    stripeBillingAttention,
+  });
+  const fleetHealthCounts = fleetHealthCountsFromClassifications(openClassifications);
+
+  const openClassificationById = new Map(
+    openAssignments.map((a, i) => [a.id, openClassifications[i]]),
+  );
+
+  const bucketByFilter: FleetHealthBucket | null =
+    fleetFilter === "healthy" || fleetFilter === "renewal" || fleetFilter === "review"
+      ? fleetFilter
+      : null;
+
+  const filteredAssignments =
+    bucketByFilter == null
+      ? customer.serviceAssignments
+      : customer.serviceAssignments.filter((a) => {
+          const open = a.endDate == null && a.status !== "cancelled";
+          if (!open) return false;
+          return openClassificationById.get(a.id)?.bucket === bucketByFilter;
+        });
+
+  const customerOverviewHref = `/admin/customers/${customer.id}`;
   const nextDueDates = openAssignments
     .map((a) => a.nextDueDate)
     .filter((d): d is Date => d != null)
@@ -81,6 +150,8 @@ export default async function CustomerDetailPage({ params }: Props) {
   const invoilessAddressPreview = buildInvoilessBillToAddress(customer);
   const invoilessApi = isInvoilessConfigured();
   let recentInvoices: Awaited<ReturnType<typeof fetchInvoicesForInvoilessCustomerId>> = [];
+  const activityEvents = await listOperationalEventsForCustomer(id, 12);
+
   if (invoilessApi && customer.invoilessCustomerId) {
     try {
       const hints = [name, customer.email?.trim()].filter(Boolean) as string[];
@@ -120,15 +191,25 @@ export default async function CustomerDetailPage({ params }: Props) {
           </div>
           <p className="mt-2 font-mono text-xs text-zinc-500">{customer.id}</p>
         </div>
-        <Link
-          href={`/admin/customers/${customer.id}/edit`}
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
-        >
-          Edit customer
-        </Link>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link
+            href={`/admin/customers/${customer.id}/billing`}
+            className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+          >
+            Billing
+          </Link>
+          <Link
+            href={`/admin/customers/${customer.id}/edit`}
+            className="inline-flex items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900"
+          >
+            Edit profile
+          </Link>
+        </div>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      <CustomerSubnav customerId={customer.id} active="overview" />
+
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Active services
@@ -139,6 +220,24 @@ export default async function CustomerDetailPage({ params }: Props) {
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Open assignments (not cancelled, no end date)
           </p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Subscription
+          </p>
+          <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            {customer.billingMode === "stripe_subscription"
+              ? customerSubscription
+                ? CUSTOMER_SUBSCRIPTION_STATUS_LABEL[customerSubscription.status]
+                : stripeAccount?.status ?? "Not started"
+              : "Manual"}
+          </p>
+          <Link
+            href={`/admin/customers/${customer.id}/billing`}
+            className="mt-1 inline-block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          >
+            Manage billing →
+          </Link>
         </div>
         <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -161,6 +260,15 @@ export default async function CustomerDetailPage({ params }: Props) {
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Earliest next billing date</p>
         </div>
       </section>
+
+      <FleetHealthSummary
+        counts={fleetHealthCounts}
+        activeFilter={fleetFilter}
+        baseHref={customerOverviewHref}
+        title="Account health"
+        subtitle="Open services for this customer · click a card to filter the device table"
+        generatedAt={new Date()}
+      />
 
       <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Billing &amp; contact</h2>
@@ -309,14 +417,30 @@ export default async function CustomerDetailPage({ params }: Props) {
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Service history</h2>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Devices and SIMs tied to this customer through service assignments.
-        </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Device details</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              {bucketByFilter
+                ? `Showing ${filteredAssignments.length} assignment${filteredAssignments.length === 1 ? "" : "s"} · ${fleetFilter} filter`
+                : "All service assignments for this customer"}
+            </p>
+          </div>
+          {fleetFilter !== "all" ? (
+            <Link
+              href={customerOverviewHref}
+              className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              Clear filter
+            </Link>
+          ) : null}
+        </div>
 
-        {customer.serviceAssignments.length === 0 ? (
+        {filteredAssignments.length === 0 ? (
           <div className="mt-4 rounded-lg border border-dashed border-zinc-300 bg-zinc-50/80 px-4 py-10 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-400">
-            No service assignments yet. When devices are assigned with billing, they will appear here.
+            {customer.serviceAssignments.length === 0
+              ? "No service assignments yet. When devices are assigned with billing, they will appear here."
+              : "No assignments match this filter."}
           </div>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -327,6 +451,8 @@ export default async function CustomerDetailPage({ params }: Props) {
                   <th className="px-4 py-3">Device</th>
                   <th className="px-4 py-3">SIM</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Health</th>
+                  <th className="px-4 py-3">Tracking</th>
                   <th className="px-4 py-3">Term</th>
                   <th className="px-4 py-3">Billing</th>
                   <th className="px-4 py-3">Next due</th>
@@ -334,9 +460,10 @@ export default async function CustomerDetailPage({ params }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {customer.serviceAssignments.map((a) => {
+                {filteredAssignments.map((a) => {
                   const iccid = a.device.simCard?.iccid ?? a.simCard?.iccid ?? "—";
                   const simId = a.device.simCard?.id ?? a.simCard?.id;
+                  const simStatus = a.device.simCard?.status ?? a.simCard?.status;
                   const modelName = a.device.deviceModel.name;
                   const friendly = a.device.label?.trim() || "Unnamed device";
                   const assignmentOpen = a.endDate == null && a.status !== "cancelled";
@@ -344,6 +471,12 @@ export default async function CustomerDetailPage({ params }: Props) {
                     assignmentOpen
                       ? `/admin/devices/${a.device.id}/edit#active-service`
                       : `/admin/devices/${a.device.id}/edit`;
+                  const classification = openClassificationById.get(a.id);
+                  const primaryLink = a.device.providerDeviceLinks[0];
+                  const gpsUrl =
+                    (primaryLink ? resolveGpsPortalUrl(primaryLink) : null) ??
+                    customer.traqcarePortalUrl?.trim() ??
+                    null;
                   return (
                     <tr key={a.id} className="bg-white dark:bg-zinc-900">
                       <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">
@@ -392,7 +525,41 @@ export default async function CustomerDetailPage({ params }: Props) {
                           iccid
                         )}
                       </td>
-                      <td className="px-4 py-3">{statusPill(a.status)}</td>
+                      <td className="px-4 py-3">
+                        {statusPill(displayAssignmentOpsStatus(a.status, a.nextDueDate))}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400">
+                        {assignmentOpen && classification ? (
+                          classification.bucket === "healthy" ? (
+                            <span className="font-medium text-emerald-700 dark:text-emerald-400">OK</span>
+                          ) : classification.bucket === "renewal" ? (
+                            <span className="font-medium text-rose-700 dark:text-rose-400">Renewal due</span>
+                          ) : (
+                            <span className="text-violet-800 dark:text-violet-300">
+                              {classification.reviewReasons.map(reviewReasonLabel).join(", ")}
+                            </span>
+                          )
+                        ) : (
+                          "—"
+                        )}
+                        {simStatus ? (
+                          <div className="mt-1 text-zinc-500">SIM {simStatus}</div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        {gpsUrl ? (
+                          <a
+                            href={gpsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                          >
+                            Open GPS
+                          </a>
+                        ) : (
+                          <span className="text-xs text-zinc-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                         {a.intervalMonths != null ? formatPlanTerm(a.intervalMonths) : "—"}
                       </td>
@@ -423,6 +590,39 @@ export default async function CustomerDetailPage({ params }: Props) {
           </div>
         )}
       </section>
+
+      {activityEvents.length > 0 ? (
+        <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recent activity</h2>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Operational log in TL Portal (assignments, billing sync, registrations).
+          </p>
+          <ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
+            {activityEvents.map((ev) => (
+              <li
+                key={ev.id}
+                className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-800 dark:text-zinc-200">{ev.summary}</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{ev.category.replace(/\./g, " · ")}</p>
+                </div>
+                <time
+                  dateTime={ev.occurredAt.toISOString()}
+                  className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400"
+                >
+                  {ev.occurredAt.toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </time>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

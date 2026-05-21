@@ -1,8 +1,16 @@
 import "server-only";
 
 import type { FleetSegmentKey } from "@/lib/admin/fleet-segments";
+import { opsUrgencyFromNextDueDate, opsUrgencyRank } from "@/lib/admin/assignment-ops-urgency";
+import { getGlobalFleetHealth } from "@/lib/admin/fleet-health";
 
 import { prisma } from "@/lib/db";
+import { isStripeBillingEnabled } from "@/lib/stripe/config";
+
+const unlinkedInvoilessWhere = {
+  invoilessCustomerId: null,
+  billingAccounts: { none: { provider: "invoiless" as const } },
+} as const;
 
 export type DashboardAttentionItem = {
   id: string;
@@ -24,10 +32,14 @@ export type DashboardRecentItem = {
   href: string;
 };
 
+const STRIPE_ATTENTION_STATUSES = ["past_due", "unpaid"] as const;
+
 export async function getDashboardStats() {
   const invoilessConfigured = Boolean(process.env.INVOILESS_API_KEY?.trim());
+  const stripeConfigured = isStripeBillingEnabled();
 
   const [
+    fleetHealth,
     fleetUnassigned,
     fleetProduction,
     fleetDemo,
@@ -37,16 +49,16 @@ export async function getDashboardStats() {
     inStockDeviceCount,
     suspendedDeviceCount,
     activeServiceCount,
-    overdueAssignmentCount,
-    dueSoonAssignmentCount,
+    openAssignmentsWithDue,
     unlinkedInvoilessCount,
-    attentionAssignments,
     upcomingBillAssignments,
     recentCustomers,
     pendingRegistrationCount,
     simDataSums,
     simCardCount,
+    stripeBillingIssues,
   ] = await Promise.all([
+    getGlobalFleetHealth(),
     prisma.device.count({
       where: { usagePurpose: "customer", status: "in_stock" },
     }),
@@ -66,18 +78,12 @@ export async function getDashboardStats() {
     prisma.serviceAssignment.count({
       where: { endDate: null, status: { not: "cancelled" } },
     }),
-    prisma.serviceAssignment.count({ where: { status: "overdue" } }),
-    prisma.serviceAssignment.count({ where: { status: "due_soon" } }),
-    invoilessConfigured
-      ? prisma.customer.count({ where: { invoilessCustomerId: null } })
-      : Promise.resolve(0),
     prisma.serviceAssignment.findMany({
       where: {
-        status: { in: ["overdue", "due_soon"] },
         endDate: null,
+        status: { not: "cancelled" },
+        nextDueDate: { not: null },
       },
-      take: 6,
-      orderBy: [{ status: "asc" }, { nextDueDate: "asc" }],
       include: {
         customer: {
           select: { id: true, company: true, firstName: true, lastName: true },
@@ -85,6 +91,9 @@ export async function getDashboardStats() {
         device: { select: { imei: true } },
       },
     }),
+    invoilessConfigured
+      ? prisma.customer.count({ where: unlinkedInvoilessWhere })
+      : Promise.resolve(0),
     prisma.serviceAssignment.findMany({
       where: {
         endDate: null,
@@ -116,12 +125,56 @@ export async function getDashboardStats() {
       _sum: { usedDataMB: true, totalDataMB: true },
     }),
     prisma.simCard.count(),
+    stripeConfigured
+      ? prisma.billingAccount.findMany({
+          where: {
+            provider: "stripe",
+            status: { in: [...STRIPE_ATTENTION_STATUSES] },
+          },
+          take: 6,
+          orderBy: { updatedAt: "desc" },
+          include: {
+            customer: {
+              select: { id: true, company: true, firstName: true, lastName: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
   ]);
+
+  type DueAssignment = (typeof openAssignmentsWithDue)[number];
+  const attentionCandidates: { assignment: DueAssignment; urgency: ReturnType<typeof opsUrgencyFromNextDueDate> }[] =
+    [];
+  let overdueAssignmentCount = 0;
+  let dueSoonAssignmentCount = 0;
+
+  for (const a of openAssignmentsWithDue) {
+    const urgency = opsUrgencyFromNextDueDate(a.nextDueDate);
+    if (urgency === "overdue") {
+      overdueAssignmentCount += 1;
+      attentionCandidates.push({ assignment: a, urgency });
+    } else if (urgency === "due_soon") {
+      dueSoonAssignmentCount += 1;
+      attentionCandidates.push({ assignment: a, urgency });
+    }
+  }
+
+  attentionCandidates.sort((x, y) => {
+    const r = opsUrgencyRank(x.urgency) - opsUrgencyRank(y.urgency);
+    if (r !== 0) return r;
+    const dx = (x.assignment.nextDueDate?.getTime() ?? 0) - (y.assignment.nextDueDate?.getTime() ?? 0);
+    return dx;
+  });
+
+  const attentionAssignments = attentionCandidates.slice(0, 6).map((c) => c.assignment);
+
+  const stripeBillingIssueCount = stripeBillingIssues.length;
 
   const attentionCount =
     overdueAssignmentCount +
     dueSoonAssignmentCount +
-    (invoilessConfigured ? unlinkedInvoilessCount : 0);
+    (invoilessConfigured ? unlinkedInvoilessCount : 0) +
+    stripeBillingIssueCount;
 
   const displayName = (c: {
     company: string | null;
@@ -138,14 +191,14 @@ export async function getDashboardStats() {
 
   for (const a of attentionAssignments) {
     const name = displayName(a.customer);
-    const urgent = a.status === "overdue";
+    const urgent = opsUrgencyFromNextDueDate(a.nextDueDate) === "overdue";
     const duePart = a.nextDueDate
       ? `Next due ${formatShortDue(a.nextDueDate)}`
       : "Next due not set";
     attentionItems.push({
       id: a.id,
       title: urgent ? `Overdue service — ${name}` : `Due soon — ${name}`,
-      meta: `${duePart} · IMEI ${a.device.imei} · ${a.status.replace(/_/g, " ")}`,
+      meta: `${duePart} · IMEI ${a.device.imei}`,
       href: `/admin/customers/${a.customer.id}`,
       tone: urgent ? "urgent" : "warning",
     });
@@ -167,9 +220,21 @@ export async function getDashboardStats() {
     if (upcomingBillItems.length >= 6) break;
   }
 
+  for (const account of stripeBillingIssues) {
+    if (attentionItems.length >= 6) break;
+    const name = displayName(account.customer);
+    attentionItems.push({
+      id: `stripe-${account.id}`,
+      title: `Stripe ${account.status} — ${name}`,
+      meta: "Open billing on the customer edit screen.",
+      href: `/admin/customers/${account.customer.id}/edit`,
+      tone: "urgent",
+    });
+  }
+
   if (invoilessConfigured && unlinkedInvoilessCount > 0) {
     const unlinked = await prisma.customer.findMany({
-      where: { invoilessCustomerId: null },
+      where: unlinkedInvoilessWhere,
       take: Math.min(3, 6 - attentionItems.length),
       orderBy: { updatedAt: "desc" },
       select: { id: true, company: true, firstName: true, lastName: true },
@@ -206,6 +271,8 @@ export async function getDashboardStats() {
 
   return {
     invoilessConfigured,
+    stripeConfigured,
+    stripeBillingIssueCount,
     fleetSegments,
     customerCount,
     assignedDeviceCount,
@@ -223,5 +290,6 @@ export async function getDashboardStats() {
     attentionItems,
     upcomingBillItems,
     recentItems,
+    fleetHealth,
   };
 }

@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth/get-session";
 import { parseDeviceObjectType } from "@/lib/admin/device-object-type";
 import { parseDeviceTagsInput, parseDeviceUsagePurpose } from "@/lib/admin/device-usage-purpose";
 import { prisma } from "@/lib/db";
+import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { parseSubscriptionIntervalMonths } from "@/lib/subscription-options/display";
 
 import type { DeviceFormActionState } from "./device-form-state";
@@ -155,6 +156,7 @@ export async function registerDevice(
   }
 
   try {
+    let createdDeviceId: string | null = null;
     await prisma.$transaction(async (tx) => {
       const status = customerId ? "assigned" : "in_stock";
 
@@ -174,6 +176,7 @@ export async function registerDevice(
           simCardId,
         },
       });
+      createdDeviceId = device.id;
 
       if (customerId) {
         await tx.serviceAssignment.create({
@@ -188,6 +191,26 @@ export async function registerDevice(
         });
       }
     });
+
+    const actor = (await getSession())?.sub ?? null;
+    if (createdDeviceId) {
+      await recordOperationalEvent({
+        category: "device.registered",
+        summary: `Device registered (IMEI ${imei})`,
+        deviceId: createdDeviceId,
+        customerId: customerId ?? undefined,
+        actorUserId: actor,
+      });
+      if (customerId) {
+        await recordOperationalEvent({
+          category: "assignment.created",
+          summary: "Service assignment created on register",
+          deviceId: createdDeviceId,
+          customerId,
+          actorUserId: actor,
+        });
+      }
+    }
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { error: "That IMEI is already registered." };
@@ -342,6 +365,13 @@ export async function assignDeviceToCustomer(
         data: { status: "assigned" },
       });
     });
+    await recordOperationalEvent({
+      category: "assignment.created",
+      summary: "Device assigned to customer",
+      deviceId,
+      customerId,
+      actorUserId: (await getSession())?.sub ?? undefined,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg || "Could not assign device." };
@@ -485,6 +515,13 @@ export async function unassignDeviceFromCustomer(
         where: { id: deviceId },
         data: { status: "in_stock" },
       });
+    });
+    await recordOperationalEvent({
+      category: "assignment.ended",
+      summary: "Service assignment ended (device returned to stock)",
+      deviceId,
+      customerId: assignment.customerId,
+      actorUserId: (await getSession())?.sub ?? undefined,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
