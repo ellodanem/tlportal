@@ -108,29 +108,36 @@ export async function createCustomer(
     return { error: message };
   }
 
-  let setupWarnings: string[] = [];
-  if (setupBilling) {
-    const modeRaw = String(formData.get("billingSetupMode") ?? "").trim();
-    const mode =
-      modeRaw === "manual_legacy"
-        ? "manual_legacy"
-        : isStripeBillingEnabled()
-          ? "stripe_subscription"
-          : "manual_legacy";
-    const setupResult = await enableCustomerBillingLifecycle({
-      customerId,
-      mode,
-      actorUserId: session?.sub ?? null,
-    });
-    if (setupResult.ok) {
-      setupWarnings = setupResult.warnings;
-    }
+  revalidatePath("/admin/customers");
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+
+  if (!setupBilling) {
+    redirect(`/admin/customers/${customerId}/billing`);
   }
 
-  revalidatePath("/admin/customers");
+  const modeRaw = String(formData.get("billingSetupMode") ?? "").trim();
+  const mode =
+    modeRaw === "manual_legacy"
+      ? "manual_legacy"
+      : isStripeBillingEnabled()
+        ? "stripe_subscription"
+        : "manual_legacy";
+  const setupResult = await enableCustomerBillingLifecycle({
+    customerId,
+    mode,
+    actorUserId: session?.sub ?? null,
+  });
+
+  const setupMessages: string[] = [];
+  if (setupResult.ok) {
+    setupMessages.push(...setupResult.warnings);
+  } else {
+    setupMessages.push(setupResult.error);
+  }
   const warnQuery =
-    setupWarnings.length > 0
-      ? `&warn=${encodeURIComponent(setupWarnings.join(" "))}`
+    setupMessages.length > 0
+      ? `&warn=${encodeURIComponent(setupMessages.join(" "))}`
       : "";
   redirect(`/admin/customers/${customerId}/billing?setup=1${warnQuery}`);
 }
