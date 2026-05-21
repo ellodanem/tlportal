@@ -7,6 +7,7 @@ import { DeviceGpsLinkForm } from "@/components/admin/device-gps-link-form";
 import { DeviceSimEditSection } from "@/components/admin/device-sim-edit-section";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-service-assignment-edit-form";
+import { MarkAssignmentPaidForm } from "@/components/admin/mark-assignment-paid-form";
 import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { fetchSimsAvailableForDeviceSwap } from "@/lib/admin/sims-available-for-device";
@@ -114,6 +115,13 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
               defaultStartDate={dateInputValue(openAssignment.startDate)}
               defaultNextDueDate={dateInputValue(openAssignment.nextDueDate)}
               defaultInvoilessRecurringId={openAssignment.invoilessRecurringId ?? ""}
+            />
+            <MarkAssignmentPaidForm
+              assignmentId={openAssignment.id}
+              customerId={openAssignment.customerId}
+              deviceId={device.id}
+              intervalMonths={openAssignment.intervalMonths}
+              nextDueDate={openAssignment.nextDueDate}
             />
           </div>
           {device.status !== "decommissioned" && device.status !== "lost" ? (

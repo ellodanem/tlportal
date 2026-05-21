@@ -46,11 +46,12 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 
 ## Paid period handling
 
-### Manual paid (target for first implementation)
+### Manual paid (implemented — Phase 6)
 
-- Staff marks a period as paid / rolls renewal in TL (e.g. action on assignment or customer device row).
-- Updates: advance **`nextDueDate`**, optionally set **`lastInvoiceId`** / **`lastPaymentStatus`** if known.
-- This is the **reliable default** when Invoiless webhooks, polling, or invoice-to-device mapping are unavailable.
+- Staff marks a period as paid on **Customer → Billing → Renewal ops** or **Manage device → Mark period paid**.
+- Updates: advance **`nextDueDate`** by **`intervalMonths`** from current next due (or start/today if unset), set **`lastPaymentStatus`**, optional **`lastInvoiceId`** ref.
+- **Mark all** active devices on one customer when one payment covers the fleet.
+- Stripe **`invoice.paid`** can auto-advance all active assignments (idempotent via **`lastInvoiceId`** = Stripe `in_…`); disable with `STRIPE_RENEWAL_AUTO_ADVANCE=false`.
 
 ### Automatic paid _(TBD — placeholder only)_
 
@@ -91,3 +92,4 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 | 2026-04-15 | Doc added: hybrid baseline + ladder, manual paid first; automatic paid and invoice linking explicitly deferred. |
 | 2026-04-15 | Billing term (`intervalMonths`) editable on Manage device; also on assign/register flows; SIM detail shows term + link. |
 | 2026-04-16 | Invoiless webhook receiver `POST /api/webhooks/invoiless` + signature helper; GET inspect last payload (dev / debug token). |
+| 2026-05-21 | Phase 6: manual mark paid + bulk; Stripe `invoice.paid` auto-advance (`assignment-renewal-service`, billing tab Renewal ops). |

@@ -108,6 +108,7 @@ export async function createCustomer(
     return { error: message };
   }
 
+  let setupWarnings: string[] = [];
   if (setupBilling) {
     const modeRaw = String(formData.get("billingSetupMode") ?? "").trim();
     const mode =
@@ -116,15 +117,22 @@ export async function createCustomer(
         : isStripeBillingEnabled()
           ? "stripe_subscription"
           : "manual_legacy";
-    await enableCustomerBillingLifecycle({
+    const setupResult = await enableCustomerBillingLifecycle({
       customerId,
       mode,
       actorUserId: session?.sub ?? null,
     });
+    if (setupResult.ok) {
+      setupWarnings = setupResult.warnings;
+    }
   }
 
   revalidatePath("/admin/customers");
-  redirect(`/admin/customers/${customerId}/billing?setup=1`);
+  const warnQuery =
+    setupWarnings.length > 0
+      ? `&warn=${encodeURIComponent(setupWarnings.join(" "))}`
+      : "";
+  redirect(`/admin/customers/${customerId}/billing?setup=1${warnQuery}`);
 }
 
 export async function updateCustomer(

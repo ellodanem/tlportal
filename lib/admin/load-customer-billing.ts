@@ -10,6 +10,7 @@ import {
   isStripeConfigured,
 } from "@/lib/services/billing-service";
 import { listBillingInvoicesForCustomer } from "@/lib/services/billing-invoice-service";
+import { listActiveAssignmentsForRenewal } from "@/lib/services/assignment-renewal-service";
 import { getBillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
 import {
@@ -43,8 +44,15 @@ export async function loadCustomerBillingPageData(customerId: string) {
   });
   const defaultVehicleCount = Math.max(1, activeAssignmentCount);
 
-  const [invoilessId, stripeAccount, planOptions, stripeInvoices, customerSubscription, billingSetup] =
-    await Promise.all([
+  const [
+    invoilessId,
+    stripeAccount,
+    planOptions,
+    stripeInvoices,
+    customerSubscription,
+    billingSetup,
+    renewalAssignments,
+  ] = await Promise.all([
       getInvoilessExternalCustomerId(customer.id),
       getStripeBillingAccount(customer.id),
       listStripeCheckoutPlanOptions({
@@ -55,6 +63,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
       listBillingInvoicesForCustomer(customer.id),
       getCurrentCustomerSubscription(customer.id),
       getBillingSetupStatus(customer.id),
+      listActiveAssignmentsForRenewal(customer.id),
     ]);
 
   const stripeMeta = stripeAccount ? parseStripeBillingMetadata(stripeAccount.metadata) : null;
@@ -114,5 +123,19 @@ export async function loadCustomerBillingPageData(customerId: string) {
     stripePeriodEnd,
     stripeInvoices,
     subscriptionSummary,
+    renewalAssignments: renewalAssignments.map((a) => ({
+      id: a.id,
+      intervalMonths: a.intervalMonths,
+      nextDueDate: a.nextDueDate?.toISOString() ?? null,
+      lastPaymentStatus: a.lastPaymentStatus,
+      lastInvoiceId: a.lastInvoiceId,
+      status: a.status,
+      device: {
+        id: a.device.id,
+        imei: a.device.imei,
+        label: a.device.label,
+        objectType: a.device.objectType,
+      },
+    })),
   };
 }
