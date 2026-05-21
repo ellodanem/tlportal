@@ -21,6 +21,17 @@ function parseDurationMonthsFromSubscription(sub: Stripe.Subscription): number |
   return null;
 }
 
+function parseVehicleCountFromSubscription(sub: Stripe.Subscription): number | null {
+  const fromMeta = sub.metadata?.tl_vehicle_count?.trim();
+  if (fromMeta) {
+    const n = Number.parseInt(fromMeta, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const qty = sub.items?.data?.[0]?.quantity;
+  if (qty != null && qty > 0) return Math.trunc(qty);
+  return null;
+}
+
 function parseMonthlyRateXcdFromSubscription(sub: Stripe.Subscription): Prisma.Decimal | null {
   const fromMeta = sub.metadata?.tl_monthly_rate_xcd?.trim();
   if (fromMeta) {
@@ -103,6 +114,7 @@ export async function upsertCustomerSubscriptionFromStripe(
   const status = stripeSubscriptionStatusToTl(sub.status);
   const planTermMonths = parseDurationMonthsFromSubscription(sub) ?? 1;
   const monthlyRateXcd = parseMonthlyRateXcdFromSubscription(sub);
+  const vehicleCount = parseVehicleCountFromSubscription(sub);
   const periods = periodDatesFromSubscription(sub);
   const tlSubscriptionId = sub.metadata?.tl_subscription_id?.trim();
 
@@ -111,6 +123,7 @@ export async function upsertCustomerSubscriptionFromStripe(
     status,
     planTermMonths,
     monthlyRateXcd,
+    vehicleCount,
     stripeSubscriptionId,
     stripeCustomerId,
     ...periods,
@@ -180,6 +193,7 @@ export async function markCustomerSubscriptionCanceledFromStripe(
         status: "canceled",
         planTermMonths: parseDurationMonthsFromSubscription(sub) ?? 1,
         monthlyRateXcd: parseMonthlyRateXcdFromSubscription(sub),
+        vehicleCount: parseVehicleCountFromSubscription(sub),
         stripeSubscriptionId,
         stripeCustomerId:
           typeof sub.customer === "string" ? sub.customer : (sub.customer?.id ?? null),
@@ -196,6 +210,7 @@ export async function markCustomerSubscriptionCanceledFromStripe(
       stripeSubscriptionId,
       stripeCustomerId:
         typeof sub.customer === "string" ? sub.customer : (sub.customer?.id ?? null),
+      vehicleCount: parseVehicleCountFromSubscription(sub) ?? row.vehicleCount,
       ...periods,
     },
   });

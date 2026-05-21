@@ -232,6 +232,22 @@ model SubscriptionOption {
   registrationRequests RegistrationRequest[]
 }
 
+/// Stripe catalog: per-vehicle Price id for monthly rate tier × billing term (Checkout quantity = vehicles).
+model SubscriptionCatalogPrice {
+  id             String   @id @default(uuid())
+  /// Per-vehicle monthly rate tier (e.g. 30, 25, 20 XCD).
+  monthlyRateXcd Decimal  @db.Decimal(10, 2)
+  durationMonths Int
+  /// Stripe Price (`price_…`) per vehicle for this billing interval.
+  stripePriceId  String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([monthlyRateXcd, durationMonths])
+  @@index([durationMonths])
+}
+
 /// Client-submitted registration; staff approves → Customer created (Invoiless separate).
 model RegistrationRequest {
   id     String                    @id @default(uuid())

@@ -2,10 +2,11 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 
+import { isCatalogRateTier, normalizeRateXcd } from "@/lib/domain/billing-catalog";
 import { prisma } from "@/lib/db";
-import { formatSubscriptionChoiceLabel } from "@/lib/subscription-options/display";
+import { formatSubscriptionChoiceLabel, formatXcd } from "@/lib/subscription-options/display";
 
-import { resolveStripePriceId } from "./price-ids";
+import { resolveCatalogStripePriceId } from "./catalog-price-ids";
 
 const PLAN_MONTHS = [1, 3, 6, 12] as const;
 
@@ -37,14 +38,22 @@ export function parseMonthlyRateXcd(raw: string | null | undefined): number | nu
   if (!Number.isFinite(n) || n <= 0 || n > 999_999) {
     return null;
   }
-  return Math.round(n * 100) / 100;
+  return normalizeRateXcd(n);
 }
 
-/** Total charged per billing period for a multi-month term at a given monthly rate. */
-export function periodTotalXcd(monthlyRateXcd: number, durationMonths: number): number {
+export function parseVehicleCount(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  const n = Number.parseInt(String(raw).trim(), 10);
+  if (!Number.isFinite(n) || n < 1 || n > 9999) {
+    return null;
+  }
+  return n;
+}
+
+/** Total charged per billing period for one vehicle at a multi-month term. */
+export function periodTotalPerVehicleXcd(monthlyRateXcd: number, durationMonths: number): number {
   const months = Math.trunc(durationMonths);
   if (months === 12) {
-    // Match catalog 12-month discount vs 12 × 1-month list (330 vs 360 at $30/mo).
     const discount = 330 / (30 * 12);
     return Math.round(monthlyRateXcd * 12 * discount * 100) / 100;
   }
@@ -52,71 +61,96 @@ export function periodTotalXcd(monthlyRateXcd: number, durationMonths: number): 
 }
 
 export type CheckoutLineItem =
-  | { type: "price_id"; priceId: string }
+  | { type: "price_id"; priceId: string; quantity: number; monthlyRateXcd: number; durationMonths: number }
   | {
       type: "price_data";
       durationMonths: number;
       monthlyRateXcd: number;
-      periodTotalXcd: number;
+      periodTotalPerVehicleXcd: number;
+      quantity: number;
+      catalogFallback?: boolean;
     };
 
-/**
- * Catalog Price id when no custom monthly rate; otherwise dynamic recurring price_data.
- */
-export async function resolveCheckoutLineItem(input: {
+export type ResolveCheckoutInput = {
   durationMonths: number;
+  /** Null = default catalog tier (typically $30/mo per vehicle). */
   monthlyRateXcd: number | null;
-}): Promise<CheckoutLineItem | null> {
+  vehicleCount: number;
+  /** Force dynamic price_data (non-catalog custom rate). */
+  useCustomPricing?: boolean;
+};
+
+/**
+ * Catalog Stripe Price × vehicle quantity when tier/term are configured; else dynamic per-vehicle price_data.
+ */
+export async function resolveCheckoutLineItem(
+  input: ResolveCheckoutInput,
+): Promise<CheckoutLineItem | null> {
   const months = Math.trunc(input.durationMonths);
   if (!PLAN_MONTHS.includes(months as (typeof PLAN_MONTHS)[number])) {
     return null;
   }
 
-  if (input.monthlyRateXcd == null) {
-    const priceId = await resolveStripePriceId(months);
+  const quantity = Math.max(1, Math.trunc(input.vehicleCount));
+  const defaultMonthly = await getDefaultMonthlyRateXcd();
+  const monthly = input.monthlyRateXcd ?? defaultMonthly;
+  const useCustom = input.useCustomPricing === true || !isCatalogRateTier(monthly);
+
+  if (!useCustom) {
+    const priceId = await resolveCatalogStripePriceId(monthly, months);
     if (priceId) {
-      return { type: "price_id", priceId };
+      return {
+        type: "price_id",
+        priceId,
+        quantity,
+        monthlyRateXcd: monthly,
+        durationMonths: months,
+      };
     }
-    const defaultMonthly = await getDefaultMonthlyRateXcd();
-    const period = periodTotalXcd(defaultMonthly, months);
-    return {
-      type: "price_data",
-      durationMonths: months,
-      monthlyRateXcd: defaultMonthly,
-      periodTotalXcd: period,
-    };
   }
 
-  const period = periodTotalXcd(input.monthlyRateXcd, months);
+  const periodPerVehicle = periodTotalPerVehicleXcd(monthly, months);
   return {
     type: "price_data",
     durationMonths: months,
-    monthlyRateXcd: input.monthlyRateXcd,
-    periodTotalXcd: period,
+    monthlyRateXcd: monthly,
+    periodTotalPerVehicleXcd: periodPerVehicle,
+    quantity,
+    catalogFallback: !useCustom,
   };
 }
 
-export async function listStripeCheckoutPlanOptions(monthlyRateXcd: number | null) {
+export async function listStripeCheckoutPlanOptions(input: {
+  monthlyRateXcd: number | null;
+  vehicleCount: number;
+  useCustomPricing?: boolean;
+}) {
   const plans = await prisma.subscriptionOption.findMany({
     where: { isActive: true, durationMonths: { in: [...PLAN_MONTHS] } },
     orderBy: { durationMonths: "asc" },
   });
   const defaultMonthly = await getDefaultMonthlyRateXcd();
-  const monthly = monthlyRateXcd ?? defaultMonthly;
+  const monthly = input.monthlyRateXcd ?? defaultMonthly;
+  const vehicles = Math.max(1, Math.trunc(input.vehicleCount));
+  const useCustom = input.useCustomPricing === true || !isCatalogRateTier(monthly);
 
-  const options: { durationMonths: number; label: string }[] = [];
+  const options: { durationMonths: number; label: string; usesCatalogPrice: boolean }[] = [];
   for (const p of plans) {
-    const hasPriceId =
-      monthlyRateXcd == null && (await resolveStripePriceId(p.durationMonths));
-    const total =
-      monthlyRateXcd != null
-        ? periodTotalXcd(monthly, p.durationMonths)
-        : hasPriceId
-          ? Number(p.priceXcd)
-          : periodTotalXcd(monthly, p.durationMonths);
+    const hasCatalog =
+      !useCustom && (await resolveCatalogStripePriceId(monthly, p.durationMonths));
+    const perVehicle = hasCatalog
+      ? periodTotalPerVehicleXcd(monthly, p.durationMonths)
+      : periodTotalPerVehicleXcd(monthly, p.durationMonths);
+    const total = Math.round(perVehicle * vehicles * 100) / 100;
+    const base = formatSubscriptionChoiceLabel(p.durationMonths, total);
+    const label =
+      vehicles > 1
+        ? `${base} · ${vehicles} vehicles × ${formatXcd(monthly)}/mo`
+        : `${base} · ${formatXcd(monthly)}/mo per vehicle`;
     options.push({
       durationMonths: p.durationMonths,
-      label: formatSubscriptionChoiceLabel(p.durationMonths, total),
+      label,
+      usesCatalogPrice: Boolean(hasCatalog),
     });
   }
   return options;
@@ -127,5 +161,27 @@ export function monthlyRateFromCustomer(
 ): number | null {
   if (stripeMonthlyRateXcd == null) return null;
   const n = Number(stripeMonthlyRateXcd);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return Number.isFinite(n) && n > 0 ? normalizeRateXcd(n) : null;
+}
+
+/** Effective monthly rate for checkout from admin rate preset. */
+export function effectiveMonthlyRateForCheckout(
+  preset: string,
+  customMonthlyRateXcd: number | null,
+  defaultMonthlyRateXcd: number,
+): { monthlyRateXcd: number | null; useCustomPricing: boolean } {
+  if (preset === "custom") {
+    return { monthlyRateXcd: customMonthlyRateXcd, useCustomPricing: true };
+  }
+  if (preset === "default" || !preset) {
+    return { monthlyRateXcd: null, useCustomPricing: false };
+  }
+  const parsed = parseMonthlyRateXcd(preset);
+  if (parsed == null) {
+    return { monthlyRateXcd: null, useCustomPricing: false };
+  }
+  return {
+    monthlyRateXcd: parsed,
+    useCustomPricing: !isCatalogRateTier(parsed),
+  };
 }

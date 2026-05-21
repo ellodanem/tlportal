@@ -28,6 +28,8 @@ export function CustomerBillingPanel({
   planOptions,
   defaultMonthlyRateXcd,
   stripeMonthlyRateXcd,
+  defaultVehicleCount,
+  catalogConfigured,
   stripeBanner,
 }: {
   customerId: string;
@@ -39,6 +41,8 @@ export function CustomerBillingPanel({
   planOptions: PlanOption[];
   defaultMonthlyRateXcd: number;
   stripeMonthlyRateXcd: number | null;
+  defaultVehicleCount: number;
+  catalogConfigured: boolean;
   stripeBanner?: "success" | "cancel" | null;
 }) {
   const [modeState, modeAction, modePending] = useActionState(setBillingModeAction, initial);
@@ -149,10 +153,10 @@ export function CustomerBillingPanel({
 
           <form action={rateAction} className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
             <input type="hidden" name="customerId" value={customerId} />
-            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Monthly subscription rate</p>
+            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Per-vehicle monthly rate</p>
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Default is {formatXcd(defaultMonthlyRateXcd)}/month. Set $25 or $20 (or custom) for this customer;
-              Checkout uses it for new subscriptions.
+              Catalog tiers $30 / $25 / $20 use fixed Stripe Prices (set under Subscription options). Custom rates
+              use dynamic pricing. Default is {formatXcd(defaultMonthlyRateXcd)}/vehicle/month.
               {stripeMonthlyRateXcd != null ? (
                 <>
                   {" "}
@@ -213,9 +217,18 @@ export function CustomerBillingPanel({
                 <input type="hidden" name="customMonthlyRateXcd" value={customRate} />
               ) : null}
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                <p className="text-xs text-zinc-500 sm:self-center">
-                  Checkout uses the monthly rate selected above.
-                </p>
+                <label className="block text-sm">
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Vehicles</span>
+                  <input
+                    type="number"
+                    name="vehicleCount"
+                    min={1}
+                    max={9999}
+                    defaultValue={String(defaultVehicleCount)}
+                    className="mt-1 block w-full min-w-[5rem] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  />
+                  <span className="mt-0.5 block text-xs text-zinc-500">Stripe quantity (active assignments: {defaultVehicleCount})</span>
+                </label>
                 <label className="block text-sm">
                   <span className="font-medium text-zinc-700 dark:text-zinc-300">Plan term</span>
                   <select
@@ -246,6 +259,13 @@ export function CustomerBillingPanel({
                   {emailPending ? "Sending…" : "Email link to customer"}
                 </button>
               </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {ratePreset === "custom"
+                  ? "Checkout will use dynamic per-vehicle pricing for this custom rate."
+                  : catalogConfigured
+                    ? "Checkout uses Stripe catalog Price × vehicle count for the tier and term above."
+                    : "No Stripe catalog Price configured for this tier/term — Checkout will use dynamic pricing. Add Price ids under Admin → Subscription options."}
+              </p>
             </form>
           ) : (
             <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">

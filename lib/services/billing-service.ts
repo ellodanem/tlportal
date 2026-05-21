@@ -168,8 +168,12 @@ export async function startStripeCheckout(
   customerId: string,
   durationMonths: number,
   actorUserId?: string | null,
-  monthlyRateXcd?: number | null,
-): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  options?: {
+    monthlyRateXcd?: number | null;
+    vehicleCount?: number;
+    useCustomPricing?: boolean;
+  },
+): Promise<{ ok: true; url: string; pricingMode: string } | { ok: false; error: string }> {
   if (!isStripeBillingEnabled()) {
     return { ok: false, error: "Stripe billing is not enabled." };
   }
@@ -184,25 +188,35 @@ export async function startStripeCheckout(
       where: { id: customerId },
       data: { billingMode: "stripe_subscription" },
     });
+    const vehicleCount = Math.max(1, options?.vehicleCount ?? 1);
+    const monthlyRateXcd = options?.monthlyRateXcd ?? null;
     const { id: tlSubscriptionId } = await createPendingCustomerSubscription({
       customerId,
       planTermMonths: durationMonths,
-      monthlyRateXcd: monthlyRateXcd ?? null,
+      monthlyRateXcd,
+      vehicleCount,
     });
-    const { url } = await createStripeSubscriptionCheckout({
+    const { url, pricingMode } = await createStripeSubscriptionCheckout({
       customer,
       durationMonths,
       tlSubscriptionId,
       monthlyRateXcd,
+      vehicleCount,
+      useCustomPricing: options?.useCustomPricing,
     });
     await recordOperationalEvent({
       category: "billing.synced",
-      summary: `Stripe Checkout started (${durationMonths} mo plan)`,
+      summary: `Stripe Checkout started (${durationMonths} mo, ${vehicleCount} vehicle${vehicleCount === 1 ? "" : "s"}, ${pricingMode})`,
       customerId,
       actorUserId: actorUserId ?? undefined,
-      payload: { durationMonths, monthlyRateXcd: monthlyRateXcd ?? null },
+      payload: {
+        durationMonths,
+        monthlyRateXcd,
+        vehicleCount,
+        pricingMode,
+      },
     });
-    return { ok: true, url };
+    return { ok: true, url, pricingMode };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Checkout failed." };
   }

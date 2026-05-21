@@ -13,7 +13,12 @@ import {
   syncCustomerToInvoilessBilling,
 } from "@/lib/services/billing-service";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
-import { parseMonthlyRateXcd } from "@/lib/stripe/checkout-pricing";
+import {
+  effectiveMonthlyRateForCheckout,
+  getDefaultMonthlyRateXcd,
+  parseMonthlyRateXcd,
+  parseVehicleCount,
+} from "@/lib/stripe/checkout-pricing";
 import type { CustomerBillingMode } from "@prisma/client";
 
 export type BillingActionState = {
@@ -23,11 +28,16 @@ export type BillingActionState = {
   message?: string;
 };
 
-function parseCheckoutForm(formData: FormData): {
-  customerId: string;
-  months: number;
-  checkoutRate: number | null;
-} | { error: string } {
+async function parseCheckoutForm(formData: FormData): Promise<
+  | {
+      customerId: string;
+      months: number;
+      monthlyRateXcd: number | null;
+      vehicleCount: number;
+      useCustomPricing: boolean;
+    }
+  | { error: string }
+> {
   const customerId = String(formData.get("customerId") ?? "").trim();
   const months = Number(String(formData.get("durationMonths") ?? ""));
   if (!customerId) {
@@ -37,25 +47,32 @@ function parseCheckoutForm(formData: FormData): {
     return { error: "Choose a valid plan term (1, 3, 6, or 12 months)." };
   }
 
+  const vehicleCount = parseVehicleCount(String(formData.get("vehicleCount") ?? "")) ?? 1;
+
   const rateRaw = String(formData.get("monthlyRateXcd") ?? "").trim();
-  let checkoutRate: number | null = null;
-  if (rateRaw && rateRaw !== "default") {
-    if (rateRaw === "custom") {
-      const custom = parseMonthlyRateXcd(String(formData.get("customMonthlyRateXcd") ?? ""));
-      if (custom == null) {
-        return { error: "Enter a valid custom monthly amount for Checkout." };
-      }
-      checkoutRate = custom;
-    } else {
-      const parsed = parseMonthlyRateXcd(rateRaw);
-      if (parsed == null) {
-        return { error: "Choose a valid monthly rate for Checkout." };
-      }
-      checkoutRate = parsed;
+  const defaultMonthly = await getDefaultMonthlyRateXcd();
+  let customMonthly: number | null = null;
+  if (rateRaw === "custom") {
+    customMonthly = parseMonthlyRateXcd(String(formData.get("customMonthlyRateXcd") ?? ""));
+    if (customMonthly == null) {
+      return { error: "Enter a valid custom monthly amount for Checkout." };
     }
   }
 
-  return { customerId, months, checkoutRate };
+  const { monthlyRateXcd, useCustomPricing } = effectiveMonthlyRateForCheckout(
+    rateRaw,
+    customMonthly,
+    defaultMonthly,
+  );
+
+  if (rateRaw && rateRaw !== "default" && rateRaw !== "custom") {
+    const parsed = parseMonthlyRateXcd(rateRaw);
+    if (parsed == null) {
+      return { error: "Choose a valid monthly rate tier for Checkout." };
+    }
+  }
+
+  return { customerId, months, monthlyRateXcd, vehicleCount, useCustomPricing };
 }
 
 export async function setBillingModeAction(
@@ -97,25 +114,29 @@ export async function startStripeCheckoutAction(
     return { error: "You must be signed in." };
   }
 
-  const parsed = parseCheckoutForm(formData);
+  const parsed = await parseCheckoutForm(formData);
   if ("error" in parsed) {
     return { error: parsed.error };
   }
 
-  const result = await startStripeCheckout(
-    parsed.customerId,
-    parsed.months,
-    session.sub,
-    parsed.checkoutRate,
-  );
+  const result = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
+    monthlyRateXcd: parsed.monthlyRateXcd,
+    vehicleCount: parsed.vehicleCount,
+    useCustomPricing: parsed.useCustomPricing,
+  });
   if (!result.ok) {
     return { error: result.error };
   }
 
+  const pricingNote =
+    result.pricingMode === "catalog"
+      ? "Using Stripe catalog price × vehicle count."
+      : "Using dynamic pricing (custom or missing catalog Price).";
+
   return {
     error: null,
     url: result.url,
-    message: `Copy the link below and send it to your customer. ${checkoutInitialLinkNotice()}`,
+    message: `Copy the link below and send it to your customer. ${checkoutInitialLinkNotice()} ${pricingNote}`,
   };
 }
 
@@ -128,7 +149,7 @@ export async function emailStripeCheckoutLinkAction(
     return { error: "You must be signed in." };
   }
 
-  const parsed = parseCheckoutForm(formData);
+  const parsed = await parseCheckoutForm(formData);
   if ("error" in parsed) {
     return { error: parsed.error };
   }
@@ -141,12 +162,11 @@ export async function emailStripeCheckoutLinkAction(
     return { error: "Customer has no email on file. Add one on the profile below, then try again." };
   }
 
-  const checkout = await startStripeCheckout(
-    parsed.customerId,
-    parsed.months,
-    session.sub,
-    parsed.checkoutRate,
-  );
+  const checkout = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
+    monthlyRateXcd: parsed.monthlyRateXcd,
+    vehicleCount: parsed.vehicleCount,
+    useCustomPricing: parsed.useCustomPricing,
+  });
   if (!checkout.ok) {
     return { error: checkout.error };
   }
@@ -213,6 +233,7 @@ export async function setStripeMonthlyRateAction(
 
   revalidatePath(`/admin/customers/${customerId}/edit`);
   revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/billing`);
   return { error: null };
 }
 

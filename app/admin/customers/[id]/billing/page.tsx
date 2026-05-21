@@ -36,6 +36,8 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     planOptions,
     defaultMonthlyRate,
     savedMonthlyRate,
+    defaultVehicleCount,
+    catalogConfigured,
     stripeInvoices,
     subscriptionSummary,
   } = data;
@@ -78,6 +80,8 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         planOptions={planOptions}
         defaultMonthlyRateXcd={defaultMonthlyRate}
         stripeMonthlyRateXcd={savedMonthlyRate}
+        defaultVehicleCount={defaultVehicleCount}
+        catalogConfigured={catalogConfigured}
         stripeBanner={stripeBannerFromQuery(stripeQuery)}
       />
 
