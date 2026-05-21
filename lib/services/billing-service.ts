@@ -51,6 +51,30 @@ export async function getInvoilessExternalCustomerId(customerId: string): Promis
   return legacy?.invoilessCustomerId ?? null;
 }
 
+export async function findTlCustomerIdByInvoilessExternalId(
+  invoilessCustomerId: string,
+): Promise<string | null> {
+  const id = invoilessCustomerId.trim();
+  if (!id) return null;
+
+  const account = await prisma.billingAccount.findUnique({
+    where: {
+      provider_externalCustomerId: {
+        provider: "invoiless",
+        externalCustomerId: id,
+      },
+    },
+    select: { customerId: true },
+  });
+  if (account) return account.customerId;
+
+  const legacy = await prisma.customer.findFirst({
+    where: { invoilessCustomerId: id },
+    select: { id: true },
+  });
+  return legacy?.id ?? null;
+}
+
 export async function setCustomerStripeMonthlyRate(
   customerId: string,
   monthlyRateXcd: number | null,

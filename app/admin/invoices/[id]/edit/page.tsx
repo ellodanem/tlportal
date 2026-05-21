@@ -3,8 +3,9 @@ import { notFound, redirect } from "next/navigation";
 
 import { InvoiceEditForm } from "@/components/admin/invoices/invoice-edit-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
-import { prisma } from "@/lib/db";
 import { fetchInvoilessInvoiceForEdit } from "@/lib/invoiless/invoice-mutate";
+import { prisma } from "@/lib/db";
+import { findTlCustomerIdByInvoilessExternalId } from "@/lib/services/billing-service";
 import { isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
 
 type Props = { params: Promise<{ id: string }> };
@@ -27,10 +28,14 @@ export default async function EditInvoicePage({ params }: Props) {
     notFound();
   }
 
-  const tl =
+  const tlCustomerId =
     data.invoilessCustomerId != null
-      ? await prisma.customer.findFirst({
-          where: { invoilessCustomerId: data.invoilessCustomerId },
+      ? await findTlCustomerIdByInvoilessExternalId(data.invoilessCustomerId)
+      : null;
+  const tl =
+    tlCustomerId != null
+      ? await prisma.customer.findUnique({
+          where: { id: tlCustomerId },
           select: { id: true, company: true, firstName: true, lastName: true },
         })
       : null;

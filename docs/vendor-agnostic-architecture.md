@@ -230,3 +230,5 @@ Summary:
 | 2026-05-21 | Public pay thanks/cancel URLs; Billing tab; BillingInvoice mirror |
 | 2026-05-21 | Locked: subscription-first recurring; plan one-off hardware invoices next |
 | 2026-05-21 | Paid invoice PDF spec; TL-INV display numbers (Stripe # secondary) |
+| 2026-05-21 | Phases 4–6 billing lifecycle, Invoiless paid mirror, renewal mark paid |
+| 2026-05-21 | Phase 7: Invoiless via BillingAccount + accounting copy on Invoices admin |

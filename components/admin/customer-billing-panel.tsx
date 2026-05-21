@@ -354,23 +354,23 @@ export function CustomerBillingPanel({
         </div>
       ) : null}
 
-      {!isStripe && invoilessConfigured ? (
+      {invoilessConfigured ? (
         <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
-          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Invoiless</h3>
+          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Invoiless (accounting)</h3>
           <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
               {hasInvoilessId
-                ? "Linked. Push sends billing address, legal info, notes, tags, and invoice Cc/Bcc."
-                : "Not linked. Sync creates the customer in Invoiless."}
+                ? isStripe
+                  ? "Linked for accounting. Paid Stripe invoices can mirror here automatically; manual invoices stay in Admin → Invoices."
+                  : "Linked. Push sends billing address, legal info, notes, tags, and invoice Cc/Bcc."
+                : "Not linked. Sync creates the contact in Invoiless for invoices and paid mirrors."}
             </p>
             <SyncInvoilessButton customerId={customerId} hasInvoilessId={hasInvoilessId} />
           </div>
         </div>
-      ) : null}
-
-      {!isStripe && !invoilessConfigured ? (
-        <p className="text-sm text-zinc-500">Set INVOILESS_API_KEY for manual invoicing sync.</p>
-      ) : null}
+      ) : (
+        <p className="text-sm text-zinc-500">Set INVOILESS_API_KEY for Invoiless accounting sync.</p>
+      )}
     </section>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { InvoicesTableClient } from "@/components/admin/invoices/invoices-table-client";
 import { customerDisplayName } from "@/lib/admin/customer-list";
+import { loadInvoilessCustomerLinks, resolveInvoilessIdForCustomer } from "@/lib/admin/invoiless-customer-links";
 import { prisma } from "@/lib/db";
 import {
   fetchInvoicesForInvoilessCustomerId,
@@ -30,31 +31,9 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
 
   const invoilessConfigured = isInvoilessConfigured();
 
-  const customers = await prisma.customer.findMany({
-    where: { invoilessCustomerId: { not: null } },
-    select: {
-      id: true,
-      company: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      invoilessCustomerId: true,
-    },
-  });
-  const tlCustomerByInvoilessId: Record<string, { portalId: string; name: string }> = {};
-  const tlCustomerByEmail: Record<string, { portalId: string; name: string }> = {};
-  for (const c of customers) {
-    if (c.invoilessCustomerId) {
-      tlCustomerByInvoilessId[c.invoilessCustomerId] = {
-        portalId: c.id,
-        name: customerDisplayName(c),
-      };
-    }
-    const em = c.email?.trim().toLowerCase();
-    if (em) {
-      tlCustomerByEmail[em] = { portalId: c.id, name: customerDisplayName(c) };
-    }
-  }
+  const { tlCustomerByInvoilessId, tlCustomerByEmail } = invoilessConfigured
+    ? await loadInvoilessCustomerLinks()
+    : { tlCustomerByInvoilessId: {}, tlCustomerByEmail: {} };
 
   let rows: Awaited<ReturnType<typeof fetchInvoicesPage>>["rows"] = [];
   let pagination = { page, limit, totalPages: 1, totalItems: 0 };
@@ -78,14 +57,16 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
     if (!cust) {
       customerScopeMessage =
         "Customer not found. Remove the customer filter from the URL or open Invoices from a customer in TL Portal.";
-    } else if (!cust.invoilessCustomerId) {
-      customerScopeMessage =
-        "This customer is not linked to Invoiless yet. Edit the customer and sync to Invoiless, then open this view again.";
     } else {
+      const invoilessCustomerId = await resolveInvoilessIdForCustomer(cust.id);
+      if (!invoilessCustomerId) {
+        customerScopeMessage =
+          "This customer is not linked to Invoiless yet. Open Billing and link accounts (or sync on edit), then return here.";
+      } else {
       scopedToCustomer = { portalId: cust.id, name: customerDisplayName(cust) };
       try {
         const hints = [customerDisplayName(cust), cust.email?.trim()].filter(Boolean) as string[];
-        rows = await fetchInvoicesForInvoilessCustomerId(cust.invoilessCustomerId, {
+        rows = await fetchInvoicesForInvoilessCustomerId(invoilessCustomerId, {
           maxInvoices: 100,
           searchHints: hints,
           matchEmails: cust.email?.trim() ? [cust.email.trim()] : [],
@@ -96,6 +77,7 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
         pagination = { page: 1, limit, totalPages: 1, totalItems: rows.length };
       } catch (e) {
         loadError = e instanceof Error ? e.message : "Failed to load invoices from Invoiless.";
+      }
       }
     }
   } else if (invoilessConfigured) {
@@ -118,10 +100,10 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Invoices</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Read-only mirror of Invoiless. Lists both standard invoices and retainers (Invoiless keeps retainers on a
-          separate screen, but the API exposes them to TL). Build and send there; use this view to scan status, totals,
-          and jump to customers linked in TL Portal. Rows attach by Invoiless customer id — nothing is linked per
-          invoice in TL.
+          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Accounting (Invoiless)</strong> — not where
+          card subscriptions run (that is <strong className="font-medium">Customer → Billing</strong>). Lists standard
+          invoices and retainers from Invoiless; Stripe-paid rows also appear here when Phase 5 mirroring is enabled.
+          Create manual or cash invoices here; link customers via Billing → Link billing accounts.
         </p>
       </div>
 

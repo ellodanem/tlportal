@@ -14,6 +14,10 @@ import {
 } from "@/lib/invoiless/invoice-mutate";
 import { parseLineItemsFromFormData } from "@/lib/invoiless/invoice-line-items";
 import { prisma } from "@/lib/db";
+import {
+  findTlCustomerIdByInvoilessExternalId,
+  getInvoilessExternalCustomerId,
+} from "@/lib/services/billing-service";
 
 import type { InvoiceCreateFormState, InvoiceDeleteState } from "./action-state";
 
@@ -42,11 +46,16 @@ export async function createInvoiceFromPortal(
 
   const customer = await prisma.customer.findUnique({
     where: { id: tlCustomerId },
-    select: { id: true, invoilessCustomerId: true },
+    select: { id: true },
   });
-  if (!customer?.invoilessCustomerId) {
+  if (!customer) {
+    return { error: "Customer not found." };
+  }
+
+  const invoilessCustomerId = await getInvoilessExternalCustomerId(tlCustomerId);
+  if (!invoilessCustomerId) {
     return {
-      error: "That customer is not linked to Invoiless. Sync them on the customer edit page first.",
+      error: "That customer is not linked to Invoiless. Open Billing and link accounts first.",
     };
   }
 
@@ -63,7 +72,7 @@ export async function createInvoiceFromPortal(
 
   try {
     await createInvoilessInvoiceApi({
-      invoilessCustomerId: customer.invoilessCustomerId,
+      invoilessCustomerId,
       items: parsedLines.items,
       status,
       notes,
@@ -131,12 +140,10 @@ export async function updateInvoiceFromPortal(
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${encodeURIComponent(invoiceId)}/edit`);
   if (invoilessCustomerId) {
-    const cust = await prisma.customer.findFirst({
-      where: { invoilessCustomerId },
-      select: { id: true },
-    });
-    if (cust) {
-      revalidatePath(`/admin/customers/${cust.id}`);
+    const tlId = await findTlCustomerIdByInvoilessExternalId(invoilessCustomerId);
+    if (tlId) {
+      revalidatePath(`/admin/customers/${tlId}`);
+      revalidatePath(`/admin/customers/${tlId}/billing`);
     }
   }
   redirect("/admin/invoices");

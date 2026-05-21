@@ -17,7 +17,11 @@ import {
 } from "@/lib/admin/fleet-health";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CUSTOMER_SUBSCRIPTION_STATUS_LABEL } from "@/lib/domain/customer-subscription";
-import { getStripeBillingAccount, isStripeConfigured } from "@/lib/services/billing-service";
+import {
+  getInvoilessExternalCustomerId,
+  getStripeBillingAccount,
+  isStripeConfigured,
+} from "@/lib/services/billing-service";
 import {
   getCurrentCustomerSubscription,
   isSubscriptionAttentionStatus,
@@ -89,9 +93,10 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   }
 
   const name = customerDisplayName(customer);
-  const [stripeAccount, customerSubscription] = await Promise.all([
+  const [stripeAccount, customerSubscription, invoilessCustomerId] = await Promise.all([
     isStripeConfigured() ? getStripeBillingAccount(customer.id) : Promise.resolve(null),
     getCurrentCustomerSubscription(customer.id),
+    getInvoilessExternalCustomerId(customer.id),
   ]);
   const openAssignments = customer.serviceAssignments.filter(
     (a) => a.endDate == null && a.status !== "cancelled",
@@ -146,16 +151,16 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
     .filter((d): d is Date => d != null)
     .sort((a, b) => a.getTime() - b.getTime());
   const nextDue = nextDueDates[0];
-  const linkedInvoiless = Boolean(customer.invoilessCustomerId);
+  const linkedInvoiless = Boolean(invoilessCustomerId);
   const invoilessAddressPreview = buildInvoilessBillToAddress(customer);
   const invoilessApi = isInvoilessConfigured();
   let recentInvoices: Awaited<ReturnType<typeof fetchInvoicesForInvoilessCustomerId>> = [];
   const activityEvents = await listOperationalEventsForCustomer(id, 12);
 
-  if (invoilessApi && customer.invoilessCustomerId) {
+  if (invoilessApi && invoilessCustomerId) {
     try {
       const hints = [name, customer.email?.trim()].filter(Boolean) as string[];
-      recentInvoices = await fetchInvoicesForInvoilessCustomerId(customer.invoilessCustomerId, {
+      recentInvoices = await fetchInvoicesForInvoilessCustomerId(invoilessCustomerId, {
         maxInvoices: 15,
         searchHints: hints,
         matchEmails: customer.email?.trim() ? [customer.email.trim()] : [],
@@ -247,7 +252,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
             {linkedInvoiless ? "Linked" : "Not linked"}
           </p>
           <p className="mt-1 truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">
-            {linkedInvoiless ? customer.invoilessCustomerId : "—"}
+            {linkedInvoiless ? invoilessCustomerId : "—"}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

@@ -2,8 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { InvoiceCreateForm } from "@/components/admin/invoices/invoice-create-form";
-import { customerDisplayName } from "@/lib/admin/customer-list";
-import { prisma } from "@/lib/db";
+import { loadInvoilessCustomerLinks } from "@/lib/admin/invoiless-customer-links";
 import { isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
 
 export default async function NewInvoicePage() {
@@ -11,15 +10,11 @@ export default async function NewInvoicePage() {
     redirect("/admin/invoices");
   }
 
-  const customers = await prisma.customer.findMany({
-    where: { invoilessCustomerId: { not: null } },
-    select: { id: true, company: true, firstName: true, lastName: true },
-    orderBy: [{ company: "asc" }, { lastName: "asc" }],
-  });
+  const { linkedCustomers } = await loadInvoilessCustomerLinks();
 
-  const options = customers.map((c) => ({
-    id: c.id,
-    name: customerDisplayName(c),
+  const options = linkedCustomers.map((c) => ({
+    id: c.portalId,
+    name: c.name,
   }));
 
   return (
@@ -36,9 +31,9 @@ export default async function NewInvoicePage() {
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">New invoice</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Creates the invoice in Invoiless via API (same workspace as your API key). Currency follows{" "}
-          <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">INVOILESS_DEFAULT_CURRENCY</code> or
-          XCD.
+          Manual / cash invoices in Invoiless (accounting). For Stripe card billing, use{" "}
+          <strong className="font-medium">Customer → Billing</strong> instead. Currency follows{" "}
+          <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">INVOILESS_DEFAULT_CURRENCY</code> or XCD.
         </p>
       </div>
 
@@ -46,7 +41,7 @@ export default async function NewInvoicePage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
           <p className="font-medium">No linked customers</p>
           <p className="mt-1">
-            Sync at least one customer to Invoiless, then return here.{" "}
+            Link at least one customer in Billing (Invoiless), then return here.{" "}
             <Link href="/admin/customers" className="font-semibold underline underline-offset-2">
               Customers
             </Link>
