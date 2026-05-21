@@ -1440,3 +1440,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-21 13:15 UTC — commit `951ea60`
+
+- docs: project context log (aa67d52)
+
+
+### 2026-05-21 13:15 UTC — pre-push (`main` → origin) @ `951ea60`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
