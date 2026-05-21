@@ -1557,3 +1557,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-21 15:58 UTC — commit `dfa04ae`
+
+- docs: project context log (42b8331)
+
+
+### 2026-05-21 15:58 UTC — pre-push (`main` → origin) @ `dfa04ae`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-21 16:10 UTC — commit `5154b4c`
+
+- feat(billing): Phase 4 lifecycle setup without auto-checkout
+
+
+### 2026-05-21 16:10 UTC — pre-push (`main` → origin) @ `5154b4c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
