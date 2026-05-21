@@ -1,5 +1,6 @@
 import type { BillingInvoice } from "@prisma/client";
 
+import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/invoices-list";
 import { formatXcd } from "@/lib/subscription-options/display";
 
 function formatDate(d: Date | null) {
@@ -26,7 +27,8 @@ export function StripeInvoicesList({ invoices }: { invoices: BillingInvoice[] })
     return (
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         No Stripe invoices mirrored yet. They appear after Checkout and subscription renewals (webhooks:
-        invoice.paid, invoice.finalized).
+        invoice.paid, invoice.finalized). Paid Stripe invoices also create a matching Invoiless invoice when the
+        customer is linked to Invoiless.
       </p>
     );
   }
@@ -41,6 +43,7 @@ export function StripeInvoicesList({ invoices }: { invoices: BillingInvoice[] })
             <th className="px-4 py-3 text-left">Amount</th>
             <th className="px-4 py-3 text-left">Period</th>
             <th className="px-4 py-3 text-left">Paid</th>
+            <th className="px-4 py-3 text-left">Invoiless</th>
             <th className="px-4 py-3 text-left">PDF</th>
           </tr>
         </thead>
@@ -72,6 +75,22 @@ export function StripeInvoicesList({ invoices }: { invoices: BillingInvoice[] })
                 )}
               </td>
               <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{formatDate(inv.paidAt)}</td>
+              <td className="px-4 py-3">
+                {inv.invoilessMirrorInvoiceId ? (
+                  <a
+                    href={invoilessInvoicePreviewUrl(inv.invoilessMirrorInvoiceId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                  >
+                    Mirrored
+                  </a>
+                ) : inv.status === "paid" ? (
+                  <span className="text-xs text-zinc-500">Pending mirror</span>
+                ) : (
+                  <span className="text-zinc-400">—</span>
+                )}
+              </td>
               <td className="px-4 py-3">
                 {inv.hostedInvoiceUrl ? (
                   <a

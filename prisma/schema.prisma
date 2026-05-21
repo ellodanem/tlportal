@@ -519,6 +519,8 @@ model BillingInvoice {
   invoicePdfUrl          String?
   stripeSubscriptionId   String?
   paidAt                 DateTime?
+  /// Invoiless invoice id created when mirroring Stripe `invoice.paid` (accounting copy).
+  invoilessMirrorInvoiceId String?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 

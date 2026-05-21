@@ -3,6 +3,11 @@ import "server-only";
 import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
+import { advanceAssignmentsOnStripeInvoicePaid } from "@/lib/services/assignment-renewal-service";
+import {
+  mirrorStripePaidInvoiceToInvoiless,
+  recordInvoilessMirrorEvent,
+} from "@/lib/services/invoiless-stripe-mirror-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 
 import { getStripeClient } from "./config";
@@ -96,7 +101,7 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     case "invoice.payment_failed":
     case "invoice.voided": {
       const invoice = event.data.object as Stripe.Invoice;
-      const { customerId } = await syncStripeInvoiceToDatabase(invoice);
+      const { customerId, invoiceId: tlBillingInvoiceId } = await syncStripeInvoiceToDatabase(invoice);
       const subId =
         typeof invoice.subscription === "string"
           ? invoice.subscription
@@ -116,6 +121,41 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
             amountPaid: invoice.amount_paid,
           },
         });
+        try {
+          const mirrorResult = await mirrorStripePaidInvoiceToInvoiless({
+            stripeInvoice: invoice,
+            customerId,
+            tlBillingInvoiceId,
+          });
+          await recordInvoilessMirrorEvent(customerId, invoice.id, mirrorResult);
+        } catch (e) {
+          console.error("[stripe webhook] Invoiless paid mirror failed", e);
+          await recordOperationalEvent({
+            category: "billing.synced",
+            summary: "Invoiless paid mirror error",
+            customerId,
+            payload: {
+              stripeInvoiceId: invoice.id,
+              error: e instanceof Error ? e.message : "Unknown error",
+            },
+          });
+        }
+        try {
+          const { advanced, skipped } = await advanceAssignmentsOnStripeInvoicePaid(
+            customerId,
+            invoice.id,
+          );
+          if (advanced > 0) {
+            await recordOperationalEvent({
+              category: "renewal.paid",
+              summary: `Renewal ladder advanced (${advanced} device${advanced === 1 ? "" : "s"})`,
+              customerId,
+              payload: { stripeInvoiceId: invoice.id, advanced, skipped },
+            });
+          }
+        } catch (e) {
+          console.error("[stripe webhook] renewal auto-advance failed", e);
+        }
       }
       break;
     }
