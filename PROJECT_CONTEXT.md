@@ -1481,3 +1481,18 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-21 14:18 UTC — commit `9ded965`
+
+- docs: project context log (2847309)
+
+
+### 2026-05-21 14:18 UTC — pre-push (`main` → origin) @ `9ded965`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-21 15:17 UTC — commit `80198b1`
+
+- feat(settings): add SMTP test send in admin settings
+
