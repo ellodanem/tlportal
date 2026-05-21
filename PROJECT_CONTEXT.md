@@ -1527,9 +1527,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
 
-### 2026-05-21 15:31 UTC — commit `0361b2e`
+### 2026-05-21 15:31 UTC — commit `3dd3334`
 
 - feat(billing): Phase 3 catalog pricing per vehicle and tier
 - SubscriptionCatalogPrice matrix (30/25/20 XCD tiers × 1/3/6/12 mo); Checkout catalog Price × vehicle quantity; dynamic fallback for custom rates; admin catalog editor on subscription options.
 
+
+### 2026-05-21 15:31 UTC — pre-push (`main` → origin) @ `3dd3334`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
