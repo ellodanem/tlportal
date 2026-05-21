@@ -15,6 +15,7 @@ import {
 } from "@/lib/branding/app-settings";
 import { parseBrandingLogoSize } from "@/lib/branding/logo-size";
 import { prisma } from "@/lib/db";
+import { sendAppEmailWithConfig } from "@/lib/email/send-mail";
 
 const SETTINGS_ID = "default";
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -25,6 +26,8 @@ export type BrandingFormState = { ok?: boolean; error?: string };
 export type BrandingLogoSizeFormState = { ok?: boolean; error?: string };
 
 export type SmtpSettingsFormState = { ok?: boolean; error?: string };
+
+export type SmtpTestFormState = { ok?: boolean; error?: string; sentTo?: string };
 
 function publicPathToFs(publicUrl: string): string {
   const relative = publicUrl.replace(/^\/+/, "");
@@ -230,6 +233,96 @@ function parseSmtpPort(raw: FormDataEntryValue | null): number {
   return Math.min(65535, Math.max(1, n));
 }
 
+function parseSmtpFormFields(formData: FormData) {
+  const host = (formData.get("smtpHost") as string)?.trim() || "";
+  const smtpSecure = formData.get("smtpSecure") === "on";
+  const user = (formData.get("smtpUser") as string)?.trim() || "";
+  const fromEmail = (formData.get("smtpFromEmail") as string)?.trim() || "";
+  const fromName = (formData.get("smtpFromName") as string)?.trim() || "";
+  const passwordRaw = formData.get("smtpPassword");
+  const password = typeof passwordRaw === "string" ? passwordRaw : "";
+  const clearPassword = formData.get("smtpClearPassword") === "on";
+  const port = parseSmtpPort(formData.get("smtpPort"));
+  return { host, smtpSecure, user, fromEmail, fromName, password, clearPassword, port };
+}
+
+async function resolveSmtpPasswordForSend(
+  fields: ReturnType<typeof parseSmtpFormFields>,
+): Promise<string> {
+  if (fields.clearPassword) {
+    return process.env.SMTP_PASSWORD?.trim() || "";
+  }
+  if (fields.password.trim()) {
+    return fields.password.trim();
+  }
+  const row = await prisma.appSettings.findUnique({
+    where: { id: SETTINGS_ID },
+    select: { smtpPassword: true },
+  });
+  return process.env.SMTP_PASSWORD?.trim() || row?.smtpPassword?.trim() || "";
+}
+
+export async function sendSmtpTestEmail(
+  _prev: SmtpTestFormState,
+  formData: FormData,
+): Promise<SmtpTestFormState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const testTo = (formData.get("smtpTestTo") as string)?.trim() || "";
+  if (!testTo) {
+    return { error: "Enter a recipient email for the test message." };
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testTo)) {
+    return { error: "Enter a valid recipient email address." };
+  }
+
+  const fields = parseSmtpFormFields(formData);
+  if (!fields.host) {
+    return { error: "SMTP host is required to send a test email." };
+  }
+  if (!fields.fromEmail) {
+    return { error: "From email is required to send a test email." };
+  }
+
+  const pass = await resolveSmtpPasswordForSend(fields);
+  const transport: {
+    host: string;
+    port: number;
+    secure: boolean;
+    auth?: { user: string; pass: string };
+  } = {
+    host: fields.host,
+    port: fields.port,
+    secure: fields.smtpSecure,
+  };
+  if (fields.user || pass) {
+    transport.auth = { user: fields.user, pass };
+  }
+
+  const from = fields.fromName
+    ? { address: fields.fromEmail, name: fields.fromName }
+    : { address: fields.fromEmail };
+
+  const sent = await sendAppEmailWithConfig(
+    { transport, from },
+    {
+      to: testTo,
+      subject: "TL Portal SMTP test",
+      text: "This is a test email from TL Portal. If you received this message, SMTP is working.",
+      html: "<p>This is a test email from <strong>TL Portal</strong>. If you received this message, SMTP is working.</p>",
+    },
+  );
+
+  if (!sent.ok) {
+    return { error: sent.error };
+  }
+
+  return { ok: true, sentTo: testTo };
+}
+
 export async function updateSmtpSettings(
   _prev: SmtpSettingsFormState,
   formData: FormData,
@@ -239,14 +332,8 @@ export async function updateSmtpSettings(
     return { error: "You must be signed in." };
   }
 
-  const host = (formData.get("smtpHost") as string)?.trim() || "";
-  const smtpSecure = formData.get("smtpSecure") === "on";
-  const user = (formData.get("smtpUser") as string)?.trim() || "";
-  const fromEmail = (formData.get("smtpFromEmail") as string)?.trim() || "";
-  const fromName = (formData.get("smtpFromName") as string)?.trim() || "";
-  const passwordRaw = formData.get("smtpPassword");
-  const password = typeof passwordRaw === "string" ? passwordRaw : "";
-  const clearPassword = formData.get("smtpClearPassword") === "on";
+  const { host, smtpSecure, user, fromEmail, fromName, password, clearPassword, port } =
+    parseSmtpFormFields(formData);
 
   if (!host) {
     await prisma.appSettings.upsert({
@@ -274,8 +361,6 @@ export async function updateSmtpSettings(
     revalidatePath("/admin/settings");
     return { ok: true };
   }
-
-  const port = parseSmtpPort(formData.get("smtpPort"));
 
   const updateData: Prisma.AppSettingsUpdateInput = {
     smtpHost: host,

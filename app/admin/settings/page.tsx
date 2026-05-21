@@ -1,10 +1,15 @@
 import { BrandingForm } from "@/components/admin/settings/branding-form";
 import { SmtpSettingsForm } from "@/components/admin/settings/smtp-settings-form";
+import { getSession } from "@/lib/auth/get-session";
 import { getBrandingSettings } from "@/lib/branding/app-settings";
 import { getSmtpSettingsForForm } from "@/lib/email/smtp-settings";
 
 export default async function AdminSettingsPage() {
-  const [branding, smtpInitial] = await Promise.all([getBrandingSettings(), getSmtpSettingsForForm()]);
+  const [branding, smtpInitial, session] = await Promise.all([
+    getBrandingSettings(),
+    getSmtpSettingsForForm(),
+    getSession(),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -21,7 +26,7 @@ export default async function AdminSettingsPage() {
         initialLogoUrl={branding.logoUrl}
         initialLogoSize={branding.logoSize}
       />
-      <SmtpSettingsForm initial={smtpInitial} />
+      <SmtpSettingsForm initial={smtpInitial} defaultTestTo={session?.email ?? ""} />
     </div>
   );
 }

@@ -5,11 +5,13 @@ import { useFormStatus } from "react-dom";
 
 import {
   type SmtpSettingsFormState,
+  type SmtpTestFormState,
+  sendSmtpTestEmail,
   updateSmtpSettings,
 } from "@/app/admin/settings/actions";
 import type { SmtpSettingsFormValues } from "@/lib/email/smtp-settings";
 
-function SubmitButton() {
+function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -17,15 +19,37 @@ function SubmitButton() {
       disabled={pending}
       className="inline-flex items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-700 disabled:opacity-60 dark:bg-amber-500 dark:hover:bg-amber-400"
     >
-      {pending ? "Saving…" : "Save SMTP settings"}
+      {pending ? pendingLabel : label}
     </button>
   );
 }
 
-const initialState: SmtpSettingsFormState = {};
+function TestSendButton({ action }: { action: (formData: FormData) => void }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      formAction={action}
+      disabled={pending}
+      className="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-900 shadow-sm transition hover:bg-amber-50 disabled:opacity-60 dark:border-amber-800 dark:bg-zinc-900 dark:text-amber-100 dark:hover:bg-amber-950/40"
+    >
+      {pending ? "Sending…" : "Send test email"}
+    </button>
+  );
+}
 
-export function SmtpSettingsForm({ initial }: { initial: SmtpSettingsFormValues }) {
-  const [state, formAction] = useActionState(updateSmtpSettings, initialState);
+const initialSaveState: SmtpSettingsFormState = {};
+const initialTestState: SmtpTestFormState = {};
+
+export function SmtpSettingsForm({
+  initial,
+  defaultTestTo,
+}: {
+  initial: SmtpSettingsFormValues;
+  defaultTestTo: string;
+}) {
+  const [state, formAction] = useActionState(updateSmtpSettings, initialSaveState);
+  const [testState, testFormAction] = useActionState(sendSmtpTestEmail, initialTestState);
 
   return (
     <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-white via-white to-amber-50/40 p-6 shadow-sm dark:border-amber-900/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/25">
@@ -161,6 +185,41 @@ export function SmtpSettingsForm({ initial }: { initial: SmtpSettingsFormValues 
           </div>
         </div>
 
+        <div className="rounded-lg border border-dashed border-amber-200/90 bg-amber-50/30 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <h3 className="text-sm font-medium text-amber-950 dark:text-amber-100">Test send</h3>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Sends using the values above (saved or not). Save settings afterward if the test succeeds.
+          </p>
+          <div className="mt-3">
+            <label htmlFor="smtpTestTo" className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+              Send test to
+            </label>
+            <input
+              id="smtpTestTo"
+              name="smtpTestTo"
+              type="email"
+              autoComplete="email"
+              required
+              defaultValue={defaultTestTo}
+              placeholder="you@example.com"
+              className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+            />
+          </div>
+          {testState.error ? (
+            <p className="mt-3 text-sm text-rose-600 dark:text-rose-400" role="alert">
+              {testState.error}
+            </p>
+          ) : null}
+          {testState.ok ? (
+            <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">
+              Test email sent to {testState.sentTo}.
+            </p>
+          ) : null}
+          <div className="mt-3">
+            <TestSendButton action={testFormAction} />
+          </div>
+        </div>
+
         {state.error ? (
           <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">
             {state.error}
@@ -170,7 +229,9 @@ export function SmtpSettingsForm({ initial }: { initial: SmtpSettingsFormValues 
           <p className="text-sm text-emerald-700 dark:text-emerald-400">SMTP settings saved.</p>
         ) : null}
 
-        <SubmitButton />
+        <div className="flex flex-wrap gap-3">
+          <SubmitButton label="Save SMTP settings" pendingLabel="Saving…" />
+        </div>
       </form>
     </div>
   );
