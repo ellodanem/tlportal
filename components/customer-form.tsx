@@ -37,9 +37,24 @@ function toFormDefaults(customer: Customer) {
 const inputClass =
   "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
 
-export function CustomerCreateForm() {
+export function CustomerCreateForm({
+  stripeBillingEnabled = false,
+  invoilessConfigured = false,
+}: {
+  stripeBillingEnabled?: boolean;
+  invoilessConfigured?: boolean;
+}) {
   const [state, formAction] = useActionState(createCustomer, customerFormInitialState);
-  return <CustomerFormInner formAction={formAction} state={state} defaults={{}} />;
+  return (
+    <CustomerFormInner
+      formAction={formAction}
+      state={state}
+      defaults={{}}
+      showBillingSetupOnCreate
+      stripeBillingEnabled={stripeBillingEnabled}
+      invoilessConfigured={invoilessConfigured}
+    />
+  );
 }
 
 export function CustomerEditForm({ customer }: { customer: Customer }) {
@@ -84,6 +99,9 @@ function CustomerFormInner({
   defaults,
   customerId,
   hasStoredTraqcarePassword = false,
+  showBillingSetupOnCreate = false,
+  stripeBillingEnabled = false,
+  invoilessConfigured = false,
 }: {
   formAction: (payload: FormData) => void;
   state: CustomerFormActionState;
@@ -91,6 +109,9 @@ function CustomerFormInner({
   customerId?: string;
   /** Edit only: whether a password is already saved (never shown in the form). */
   hasStoredTraqcarePassword?: boolean;
+  showBillingSetupOnCreate?: boolean;
+  stripeBillingEnabled?: boolean;
+  invoilessConfigured?: boolean;
 }) {
   return (
     <form action={formAction} className="max-w-xl space-y-6">
@@ -322,6 +343,55 @@ function CustomerFormInner({
           <span>Remove stored Traqcare password</span>
         </label>
       </div>
+
+      {showBillingSetupOnCreate ? (
+        <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+          <h2 className={sectionTitleClass}>Billing setup</h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Optionally link Stripe and Invoiless when the customer is created. You will land on Billing to send a payment link later — Checkout is not started automatically.
+          </p>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input
+              type="checkbox"
+              name="setupBilling"
+              value="1"
+              defaultChecked
+              className="mt-1 rounded border-zinc-300"
+            />
+            <span>Run billing setup after create</span>
+          </label>
+          <fieldset className="ml-6 flex flex-col gap-2 border-l border-zinc-200 pl-4 dark:border-zinc-700">
+            <legend className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Billing mode</legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="billingSetupMode"
+                value="stripe_subscription"
+                defaultChecked={stripeBillingEnabled}
+                disabled={!stripeBillingEnabled}
+                className="text-emerald-600"
+              />
+              Stripe card subscription
+              {!stripeBillingEnabled ? (
+                <span className="text-xs text-zinc-500">(set STRIPE_SECRET_KEY)</span>
+              ) : null}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="billingSetupMode"
+                value="manual_legacy"
+                defaultChecked={!stripeBillingEnabled}
+                className="text-emerald-600"
+              />
+              Manual / cash (Invoiless invoices)
+              {!invoilessConfigured ? (
+                <span className="text-xs text-zinc-500">(Invoiless optional)</span>
+              ) : null}
+            </label>
+          </fieldset>
+        </div>
+      ) : null}
 
       <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
         <h2 className={sectionTitleClass}>Tags &amp; notes</h2>

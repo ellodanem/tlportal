@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/get-session";
 import { buildRegistrationCustomerNotes } from "@/lib/register/build-registration-notes";
 import { prisma } from "@/lib/db";
+import { enableCustomerBillingLifecycle } from "@/lib/services/billing-lifecycle-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import { isStripeBillingEnabled } from "@/lib/stripe/config";
 import { formatSubscriptionChoiceLabel } from "@/lib/subscription-options/display";
 
 import type { RegistrationReviewState } from "./registration-review-state";
@@ -107,12 +109,20 @@ export async function approveRegistrationRequest(
     payload: { registrationRequestId: id },
   });
 
+  const billingMode = isStripeBillingEnabled() ? "stripe_subscription" : "manual_legacy";
+  await enableCustomerBillingLifecycle({
+    customerId,
+    mode: billingMode,
+    actorUserId: session.sub,
+  });
+
   revalidatePath("/admin/registration-requests");
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}/edit`);
+  revalidatePath(`/admin/customers/${customerId}/billing`);
   return {
     error: null,
-    next: `/admin/customers/${customerId}/edit`,
+    next: `/admin/customers/${customerId}/billing?setup=1`,
   };
 }
 

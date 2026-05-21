@@ -12,6 +12,7 @@ import {
   startStripeCheckout,
   syncCustomerToInvoilessBilling,
 } from "@/lib/services/billing-service";
+import { enableCustomerBillingLifecycle } from "@/lib/services/billing-lifecycle-service";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import {
   effectiveMonthlyRateForCheckout,
@@ -262,7 +263,49 @@ export async function syncInvoilessBillingAction(customerId: string) {
   if (result.ok) {
     revalidatePath(`/admin/customers/${customerId}/edit`);
     revalidatePath(`/admin/customers/${customerId}`);
+    revalidatePath(`/admin/customers/${customerId}/billing`);
     revalidatePath("/admin/customers");
   }
   return result;
+}
+
+export async function enableBillingSetupAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) {
+    return { error: "Missing customer id." };
+  }
+
+  const modeRaw = String(formData.get("billingMode") ?? "").trim();
+  const mode =
+    modeRaw === "manual_legacy" ? "manual_legacy" : ("stripe_subscription" as const);
+
+  const result = await enableCustomerBillingLifecycle({
+    customerId,
+    mode,
+    actorUserId: session.sub,
+  });
+
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/edit`);
+  revalidatePath("/admin/customers");
+
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  const warn =
+    result.warnings.length > 0 ? ` Note: ${result.warnings.join(" ")}` : "";
+  return {
+    error: null,
+    message: `Billing accounts linked (${mode.replace(/_/g, " ")}).${warn} Send a payment link when ready — checkout is not started automatically.`,
+  };
 }

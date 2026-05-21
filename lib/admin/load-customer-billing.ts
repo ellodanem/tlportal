@@ -10,6 +10,7 @@ import {
   isStripeConfigured,
 } from "@/lib/services/billing-service";
 import { listBillingInvoicesForCustomer } from "@/lib/services/billing-invoice-service";
+import { getBillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
 import {
   effectiveMonthlyRateForCheckout,
@@ -42,7 +43,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
   });
   const defaultVehicleCount = Math.max(1, activeAssignmentCount);
 
-  const [invoilessId, stripeAccount, planOptions, stripeInvoices, customerSubscription] =
+  const [invoilessId, stripeAccount, planOptions, stripeInvoices, customerSubscription, billingSetup] =
     await Promise.all([
       getInvoilessExternalCustomerId(customer.id),
       getStripeBillingAccount(customer.id),
@@ -53,6 +54,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
       }),
       listBillingInvoicesForCustomer(customer.id),
       getCurrentCustomerSubscription(customer.id),
+      getBillingSetupStatus(customer.id),
     ]);
 
   const stripeMeta = stripeAccount ? parseStripeBillingMetadata(stripeAccount.metadata) : null;
@@ -108,6 +110,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     savedMonthlyRate,
     defaultVehicleCount,
     catalogConfigured,
+    billingSetup,
     stripePeriodEnd,
     stripeInvoices,
     subscriptionSummary,

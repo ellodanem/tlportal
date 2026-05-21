@@ -1,8 +1,11 @@
 import Link from "next/link";
 
 import { CustomerCreateForm } from "@/components/customer-form";
+import { isStripeBillingEnabled } from "@/lib/stripe/config";
 
 export default function NewCustomerPage() {
+  const stripeBillingEnabled = isStripeBillingEnabled();
+  const invoilessConfigured = Boolean(process.env.INVOILESS_API_KEY?.trim());
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -18,7 +21,10 @@ export default function NewCustomerPage() {
           Street, city, postal, and country are combined into one bill-to address when you push to Invoiless.
         </p>
       </div>
-      <CustomerCreateForm />
+      <CustomerCreateForm
+        stripeBillingEnabled={stripeBillingEnabled}
+        invoilessConfigured={invoilessConfigured}
+      />
     </div>
   );
 }

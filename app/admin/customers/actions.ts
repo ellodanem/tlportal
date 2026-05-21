@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
 import { syncCustomerToInvoilessBilling } from "@/lib/services/billing-service";
+import { enableCustomerBillingLifecycle } from "@/lib/services/billing-lifecycle-service";
+import { isStripeBillingEnabled } from "@/lib/stripe/config";
 
 import type { CustomerFormActionState } from "./customer-form-state";
 
@@ -73,8 +75,12 @@ export async function createCustomer(
 
   const traqcarePwd = readTraqcarePassword(formData);
 
+  const session = await getSession();
+  const setupBilling = String(formData.get("setupBilling") ?? "") === "1";
+
+  let customerId: string;
   try {
-    await prisma.customer.create({
+    const customer = await prisma.customer.create({
       data: {
         firstName: fields.firstName,
         lastName: fields.lastName,
@@ -96,13 +102,29 @@ export async function createCustomer(
         tags: fields.tags,
       },
     });
+    customerId = customer.id;
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not create customer.";
     return { error: message };
   }
 
+  if (setupBilling) {
+    const modeRaw = String(formData.get("billingSetupMode") ?? "").trim();
+    const mode =
+      modeRaw === "manual_legacy"
+        ? "manual_legacy"
+        : isStripeBillingEnabled()
+          ? "stripe_subscription"
+          : "manual_legacy";
+    await enableCustomerBillingLifecycle({
+      customerId,
+      mode,
+      actorUserId: session?.sub ?? null,
+    });
+  }
+
   revalidatePath("/admin/customers");
-  redirect("/admin/customers");
+  redirect(`/admin/customers/${customerId}/billing?setup=1`);
 }
 
 export async function updateCustomer(

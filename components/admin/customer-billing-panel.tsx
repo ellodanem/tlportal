@@ -3,12 +3,14 @@
 import { useActionState, useState, useTransition } from "react";
 import {
   emailStripeCheckoutLinkAction,
+  enableBillingSetupAction,
   openStripePortalAction,
   setBillingModeAction,
   setStripeMonthlyRateAction,
   startStripeCheckoutAction,
   type BillingActionState,
 } from "@/app/admin/customers/billing-actions";
+import type { BillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
 import { checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import { formatXcd } from "@/lib/subscription-options/display";
 import { SyncInvoilessButton } from "@/components/sync-invoiless-button";
@@ -30,6 +32,7 @@ export function CustomerBillingPanel({
   stripeMonthlyRateXcd,
   defaultVehicleCount,
   catalogConfigured,
+  billingSetup,
   stripeBanner,
 }: {
   customerId: string;
@@ -43,9 +46,11 @@ export function CustomerBillingPanel({
   stripeMonthlyRateXcd: number | null;
   defaultVehicleCount: number;
   catalogConfigured: boolean;
+  billingSetup: BillingSetupStatus | null;
   stripeBanner?: "success" | "cancel" | null;
 }) {
   const [modeState, modeAction, modePending] = useActionState(setBillingModeAction, initial);
+  const [setupState, setupAction, setupPending] = useActionState(enableBillingSetupAction, initial);
   const [rateState, rateAction, ratePending] = useActionState(setStripeMonthlyRateAction, initial);
   const [checkoutState, checkoutAction, checkoutPending] = useActionState(startStripeCheckoutAction, initial);
   const [emailState, emailFormAction, emailPending] = useActionState(emailStripeCheckoutLinkAction, initial);
@@ -102,6 +107,59 @@ export function CustomerBillingPanel({
         <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
           Stripe Checkout was canceled.
         </p>
+      ) : null}
+
+      {setupState.message && !setupState.error ? (
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+          {setupState.message}
+        </p>
+      ) : null}
+
+      {billingSetup ? (
+        <div className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-950/40">
+          <p className="font-medium text-zinc-800 dark:text-zinc-200">Provider links</p>
+          <ul className="mt-2 space-y-1 text-zinc-600 dark:text-zinc-400">
+            {billingSetup.stripeConfigured ? (
+              <li>
+                Stripe:{" "}
+                {billingSetup.hasStripeAccount ? (
+                  <span className="text-emerald-700 dark:text-emerald-400">linked</span>
+                ) : isStripe ? (
+                  <span className="text-amber-800 dark:text-amber-200">not linked — run setup below</span>
+                ) : (
+                  <span className="text-zinc-500">not required (manual billing)</span>
+                )}
+              </li>
+            ) : null}
+            {billingSetup.invoilessConfigured ? (
+              <li>
+                Invoiless:{" "}
+                {billingSetup.hasInvoilessAccount ? (
+                  <span className="text-emerald-700 dark:text-emerald-400">linked</span>
+                ) : (
+                  <span className="text-amber-800 dark:text-amber-200">not linked — run setup below</span>
+                )}
+              </li>
+            ) : null}
+          </ul>
+          {billingSetup.needsSetup ? (
+            <form action={setupAction} className="mt-3 flex flex-col gap-2">
+              <input type="hidden" name="customerId" value={customerId} />
+              <input type="hidden" name="billingMode" value={billingMode} />
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                Links Stripe and/or Invoiless for this customer. Does not start Checkout — send a payment link when they are ready to pay by card.
+              </p>
+              <button
+                type="submit"
+                disabled={setupPending}
+                className="w-fit rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600"
+              >
+                {setupPending ? "Linking…" : "Link billing accounts"}
+              </button>
+              {setupState.error ? <p className="text-sm text-red-600">{setupState.error}</p> : null}
+            </form>
+          ) : null}
+        </div>
       ) : null}
 
       <form action={modeAction} className="flex flex-col gap-3">

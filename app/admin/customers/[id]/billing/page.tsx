@@ -10,7 +10,7 @@ import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ stripe?: string }>;
+  searchParams: Promise<{ stripe?: string; setup?: string }>;
 };
 
 function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | null {
@@ -21,7 +21,7 @@ function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | 
 
 export default async function CustomerBillingPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { stripe: stripeQuery } = await searchParams;
+  const { stripe: stripeQuery, setup: setupQuery } = await searchParams;
   const data = await loadCustomerBillingPageData(id);
   if (!data) {
     notFound();
@@ -38,6 +38,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     savedMonthlyRate,
     defaultVehicleCount,
     catalogConfigured,
+    billingSetup,
     stripeInvoices,
     subscriptionSummary,
   } = data;
@@ -61,6 +62,12 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
 
       <CustomerSubnav customerId={customer.id} active="billing" />
 
+      {setupQuery === "1" ? (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+          Billing setup ran. Review links below, then create a payment link when the customer is ready to pay by card.
+        </p>
+      ) : null}
+
       {subscriptionSummary ? (
         <CustomerSubscriptionSummary {...subscriptionSummary} />
       ) : customer.billingMode === "stripe_subscription" ? (
@@ -82,6 +89,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         stripeMonthlyRateXcd={savedMonthlyRate}
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
+        billingSetup={billingSetup}
         stripeBanner={stripeBannerFromQuery(stripeQuery)}
       />
 
