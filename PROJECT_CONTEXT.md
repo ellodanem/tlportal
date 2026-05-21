@@ -1577,3 +1577,28 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-21 16:10 UTC — commit `4ce3caf`
+
+- docs: project context log (5154b4c)
+
+
+### 2026-05-21 16:10 UTC — pre-push (`main` → origin) @ `4ce3caf`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-21 16:42 UTC — commit `1079644`
+
+- feat(billing): Phase 5 mirror Stripe paid invoices to Invoiless
+
+
+### 2026-05-21 16:42 UTC — commit `704929e`
+
+- feat(ops): Phase 6 renewal mark paid and Stripe auto-advance
+
+
+### 2026-05-21 16:42 UTC — pre-push (`main` → origin) @ `704929e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
