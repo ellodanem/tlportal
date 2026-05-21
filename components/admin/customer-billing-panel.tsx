@@ -9,6 +9,7 @@ import {
   startStripeCheckoutAction,
   type BillingActionState,
 } from "@/app/admin/customers/billing-actions";
+import { checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import { formatXcd } from "@/lib/subscription-options/display";
 import { SyncInvoilessButton } from "@/components/sync-invoiless-button";
 import type { CustomerBillingMode } from "@prisma/client";
@@ -83,6 +84,7 @@ export function CustomerBillingPanel({
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Choose how this customer is billed. Payment links are copied or emailed to the customer — you are not
           redirected to Checkout unless you open the link yourself.
+          {stripeConfigured ? ` ${checkoutInitialLinkNotice()} If the link expires, a recovery link can be emailed automatically when SMTP is configured.` : null}
           {!stripeConfigured ? " Stripe is off until STRIPE_SECRET_KEY is set." : null}
         </p>
       </div>
@@ -141,8 +143,8 @@ export function CustomerBillingPanel({
         <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
           <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Payment &amp; Checkout</h3>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Subscription status is shown above. Use this section for monthly rate, payment links, and the
-            Stripe customer portal.
+            Subscription status is shown above. Payment links expire in about 24 hours; Stripe recovery can email a
+            follow-up link (about 30 days) after expiry when webhooks and SMTP are configured.
           </p>
 
           <form action={rateAction} className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">

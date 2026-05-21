@@ -1450,3 +1450,18 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-21 13:16 UTC — commit `fb38534`
+
+- docs: project context log (951ea60)
+
+
+### 2026-05-21 13:16 UTC — pre-push (`main` → origin) @ `fb38534`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-21 14:17 UTC — commit `59e36bf`
+
+- feat(billing): Stripe Checkout recovery emails (Phase 2)
+

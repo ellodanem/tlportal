@@ -12,6 +12,7 @@ import {
   startStripeCheckout,
   syncCustomerToInvoilessBilling,
 } from "@/lib/services/billing-service";
+import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import { parseMonthlyRateXcd } from "@/lib/stripe/checkout-pricing";
 import type { CustomerBillingMode } from "@prisma/client";
 
@@ -114,7 +115,7 @@ export async function startStripeCheckoutAction(
   return {
     error: null,
     url: result.url,
-    message: "Copy the payment link below and send it to your customer. It does not email automatically.",
+    message: `Copy the link below and send it to your customer. ${checkoutInitialLinkNotice()}`,
   };
 }
 
@@ -155,18 +156,16 @@ export async function emailStripeCheckoutLinkAction(
     [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
     "there";
 
+  const emailBody = checkoutInitialEmailBody({
+    greetingName: name,
+    paymentUrl: checkout.url,
+  });
+
   const sent = await sendAppEmail({
     to: customer.email.trim(),
     subject: "Complete your Track Lucia subscription payment",
-    text: `Hello ${name},
-
-Please use the link below to enter your card and start your subscription. Stripe will bill your card automatically on each renewal.
-
-${checkout.url}
-
-If you have questions, reply to this email.
-
-— Track Lucia`,
+    text: emailBody.text,
+    html: emailBody.html,
   });
 
   if (!sent.ok) {
@@ -177,7 +176,7 @@ If you have questions, reply to this email.
     error: null,
     url: checkout.url,
     emailSent: true,
-    message: `Payment link emailed to ${customer.email.trim()}. You can also copy the link below.`,
+    message: `Payment link emailed to ${customer.email.trim()}. ${checkoutInitialLinkNotice()} You can also copy the link below.`,
   };
 }
 

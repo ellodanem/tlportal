@@ -82,6 +82,11 @@ export async function createStripeSubscriptionCheckout(input: {
     subscription_data: {
       metadata: meta,
     },
+    after_expiration: {
+      recovery: {
+        enabled: true,
+      },
+    },
   });
 
   if (!session.url) {

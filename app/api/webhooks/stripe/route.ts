@@ -10,8 +10,9 @@ export const dynamic = "force-dynamic";
  *
  * Requires `STRIPE_WEBHOOK_SECRET` (whsec_… from `stripe listen` or Dashboard).
  *
- * Subscribe to: checkout.session.completed, customer.subscription.*,
- * invoice.paid, invoice.finalized, invoice.payment_failed, invoice.voided.
+ * Subscribe to: checkout.session.completed, checkout.session.expired,
+ * customer.subscription.*, invoice.paid, invoice.finalized,
+ * invoice.payment_failed, invoice.voided.
  */
 export async function POST(req: Request) {
   const secret = stripeWebhookSecret();

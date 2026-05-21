@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 
 import { getStripeClient } from "./config";
+import { handleCheckoutSessionExpired } from "./checkout-recovery";
 import { syncStripeInvoiceToDatabase } from "./invoice-sync";
 import { markStripeSubscriptionCanceled, syncStripeSubscriptionToDatabase } from "./subscription-sync";
 
@@ -16,6 +17,11 @@ async function loadSubscription(subscriptionId: string): Promise<Stripe.Subscrip
 
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
+    case "checkout.session.expired": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      await handleCheckoutSessionExpired(session);
+      break;
+    }
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       const tlCustomerId = session.metadata?.tl_customer_id?.trim();
