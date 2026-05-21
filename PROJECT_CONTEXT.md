@@ -1461,7 +1461,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
 
-### 2026-05-21 14:17 UTC — commit `59e36bf`
+### 2026-05-21 14:17 UTC — commit `dbaae99`
 
 - feat(billing): Stripe Checkout recovery emails (Phase 2)
+- Checkout `after_expiration.recovery`; webhook `checkout.session.expired` emails recovery URL; admin copy for 24h / 30-day links.
+
+
+### 2026-05-21 14:17 UTC — pre-push (`main` → origin) @ `dbaae99`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
