@@ -10,6 +10,17 @@ import {
 import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
+function coerceAssignmentDate(d: Date | string | null): Date | null {
+  if (d == null) {
+    return null;
+  }
+  if (d instanceof Date) {
+    return d;
+  }
+  const parsed = new Date(d);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function Submit() {
   const { pending } = useFormStatus();
   return (
@@ -34,9 +45,11 @@ export function MarkAssignmentPaidForm({
   customerId: string;
   deviceId: string;
   intervalMonths: number | null;
-  nextDueDate: Date | null;
+  /** Serialized from server as ISO string when set. */
+  nextDueDate: Date | string | null;
 }) {
   const [state, action] = useActionState(markAssignmentPeriodPaidAction, renewalActionInitialState);
+  const nextDue = coerceAssignmentDate(nextDueDate);
 
   if (intervalMonths == null) {
     return (
@@ -51,7 +64,7 @@ export function MarkAssignmentPaidForm({
       <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Mark period paid</h3>
       <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
         Advances next due by {formatPlanTerm(intervalMonths)} from{" "}
-        {nextDueDate ? formatAssignmentDateLabel(nextDueDate) : "today (first period)"}. Use after cash or bank
+        {nextDue ? formatAssignmentDateLabel(nextDue) : "today (first period)"}. Use after cash or bank
         payment, or to correct the renewal ladder.
       </p>
       <form

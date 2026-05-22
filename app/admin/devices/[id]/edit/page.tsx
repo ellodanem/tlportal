@@ -47,6 +47,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
         startDate: true,
         nextDueDate: true,
         invoilessRecurringId: true,
+        updatedAt: true,
         customer: {
           select: { id: true, company: true, firstName: true, lastName: true },
         },
@@ -109,6 +110,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
           </p>
           <div className="mt-4">
             <DeviceServiceAssignmentEditForm
+              key={`${openAssignment.id}-${openAssignment.updatedAt.toISOString()}`}
               deviceId={device.id}
               assignmentId={openAssignment.id}
               defaultIntervalMonths={openAssignment.intervalMonths}
@@ -117,6 +119,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
               defaultInvoilessRecurringId={openAssignment.invoilessRecurringId ?? ""}
             />
             <MarkAssignmentPaidForm
+              key={`paid-${openAssignment.id}-${openAssignment.intervalMonths ?? "x"}-${openAssignment.updatedAt.toISOString()}`}
               assignmentId={openAssignment.id}
               customerId={openAssignment.customerId}
               deviceId={device.id}

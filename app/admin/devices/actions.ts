@@ -390,6 +390,17 @@ export async function updateServiceAssignmentDates(
   _prev: DeviceFormActionState,
   formData: FormData,
 ): Promise<DeviceFormActionState> {
+  try {
+    return await updateServiceAssignmentDatesInner(formData);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg || "Could not update assignment." };
+  }
+}
+
+async function updateServiceAssignmentDatesInner(
+  formData: FormData,
+): Promise<DeviceFormActionState> {
   const session = await getSession();
   if (!session) {
     return { error: "You must be signed in." };
@@ -458,7 +469,7 @@ export async function updateServiceAssignmentDates(
   revalidatePath("/admin/devices");
   revalidatePath(`/admin/devices/${deviceId}/edit`);
   revalidatePath(`/admin/customers/${assignment.customerId}`);
-  return { error: null, next: `/admin/devices/${deviceId}/edit` };
+  return { error: null };
 }
 
 /**

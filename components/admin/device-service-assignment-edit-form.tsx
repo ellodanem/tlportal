@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import { updateServiceAssignmentDates } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
-import { useDeviceFormActionNav } from "@/components/admin/use-device-form-action-nav";
+import { useDeviceFormRefreshOnSuccess } from "@/components/admin/use-device-form-refresh-on-success";
 import { formatPlanTerm, SUBSCRIPTION_PLAN_MONTHS } from "@/lib/subscription-options/display";
 
 const inputClass =
@@ -40,8 +40,8 @@ export function DeviceServiceAssignmentEditForm({
   defaultNextDueDate: string;
   defaultInvoilessRecurringId: string;
 }) {
-  const [state, formAction] = useActionState(updateServiceAssignmentDates, deviceFormInitialState);
-  useDeviceFormActionNav(state);
+  const [state, formAction, isPending] = useActionState(updateServiceAssignmentDates, deviceFormInitialState);
+  useDeviceFormRefreshOnSuccess(state, isPending);
 
   return (
     <form action={formAction} className="max-w-md space-y-4">
