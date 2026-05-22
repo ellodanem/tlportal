@@ -10,6 +10,7 @@ import { AdminCreateMenu } from "@/components/admin-create-menu";
 import {
   IconNavChevronLeft,
   IconNavChevronRight,
+  IconNavBroadcast,
   IconNavDashboard,
   IconNavInbox,
   IconNavInvoice,
@@ -27,6 +28,7 @@ const links = [
   { href: "/admin", label: "Dashboard", Icon: IconNavDashboard },
   { href: "/admin/customers", label: "Customers", Icon: IconUsers },
   { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
+  { href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast },
   { href: "/admin/invoices", label: "Invoices", Icon: IconNavInvoice },
   { href: "/admin/devices", label: "Devices", Icon: IconDevice },
   { href: "/admin/sims", label: "SIMs", Icon: IconNavSim },

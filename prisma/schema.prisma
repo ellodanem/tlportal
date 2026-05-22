@@ -122,6 +122,14 @@ enum CustomerSubscriptionStatus {
   paused
 }
 
+/// Broadcast message templates (email now; WhatsApp body reserved for phase 2).
+enum BroadcastTemplateCategory {
+  outage
+  maintenance
+  general
+  billing
+}
+
 /// GPS / telematics platform linked to a device.
 enum GpsProvider {
   traqcare
@@ -593,6 +601,27 @@ model ProviderDeviceLink {
   @@unique([deviceId, provider])
   @@index([deviceId])
   @@index([provider])
+}
+
+/// Reusable copy for customer broadcast emails (and future WhatsApp).
+model BroadcastTemplate {
+  id           String                   @id @default(uuid())
+  /// Stable key for seeded system templates (`outage-investigating`, etc.).
+  slug         String?                  @unique
+  name         String
+  category     BroadcastTemplateCategory @default(general)
+  subject      String
+  bodyText     String                   @db.Text
+  /// Phase 2: shorter plain body for WhatsApp when channel is enabled.
+  whatsappBody String?                  @db.Text
+  isSystem     Boolean                  @default(false)
+  isActive     Boolean                  @default(true)
+  sortOrder    Int                      @default(0)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([category])
+  @@index([isActive, sortOrder])
 }
 
 /// TL-native audit trail for ops and future automation (not vendor telemetry).

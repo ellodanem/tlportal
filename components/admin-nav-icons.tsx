@@ -95,6 +95,25 @@ export function IconNavPackage({ className }: { className?: string }) {
   );
 }
 
+export function IconNavBroadcast({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M3 11v2a2 2 0 0 0 2 2h1l3 5v-7H8.8A3 3 0 0 1 6 12.2V11H3ZM13 7v10l4-2.5V9.5L13 7Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18 8.5c1.5 1.2 2.5 2.8 2.5 3.5s-1 2.3-2.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function IconNavProposal({ className }: { className?: string }) {
   return (
     <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
