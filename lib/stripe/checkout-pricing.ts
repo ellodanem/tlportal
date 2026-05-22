@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { isCatalogRateTier, normalizeRateXcd } from "@/lib/domain/billing-catalog";
 import { prisma } from "@/lib/db";
-import { formatSubscriptionChoiceLabel, formatXcd } from "@/lib/subscription-options/display";
+import { formatPlanTerm } from "@/lib/subscription-options/display";
 
 import { resolveCatalogStripePriceId } from "./catalog-price-ids";
 
@@ -131,25 +131,15 @@ export async function listStripeCheckoutPlanOptions(input: {
   });
   const defaultMonthly = await getDefaultMonthlyRateXcd();
   const monthly = input.monthlyRateXcd ?? defaultMonthly;
-  const vehicles = Math.max(1, Math.trunc(input.vehicleCount));
   const useCustom = input.useCustomPricing === true || !isCatalogRateTier(monthly);
 
   const options: { durationMonths: number; label: string; usesCatalogPrice: boolean }[] = [];
   for (const p of plans) {
     const hasCatalog =
       !useCustom && (await resolveCatalogStripePriceId(monthly, p.durationMonths));
-    const perVehicle = hasCatalog
-      ? periodTotalPerVehicleXcd(monthly, p.durationMonths)
-      : periodTotalPerVehicleXcd(monthly, p.durationMonths);
-    const total = Math.round(perVehicle * vehicles * 100) / 100;
-    const base = formatSubscriptionChoiceLabel(p.durationMonths, total);
-    const label =
-      vehicles > 1
-        ? `${base} · ${vehicles} vehicles × ${formatXcd(monthly)}/mo`
-        : `${base} · ${formatXcd(monthly)}/mo per vehicle`;
     options.push({
       durationMonths: p.durationMonths,
-      label,
+      label: formatPlanTerm(p.durationMonths),
       usesCatalogPrice: Boolean(hasCatalog),
     });
   }

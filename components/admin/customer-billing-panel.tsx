@@ -20,6 +20,22 @@ const initial: BillingActionState = { error: null };
 
 type PlanOption = { durationMonths: number; label: string };
 
+function ratePresetFromSaved(
+  stripeMonthlyRateXcd: number | null,
+  defaultMonthlyRateXcd: number,
+): { preset: string; custom: string } {
+  if (stripeMonthlyRateXcd == null) {
+    return { preset: "default", custom: "" };
+  }
+  if (String(stripeMonthlyRateXcd) === String(defaultMonthlyRateXcd)) {
+    return { preset: "default", custom: "" };
+  }
+  if ([20, 25, 30].includes(stripeMonthlyRateXcd)) {
+    return { preset: String(stripeMonthlyRateXcd), custom: "" };
+  }
+  return { preset: "custom", custom: String(stripeMonthlyRateXcd) };
+}
+
 export function CustomerBillingPanel({
   customerId,
   billingMode,
@@ -49,24 +65,15 @@ export function CustomerBillingPanel({
 }) {
   const [modeState, modeAction, modePending] = useActionState(setBillingModeAction, initial);
   const [setupState, setupAction, setupPending] = useActionState(enableBillingSetupAction, initial);
-  const [rateState, rateAction, ratePending] = useActionState(setStripeMonthlyRateAction, initial);
   const [checkoutState, checkoutAction, checkoutPending] = useActionState(startStripeCheckoutAction, initial);
   const [emailState, emailFormAction, emailPending] = useActionState(emailStripeCheckoutLinkAction, initial);
+  const [pricingState, pricingAction, pricingPending] = useActionState(setStripeMonthlyRateAction, initial);
   const paymentUrl = checkoutState.url ?? emailState.url;
   const paymentMessage = checkoutState.message ?? emailState.message;
   const paymentEmailSent = checkoutState.emailSent ?? emailState.emailSent;
-  const [ratePreset, setRatePreset] = useState<string>(
-    stripeMonthlyRateXcd == null
-      ? "default"
-      : String(stripeMonthlyRateXcd) === String(defaultMonthlyRateXcd)
-        ? "default"
-        : [20, 25, 30].includes(stripeMonthlyRateXcd)
-          ? String(stripeMonthlyRateXcd)
-          : "custom",
-  );
-  const [customRate, setCustomRate] = useState(
-    ratePreset === "custom" && stripeMonthlyRateXcd != null ? String(stripeMonthlyRateXcd) : "",
-  );
+  const saved = ratePresetFromSaved(stripeMonthlyRateXcd, defaultMonthlyRateXcd);
+  const [ratePreset, setRatePreset] = useState(saved.preset);
+  const [customRate, setCustomRate] = useState(saved.custom);
   const [portalPending, startPortal] = useTransition();
   const [portalError, setPortalError] = useState<string | null>(null);
 
@@ -83,6 +90,8 @@ export function CustomerBillingPanel({
   }
 
   const isStripe = billingMode === "stripe_subscription";
+  const checkoutError = checkoutState.error ?? emailState.error;
+  const busy = checkoutPending || emailPending || pricingPending;
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,65 +99,12 @@ export function CustomerBillingPanel({
         <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payment link</h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Send the customer to Stripe Checkout. {checkoutInitialLinkNotice()}
+            Choose tier, term, and vehicles — then create or email a Checkout link. Pricing saves automatically when you
+            send a link, or use <strong className="font-medium">Save pricing</strong> without sending.
           </p>
 
-          <form action={rateAction} className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
-            <input type="hidden" name="customerId" value={customerId} />
-            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Per-vehicle monthly rate</p>
-            <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Catalog tiers $30 / $25 / $20 use fixed Stripe Prices. Custom rates use dynamic pricing. Default{" "}
-              {formatXcd(defaultMonthlyRateXcd)}/vehicle/month.
-              {stripeMonthlyRateXcd != null ? (
-                <>
-                  {" "}
-                  Saved: <strong>{formatXcd(stripeMonthlyRateXcd)}/month</strong>.
-                </>
-              ) : (
-                <> Using catalog default.</>
-              )}
-            </p>
-            <select
-              className="block w-full max-w-xs rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-              value={ratePreset}
-              onChange={(e) => setRatePreset(e.target.value)}
-            >
-              <option value="default">Default ({formatXcd(defaultMonthlyRateXcd)}/mo)</option>
-              <option value="25">$25 / month</option>
-              <option value="20">$20 / month</option>
-              <option value="custom">Custom amount…</option>
-            </select>
-            {ratePreset === "custom" ? (
-              <input
-                type="number"
-                min="1"
-                step="0.01"
-                value={customRate}
-                onChange={(e) => setCustomRate(e.target.value)}
-                placeholder="XCD per month"
-                className="block w-full max-w-xs rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-              />
-            ) : null}
-            <input
-              type="hidden"
-              name="monthlyRateXcd"
-              value={ratePreset === "custom" ? "custom" : ratePreset}
-            />
-            {ratePreset === "custom" ? (
-              <input type="hidden" name="customMonthlyRateXcd" value={customRate} />
-            ) : null}
-            <button
-              type="submit"
-              disabled={ratePending}
-              className="w-fit rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900"
-            >
-              {ratePending ? "Saving…" : "Save monthly rate"}
-            </button>
-            {rateState.error ? <p className="text-sm text-red-600">{rateState.error}</p> : null}
-          </form>
-
           {planOptions.length > 0 ? (
-            <form action={checkoutAction} className="mt-4 flex flex-col gap-3">
+            <form action={checkoutAction} className="mt-4 flex flex-col gap-4">
               <input type="hidden" name="customerId" value={customerId} />
               <input
                 type="hidden"
@@ -158,26 +114,40 @@ export function CustomerBillingPanel({
               {ratePreset === "custom" ? (
                 <input type="hidden" name="customMonthlyRateXcd" value={customRate} />
               ) : null}
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="block text-sm">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Vehicles</span>
-                  <input
-                    type="number"
-                    name="vehicleCount"
-                    min={1}
-                    max={9999}
-                    defaultValue={String(defaultVehicleCount)}
-                    className="mt-1 block w-full min-w-[5rem] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                  />
-                  <span className="mt-0.5 block text-xs text-zinc-500">
-                    Stripe quantity (active assignments: {defaultVehicleCount})
-                  </span>
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Monthly tier</span>
+                  <select
+                    className="mt-1 block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                    value={ratePreset}
+                    onChange={(e) => setRatePreset(e.target.value)}
+                  >
+                    <option value="default">Default ({formatXcd(defaultMonthlyRateXcd)}/mo)</option>
+                    <option value="25">$25 / month</option>
+                    <option value="20">$20 / month</option>
+                    <option value="custom">Custom…</option>
+                  </select>
                 </label>
+                {ratePreset === "custom" ? (
+                  <label className="block text-sm">
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Custom rate (XCD/mo)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      value={customRate}
+                      onChange={(e) => setCustomRate(e.target.value)}
+                      placeholder="Per vehicle / month"
+                      className="mt-1 block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                    />
+                  </label>
+                ) : null}
                 <label className="block text-sm">
                   <span className="font-medium text-zinc-700 dark:text-zinc-300">Plan term</span>
                   <select
                     name="durationMonths"
-                    className="mt-1 block w-full min-w-[12rem] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                    className="mt-1 block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
                     defaultValue={String(planOptions[0]?.durationMonths ?? 1)}
                   >
                     {planOptions.map((p) => (
@@ -187,9 +157,27 @@ export function CustomerBillingPanel({
                     ))}
                   </select>
                 </label>
+                <label className="block text-sm">
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Vehicles</span>
+                  <input
+                    type="number"
+                    name="vehicleCount"
+                    min={1}
+                    max={9999}
+                    defaultValue={String(defaultVehicleCount)}
+                    className="mt-1 block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  />
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    Stripe quantity ({defaultVehicleCount} active assignment
+                    {defaultVehicleCount === 1 ? "" : "s"})
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <button
                   type="submit"
-                  disabled={checkoutPending || emailPending}
+                  disabled={busy}
                   className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600"
                 >
                   {checkoutPending ? "Creating…" : "Create payment link"}
@@ -197,24 +185,33 @@ export function CustomerBillingPanel({
                 <button
                   type="submit"
                   formAction={emailFormAction}
-                  disabled={checkoutPending || emailPending}
+                  disabled={busy}
                   className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900"
                 >
                   {emailPending ? "Sending…" : "Email link to customer"}
                 </button>
+                <button
+                  type="submit"
+                  formAction={pricingAction}
+                  disabled={busy}
+                  className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900"
+                >
+                  {pricingPending ? "Saving…" : "Save pricing"}
+                </button>
               </div>
+
               <details className="text-xs text-zinc-500 dark:text-zinc-400">
                 <summary className="cursor-pointer font-medium text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">
                   Checkout details
                 </summary>
                 <p className="mt-2">
                   {ratePreset === "custom"
-                    ? "Uses dynamic per-vehicle pricing for this custom rate."
+                    ? "Custom tiers use dynamic per-vehicle pricing."
                     : catalogConfigured
-                      ? "Uses Stripe catalog Price × vehicle count for the tier and term above."
+                      ? "Catalog tiers use Stripe Price × vehicle count."
                       : "No catalog Price for this tier/term — dynamic pricing. Add Price ids under Subscription options."}
                   {" "}
-                  Links expire in ~24h; recovery email after expiry when SMTP and webhooks are configured.
+                  {checkoutInitialLinkNotice()} Recovery email after expiry when SMTP and webhooks are configured.
                 </p>
               </details>
             </form>
@@ -223,8 +220,12 @@ export function CustomerBillingPanel({
               No subscription plans found. Run migrations/seed or check subscription options.
             </p>
           )}
-          {checkoutState.error ? <p className="mt-2 text-sm text-red-600">{checkoutState.error}</p> : null}
-          {emailState.error ? <p className="mt-2 text-sm text-red-600">{emailState.error}</p> : null}
+
+          {checkoutError ? <p className="mt-2 text-sm text-red-600">{checkoutError}</p> : null}
+          {pricingState.error ? <p className="mt-2 text-sm text-red-600">{pricingState.error}</p> : null}
+          {pricingState.message && !pricingState.error ? (
+            <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">{pricingState.message}</p>
+          ) : null}
           {paymentUrl ? (
             <CheckoutPaymentLink url={paymentUrl} message={paymentMessage} emailSent={paymentEmailSent} />
           ) : null}
@@ -248,7 +249,7 @@ export function CustomerBillingPanel({
           <span className="inline-flex items-center gap-2">
             Billing settings
             <span className="text-xs font-normal text-zinc-500 group-open:hidden dark:text-zinc-400">
-              — mode, provider links, pricing, Invoiless
+              — mode, provider links, Invoiless
             </span>
           </span>
         </summary>

@@ -80,6 +80,38 @@ async function parseCheckoutForm(formData: FormData): Promise<
   return { customerId, months, monthlyRateXcd, vehicleCount, useCustomPricing };
 }
 
+async function persistStripeMonthlyRateFromForm(
+  customerId: string,
+  formData: FormData,
+  actorUserId: string | null,
+): Promise<{ error: string } | { ok: true }> {
+  const rateRaw = String(formData.get("monthlyRateXcd") ?? "").trim();
+  if (rateRaw === "custom") {
+    const customMonthly = parseMonthlyRateXcd(String(formData.get("customMonthlyRateXcd") ?? ""));
+    if (customMonthly == null) {
+      return { error: "Enter a valid custom monthly amount." };
+    }
+    await setCustomerStripeMonthlyRate(customerId, customMonthly, actorUserId);
+    return { ok: true };
+  }
+  if (rateRaw === "default" || !rateRaw) {
+    await setCustomerStripeMonthlyRate(customerId, null, actorUserId);
+    return { ok: true };
+  }
+  const parsed = parseMonthlyRateXcd(rateRaw);
+  if (parsed == null) {
+    return { error: "Choose a valid monthly rate tier." };
+  }
+  await setCustomerStripeMonthlyRate(customerId, parsed, actorUserId);
+  return { ok: true };
+}
+
+function revalidateCustomerBillingPaths(customerId: string) {
+  revalidatePath(`/admin/customers/${customerId}/edit`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+}
+
 export async function setBillingModeAction(
   _prev: BillingActionState,
   formData: FormData,
@@ -124,6 +156,12 @@ export async function startStripeCheckoutAction(
     return { error: parsed.error };
   }
 
+  const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+  if ("error" in saved) {
+    return { error: saved.error };
+  }
+  revalidateCustomerBillingPaths(parsed.customerId);
+
   const result = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
     monthlyRateXcd: parsed.monthlyRateXcd,
     vehicleCount: parsed.vehicleCount,
@@ -166,6 +204,12 @@ export async function emailStripeCheckoutLinkAction(
   if (!customer?.email?.trim()) {
     return { error: "Customer has no email on file. Add one on the profile below, then try again." };
   }
+
+  const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+  if ("error" in saved) {
+    return { error: saved.error };
+  }
+  revalidateCustomerBillingPaths(parsed.customerId);
 
   const checkout = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
     monthlyRateXcd: parsed.monthlyRateXcd,
@@ -219,27 +263,17 @@ export async function setStripeMonthlyRateAction(
     return { error: "Missing customer id." };
   }
 
-  const rate = parseMonthlyRateXcd(String(formData.get("monthlyRateXcd") ?? ""));
-  const customRaw = String(formData.get("customMonthlyRateXcd") ?? "").trim();
-  let monthly: number | null = rate;
-  if (customRaw) {
-    const custom = parseMonthlyRateXcd(customRaw);
-    if (custom == null) {
-      return { error: "Enter a valid custom monthly amount (e.g. 20 or 25)." };
-    }
-    monthly = custom;
-  }
-
   try {
-    await setCustomerStripeMonthlyRate(customerId, monthly, session.sub);
+    const saved = await persistStripeMonthlyRateFromForm(customerId, formData, session.sub);
+    if ("error" in saved) {
+      return { error: saved.error };
+    }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save monthly rate." };
   }
 
-  revalidatePath(`/admin/customers/${customerId}/edit`);
-  revalidatePath(`/admin/customers/${customerId}`);
-  revalidatePath(`/admin/customers/${customerId}/billing`);
-  return { error: null };
+  revalidateCustomerBillingPaths(customerId);
+  return { error: null, message: "Monthly rate saved." };
 }
 
 export async function openStripePortalAction(customerId: string): Promise<BillingActionState> {
