@@ -130,6 +130,22 @@ enum BroadcastTemplateCategory {
   billing
 }
 
+enum BroadcastCampaignStatus {
+  queued
+  sending
+  completed
+  completed_with_errors
+  failed
+  cancelled
+}
+
+enum BroadcastDeliveryStatus {
+  pending
+  sent
+  failed
+  skipped
+}
+
 /// GPS / telematics platform linked to a device.
 enum GpsProvider {
   traqcare
@@ -224,6 +240,7 @@ model Customer {
   billingInvoices       BillingInvoice[]
   customerSubscriptions CustomerSubscription[]
   operationalEvents     OperationalEvent[]
+  broadcastDeliveries   BroadcastDelivery[]
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
   createdFromRegistration    RegistrationRequest?  @relation("RegistrationCreatedCustomer")
@@ -619,9 +636,57 @@ model BroadcastTemplate {
   sortOrder    Int                      @default(0)
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
+  campaigns    BroadcastCampaign[]
 
   @@index([category])
   @@index([isActive, sortOrder])
+}
+
+/// Mass email send to a filtered customer audience (snapshot subject/body at send time).
+model BroadcastCampaign {
+  id                String                  @id @default(uuid())
+  templateId        String?
+  template          BroadcastTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  subjectSnapshot   String
+  bodyTextSnapshot  String                  @db.Text
+  /// When false, only customers with an active service assignment; when true, all customers with email.
+  includeInactive   Boolean                 @default(false)
+  incidentTitle     String?
+  incidentStatus    String?
+  incidentEta       String?
+  status            BroadcastCampaignStatus @default(queued)
+  totalRecipients   Int                     @default(0)
+  sentCount         Int                     @default(0)
+  failedCount       Int                     @default(0)
+  skippedCount      Int                     @default(0)
+  actorUserId       String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  deliveries BroadcastDelivery[]
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+/// Per-customer email attempt for a broadcast campaign.
+model BroadcastDelivery {
+  id         String                  @id @default(uuid())
+  campaignId String
+  campaign   BroadcastCampaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  email      String
+  status     BroadcastDeliveryStatus @default(pending)
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime                @default(now())
+
+  @@unique([campaignId, customerId])
+  @@index([campaignId, status])
+  @@index([customerId])
 }
 
 /// TL-native audit trail for ops and future automation (not vendor telemetry).

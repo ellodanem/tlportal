@@ -12,6 +12,8 @@ export const OPERATIONAL_EVENT_CATEGORIES = [
   "registration.approved",
   "registration.rejected",
   "staff.note",
+  "broadcast.sent",
+  "broadcast.completed",
 ] as const;
 
 export type OperationalEventCategory = (typeof OPERATIONAL_EVENT_CATEGORIES)[number];
