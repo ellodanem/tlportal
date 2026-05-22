@@ -1802,3 +1802,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-22 09:53 UTC — commit `406a65e`
+
+- docs: project context log (f18238c)
+
+
+### 2026-05-22 09:53 UTC — pre-push (`main` → origin) @ `406a65e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 09:57 UTC — commit `20954be`
+
+- fix(devices): refresh in place when saving billing term
+
+
+### 2026-05-22 09:57 UTC — pre-push (`main` → origin) @ `20954be`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
