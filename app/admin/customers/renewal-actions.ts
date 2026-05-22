@@ -10,12 +10,7 @@ import {
 import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
-export type RenewalActionState = {
-  error: string | null;
-  message?: string;
-};
-
-const initial: RenewalActionState = { error: null };
+import type { RenewalActionState } from "@/app/admin/customers/renewal-action-state";
 
 function revalidateRenewalPaths(customerId: string, deviceId?: string) {
   revalidatePath("/admin");
@@ -126,5 +121,3 @@ export async function markAllCustomerAssignmentsPaidAction(
     message: `Marked ${ok} assignment${ok === 1 ? "" : "s"} paid${invoiceRef ? ` (ref ${invoiceRef})` : ""}.${errors.length ? ` ${errors.length} skipped (set billing term on device).` : ""}`,
   };
 }
-
-export { initial as renewalActionInitialState };

@@ -3,10 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  markAssignmentPeriodPaidAction,
-  renewalActionInitialState,
-} from "@/app/admin/customers/renewal-actions";
+import { renewalActionInitialState } from "@/app/admin/customers/renewal-action-state";
+import { markAssignmentPeriodPaidAction } from "@/app/admin/customers/renewal-actions";
 import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 

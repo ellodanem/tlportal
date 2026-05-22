@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { renewalActionInitialState } from "@/app/admin/customers/renewal-action-state";
 import {
   markAllCustomerAssignmentsPaidAction,
   markAssignmentPeriodPaidAction,
-  renewalActionInitialState,
 } from "@/app/admin/customers/renewal-actions";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { displayAssignmentOpsStatus } from "@/lib/admin/assignment-ops-urgency";
