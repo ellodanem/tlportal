@@ -2,7 +2,6 @@
 
 import { DeviceCondition, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/get-session";
 import { parseDeviceObjectType } from "@/lib/admin/device-object-type";
@@ -224,7 +223,7 @@ export async function registerDevice(
 
   revalidatePath("/admin");
   revalidatePath("/admin/devices");
-  redirect("/admin/devices");
+  return { error: null, next: "/admin/devices" };
 }
 
 export async function updateDeviceCommercialFields(
@@ -384,7 +383,7 @@ export async function assignDeviceToCustomer(
   if (device.simCardId) {
     revalidatePath(`/admin/sims/${device.simCardId}`);
   }
-  redirect(`/admin/devices/${deviceId}/edit`);
+  return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }
 
 export async function updateServiceAssignmentDates(
@@ -459,7 +458,7 @@ export async function updateServiceAssignmentDates(
   revalidatePath("/admin/devices");
   revalidatePath(`/admin/devices/${deviceId}/edit`);
   revalidatePath(`/admin/customers/${assignment.customerId}`);
-  redirect(`/admin/devices/${deviceId}/edit`);
+  return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }
 
 /**
@@ -535,7 +534,7 @@ export async function unassignDeviceFromCustomer(
   if (device.simCardId) {
     revalidatePath(`/admin/sims/${device.simCardId}`);
   }
-  redirect(`/admin/devices/${deviceId}/edit`);
+  return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }
 
 function deviceBlockedForSimEdit(status: string): boolean {
@@ -610,7 +609,7 @@ export async function clearDeviceSimCard(
   if (assignment) {
     revalidatePath(`/admin/customers/${assignment.customerId}`);
   }
-  redirect(`/admin/devices/${deviceId}/edit`);
+  return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }
 
 /**
@@ -653,7 +652,7 @@ export async function updateDeviceLinkedSim(
   }
 
   if (device.simCardId === simCardIdRaw) {
-    redirect(`/admin/devices/${deviceId}/edit`);
+    return { error: null, next: `/admin/devices/${deviceId}/edit` };
   }
 
   const prevSimId = device.simCardId;
@@ -695,5 +694,5 @@ export async function updateDeviceLinkedSim(
   if (assignment) {
     revalidatePath(`/admin/customers/${assignment.customerId}`);
   }
-  redirect(`/admin/devices/${deviceId}/edit`);
+  return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }

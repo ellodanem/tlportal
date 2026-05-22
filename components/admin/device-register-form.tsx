@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { registerDevice } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { useDeviceFormActionNav } from "@/components/admin/use-device-form-action-nav";
 import { UnlinkedSimPicker } from "@/components/admin/unlinked-sim-picker";
 import {
   DEVICE_OBJECT_TYPE_LABEL,
@@ -43,6 +44,7 @@ export function DeviceRegisterForm({
   customers: CustomerOption[];
 }) {
   const [state, formAction] = useActionState(registerDevice, deviceFormInitialState);
+  useDeviceFormActionNav(state);
   const modelsEmpty = deviceModels.length === 0;
 
   return (

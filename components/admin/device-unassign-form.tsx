@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import { unassignDeviceFromCustomer } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { useDeviceFormActionNav } from "@/components/admin/use-device-form-action-nav";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -21,6 +22,7 @@ function SubmitButton() {
 
 export function DeviceUnassignForm({ deviceId }: { deviceId: string }) {
   const [state, formAction] = useActionState(unassignDeviceFromCustomer, deviceFormInitialState);
+  useDeviceFormActionNav(state);
 
   return (
     <form action={formAction} className="mt-6 border-t border-zinc-200 pt-6 dark:border-zinc-800">

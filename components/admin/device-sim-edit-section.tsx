@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { clearDeviceSimCard, updateDeviceLinkedSim } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { useDeviceFormActionNav } from "@/components/admin/use-device-form-action-nav";
 import { UnlinkedSimPicker } from "@/components/admin/unlinked-sim-picker";
 import type { UnlinkedSimRow } from "@/lib/admin/unlinked-sim-filter";
 
@@ -51,6 +52,8 @@ export function DeviceSimEditSection({
 }) {
   const [linkState, linkAction] = useActionState(updateDeviceLinkedSim, deviceFormInitialState);
   const [clearState, clearAction] = useActionState(clearDeviceSimCard, deviceFormInitialState);
+  useDeviceFormActionNav(linkState);
+  useDeviceFormActionNav(clearState);
 
   return (
     <section

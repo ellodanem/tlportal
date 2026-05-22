@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { assignDeviceToCustomer } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { useDeviceFormActionNav } from "@/components/admin/use-device-form-action-nav";
 import { formatPlanTerm, SUBSCRIPTION_PLAN_MONTHS } from "@/lib/subscription-options/display";
 
 const inputClass =
@@ -34,6 +35,7 @@ export function DeviceAssignToCustomerForm({
   customers: CustomerOption[];
 }) {
   const [state, formAction] = useActionState(assignDeviceToCustomer, deviceFormInitialState);
+  useDeviceFormActionNav(state);
   const noCustomers = customers.length === 0;
 
   return (
