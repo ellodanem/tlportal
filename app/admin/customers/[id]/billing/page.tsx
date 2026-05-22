@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
+import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-status-strip";
 import { CustomerRenewalOpsPanel } from "@/components/admin/customer-renewal-ops-panel";
-import { CustomerSubscriptionSummary } from "@/components/admin/customer-subscription-summary";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
 import { customerDisplayName } from "@/lib/admin/customer-display";
@@ -47,6 +48,33 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
   } = data;
 
   const title = customerDisplayName(customer);
+  const isManual = customer.billingMode === "manual_legacy";
+  const stripeBanner = stripeBannerFromQuery(stripeQuery);
+
+  const renewalPanel = (
+    <CustomerRenewalOpsPanel
+      customerId={customer.id}
+      billingMode={customer.billingMode}
+      rows={renewalAssignments}
+    />
+  );
+
+  const billingPanel = (
+    <CustomerBillingPanel
+      customerId={customer.id}
+      billingMode={customer.billingMode}
+      invoilessConfigured={invoilessConfigured}
+      stripeConfigured={stripeConfigured}
+      hasInvoilessId={Boolean(invoilessId)}
+      stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
+      planOptions={planOptions}
+      defaultMonthlyRateXcd={defaultMonthlyRate}
+      stripeMonthlyRateXcd={savedMonthlyRate}
+      defaultVehicleCount={defaultVehicleCount}
+      catalogConfigured={catalogConfigured}
+      billingSetup={billingSetup}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,78 +86,51 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
           ← Customers
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{title}</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Subscriptions, payment links, and Stripe invoices
-        </p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Billing</p>
       </div>
 
       <CustomerSubnav customerId={customer.id} active="billing" />
 
-      {setupQuery === "1" ? (
-        <div className="flex flex-col gap-2">
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
-            {customer.billingMode === "stripe_subscription" ? (
-              <>
-                Billing setup linked provider accounts only — no TL subscription and no Checkout session were
-                started. When the customer is ready to pay by card, use <strong>Create payment link</strong> below;
-                that creates a pending subscription and sends them to Stripe.
-              </>
-            ) : (
-              <>
-                Billing setup linked Invoiless (manual / cash billing). Card subscriptions are not used in this
-                mode. Issue invoices in Invoiless or switch billing mode to Stripe when you want card billing.
-              </>
-            )}
-          </p>
-          {setupWarning ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-              <span className="font-medium">Setup note: </span>
-              {setupWarning}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {subscriptionSummary ? (
-        <CustomerSubscriptionSummary {...subscriptionSummary} />
-      ) : customer.billingMode === "stripe_subscription" ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-          No subscription record yet — normal right after setup. Create a payment link below to start a pending
-          subscription, or wait for Stripe webhooks if checkout already completed.
-        </p>
-      ) : null}
-
-      <CustomerRenewalOpsPanel
-        customerId={customer.id}
+      <CustomerBillingAlerts
         billingMode={customer.billingMode}
-        rows={renewalAssignments}
+        setupBanner={setupQuery === "1"}
+        setupWarning={setupWarning}
+        stripeBanner={stripeBanner}
       />
 
-      <CustomerBillingPanel
-        customerId={customer.id}
+      <CustomerBillingStatusStrip
         billingMode={customer.billingMode}
-        invoilessConfigured={invoilessConfigured}
-        stripeConfigured={stripeConfigured}
-        hasInvoilessId={Boolean(invoilessId)}
-        stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
-        planOptions={planOptions}
-        defaultMonthlyRateXcd={defaultMonthlyRate}
-        stripeMonthlyRateXcd={savedMonthlyRate}
-        defaultVehicleCount={defaultVehicleCount}
-        catalogConfigured={catalogConfigured}
         billingSetup={billingSetup}
-        stripeBanner={stripeBannerFromQuery(stripeQuery)}
+        subscription={subscriptionSummary}
+        stripeConfigured={stripeConfigured}
+        invoilessConfigured={invoilessConfigured}
       />
+
+      {isManual ? (
+        <>
+          {renewalPanel}
+          {billingPanel}
+        </>
+      ) : (
+        <>
+          {billingPanel}
+          {renewalPanel}
+        </>
+      )}
 
       {customer.billingMode === "stripe_subscription" || stripeInvoices.length > 0 ? (
         <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Stripe invoices</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Mirrored from Stripe. Paid rows get a TL receipt PDF (
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code>) via{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">invoice.paid</code> when Vercel Blob is
-            configured. Invoiless Paid mirror runs when the customer is linked there.
-          </p>
+          <details className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <summary className="cursor-pointer font-medium text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">
+              About mirrored invoices
+            </summary>
+            <p className="mt-2">
+              Mirrored from Stripe webhooks. Paid rows can get a TL receipt PDF (
+              <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code>) when Vercel Blob is
+              configured. Invoiless Paid mirror runs when the customer is linked there.
+            </p>
+          </details>
           <div className="mt-4">
             <StripeInvoicesList
               invoices={stripeInvoices}
@@ -155,4 +156,3 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     </div>
   );
 }
-

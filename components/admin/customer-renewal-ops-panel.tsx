@@ -11,6 +11,12 @@ import {
 } from "@/app/admin/customers/renewal-actions";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { displayAssignmentOpsStatus } from "@/lib/admin/assignment-ops-urgency";
+import {
+  countRenewalOps,
+  priorityRenewalRows,
+  renewalOpsSummaryLabel,
+  sortRenewalRowsByUrgency,
+} from "@/lib/admin/renewal-ops-display";
 import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 import type { CustomerBillingMode, DeviceObjectType, ServiceAssignmentStatus } from "@prisma/client";
@@ -130,7 +136,7 @@ function MarkOneForm({ row, customerId }: { row: RenewalRow; customerId: string 
   );
 }
 
-export function CustomerRenewalOpsPanel({
+function RenewalOpsBody({
   customerId,
   billingMode,
   rows,
@@ -144,33 +150,26 @@ export function CustomerRenewalOpsPanel({
     renewalActionInitialState,
   );
 
-  if (rows.length === 0) {
-    return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Renewal ops</h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          No active device assignments. Assign devices from the customer overview or Devices admin.
-        </p>
-      </section>
-    );
-  }
-
   const missingTerm = rows.some((r) => r.intervalMonths == null);
+  const isManual = billingMode === "manual_legacy";
+  const counts = countRenewalOps(rows);
+  const priority = priorityRenewalRows(rows);
+  const sorted = sortRenewalRowsByUrgency(rows);
+  const showPriority = priority.length > 0;
+  const allDevicesDefaultOpen = priority.length === 0 || sorted.length <= priority.length;
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Renewal ops</h2>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        {billingMode === "manual_legacy" ? (
+    <>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        {isManual ? (
           <>
-            Cash / manual billing: when you receive payment (cash, transfer, or Invoiless invoice marked paid),
-            <strong> mark period paid</strong> to roll <strong>next due</strong> forward per device.
+            When payment is received (cash, transfer, or Invoiless paid), <strong>mark period paid</strong> to advance{" "}
+            <strong>next due</strong> per device.
           </>
         ) : (
           <>
-            Card subscriptions renew via Stripe; <strong>invoice.paid</strong> can auto-advance next due on all active
-            devices (disable with <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">STRIPE_RENEWAL_AUTO_ADVANCE=false</code>
-            ). Use manual mark paid for cash top-ups or corrections.
+            Stripe <strong>invoice.paid</strong> can auto-advance next due on all active devices. Mark paid manually for
+            cash or corrections.
           </>
         )}
       </p>
@@ -182,45 +181,119 @@ export function CustomerRenewalOpsPanel({
         </p>
       ) : null}
 
-      {rows.length > 1 ? (
-        <form
-          action={bulkAction}
-          className="mt-4 flex flex-col gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:flex-row sm:items-end"
-          onSubmit={(e) => {
-            if (
-              !window.confirm(
-                `Mark the current period paid for all ${rows.length} active devices and advance each next due date?`,
-              )
-            ) {
-              e.preventDefault();
-            }
-          }}
-        >
-          <input type="hidden" name="customerId" value={customerId} />
-          <label className="block flex-1 text-xs">
-            <span className="font-medium text-zinc-600 dark:text-zinc-400">
-              Invoice ref for all devices (optional)
-            </span>
-            <input
-              name="invoiceRef"
-              type="text"
-              placeholder="e.g. Invoiless invoice id"
-              className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            />
-          </label>
-          <MarkPaidSubmit label={`Mark all ${rows.length} paid`} />
-          {bulkState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkState.error}</p> : null}
-          {bulkState.message ? (
-            <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkState.message}</p>
-          ) : null}
-        </form>
+      {showPriority ? (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Needs attention
+          </p>
+          <ul className="mt-2 flex flex-col gap-3">
+            {priority.map((row) => (
+              <MarkOneForm key={row.id} row={row} customerId={customerId} />
+            ))}
+          </ul>
+        </div>
       ) : null}
 
-      <ul className="mt-4 flex flex-col gap-3">
-        {rows.map((row) => (
-          <MarkOneForm key={row.id} row={row} customerId={customerId} />
-        ))}
-      </ul>
+      <details className="mt-4" open={allDevicesDefaultOpen}>
+        <summary className="cursor-pointer text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          All devices ({rows.length})
+        </summary>
+
+        {rows.length > 1 ? (
+          <form
+            action={bulkAction}
+            className="mt-3 flex flex-col gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              if (
+                !window.confirm(
+                  `Mark the current period paid for all ${rows.length} active devices and advance each next due date?`,
+                )
+              ) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="customerId" value={customerId} />
+            <label className="block flex-1 text-xs">
+              <span className="font-medium text-zinc-600 dark:text-zinc-400">
+                Invoice ref for all devices (optional)
+              </span>
+              <input
+                name="invoiceRef"
+                type="text"
+                placeholder="e.g. Invoiless invoice id"
+                className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              />
+            </label>
+            <MarkPaidSubmit label={`Mark all ${rows.length} paid`} />
+            {bulkState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkState.error}</p> : null}
+            {bulkState.message ? (
+              <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkState.message}</p>
+            ) : null}
+          </form>
+        ) : null}
+
+        <ul className="mt-3 flex flex-col gap-3">
+          {sorted.map((row) => {
+            const inPriority = showPriority && priority.some((p) => p.id === row.id);
+            if (inPriority) {
+              return null;
+            }
+            return <MarkOneForm key={row.id} row={row} customerId={customerId} />;
+          })}
+        </ul>
+      </details>
+    </>
+  );
+}
+
+export function CustomerRenewalOpsPanel({
+  customerId,
+  billingMode,
+  rows,
+}: {
+  customerId: string;
+  billingMode: CustomerBillingMode;
+  rows: RenewalRow[];
+}) {
+  if (rows.length === 0) {
+    return (
+      <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Device renewals</h2>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          No active device assignments. Assign devices from the customer overview or Devices admin.
+        </p>
+      </section>
+    );
+  }
+
+  const counts = countRenewalOps(rows);
+  const summary = renewalOpsSummaryLabel(counts);
+  const isManual = billingMode === "manual_legacy";
+  const hasUrgent = counts.overdue > 0 || counts.dueSoon > 0;
+  const collapseForStripe = !isManual && !hasUrgent;
+
+  const inner = <RenewalOpsBody customerId={customerId} billingMode={billingMode} rows={rows} />;
+
+  if (collapseForStripe) {
+    return (
+      <details className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-zinc-900 marker:content-none dark:text-zinc-50 [&::-webkit-details-marker]:hidden">
+          <span className="font-semibold">Device renewals</span>
+          <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+            {summary} · renewals via Stripe when configured
+          </span>
+        </summary>
+        <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">{inner}</div>
+      </details>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Device renewals</h2>
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{summary}</p>
+      <div className="mt-3">{inner}</div>
     </section>
   );
 }
