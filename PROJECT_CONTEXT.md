@@ -1912,3 +1912,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-22 10:39 UTC — commit `c3a34f4`
+
+- docs: project context log (98f7d60)
+
+
+### 2026-05-22 10:39 UTC — pre-push (`main` → origin) @ `c3a34f4`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 10:44 UTC — commit `e648390`
+
+- fix(vercel): daily broadcast cron for Hobby plan limit
+
+
+### 2026-05-22 10:45 UTC — pre-push (`main` → origin) @ `e648390`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
