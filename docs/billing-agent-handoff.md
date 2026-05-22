@@ -2,6 +2,8 @@
 
 Handoff for agents continuing billing work. **Branch:** `main` (through `d35f86e`, 2026-05-21). **Transcript:** `agent-transcripts/6413d68c-8219-4b0c-ac67-119b402d4c56.jsonl`.
 
+**Production lag vs local (2026-05-22):** If billing UI on Vercel looks older than local, check Vercel Production SHA first — an invalid **Hobby cron** in `vercel.json` stopped deploys after `3b85623` until `e648390`. See **`docs/vercel-deploy-agent-notes.md`**.
+
 ---
 
 ## North star
