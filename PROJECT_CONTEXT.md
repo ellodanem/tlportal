@@ -2027,3 +2027,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - docs(billing): lock one-off charges to Admin Invoices module
 
+
+### 2026-05-22 23:09 UTC — commit `fac7392`
+
+- docs(billing): lock one-off charges to Admin Invoices module
+
+
+### 2026-05-22 23:10 UTC — pre-push (`main` → origin) @ `fac7392`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
