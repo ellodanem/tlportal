@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import {
+  CustomerOverviewBillingRibbon,
+  subscriptionStatusLabelForOverview,
+} from "@/components/admin/customer-overview-billing-ribbon";
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { FleetHealthSummary, type FleetHealthFilter } from "@/components/dashboard/fleet-health-summary";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
@@ -16,7 +20,6 @@ import {
   type FleetHealthBucket,
 } from "@/lib/admin/fleet-health";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
-import { CUSTOMER_SUBSCRIPTION_STATUS_LABEL } from "@/lib/domain/customer-subscription";
 import {
   getInvoilessExternalCustomerId,
   getStripeBillingAccount,
@@ -39,6 +42,12 @@ function parseFleetFilter(raw: string | undefined): FleetHealthFilter {
   if (raw === "healthy" || raw === "renewal" || raw === "review") return raw;
   return "all";
 }
+
+const FLEET_FILTER_LABEL: Record<FleetHealthBucket, string> = {
+  healthy: "healthy",
+  renewal: "due soon / overdue",
+  review: "needs review",
+};
 
 function formatDate(d: Date | null | undefined) {
   if (!d) return "—";
@@ -101,7 +110,6 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   const openAssignments = customer.serviceAssignments.filter(
     (a) => a.endDate == null && a.status !== "cancelled",
   );
-  const activeServices = openAssignments.length;
 
   const stripeBillingAttention =
     customerSubscription != null
@@ -214,65 +222,26 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
 
       <CustomerSubnav customerId={customer.id} active="overview" />
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Active services
-          </p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-            {activeServices}
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Open assignments (not cancelled, no end date)
-          </p>
-        </div>
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Subscription
-          </p>
-          <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {customer.billingMode === "stripe_subscription"
-              ? customerSubscription
-                ? CUSTOMER_SUBSCRIPTION_STATUS_LABEL[customerSubscription.status]
-                : stripeAccount?.status ?? "Not started"
-              : "Manual"}
-          </p>
-          <Link
-            href={`/admin/customers/${customer.id}/billing`}
-            className="mt-1 inline-block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-          >
-            Manage billing →
-          </Link>
-        </div>
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Invoiless
-          </p>
-          <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {linkedInvoiless ? "Linked" : "Not linked"}
-          </p>
-          <p className="mt-1 truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">
-            {linkedInvoiless ? invoilessCustomerId : "—"}
-          </p>
-        </div>
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Next due
-          </p>
-          <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {formatDate(nextDue)}
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Earliest next billing date</p>
-        </div>
-      </section>
+      <CustomerOverviewBillingRibbon
+        customerId={customer.id}
+        billingMode={customer.billingMode}
+        subscriptionStatusLabel={subscriptionStatusLabelForOverview(
+          customer.billingMode,
+          customerSubscription,
+          stripeAccount?.status,
+        )}
+        invoilessLinked={linkedInvoiless}
+        invoilessCustomerId={invoilessCustomerId}
+        nextDue={nextDue}
+      />
 
       <FleetHealthSummary
         counts={fleetHealthCounts}
         activeFilter={fleetFilter}
         baseHref={customerOverviewHref}
         title="Account health"
-        subtitle="Open services for this customer · click a card to filter the device table"
-        generatedAt={new Date()}
+        subtitle="Open services · click a card to filter the device table below"
+        compactWhenAllHealthy
       />
 
       <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -427,7 +396,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Device details</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               {bucketByFilter
-                ? `Showing ${filteredAssignments.length} assignment${filteredAssignments.length === 1 ? "" : "s"} · ${fleetFilter} filter`
+                ? `Showing ${filteredAssignments.length} assignment${filteredAssignments.length === 1 ? "" : "s"} · ${FLEET_FILTER_LABEL[bucketByFilter]} filter`
                 : "All service assignments for this customer"}
             </p>
           </div>
@@ -538,7 +507,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
                           classification.bucket === "healthy" ? (
                             <span className="font-medium text-emerald-700 dark:text-emerald-400">OK</span>
                           ) : classification.bucket === "renewal" ? (
-                            <span className="font-medium text-rose-700 dark:text-rose-400">Renewal due</span>
+                            <span className="font-medium text-rose-700 dark:text-rose-400">Due soon / overdue</span>
                           ) : (
                             <span className="text-violet-800 dark:text-violet-300">
                               {classification.reviewReasons.map(reviewReasonLabel).join(", ")}

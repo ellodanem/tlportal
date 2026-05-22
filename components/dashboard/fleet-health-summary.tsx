@@ -28,8 +28,8 @@ const BUCKETS: {
   },
   {
     key: "renewal",
-    label: "Due for renewal",
-    shortLabel: "Renewal",
+    label: "Due within 7 days or overdue",
+    shortLabel: "Due soon",
     accent: "border-l-rose-400 bg-rose-50/35 dark:bg-rose-950/20",
     borderActive: "ring-2 ring-rose-400/70 border-rose-300 dark:ring-rose-600/50",
   },
@@ -54,6 +54,7 @@ export function FleetHealthSummary({
   title = "Fleet status",
   subtitle,
   generatedAt,
+  compactWhenAllHealthy = false,
 }: {
   counts: FleetHealthCounts;
   activeFilter?: FleetHealthFilter;
@@ -62,6 +63,8 @@ export function FleetHealthSummary({
   title?: string;
   subtitle?: string;
   generatedAt?: Date;
+  /** Customer overview: one calm line when every open assignment is healthy and no filter is active. */
+  compactWhenAllHealthy?: boolean;
 }) {
   const total = counts.total;
   const metaLine = [
@@ -77,11 +80,30 @@ export function FleetHealthSummary({
     .filter(Boolean)
     .join(" · ");
 
+  const showCompact =
+    compactWhenAllHealthy &&
+    activeFilter === "all" &&
+    total > 0 &&
+    counts.healthy === total;
+
   return (
     <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{title}</h2>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{subtitle ?? metaLine}</p>
 
+      {showCompact ? (
+        <p className="mt-4 rounded-xl border border-emerald-200/80 bg-emerald-50/50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
+          <span className="font-medium">
+            {total.toLocaleString()} open service{total === 1 ? "" : "s"}
+          </span>
+          <span className="text-emerald-800 dark:text-emerald-200"> · all devices OK</span>
+          {baseHref ? (
+            <span className="mt-1 block text-xs font-normal text-emerald-800/90 dark:text-emerald-300/90">
+              No ops issues — use the device table below for details
+            </span>
+          ) : null}
+        </p>
+      ) : (
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {BUCKETS.map((b) => {
           const value = countForKey(counts, b.key);
@@ -123,6 +145,7 @@ export function FleetHealthSummary({
           return <div key={b.key}>{card}</div>;
         })}
       </div>
+      )}
     </section>
   );
 }
