@@ -136,7 +136,8 @@ Plus sequence counter (e.g. `InvoiceSequence` table or field on `AppSettings`).
 | Done | Subscription-first Checkout, `BillingInvoice` mirror, Billing tab |
 | Done | TL numbering + paid PDF generate/store/download/email (this spec) |
 | Done | `invoice.paid` → advance `ServiceAssignment.nextDueDate` (Phase 6) |
-| **Next** | One-off hardware (`one_time`) — same PDF template + `displayNumber` |
+| Locked | **One-offs** → Admin → Invoices (Invoiless), not Stripe Checkout |
+| Optional later | TL-INV PDF for Invoiless one-offs; Stripe `one_time` Checkout only if card hardware is required |
 | Deferred | Invoice-first recurring for service plans |
 
 ---
@@ -156,3 +157,4 @@ Plus sequence counter (e.g. `InvoiceSequence` table or field on `AppSettings`).
 |------|------|
 | 2026-05-21 | Spec created; numbering decision: TL-INV serial + Stripe refs stored separately |
 | 2026-05-23 | Implemented: sequence, PDF on invoice.paid, Billing tab download/email |
+| 2026-05-23 | Locked: one-off charges stay on Admin → Invoices (Invoiless), not Stripe one-off Checkout |

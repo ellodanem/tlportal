@@ -103,7 +103,8 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
           <strong className="font-medium text-zinc-800 dark:text-zinc-200">Accounting (Invoiless)</strong> — not where
           card subscriptions run (that is <strong className="font-medium">Customer → Billing</strong>). Lists standard
           invoices and retainers from Invoiless; Stripe-paid rows also appear here when Phase 5 mirroring is enabled.
-          Create manual or cash invoices here; link customers via Billing → Link billing accounts.
+          Use this module for <strong className="font-medium">one-off</strong> charges (hardware, installation, cash);
+          link customers via Billing → Link billing accounts.
         </p>
       </div>
 

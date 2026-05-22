@@ -203,10 +203,12 @@ Summary:
 - **Invoice # (locked):** customer-facing **`TL-INV-{serial}`**; Stripe `invoice.number` and `in_…` stored for reconciliation only (see [paid-invoice-pdf-spec.md](./paid-invoice-pdf-spec.md)).
 - Stripe hosted PDF / **View** link remains secondary.
 
-**Then: one-off invoices for hardware**
+**One-off charges (locked — 2026-05)**
 
-- Same PDF template and `TL-INV` numbering; Checkout `mode: payment`; `kind: one_time` on `BillingInvoice`.
-- **Out of scope:** invoice-first recurring for service plans; Invoiless duplicate for Stripe customers.
+- **Use Admin → Invoices** (Invoiless): hardware, installation, cash, bank, and other non-subscription charges. Staff create via **New invoice**; data lives in Invoiless and lists under **Admin → Invoices**. This is the standard one-off path — **do not** replace it with Stripe Checkout for routine one-offs.
+- **Stripe** remains for **recurring service** (Customer → Billing, subscription Checkout). Optional future: Stripe `mode: payment` one-offs only if card pay for hardware is explicitly required; not on the default roadmap.
+- Optional later: TL-INV PDF branding for Invoiless-paid one-offs (separate from Stripe subscription receipts).
+- **Out of scope:** invoice-first recurring for service plans; building a second one-off system parallel to Invoices.
 
 ---
 
@@ -228,8 +230,9 @@ Summary:
 | 2026-05-18 | Initial architecture + Phase 1 approval |
 | 2026-05-19 | Stripe Checkout + webhooks + admin billing panel |
 | 2026-05-23 | TL paid invoice PDF (`TL-INV`), Blob storage, Billing tab download/email |
+| 2026-05-23 | Locked: one-off billing via Admin → Invoices (Invoiless), not Stripe Checkout |
 | 2026-05-21 | Public pay thanks/cancel URLs; Billing tab; BillingInvoice mirror |
-| 2026-05-21 | Locked: subscription-first recurring; plan one-off hardware invoices next |
+| 2026-05-21 | Locked: subscription-first recurring |
 | 2026-05-21 | Paid invoice PDF spec; TL-INV display numbers (Stripe # secondary) |
 | 2026-05-21 | Phases 4–6 billing lifecycle, Invoiless paid mirror, renewal mark paid |
 | 2026-05-21 | Phase 7: Invoiless via BillingAccount + accounting copy on Invoices admin |

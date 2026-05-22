@@ -2002,3 +2002,28 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-22 11:44 UTC — commit `8192be9`
+
+- docs: project context log (554250a)
+
+
+### 2026-05-22 11:44 UTC — pre-push (`main` → origin) @ `8192be9`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 22:55 UTC — commit `884b4f5`
+
+- fix(billing): move renewal action initial state out of use server
+
+
+### 2026-05-22 22:55 UTC — pre-push (`main` → origin) @ `884b4f5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 23:09 UTC — commit `9055ccf`
+
+- docs(billing): lock one-off charges to Admin Invoices module
+

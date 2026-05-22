@@ -14,7 +14,8 @@ Handoff for agents continuing billing work. **Branch:** `main` (through `d35f86e
 | **Stripe** | Card Checkout, subscriptions, webhooks, `BillingInvoice` mirror |
 | **Invoiless** | Accounting mirror (manual invoices + Paid copy of Stripe payments) |
 
-- Card billing: **Customer → Billing** (not Admin → Invoices).
+- Card **subscription** billing: **Customer → Billing** (not Admin → Invoices).
+- **One-off** billing (hardware, cash, manual lines): **Admin → Invoices → New** → Invoiless. Keep this as the product default; do not steer one-offs to Stripe Checkout unless explicitly requested later.
 - **Do not** auto-start Checkout on create; staff use **Create payment link**.
 - Catalog: Stripe Price × **vehicle quantity**; tiers $30/$25/$20 × terms 1/3/6/12 mo.
 
@@ -106,7 +107,7 @@ Webhook events: `checkout.session.completed`, `checkout.session.expired`, `custo
 
 ## Not implemented
 
-- One-off hardware Checkout
+- Stripe one-off Checkout (deferred / optional — **not** the default one-off path; use Invoices module)
 - Invoiless webhook → auto renewal
 - Per-assignment invoice linking
 - Delete customer does **not** remove Stripe/Invoiless externals

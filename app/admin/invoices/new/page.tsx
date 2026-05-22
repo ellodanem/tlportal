@@ -31,8 +31,10 @@ export default async function NewInvoicePage() {
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">New invoice</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Manual / cash invoices in Invoiless (accounting). For Stripe card billing, use{" "}
-          <strong className="font-medium">Customer → Billing</strong> instead. Currency follows{" "}
+          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Standard path for one-off charges</strong>{" "}
+          (hardware, installation, cash, bank): create here — invoices sync to Invoiless. For recurring card
+          subscriptions, use <strong className="font-medium">Customer → Billing</strong> (Stripe), not this form.
+          Currency follows{" "}
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">INVOILESS_DEFAULT_CURRENCY</code> or XCD.
         </p>
       </div>
