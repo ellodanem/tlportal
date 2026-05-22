@@ -1712,3 +1712,33 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-22 09:32 UTC — commit `3b85623`
+
+- docs: project context log (a739e7c)
+
+
+### 2026-05-22 09:32 UTC — pre-push (`main` → origin) @ `3b85623`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 09:41 UTC — commit `63442a6`
+
+- feat(broadcast): mass email campaigns with batched send (phase 1b)
+
+
+### 2026-05-22 09:41 UTC — pre-push (`main` → origin) @ `63442a6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 09:45 UTC — commit `5cd8620`
+
+- fix(devices): avoid redirect in useActionState device forms
+
+
+### 2026-05-22 09:45 UTC — pre-push (`main` → origin) @ `5cd8620`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
