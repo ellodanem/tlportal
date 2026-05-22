@@ -1872,3 +1872,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-22 10:17 UTC — commit `ce90787`
+
+- docs: project context log (3c977af)
+
+
+### 2026-05-22 10:17 UTC — pre-push (`main` → origin) @ `ce90787`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 10:23 UTC — commit `e416ab3`
+
+- fix(admin): move checkout helper text above payment form
+
+
+### 2026-05-22 10:23 UTC — pre-push (`main` → origin) @ `e416ab3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
