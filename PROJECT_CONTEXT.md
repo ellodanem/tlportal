@@ -1822,3 +1822,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-22 09:57 UTC — commit `5df9459`
+
+- docs: project context log (20954be)
+
+
+### 2026-05-22 09:57 UTC — pre-push (`main` → origin) @ `5df9459`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 10:15 UTC — commit `f1af6c5`
+
+- Refine paid invoice PDF layout to match Invoiceless style.
+
+
+### 2026-05-22 10:15 UTC — pre-push (`main` → origin) @ `f1af6c5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
