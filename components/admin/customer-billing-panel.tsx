@@ -102,6 +102,14 @@ export function CustomerBillingPanel({
             Choose tier, term, and vehicles — then create or email a Checkout link. Pricing saves automatically when you
             send a link, or use <strong className="font-medium">Save pricing</strong> without sending.
           </p>
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            {ratePreset === "custom"
+              ? "Custom tiers use dynamic per-vehicle pricing."
+              : catalogConfigured
+                ? "Catalog tiers use Stripe Price × vehicle count."
+                : "No catalog Price for this tier/term — dynamic pricing. Add Price ids under Subscription options."}{" "}
+            {checkoutInitialLinkNotice()} Recovery email after expiry when SMTP and webhooks are configured.
+          </p>
 
           {planOptions.length > 0 ? (
             <form action={checkoutAction} className="mt-4 flex flex-col gap-4">
@@ -199,21 +207,6 @@ export function CustomerBillingPanel({
                   {pricingPending ? "Saving…" : "Save pricing"}
                 </button>
               </div>
-
-              <details className="text-xs text-zinc-500 dark:text-zinc-400">
-                <summary className="cursor-pointer font-medium text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">
-                  Checkout details
-                </summary>
-                <p className="mt-2">
-                  {ratePreset === "custom"
-                    ? "Custom tiers use dynamic per-vehicle pricing."
-                    : catalogConfigured
-                      ? "Catalog tiers use Stripe Price × vehicle count."
-                      : "No catalog Price for this tier/term — dynamic pricing. Add Price ids under Subscription options."}
-                  {" "}
-                  {checkoutInitialLinkNotice()} Recovery email after expiry when SMTP and webhooks are configured.
-                </p>
-              </details>
             </form>
           ) : (
             <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">
