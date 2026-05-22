@@ -1,5 +1,6 @@
 import "server-only";
 
+import { toBillingInvoiceClientRow } from "@/lib/admin/billing-invoice-client";
 import { prisma } from "@/lib/db";
 import { isCatalogRateTier } from "@/lib/domain/billing-catalog";
 import { CUSTOMER_SUBSCRIPTION_STATUS_LABEL } from "@/lib/domain/customer-subscription";
@@ -121,7 +122,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     catalogConfigured,
     billingSetup,
     stripePeriodEnd,
-    stripeInvoices,
+    stripeInvoices: stripeInvoices.map(toBillingInvoiceClientRow),
     subscriptionSummary,
     renewalAssignments: renewalAssignments.map((a) => ({
       id: a.id,

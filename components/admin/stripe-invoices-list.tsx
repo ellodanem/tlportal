@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import type { BillingInvoice } from "@prisma/client";
+import type { BillingInvoiceClientRow } from "@/lib/admin/billing-invoice-client";
 
 import {
   emailBillingInvoicePdfAction,
@@ -37,7 +37,7 @@ function InvoicePdfActions({
   customerId,
   customerEmail,
 }: {
-  inv: BillingInvoice;
+  inv: BillingInvoiceClientRow;
   customerId: string;
   customerEmail: string | null;
 }) {
@@ -126,7 +126,7 @@ export function StripeInvoicesList({
   customerId,
   customerEmail,
 }: {
-  invoices: BillingInvoice[];
+  invoices: BillingInvoiceClientRow[];
   customerId: string;
   customerEmail: string | null;
 }) {
