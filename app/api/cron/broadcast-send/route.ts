@@ -20,7 +20,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const { campaigns } = await processInFlightBroadcastCampaigns(25);
+  const batchSize = Math.min(
+    200,
+    Math.max(1, Number.parseInt(process.env.BROADCAST_CRON_BATCH_SIZE ?? "50", 10) || 50),
+  );
+  const { campaigns } = await processInFlightBroadcastCampaigns(batchSize);
   return NextResponse.json({
     ok: true,
     at: new Date().toISOString(),
