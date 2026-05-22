@@ -85,24 +85,44 @@ async function persistStripeMonthlyRateFromForm(
   formData: FormData,
   actorUserId: string | null,
 ): Promise<{ error: string } | { ok: true }> {
-  const rateRaw = String(formData.get("monthlyRateXcd") ?? "").trim();
-  if (rateRaw === "custom") {
-    const customMonthly = parseMonthlyRateXcd(String(formData.get("customMonthlyRateXcd") ?? ""));
-    if (customMonthly == null) {
-      return { error: "Enter a valid custom monthly amount." };
+  try {
+    const rateRaw = String(formData.get("monthlyRateXcd") ?? "").trim();
+    if (rateRaw === "custom") {
+      const customMonthly = parseMonthlyRateXcd(String(formData.get("customMonthlyRateXcd") ?? ""));
+      if (customMonthly == null) {
+        return { error: "Enter a valid custom monthly amount." };
+      }
+      await setCustomerStripeMonthlyRate(customerId, customMonthly, actorUserId);
+      return { ok: true };
     }
-    await setCustomerStripeMonthlyRate(customerId, customMonthly, actorUserId);
+    if (rateRaw === "default" || !rateRaw) {
+      await setCustomerStripeMonthlyRate(customerId, null, actorUserId);
+      return { ok: true };
+    }
+    const parsed = parseMonthlyRateXcd(rateRaw);
+    if (parsed == null) {
+      return { error: "Choose a valid monthly rate tier." };
+    }
+    await setCustomerStripeMonthlyRate(customerId, parsed, actorUserId);
     return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save monthly rate." };
   }
-  if (rateRaw === "default" || !rateRaw) {
-    await setCustomerStripeMonthlyRate(customerId, null, actorUserId);
-    return { ok: true };
+}
+
+async function assertCustomerReadyForStripeCheckout(
+  customerId: string,
+): Promise<{ error: string } | { ok: true }> {
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { email: true },
+  });
+  if (!customer?.email?.trim()) {
+    return {
+      error:
+        "Customer has no email on file. Add one under Edit profile, then create the payment link.",
+    };
   }
-  const parsed = parseMonthlyRateXcd(rateRaw);
-  if (parsed == null) {
-    return { error: "Choose a valid monthly rate tier." };
-  }
-  await setCustomerStripeMonthlyRate(customerId, parsed, actorUserId);
   return { ok: true };
 }
 
@@ -146,107 +166,128 @@ export async function startStripeCheckoutAction(
   _prev: BillingActionState,
   formData: FormData,
 ): Promise<BillingActionState> {
-  const session = await getSession();
-  if (!session) {
-    return { error: "You must be signed in." };
+  try {
+    const session = await getSession();
+    if (!session) {
+      return { error: "You must be signed in." };
+    }
+
+    const parsed = await parseCheckoutForm(formData);
+    if ("error" in parsed) {
+      return { error: parsed.error };
+    }
+
+    const ready = await assertCustomerReadyForStripeCheckout(parsed.customerId);
+    if ("error" in ready) {
+      return { error: ready.error };
+    }
+
+    const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+    if ("error" in saved) {
+      return { error: saved.error };
+    }
+
+    const result = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      vehicleCount: parsed.vehicleCount,
+      useCustomPricing: parsed.useCustomPricing,
+    });
+    if (!result.ok) {
+      return { error: result.error };
+    }
+
+    revalidateCustomerBillingPaths(parsed.customerId);
+
+    const pricingNote =
+      result.pricingMode === "catalog"
+        ? "Using Stripe catalog price × vehicle count."
+        : "Using dynamic pricing (custom or missing catalog Price).";
+
+    return {
+      error: null,
+      url: result.url,
+      message: `Copy the link below and send it to your customer. ${checkoutInitialLinkNotice()} ${pricingNote}`,
+    };
+  } catch (e) {
+    console.error("startStripeCheckoutAction", e);
+    return {
+      error: e instanceof Error ? e.message : "Could not create payment link. Try again.",
+    };
   }
-
-  const parsed = await parseCheckoutForm(formData);
-  if ("error" in parsed) {
-    return { error: parsed.error };
-  }
-
-  const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
-  if ("error" in saved) {
-    return { error: saved.error };
-  }
-  revalidateCustomerBillingPaths(parsed.customerId);
-
-  const result = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
-    monthlyRateXcd: parsed.monthlyRateXcd,
-    vehicleCount: parsed.vehicleCount,
-    useCustomPricing: parsed.useCustomPricing,
-  });
-  if (!result.ok) {
-    return { error: result.error };
-  }
-
-  const pricingNote =
-    result.pricingMode === "catalog"
-      ? "Using Stripe catalog price × vehicle count."
-      : "Using dynamic pricing (custom or missing catalog Price).";
-
-  return {
-    error: null,
-    url: result.url,
-    message: `Copy the link below and send it to your customer. ${checkoutInitialLinkNotice()} ${pricingNote}`,
-  };
 }
 
 export async function emailStripeCheckoutLinkAction(
   _prev: BillingActionState,
   formData: FormData,
 ): Promise<BillingActionState> {
-  const session = await getSession();
-  if (!session) {
-    return { error: "You must be signed in." };
+  try {
+    const session = await getSession();
+    if (!session) {
+      return { error: "You must be signed in." };
+    }
+
+    const parsed = await parseCheckoutForm(formData);
+    if ("error" in parsed) {
+      return { error: parsed.error };
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: { email: true, company: true, firstName: true, lastName: true },
+    });
+    if (!customer?.email?.trim()) {
+      return { error: "Customer has no email on file. Add one on the profile below, then try again." };
+    }
+
+    const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+    if ("error" in saved) {
+      return { error: saved.error };
+    }
+
+    const checkout = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      vehicleCount: parsed.vehicleCount,
+      useCustomPricing: parsed.useCustomPricing,
+    });
+    if (!checkout.ok) {
+      return { error: checkout.error };
+    }
+
+    revalidateCustomerBillingPaths(parsed.customerId);
+
+    const name =
+      customer.company?.trim() ||
+      [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
+      "there";
+
+    const emailBody = checkoutInitialEmailBody({
+      greetingName: name,
+      paymentUrl: checkout.url,
+    });
+
+    const sent = await sendAppEmail({
+      to: customer.email.trim(),
+      subject: "Complete your Track Lucia subscription payment",
+      text: emailBody.text,
+      html: emailBody.html,
+    });
+
+    if (!sent.ok) {
+      return { error: sent.error, url: checkout.url };
+    }
+
+    return {
+      error: null,
+      url: checkout.url,
+      emailSent: true,
+      message: `Payment link emailed to ${customer.email.trim()}. ${checkoutInitialLinkNotice()} You can also copy the link below.`,
+    };
+  } catch (e) {
+    console.error("emailStripeCheckoutLinkAction", e);
+    return {
+      error: e instanceof Error ? e.message : "Could not email payment link. Try again.",
+    };
   }
-
-  const parsed = await parseCheckoutForm(formData);
-  if ("error" in parsed) {
-    return { error: parsed.error };
-  }
-
-  const customer = await prisma.customer.findUnique({
-    where: { id: parsed.customerId },
-    select: { email: true, company: true, firstName: true, lastName: true },
-  });
-  if (!customer?.email?.trim()) {
-    return { error: "Customer has no email on file. Add one on the profile below, then try again." };
-  }
-
-  const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
-  if ("error" in saved) {
-    return { error: saved.error };
-  }
-  revalidateCustomerBillingPaths(parsed.customerId);
-
-  const checkout = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
-    monthlyRateXcd: parsed.monthlyRateXcd,
-    vehicleCount: parsed.vehicleCount,
-    useCustomPricing: parsed.useCustomPricing,
-  });
-  if (!checkout.ok) {
-    return { error: checkout.error };
-  }
-
-  const name =
-    customer.company?.trim() ||
-    [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
-    "there";
-
-  const emailBody = checkoutInitialEmailBody({
-    greetingName: name,
-    paymentUrl: checkout.url,
-  });
-
-  const sent = await sendAppEmail({
-    to: customer.email.trim(),
-    subject: "Complete your Track Lucia subscription payment",
-    text: emailBody.text,
-    html: emailBody.html,
-  });
-
-  if (!sent.ok) {
-    return { error: sent.error, url: checkout.url };
-  }
-
-  return {
-    error: null,
-    url: checkout.url,
-    emailSent: true,
-    message: `Payment link emailed to ${customer.email.trim()}. ${checkoutInitialLinkNotice()} You can also copy the link below.`,
-  };
 }
 
 export async function setStripeMonthlyRateAction(
