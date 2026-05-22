@@ -10,7 +10,7 @@ import {
   updateInvoilessInvoiceApi,
   type CreateInvoilessInvoiceItem,
 } from "@/lib/invoiless/invoice-mutate";
-import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/invoices-list";
+import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
 import { formatPlanTerm, formatXcd } from "@/lib/subscription-options/display";
 import { getInvoilessExternalCustomerId } from "@/lib/services/billing-service";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";

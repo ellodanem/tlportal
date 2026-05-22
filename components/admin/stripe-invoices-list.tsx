@@ -8,7 +8,7 @@ import {
   regenerateBillingInvoicePdfAction,
   type BillingInvoiceActionState,
 } from "@/app/admin/customers/billing-actions";
-import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/invoices-list";
+import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
 import { formatXcd } from "@/lib/subscription-options/display";
 
 const invoiceActionInitial: BillingInvoiceActionState = { error: null };

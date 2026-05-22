@@ -1,13 +1,9 @@
 import "server-only";
 
 import { clampInvoilessListLimit, InvoilessConfigError, invoilessJson } from "./client";
+import { INVOILESS_INVOICE_PREVIEW_ORIGIN } from "./preview-url";
 
-/** Public preview host from create-invoice response; override if Invoiless changes regions. */
-export const INVOILESS_INVOICE_PREVIEW_ORIGIN = "https://invoiless.com";
-
-export function invoilessInvoicePreviewUrl(invoilessInvoiceId: string): string {
-  return `${INVOILESS_INVOICE_PREVIEW_ORIGIN}/i/${encodeURIComponent(invoilessInvoiceId.trim())}`;
-}
+export { INVOILESS_INVOICE_PREVIEW_ORIGIN, invoilessInvoicePreviewUrl } from "./preview-url";
 
 export type InvoilessInvoiceListRow = {
   id: string;
