@@ -125,14 +125,17 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Stripe invoices</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Mirrored from Stripe for this customer.{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">invoice.paid</code> also creates a Paid
-            Invoiless invoice when the customer is linked there. Ensure{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">invoice.finalized</code> is subscribed if
-            missing.
+            Mirrored from Stripe. Paid rows get a TL receipt PDF (
+            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code>) via{" "}
+            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">invoice.paid</code> when Vercel Blob is
+            configured. Invoiless Paid mirror runs when the customer is linked there.
           </p>
           <div className="mt-4">
-            <StripeInvoicesList invoices={stripeInvoices} />
+            <StripeInvoicesList
+              invoices={stripeInvoices}
+              customerId={customer.id}
+              customerEmail={customer.email}
+            />
           </div>
         </section>
       ) : null}

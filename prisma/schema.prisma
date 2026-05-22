@@ -133,6 +133,13 @@ enum DeviceLinkRole {
   migrating
 }
 
+/// Atomic counter for customer-facing `TL-INV-{n}` numbers (singleton id = "default").
+model InvoiceSequence {
+  id        String   @id
+  nextValue Int
+  updatedAt DateTime @updatedAt
+}
+
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
@@ -512,7 +519,10 @@ model BillingInvoice {
   status                 String
   amountXcd              Decimal            @db.Decimal(12, 2)
   currency               String             @default("xcd")
-  invoiceNumber          String?
+  /// Customer-facing number on PDF and Billing UI (e.g. TL-INV-100837).
+  displayNumber          String?            @unique
+  /// Provider invoice number (Stripe `invoice.number`).
+  providerInvoiceNumber  String?
   periodStart            DateTime?
   periodEnd              DateTime?
   hostedInvoiceUrl       String?
@@ -521,6 +531,9 @@ model BillingInvoice {
   paidAt                 DateTime?
   /// Invoiless invoice id created when mirroring Stripe `invoice.paid` (accounting copy).
   invoilessMirrorInvoiceId String?
+  /// Vercel Blob path prefix `private:` + url, or public blob url for TL paid PDF.
+  pdfStoragePath         String?
+  pdfGeneratedAt         DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 

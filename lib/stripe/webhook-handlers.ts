@@ -8,6 +8,7 @@ import {
   mirrorStripePaidInvoiceToInvoiless,
   recordInvoilessMirrorEvent,
 } from "@/lib/services/invoiless-stripe-mirror-service";
+import { generateAndStorePaidInvoicePdf } from "@/lib/services/billing-paid-pdf-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 
 import { getStripeClient } from "./config";
@@ -155,6 +156,16 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           }
         } catch (e) {
           console.error("[stripe webhook] renewal auto-advance failed", e);
+        }
+        if (tlBillingInvoiceId) {
+          try {
+            const pdfResult = await generateAndStorePaidInvoicePdf(tlBillingInvoiceId);
+            if (!pdfResult.ok) {
+              console.error("[stripe webhook] paid PDF failed", pdfResult.error);
+            }
+          } catch (e) {
+            console.error("[stripe webhook] paid PDF failed", e);
+          }
         }
       }
       break;

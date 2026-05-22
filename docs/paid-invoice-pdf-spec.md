@@ -1,6 +1,6 @@
 # Paid invoice PDF — spec (TL Portal)
 
-**Status:** Approved for implementation (not built yet).  
+**Status:** Implemented on `main` (2026-05-23).  
 **Depends on:** `BillingInvoice` mirror, Stripe webhooks, Billing tab UI.  
 **Does not change:** subscription-first payment flow (Checkout / auto-renew).
 
@@ -134,9 +134,9 @@ Plus sequence counter (e.g. `InvoiceSequence` table or field on `AppSettings`).
 | Order | Item |
 |-------|------|
 | Done | Subscription-first Checkout, `BillingInvoice` mirror, Billing tab |
-| **Next** | **This spec:** TL numbering + paid PDF generate/store/download/email |
-| Then | One-off hardware (`one_time`) — same PDF template + `displayNumber` |
-| Then | `invoice.paid` → advance `ServiceAssignment.nextDueDate` (renewal ladder) |
+| Done | TL numbering + paid PDF generate/store/download/email (this spec) |
+| Done | `invoice.paid` → advance `ServiceAssignment.nextDueDate` (Phase 6) |
+| **Next** | One-off hardware (`one_time`) — same PDF template + `displayNumber` |
 | Deferred | Invoice-first recurring for service plans |
 
 ---
@@ -155,3 +155,4 @@ Plus sequence counter (e.g. `InvoiceSequence` table or field on `AppSettings`).
 | Date | Note |
 |------|------|
 | 2026-05-21 | Spec created; numbering decision: TL-INV serial + Stripe refs stored separately |
+| 2026-05-23 | Implemented: sequence, PDF on invoice.paid, Billing tab download/email |

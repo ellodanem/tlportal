@@ -13,6 +13,10 @@ import {
   syncCustomerToInvoilessBilling,
 } from "@/lib/services/billing-service";
 import { enableCustomerBillingLifecycle } from "@/lib/services/billing-lifecycle-service";
+import {
+  generateAndStorePaidInvoicePdf,
+  loadBillingInvoicePdfBytes,
+} from "@/lib/services/billing-paid-pdf-service";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import {
   effectiveMonthlyRateForCheckout,
@@ -308,4 +312,133 @@ export async function enableBillingSetupAction(
     error: null,
     message: `Billing accounts linked (${mode.replace(/_/g, " ")}).${warn} Send a payment link when ready — checkout is not started automatically.`,
   };
+}
+
+export type BillingInvoiceActionState = {
+  error: string | null;
+  message?: string;
+};
+
+export async function regenerateBillingInvoicePdfAction(
+  _prev: BillingInvoiceActionState,
+  formData: FormData,
+): Promise<BillingInvoiceActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const billingInvoiceId = String(formData.get("billingInvoiceId") ?? "").trim();
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!billingInvoiceId || !customerId) {
+    return { error: "Missing invoice or customer." };
+  }
+
+  const result = await generateAndStorePaidInvoicePdf(billingInvoiceId, { force: true });
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  return {
+    error: null,
+    message: result.skipped
+      ? "PDF already stored."
+      : `PDF generated (${result.displayNumber}).`,
+  };
+}
+
+export async function emailBillingInvoicePdfAction(
+  _prev: BillingInvoiceActionState,
+  formData: FormData,
+): Promise<BillingInvoiceActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const billingInvoiceId = String(formData.get("billingInvoiceId") ?? "").trim();
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!billingInvoiceId || !customerId) {
+    return { error: "Missing invoice or customer." };
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { email: true, company: true, firstName: true, lastName: true },
+  });
+  const to = customer?.email?.trim();
+  if (!to) {
+    return { error: "Customer has no email address." };
+  }
+
+  let row = await prisma.billingInvoice.findUnique({
+    where: { id: billingInvoiceId },
+    select: { displayNumber: true, pdfStoragePath: true, status: true, customerId: true },
+  });
+  if (!row || row.customerId !== customerId) {
+    return { error: "Invoice not found." };
+  }
+  if (row.status.toLowerCase() !== "paid") {
+    return { error: "Only paid invoices can be emailed." };
+  }
+
+  if (!row.pdfStoragePath) {
+    const gen = await generateAndStorePaidInvoicePdf(billingInvoiceId);
+    if (!gen.ok) {
+      return { error: gen.error };
+    }
+    row = await prisma.billingInvoice.findUnique({
+      where: { id: billingInvoiceId },
+      select: { displayNumber: true, pdfStoragePath: true, status: true, customerId: true },
+    });
+  }
+
+  if (!row?.pdfStoragePath) {
+    return { error: "PDF is not available." };
+  }
+
+  const pdfBytes = await loadBillingInvoicePdfBytes(row.pdfStoragePath);
+  if (!pdfBytes) {
+    return { error: "Could not load PDF from storage." };
+  }
+
+  const displayNumber = row.displayNumber ?? "invoice";
+  const greeting =
+    customer?.company?.trim() ||
+    [customer?.firstName, customer?.lastName].filter(Boolean).join(" ").trim() ||
+    "there";
+
+  const transportOpts = await import("@/lib/email/smtp-settings").then((m) => m.getSmtpTransportOptions());
+  const from = await import("@/lib/email/smtp-settings").then((m) => m.getSmtpMailFrom());
+  if (!transportOpts || !from) {
+    return { error: "SMTP is not configured in Admin → Settings." };
+  }
+
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.createTransport(transportOpts);
+  const filename = `${displayNumber.replace(/[^\w-]+/g, "-")}.pdf`;
+
+  try {
+    await transporter.sendMail({
+      from: from.name ? `"${from.name}" <${from.address}>` : from.address,
+      to,
+      subject: `Receipt ${displayNumber} — Track Lucia`,
+      text: `Hi ${greeting},\n\nPlease find your paid invoice receipt attached (${displayNumber}).\n\nThank you,\nTrack Lucia`,
+      html: `<p>Hi ${greeting},</p><p>Please find your paid invoice receipt attached (<strong>${displayNumber}</strong>).</p><p>Thank you,<br>Track Lucia</p>`,
+      attachments: [
+        {
+          filename,
+          content: pdfBytes,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not send email." };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  return { error: null, message: `Receipt emailed to ${to}.` };
 }

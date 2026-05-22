@@ -208,7 +208,7 @@ export async function mirrorStripePaidInvoiceToInvoiless(input: {
         status: "paid",
         amountXcd: new Prisma.Decimal(majorAmountFromStripeMinor(amountPaid, currency)),
         currency,
-        invoiceNumber: invoice.number ?? null,
+        providerInvoiceNumber: invoice.number ?? null,
         invoilessMirrorInvoiceId: invoilessInvoiceId,
         paidAt: new Date(),
       },

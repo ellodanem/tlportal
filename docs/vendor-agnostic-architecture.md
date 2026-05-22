@@ -183,7 +183,7 @@ Summary:
 ## Stripe subscriptions (MVP)
 
 - **Mode:** `Customer.billingMode = stripe_subscription` (one Stripe subscription per customer).
-- **Flow:** Admin → customer edit → billing panel → Checkout; webhooks update `BillingAccount` (`provider: stripe`).
+- **Flow:** Admin → customer **Billing** tab → payment link / Checkout; webhooks update `BillingAccount` (`provider: stripe`).
 - **Custom rates:** `Customer.stripeMonthlyRateXcd` (e.g. $25 or $20/mo); Checkout builds a dynamic Stripe price when set, or when you pick a non-default rate for one session.
 - **Env:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_*` or `SubscriptionOption.stripePriceId`, `APP_BASE_URL`.
 - **Local webhooks:** `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
@@ -197,7 +197,7 @@ Summary:
 
 **Rationale:** subscription-first matches set-and-forget card billing and custom monthly rates ($20 / $25 / $30). `BillingInvoice` mirror is for **per-client tracking and PDFs**, not replacing the subscription anchor.
 
-**Planned next (not built yet): paid invoice PDF**
+**Paid invoice PDF (shipped)**
 
 - After `invoice.paid`, generate a **TL-branded PDF receipt** (large **PAID**, Zoho-style layout) stored on `BillingInvoice`; download / reshare / email from **Billing** tab.
 - **Invoice # (locked):** customer-facing **`TL-INV-{serial}`**; Stripe `invoice.number` and `in_…` stored for reconciliation only (see [paid-invoice-pdf-spec.md](./paid-invoice-pdf-spec.md)).
@@ -227,6 +227,7 @@ Summary:
 |------|------|
 | 2026-05-18 | Initial architecture + Phase 1 approval |
 | 2026-05-19 | Stripe Checkout + webhooks + admin billing panel |
+| 2026-05-23 | TL paid invoice PDF (`TL-INV`), Blob storage, Billing tab download/email |
 | 2026-05-21 | Public pay thanks/cancel URLs; Billing tab; BillingInvoice mirror |
 | 2026-05-21 | Locked: subscription-first recurring; plan one-off hardware invoices next |
 | 2026-05-21 | Paid invoice PDF spec; TL-INV display numbers (Stripe # secondary) |

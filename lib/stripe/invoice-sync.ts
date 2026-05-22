@@ -4,6 +4,7 @@ import type { BillingInvoiceKind } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 
+import { ensureBillingInvoiceDisplayNumber } from "@/lib/billing/invoice-display-number";
 import { prisma } from "@/lib/db";
 
 import { getStripeClient } from "./config";
@@ -89,7 +90,7 @@ export async function syncStripeInvoiceToDatabase(
       status: invoice.status ?? "unknown",
       amountXcd: amountFromStripeMinor(amountPaid, currency),
       currency,
-      invoiceNumber: invoice.number ?? null,
+      providerInvoiceNumber: invoice.number ?? null,
       periodStart,
       periodEnd,
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
@@ -101,7 +102,7 @@ export async function syncStripeInvoiceToDatabase(
       status: invoice.status ?? "unknown",
       amountXcd: amountFromStripeMinor(amountPaid, currency),
       currency,
-      invoiceNumber: invoice.number ?? null,
+      providerInvoiceNumber: invoice.number ?? null,
       periodStart,
       periodEnd,
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
@@ -110,6 +111,10 @@ export async function syncStripeInvoiceToDatabase(
       paidAt,
     },
   });
+
+  if (invoice.status === "open" || invoice.status === "paid") {
+    await ensureBillingInvoiceDisplayNumber(row.id);
+  }
 
   return { customerId, invoiceId: row.id };
 }

@@ -96,9 +96,14 @@ Webhook events: `checkout.session.completed`, `checkout.session.expired`, `custo
 
 ---
 
+## Phase 8 — TL paid invoice PDF (if on `main` after 2026-05-23)
+
+- `TL-INV-{n}` via `InvoiceSequence`; `displayNumber` + `providerInvoiceNumber` on `BillingInvoice`
+- Generate on `invoice.paid` → Vercel Blob (`pdfStoragePath`); Billing tab **Download** / **Email** / **Regenerate**
+- See `docs/paid-invoice-pdf-spec.md`
+
 ## Not implemented
 
-- TL branded paid PDF / `TL-INV` numbering (`docs/paid-invoice-pdf-spec.md`)
 - One-off hardware Checkout
 - Invoiless webhook → auto renewal
 - Per-assignment invoice linking

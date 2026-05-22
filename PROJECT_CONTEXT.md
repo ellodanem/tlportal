@@ -1642,3 +1642,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-21 17:03 UTC — commit `8e65156`
+
+- docs: project context log (61c578c)
+
+
+### 2026-05-21 17:03 UTC — pre-push (`main` → origin) @ `8e65156`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-22 08:59 UTC — commit `e080228`
+
+- feat(billing): TL paid invoice PDFs with TL-INV numbering
+
+
+### 2026-05-22 09:00 UTC — commit `434129e`
+
+- feat(billing): TL paid invoice PDFs with TL-INV numbering
+
