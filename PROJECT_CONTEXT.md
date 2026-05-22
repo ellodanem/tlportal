@@ -1972,3 +1972,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-22 11:39 UTC — commit `c58d16b`
+
+- refactor(admin): tighten customer overview dashboard
+
+
+### 2026-05-22 11:40 UTC — pre-push (`main` → origin) @ `c58d16b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
