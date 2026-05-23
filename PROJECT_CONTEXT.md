@@ -2057,3 +2057,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-23 02:27 UTC — commit `be23868`
+
+- fix(admin): invoice date field and standard-only create form UI
+
+
+### 2026-05-23 02:27 UTC — pre-push (`main` → origin) @ `be23868`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
