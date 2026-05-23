@@ -25,7 +25,14 @@ export default async function CustomersPage() {
       },
       serviceAssignments: {
         where: { endDate: null, status: { not: "cancelled" } },
-        select: { status: true, endDate: true, nextDueDate: true, deviceId: true },
+        select: {
+          id: true,
+          status: true,
+          endDate: true,
+          nextDueDate: true,
+          deviceId: true,
+          device: { select: { imei: true, label: true } },
+        },
       },
     },
   });

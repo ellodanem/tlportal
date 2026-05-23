@@ -10,7 +10,6 @@ import {
   createInvoilessInvoiceApi,
   deleteInvoilessInvoiceApi,
   updateInvoilessInvoiceApi,
-  type InvoilessInvoiceScheduleKind,
 } from "@/lib/invoiless/invoice-mutate";
 import { parseLineItemsFromFormData } from "@/lib/invoiless/invoice-line-items";
 import { prisma } from "@/lib/db";
@@ -66,18 +65,17 @@ export async function createInvoiceFromPortal(
 
   const status = String(formData.get("status") ?? "Draft").trim() || "Draft";
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const invoiceDateRaw = String(formData.get("invoiceDate") ?? "").trim() || null;
   const dueDateRaw = String(formData.get("dueDate") ?? "").trim() || null;
-  const scheduleRaw = String(formData.get("invoiceScheduleType") ?? "standard").trim();
-  const scheduleType: InvoilessInvoiceScheduleKind = scheduleRaw === "retainer" ? "retainer" : "standard";
-
   try {
     await createInvoilessInvoiceApi({
       invoilessCustomerId,
       items: parsedLines.items,
       status,
       notes,
+      invoiceDate: invoiceDateRaw,
       dueDate: dueDateRaw,
-      scheduleType,
+      scheduleType: "standard",
     });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create invoice in Invoiless." };

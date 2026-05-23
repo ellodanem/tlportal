@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
+import { CustomerServicesExpand } from "@/components/admin/customer-services-expand";
+import type { CustomerTableDeviceRow } from "@/lib/admin/customer-table-rows";
 import type { CustomerBillingMode } from "@prisma/client";
 
 import type { AssignmentRollup } from "@/lib/admin/customer-list";
@@ -13,6 +15,7 @@ export type CustomerTableRow = {
   tagsLine: string | null;
   activeServices: number;
   distinctDevices: number;
+  devices: CustomerTableDeviceRow[];
   nextDue: Date | null;
   billingMode: CustomerBillingMode;
   invoilessLinked: boolean;
@@ -189,18 +192,16 @@ export function CustomersTable({
                       ) : null}
                       <span className="mt-2 flex flex-wrap items-center gap-2 md:hidden">
                         <RollupPill rollup={r.rollup} />
-                        <span className="text-[11px] text-zinc-500">
-                          {r.activeServices} svc · {r.distinctDevices} dev
-                        </span>
+                        <CustomerServicesExpand customerId={r.id} billingMode={r.billingMode} devices={r.devices} />
                       </span>
                     </span>
                   </Link>
                 </td>
                 <td className="hidden align-top px-4 py-4 md:table-cell">
                   <span className="block font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{r.activeServices}</span>
-                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-                    {r.distinctDevices} device{r.distinctDevices === 1 ? "" : "s"}
-                  </span>
+                  <div className="mt-1">
+                    <CustomerServicesExpand customerId={r.id} billingMode={r.billingMode} devices={r.devices} />
+                  </div>
                 </td>
                 <td className="hidden align-top px-4 py-4 lg:table-cell">
                   {r.nextDue ? (

@@ -56,7 +56,7 @@ export default async function AdminPage() {
 
   const totalDevices = FLEET_SEGMENT_ORDER.reduce((sum, k) => sum + s.fleetSegments[k], 0);
   const upcomingBillingCount = s.upcomingBillItems.length;
-  const upcomingBillingHref = s.upcomingBillItems[0]?.href ?? "/admin/customers";
+  const upcomingBillingHref = "/admin/customers";
 
   return (
     <div className="flex flex-col gap-8">
@@ -232,8 +232,16 @@ export default async function AdminPage() {
               </div>
             </div>
             {s.attentionCount > 0 ? (
-              <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
-                {s.attentionCount} open
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
+                  {s.attentionCount} open
+                </span>
+                <Link
+                  href="/admin/customers"
+                  className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                >
+                  Customers →
+                </Link>
               </span>
             ) : (
               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">

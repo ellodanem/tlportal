@@ -199,7 +199,7 @@ export async function getDashboardStats() {
       id: a.id,
       title: urgent ? `Overdue service — ${name}` : `Due soon — ${name}`,
       meta: `${duePart} · IMEI ${a.device.imei}`,
-      href: `/admin/customers/${a.customer.id}`,
+      href: `/admin/customers/${a.customer.id}/billing`,
       tone: urgent ? "urgent" : "warning",
     });
   }
@@ -214,7 +214,7 @@ export async function getDashboardStats() {
       id: `up-${a.id}`,
       title: `Next bill — ${name}`,
       meta: `Due ${formatShortDue(a.nextDueDate)} · IMEI ${a.device.imei}`,
-      href: `/admin/customers/${a.customer.id}`,
+      href: `/admin/customers/${a.customer.id}/billing`,
       tone: "info",
     });
     if (upcomingBillItems.length >= 6) break;
@@ -226,8 +226,8 @@ export async function getDashboardStats() {
     attentionItems.push({
       id: `stripe-${account.id}`,
       title: `Stripe ${account.status} — ${name}`,
-      meta: "Open billing on the customer edit screen.",
-      href: `/admin/customers/${account.customer.id}/edit`,
+      meta: "Open customer billing to review card subscription.",
+      href: `/admin/customers/${account.customer.id}/billing`,
       tone: "urgent",
     });
   }
@@ -244,8 +244,8 @@ export async function getDashboardStats() {
       attentionItems.push({
         id: `inv-${c.id}`,
         title: `Invoiless not linked — ${displayName(c)}`,
-        meta: "Push customer from the edit screen when ready.",
-        href: `/admin/customers/${c.id}/edit`,
+        meta: "Link billing accounts on the customer Billing tab.",
+        href: `/admin/customers/${c.id}/billing`,
         tone: "info",
       });
     }

@@ -127,6 +127,7 @@ async function assertCustomerReadyForStripeCheckout(
 }
 
 function revalidateCustomerBillingPaths(customerId: string) {
+  revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}/edit`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/billing`);

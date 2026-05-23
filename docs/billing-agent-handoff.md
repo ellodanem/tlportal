@@ -65,6 +65,20 @@ Handoff for agents continuing billing work. **Branch:** `main` (through `d35f86e
 
 ---
 
+## Admin IA — Customers roster (2026-05)
+
+| Route | Role |
+|-------|------|
+| **Admin → Customers** | Canonical list: billing mode, next due, status rollup. **Services** column expands to device friendly names + **Mark paid** (manual). |
+| **Customer → Billing** | Setup, Checkout, renewal ops, Stripe receipts. |
+| **Admin → Invoices** | **Locked** one-off and accounting (Invoiless). |
+
+**Legacy redirects:** `/admin/billing` and `/admin/subscriptions` → `/admin/customers`.
+
+**UI:** `components/admin/customer-services-expand.tsx`, `lib/admin/customer-table-rows.ts`
+
+---
+
 ## Prisma (billing)
 
 - `Customer`: `billingMode`, `stripeMonthlyRateXcd`, `invoilessCustomerId` (legacy; sync keeps aligned)
