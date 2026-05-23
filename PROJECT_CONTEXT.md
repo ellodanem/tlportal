@@ -2082,3 +2082,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - fix(admin): fleet health accepts 1NCE Enabled/Activated SIMs
 
+
+### 2026-05-23 11:27 UTC — commit `cf369a9`
+
+- docs: project context log (3558d4d)
+
+
+### 2026-05-23 11:28 UTC — pre-push (`main` → origin) @ `cf369a9`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
