@@ -66,9 +66,7 @@ export function InvoiceEditForm({
     <form action={formAction} className="flex max-w-2xl flex-col gap-5">
       <input type="hidden" name="invoilessInvoiceId" value={invoiceId} />
       <input type="hidden" name="invoilessCustomerId" value={invoilessCustomerId} />
-      <input type="hidden" name="invoiceDate" value={initialInvoiceDate} />
-
-           <div>
+      <div>
         <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Customer</p>
         <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">{customerLabel}</p>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
@@ -76,21 +74,17 @@ export function InvoiceEditForm({
         </p>
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/50">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Billing type</p>
-        <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
-          {initialIsRecurring
-            ? "Recurring (Invoiless automation)"
-            : initialIsRetainer
-              ? "Retainer (prepaid / budget)"
-              : "Standard"}
-        </p>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Retainer / recurring template flags cannot be changed from TL after creation (Invoiless API). Adjust in the
-          Invoiless app if needed. New recurring schedules are created in their Invoice Builder, not via{" "}
-          <code className="rounded bg-zinc-100 px-0.5 dark:bg-zinc-800">POST /v1/invoices</code>.
-        </p>
-      </div>
+      {initialIsRecurring || initialIsRetainer ? (
+        <div className="rounded-lg border border-amber-200/90 bg-amber-50/80 px-3 py-2.5 text-sm dark:border-amber-900/40 dark:bg-amber-950/30">
+          <p className="font-medium text-amber-950 dark:text-amber-100">
+            {initialIsRecurring ? "Recurring" : "Retainer"} invoice (Invoiless)
+          </p>
+          <p className="mt-1 text-xs text-amber-900/90 dark:text-amber-200/90">
+            TL Portal only edits standard one-off invoices created here. Update line items and status below, or change
+            schedule type in the Invoiless app.
+          </p>
+        </div>
+      ) : null}
 
       <fieldset className="min-w-0 border-0 p-0">
         <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Line items</legend>
@@ -199,17 +193,32 @@ export function InvoiceEditForm({
         </select>
       </div>
 
-      <div>
-        <label htmlFor="dueDate" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Due date <span className="font-normal text-zinc-500">(optional)</span>
-        </label>
-        <input
-          id="dueDate"
-          name="dueDate"
-          type="date"
-          defaultValue={initialDueDate}
-          className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-        />
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <label htmlFor="invoiceDate" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Invoice date
+          </label>
+          <input
+            id="invoiceDate"
+            name="invoiceDate"
+            type="date"
+            required
+            defaultValue={initialInvoiceDate}
+            className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+          />
+        </div>
+        <div>
+          <label htmlFor="dueDate" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Due date <span className="font-normal text-zinc-500">(optional)</span>
+          </label>
+          <input
+            id="dueDate"
+            name="dueDate"
+            type="date"
+            defaultValue={initialDueDate}
+            className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+          />
+        </div>
       </div>
 
       <div>
