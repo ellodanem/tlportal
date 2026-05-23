@@ -32,7 +32,7 @@ export function CustomerOverviewBillingRibbon({
       aria-label="Billing summary"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <dl className="flex min-w-0 flex-wrap items-baseline gap-x-5 gap-y-2 text-sm">
+        <dl className="flex min-w-0 flex-wrap items-baseline gap-x-8 gap-y-3 text-sm sm:gap-x-12">
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Billing mode

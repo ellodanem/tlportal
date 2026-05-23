@@ -19,6 +19,7 @@ import {
   reviewReasonLabel,
   type FleetHealthBucket,
 } from "@/lib/admin/fleet-health";
+import { CopyValueButton } from "@/components/admin/copy-value-button";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import {
   getInvoilessExternalCustomerId,
@@ -363,12 +364,20 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
           </div>
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Username</dt>
-            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{customer.traqcareUsername?.trim() || "—"}</dd>
+            <dd className="mt-0.5 flex items-center gap-1 text-zinc-800 dark:text-zinc-200">
+              <span>{customer.traqcareUsername?.trim() || "—"}</span>
+              {customer.traqcareUsername?.trim() ? (
+                <CopyValueButton value={customer.traqcareUsername.trim()} kind="username" />
+              ) : null}
+            </dd>
           </div>
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Password</dt>
-            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
-              {customer.traqcarePassword ? "Saved (edit customer to change)" : "—"}
+            <dd className="mt-0.5 flex items-center gap-1 text-zinc-800 dark:text-zinc-200">
+              <span>{customer.traqcarePassword ? "Saved (edit customer to change)" : "—"}</span>
+              {customer.traqcarePassword ? (
+                <CopyValueButton value={customer.traqcarePassword} kind="password" />
+              ) : null}
             </dd>
           </div>
           <div className="sm:col-span-2">
