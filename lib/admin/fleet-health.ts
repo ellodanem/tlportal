@@ -4,6 +4,7 @@ import type { DeviceStatus, ServiceAssignmentStatus } from "@prisma/client";
 
 import { opsUrgencyFromNextDueDate, type OpsUrgency } from "@/lib/admin/assignment-ops-urgency";
 import { prisma } from "@/lib/db";
+import { isOnceSimOperational } from "@/lib/nce/sim-status";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 
 export type FleetHealthBucket = "healthy" | "renewal" | "review";
@@ -50,11 +51,6 @@ function hasActiveGpsLink(a: FleetHealthAssignmentInput) {
   return a.device.providerDeviceLinks.some((l) => l.unlinkedAt == null);
 }
 
-function isSimActive(status: string | undefined | null) {
-  if (!status?.trim()) return false;
-  return status.trim().toLowerCase() === "active";
-}
-
 /** Mutually exclusive bucket per open assignment (review > renewal > healthy). */
 export function classifyOpenAssignment(
   a: FleetHealthAssignmentInput,
@@ -72,7 +68,7 @@ export function classifyOpenAssignment(
   const sim = simForAssignment(a);
   if (!sim) {
     reviewReasons.push("missing_sim");
-  } else if (!isSimActive(sim.status)) {
+  } else if (!isOnceSimOperational(sim.status)) {
     reviewReasons.push("sim_not_active");
   }
   if (!hasActiveGpsLink(a)) {

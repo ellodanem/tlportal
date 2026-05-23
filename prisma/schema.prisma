@@ -230,6 +230,8 @@ model Customer {
   traqcarePassword    String?
   /// Traqcare / white-label portal base URL if not the default (e.g. https://…).
   traqcarePortalUrl   String?
+  /// Traqcare live API `clientid` — one fleet id per customer (copy from Traqcare platform).
+  traqcareClientId    String?
   notes               String?
   tags                String[]  @default([])
   createdAt           DateTime  @default(now())

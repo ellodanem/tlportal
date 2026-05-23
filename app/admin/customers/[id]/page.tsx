@@ -355,6 +355,12 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
       <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Traqcare (GPS)</h2>
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Client ID</dt>
+            <dd className="mt-0.5 font-mono text-xs text-zinc-800 dark:text-zinc-200">
+              {customer.traqcareClientId?.trim() || "—"}
+            </dd>
+          </div>
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Username</dt>
             <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{customer.traqcareUsername?.trim() || "—"}</dd>
@@ -383,10 +389,11 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
             </dd>
           </div>
         </dl>
-        {!customer.traqcareUsername?.trim() &&
+        {!customer.traqcareClientId?.trim() &&
+        !customer.traqcareUsername?.trim() &&
         !customer.traqcarePassword &&
         !customer.traqcarePortalUrl?.trim() && (
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No Traqcare credentials on file.</p>
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No Traqcare settings on file.</p>
         )}
       </section>
 

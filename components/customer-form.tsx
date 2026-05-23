@@ -29,6 +29,7 @@ function toFormDefaults(customer: Customer) {
     invoiceBcc: customer.invoiceBcc,
     traqcareUsername: customer.traqcareUsername,
     traqcarePortalUrl: customer.traqcarePortalUrl,
+    traqcareClientId: customer.traqcareClientId,
     notes: customer.notes,
     tags: customer.tags?.length ? customer.tags.join(", ") : "",
   };
@@ -89,6 +90,7 @@ type FormDefaults = Partial<
     | "invoiceBcc"
     | "traqcareUsername"
     | "traqcarePortalUrl"
+    | "traqcareClientId"
     | "notes"
   >
 > & { tags?: string };
@@ -290,11 +292,28 @@ function CustomerFormInner({
       </div>
 
       <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
-        <h2 className={sectionTitleClass}>Traqcare (GPS) — legacy</h2>
+        <h2 className={sectionTitleClass}>Traqcare (GPS)</h2>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Prefer GPS settings per device under Manage device → GPS provider. These customer fields remain during
-          migration. Passwords are stored as plain text — limit who can access this admin app.
+          Set the fleet client ID once per customer; per-device GPS settings only need object-specific ids (see Manage
+          device → GPS provider). Legacy username/password below. Passwords are stored as plain text — limit who can
+          access this admin app.
         </p>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="traqcareClientId">
+            Client ID (live API)
+          </label>
+          <input
+            id="traqcareClientId"
+            name="traqcareClientId"
+            autoComplete="off"
+            defaultValue={defaults.traqcareClientId ?? ""}
+            placeholder="e.g. 6a0dfdc8ab135d26b78cc035"
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-zinc-500">
+            Copy from Traqcare for this customer/fleet. Applies to all their devices unless a device has an override.
+          </p>
+        </div>
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="traqcareUsername">
             Username

@@ -133,6 +133,7 @@ lib/
 
 - `portalUrlForDevice(link)`, optional `externalIdFromImei` stub
 - No position ingest in Phase 1
+- **Live API (vendor doc, not wired):** [traqcare-live-tracking-api.md](./traqcare-live-tracking-api.md) — `GET /live` with `key`, `imei`, `clientid`, `oname`
 
 ---
 
@@ -157,7 +158,7 @@ Summary:
 
 **Now:** `ProviderDeviceLink`, domain types for future `TelemetryEvent` / `Alert` in `lib/domain/` only.
 
-**Later:** webhook/poll ingest, snapshots, rules, FleetGuardian.
+**Later:** webhook/poll ingest, snapshots, rules, FleetGuardian. Traqcare live positions: see [traqcare-live-tracking-api.md](./traqcare-live-tracking-api.md).
 
 **Never (unless product demands):** full trip database, map tile stack, enterprise event bus.
 
@@ -219,6 +220,7 @@ Summary:
 | [paid-invoice-pdf-spec.md](./paid-invoice-pdf-spec.md) | Paid PDF layout, TL-INV numbering, implementation checklist |
 | [phase-1-vendor-foundation-plan.md](./phase-1-vendor-foundation-plan.md) | Implementation plan |
 | [subscription-renewal-tracking.md](./subscription-renewal-tracking.md) | Renewal ladder / Invoiless |
+| [traqcare-live-tracking-api.md](./traqcare-live-tracking-api.md) | Traqcare `GET /live` API reference |
 | README.md | Env vars, deploy |
 
 ---

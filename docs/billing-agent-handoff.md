@@ -132,4 +132,5 @@ Webhook events: `checkout.session.completed`, `checkout.session.expired`, `custo
 
 - `docs/vendor-agnostic-architecture.md`
 - `docs/subscription-renewal-tracking.md`
+- `docs/traqcare-live-tracking-api.md` (Traqcare GPS live API — not integrated yet)
 - `PROJECT_CONTEXT.md` (append-only git log)

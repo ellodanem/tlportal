@@ -49,7 +49,13 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
         invoilessRecurringId: true,
         updatedAt: true,
         customer: {
-          select: { id: true, company: true, firstName: true, lastName: true },
+          select: {
+            id: true,
+            company: true,
+            firstName: true,
+            lastName: true,
+            traqcareClientId: true,
+          },
         },
       },
     }),
@@ -145,6 +151,10 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
             externalDeviceId: gpsLink?.externalDeviceId ?? "",
             externalAccountRef: gpsLink?.externalAccountRef ?? "",
           }}
+          customerTraqcareClientId={openAssignment?.customer.traqcareClientId}
+          customerLabel={
+            openAssignment ? customerDisplayName(openAssignment.customer) : null
+          }
           openTrackingUrl={openTrackingUrl}
         />
       </section>

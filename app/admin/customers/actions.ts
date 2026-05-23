@@ -41,6 +41,7 @@ function readCustomerFields(formData: FormData) {
     invoiceBcc: String(formData.get("invoiceBcc") ?? "").trim() || null,
     traqcareUsername: String(formData.get("traqcareUsername") ?? "").trim() || null,
     traqcarePortalUrl: String(formData.get("traqcarePortalUrl") ?? "").trim() || null,
+    traqcareClientId: String(formData.get("traqcareClientId") ?? "").trim() || null,
     notes: String(formData.get("notes") ?? "").trim() || null,
     tags: parseTags(String(formData.get("tags") ?? "")),
   };
@@ -97,6 +98,7 @@ export async function createCustomer(
         invoiceBcc: fields.invoiceBcc,
         traqcareUsername: fields.traqcareUsername,
         traqcarePortalUrl: fields.traqcarePortalUrl,
+        traqcareClientId: fields.traqcareClientId,
         traqcarePassword: traqcarePwd.clear ? null : traqcarePwd.next,
         notes: fields.notes,
         tags: fields.tags,
@@ -175,6 +177,7 @@ export async function updateCustomer(
       invoiceBcc: fields.invoiceBcc,
       traqcareUsername: fields.traqcareUsername,
       traqcarePortalUrl: fields.traqcarePortalUrl,
+      traqcareClientId: fields.traqcareClientId,
       notes: fields.notes,
       tags: fields.tags,
     };
@@ -195,6 +198,7 @@ export async function updateCustomer(
 
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${id}`);
+  revalidatePath("/admin/devices");
   redirect(`/admin/customers/${id}`);
 }
 
