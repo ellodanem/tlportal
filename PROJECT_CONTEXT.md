@@ -2162,3 +2162,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-24 13:18 UTC — commit `da4df03`
+
+- docs: project context log (ce60f5b)
+
+
+### 2026-05-24 13:18 UTC — pre-push (`main` → origin) @ `da4df03`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-24 14:18 UTC — commit `9a78e8d`
+
+- fix(register): place additional users below vehicle details
+
+
+### 2026-05-24 14:18 UTC — pre-push (`main` → origin) @ `9a78e8d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
