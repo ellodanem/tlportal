@@ -294,6 +294,8 @@ model RegistrationRequest {
   email String
 
   vehicleDetails       String  @db.Text
+  /// Optional extra portal users from the registration form (free text, one per line).
+  additionalUsers String? @db.Text
   subscriptionOptionId String?
   subscriptionOption   SubscriptionOption? @relation(fields: [subscriptionOptionId], references: [id], onDelete: SetNull)
 

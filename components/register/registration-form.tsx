@@ -82,6 +82,23 @@ export function RegistrationForm({ subscriptionOptions }: { subscriptionOptions:
       </div>
 
       <div>
+        <label className={labelClass()} htmlFor="reg-additionalUsers">
+          Additional users
+        </label>
+        <textarea
+          id="reg-additionalUsers"
+          name="additionalUsers"
+          rows={4}
+          placeholder={"One person per line, e.g.\nJohn Doe   jdoe@email.com   1758581999"}
+          className={`${fieldClass()} min-h-[96px]`}
+        />
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Optional. List anyone else who should have access (e.g. to view vehicles in the app). For each person, include
+          full name, email, and WhatsApp number on one line, separated by spaces or tabs.
+        </p>
+      </div>
+
+      <div>
         <label className={labelClass()} htmlFor="reg-vehicles">
           Vehicle details <span className="text-red-600">*</span>
         </label>

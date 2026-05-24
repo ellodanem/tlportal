@@ -59,6 +59,7 @@ export async function approveRegistrationRequest(
   const notes = buildRegistrationCustomerNotes({
     submittedAt: reg.submittedAt,
     vehicleDetails: reg.vehicleDetails,
+    additionalUsers: reg.additionalUsers,
     subscriptionLabel:
       reg.subscriptionOption != null
         ? formatSubscriptionChoiceLabel(

@@ -89,6 +89,14 @@ export default async function RegistrationRequestDetailPage({ params }: Props) {
                   : "—"}
               </dd>
             </div>
+            {r.additionalUsers ? (
+              <div>
+                <dt className="text-zinc-500 dark:text-zinc-400">Additional users</dt>
+                <dd className="mt-2 whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 font-mono text-xs text-zinc-900 dark:bg-zinc-950/60 dark:text-zinc-100">
+                  {r.additionalUsers}
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-zinc-500 dark:text-zinc-400">Vehicle details</dt>
               <dd className="mt-2 whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 font-mono text-xs text-zinc-900 dark:bg-zinc-950/60 dark:text-zinc-100">

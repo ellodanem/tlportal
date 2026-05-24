@@ -16,6 +16,8 @@ export async function submitRegistrationRequest(
   const emailRaw = String(formData.get("email") ?? "").trim();
   const emailStored = emailRaw;
   const vehicleDetails = String(formData.get("vehicleDetails") ?? "").trim();
+  const additionalUsersRaw = String(formData.get("additionalUsers") ?? "").trim();
+  const additionalUsers = additionalUsersRaw || null;
   const subscriptionOptionId = String(formData.get("subscriptionOptionId") ?? "").trim() || null;
 
   const termInstall = formData.get("termInstallAfterPayment") === "on" || formData.get("termInstallAfterPayment") === "true";
@@ -68,6 +70,7 @@ export async function submitRegistrationRequest(
         phone,
         email: emailStored,
         vehicleDetails,
+        additionalUsers,
         subscriptionOptionId,
         termInstallAfterPayment: termInstall,
         termHardwarePerVehicle: termHardware,
