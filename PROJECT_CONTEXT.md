@@ -2182,3 +2182,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-24 14:18 UTC — commit `b729d4a`
+
+- docs: project context log (9a78e8d)
+
+
+### 2026-05-24 14:18 UTC — pre-push (`main` → origin) @ `b729d4a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-29 10:56 UTC — commit `c5f058f`
+
+- feat(billing): WhatsApp renewal reminders and staff pay-link alerts
+
+
+### 2026-05-29 10:56 UTC — pre-push (`main` → origin) @ `c5f058f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
