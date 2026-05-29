@@ -20,6 +20,8 @@ export function CheckoutSendConfirmDialog({
 }) {
   const [sendEmail, setSendEmail] = useState(true);
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [showWhatsAppPreview, setShowWhatsAppPreview] = useState(true);
 
   if (!open || !preview) return null;
 
@@ -33,7 +35,7 @@ export function CheckoutSendConfirmDialog({
       aria-modal="true"
       aria-labelledby="checkout-send-title"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
         <h2 id="checkout-send-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Send payment link to customer?
         </h2>
@@ -81,6 +83,49 @@ export function CheckoutSendConfirmDialog({
             </label>
           </li>
         </ul>
+
+        <div className="mt-4 space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Message preview
+          </p>
+          {sendEmail && canEmail ? (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/60">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-zinc-800 dark:text-zinc-200"
+                onClick={() => setShowEmailPreview((v) => !v)}
+              >
+                Email preview
+                <span className="text-xs text-zinc-500">{showEmailPreview ? "Hide" : "Show"}</span>
+              </button>
+              {showEmailPreview ? (
+                <pre className="max-h-40 overflow-auto whitespace-pre-wrap border-t border-zinc-200 px-3 py-2 font-sans text-xs leading-relaxed text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
+                  {preview.emailPreviewText}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
+          {sendWhatsApp && canWhatsApp ? (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/60">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-zinc-800 dark:text-zinc-200"
+                onClick={() => setShowWhatsAppPreview((v) => !v)}
+              >
+                WhatsApp preview
+                <span className="text-xs text-zinc-500">{showWhatsAppPreview ? "Hide" : "Show"}</span>
+              </button>
+              {showWhatsAppPreview ? (
+                <pre className="max-h-48 overflow-auto whitespace-pre-wrap border-t border-zinc-200 px-3 py-2 font-sans text-xs leading-relaxed text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
+                  {preview.whatsAppPreviewText}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            The real payment URL is inserted when you send. Wording matches your Twilio templates.
+          </p>
+        </div>
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button

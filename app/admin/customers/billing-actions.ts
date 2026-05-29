@@ -22,6 +22,11 @@ import {
   recordCheckoutLinkSentToCustomer,
 } from "@/lib/billing/checkout-link-recent";
 import {
+  buildStripeCheckoutEmailPreview,
+  buildStripeCheckoutAmountLineFromCheckout,
+  buildStripeCheckoutWhatsAppPreview,
+} from "@/lib/billing/checkout-message-preview";
+import {
   buildStripeCheckoutAmountLine,
   sendStripePaymentLinkWhatsApp,
 } from "@/lib/billing/customer-whatsapp";
@@ -46,12 +51,15 @@ export type BillingActionState = {
 
 export type CheckoutSendPreview = {
   customerName: string;
+  greetingName: string;
   email: string | null;
   phone: string | null;
   phoneValid: boolean;
   hasRecentLink: boolean;
   recentSentAt: string | null;
   whatsAppConfigured: boolean;
+  emailPreviewText: string;
+  whatsAppPreviewText: string;
 };
 
 async function parseCheckoutForm(formData: FormData): Promise<
@@ -185,15 +193,20 @@ export async function setBillingModeAction(
 }
 
 export async function getStripeCheckoutSendPreview(
-  customerId: string,
+  formData: FormData,
 ): Promise<CheckoutSendPreview | { error: string }> {
   const session = await getSession();
   if (!session) {
     return { error: "You must be signed in." };
   }
 
+  const parsed = await parseCheckoutForm(formData);
+  if ("error" in parsed) {
+    return { error: parsed.error };
+  }
+
   const customer = await prisma.customer.findUnique({
-    where: { id: customerId.trim() },
+    where: { id: parsed.customerId },
     select: { company: true, firstName: true, lastName: true, email: true, phone: true },
   });
   if (!customer) {
@@ -205,15 +218,33 @@ export async function getStripeCheckoutSendPreview(
     [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
     "Customer";
 
-  const recent = await findRecentCheckoutLinkSentAt(customerId);
+  const greetingName =
+    customer.company?.trim() ||
+    [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
+    "there";
+
+  const recent = await findRecentCheckoutLinkSentAt(parsed.customerId);
+  const amountLine = buildStripeCheckoutAmountLineFromCheckout({
+    monthlyRateXcd: parsed.monthlyRateXcd,
+    durationMonths: parsed.months,
+    vehicleCount: parsed.vehicleCount,
+  });
+
   return {
     customerName,
+    greetingName,
     email: customer.email?.trim() || null,
     phone: customer.phone?.trim() || null,
     phoneValid: Boolean(toWhatsAppAddress(customer.phone)),
     hasRecentLink: Boolean(recent),
     recentSentAt: recent ? recent.toISOString() : null,
     whatsAppConfigured: isTwilioWhatsAppConfigured(),
+    emailPreviewText: buildStripeCheckoutEmailPreview(greetingName),
+    whatsAppPreviewText: buildStripeCheckoutWhatsAppPreview({
+      firstName: customer.firstName?.trim() || greetingName,
+      amountLine,
+      isResend: Boolean(recent),
+    }),
   };
 }
 

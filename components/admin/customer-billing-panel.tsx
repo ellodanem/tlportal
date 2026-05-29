@@ -103,9 +103,11 @@ export function CustomerBillingPanel({
   const busy = checkoutPending || sendPending || pricingPending || previewPending;
 
   function openSendDialog() {
+    const form = formRef.current;
+    if (!form) return;
     setPreviewError(null);
     startPreview(async () => {
-      const result = await getStripeCheckoutSendPreview(customerId);
+      const result = await getStripeCheckoutSendPreview(new FormData(form));
       if ("error" in result) {
         setPreviewError(result.error);
         setSendPreview(null);
