@@ -1,11 +1,20 @@
 import "server-only";
 
-export type TwilioWhatsAppTemplateKey =
+export type TwilioWhatsAppReminderTemplateKey =
   | "due_5d"
   | "due_3d"
   | "due_0d"
   | "overdue_3d"
   | "overdue_5d";
+
+export type TwilioWhatsAppCustomerTemplateKey =
+  | "stripe_payment_link"
+  | "stripe_payment_link_resend"
+  | "invoice_new";
+
+export type TwilioWhatsAppTemplateKey =
+  | TwilioWhatsAppReminderTemplateKey
+  | TwilioWhatsAppCustomerTemplateKey;
 
 const TEMPLATE_ENV: Record<TwilioWhatsAppTemplateKey, string> = {
   due_5d: "TWILIO_WA_TEMPLATE_DUE_5_DAYS",
@@ -13,6 +22,9 @@ const TEMPLATE_ENV: Record<TwilioWhatsAppTemplateKey, string> = {
   due_0d: "TWILIO_WA_TEMPLATE_DUE_TODAY",
   overdue_3d: "TWILIO_WA_TEMPLATE_OVERDUE_3_DAYS",
   overdue_5d: "TWILIO_WA_TEMPLATE_OVERDUE_5_DAYS",
+  stripe_payment_link: "TWILIO_WA_TEMPLATE_STRIPE_PAYMENT_LINK",
+  stripe_payment_link_resend: "TWILIO_WA_TEMPLATE_STRIPE_PAYMENT_LINK_RESEND",
+  invoice_new: "TWILIO_WA_TEMPLATE_INVOICE_NEW",
 };
 
 export function isTwilioWhatsAppConfigured(): boolean {

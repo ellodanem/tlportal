@@ -13,7 +13,7 @@ import {
   billingReminderTimezone,
   getTwilioContentSid,
   isTwilioWhatsAppConfigured,
-  type TwilioWhatsAppTemplateKey,
+  type TwilioWhatsAppReminderTemplateKey,
 } from "@/lib/twilio/config";
 import { toWhatsAppAddress } from "@/lib/twilio/phone";
 import { sendBillingWhatsAppTemplate } from "@/lib/twilio/whatsapp-send";
@@ -299,7 +299,7 @@ export async function processBillingWhatsAppReminders(
       }
 
       const amountDue = await resolveAmountDueLabel(customerId, group.customer, group.assignments);
-      const sendResult = await sendBillingWhatsAppTemplate(to, kind as TwilioWhatsAppTemplateKey, {
+      const sendResult = await sendBillingWhatsAppTemplate(to, kind as TwilioWhatsAppReminderTemplateKey, {
         firstName: customerGreetingName(group.customer),
         dueDate: formatDueDateLabel(anchorDue, tz),
         amountDue,

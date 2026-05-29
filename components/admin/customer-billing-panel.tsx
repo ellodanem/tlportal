@@ -1,15 +1,18 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import {
-  emailStripeCheckoutLinkAction,
   enableBillingSetupAction,
+  getStripeCheckoutSendPreview,
   openStripePortalAction,
+  sendStripeCheckoutToCustomerAction,
   setBillingModeAction,
   setStripeMonthlyRateAction,
   startStripeCheckoutAction,
   type BillingActionState,
+  type CheckoutSendPreview,
 } from "@/app/admin/customers/billing-actions";
+import { CheckoutSendConfirmDialog } from "@/components/admin/checkout-send-confirm-dialog";
 import type { BillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
 import { checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import { formatXcd } from "@/lib/subscription-options/display";
@@ -66,16 +69,22 @@ export function CustomerBillingPanel({
   const [modeState, modeAction, modePending] = useActionState(setBillingModeAction, initial);
   const [setupState, setupAction, setupPending] = useActionState(enableBillingSetupAction, initial);
   const [checkoutState, checkoutAction, checkoutPending] = useActionState(startStripeCheckoutAction, initial);
-  const [emailState, emailFormAction, emailPending] = useActionState(emailStripeCheckoutLinkAction, initial);
+  const [sendState, sendFormAction, sendPending] = useActionState(sendStripeCheckoutToCustomerAction, initial);
   const [pricingState, pricingAction, pricingPending] = useActionState(setStripeMonthlyRateAction, initial);
-  const paymentUrl = checkoutState.url ?? emailState.url;
-  const paymentMessage = checkoutState.message ?? emailState.message;
-  const paymentEmailSent = checkoutState.emailSent ?? emailState.emailSent;
+  const formRef = useRef<HTMLFormElement>(null);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendPreview, setSendPreview] = useState<CheckoutSendPreview | null>(null);
+  const [previewPending, startPreview] = useTransition();
+  const paymentUrl = checkoutState.url ?? sendState.url;
+  const paymentMessage = checkoutState.message ?? sendState.message;
+  const paymentEmailSent = checkoutState.emailSent ?? sendState.emailSent;
+  const paymentWhatsAppSent = sendState.whatsappSent;
   const saved = ratePresetFromSaved(stripeMonthlyRateXcd, defaultMonthlyRateXcd);
   const [ratePreset, setRatePreset] = useState(saved.preset);
   const [customRate, setCustomRate] = useState(saved.custom);
   const [portalPending, startPortal] = useTransition();
   const [portalError, setPortalError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   function openPortal() {
     setPortalError(null);
@@ -90,8 +99,38 @@ export function CustomerBillingPanel({
   }
 
   const isStripe = billingMode === "stripe_subscription";
-  const checkoutError = checkoutState.error ?? emailState.error;
-  const busy = checkoutPending || emailPending || pricingPending;
+  const checkoutError = checkoutState.error ?? sendState.error;
+  const busy = checkoutPending || sendPending || pricingPending || previewPending;
+
+  function openSendDialog() {
+    setPreviewError(null);
+    startPreview(async () => {
+      const result = await getStripeCheckoutSendPreview(customerId);
+      if ("error" in result) {
+        setPreviewError(result.error);
+        setSendPreview(null);
+        setSendDialogOpen(false);
+        return;
+      }
+      setSendPreview(result);
+      setSendDialogOpen(true);
+    });
+  }
+
+  function submitSendToCustomer(opts: {
+    sendEmail: boolean;
+    sendWhatsApp: boolean;
+    forceResend: boolean;
+  }) {
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    if (opts.sendEmail) fd.set("sendEmail", "on");
+    if (opts.sendWhatsApp) fd.set("sendWhatsApp", "on");
+    if (opts.forceResend) fd.set("forceResend", "on");
+    setSendDialogOpen(false);
+    sendFormAction(fd);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -112,7 +151,7 @@ export function CustomerBillingPanel({
           </p>
 
           {planOptions.length > 0 ? (
-            <form action={checkoutAction} className="mt-4 flex flex-col gap-4">
+            <form ref={formRef} action={checkoutAction} className="mt-4 flex flex-col gap-4">
               <input type="hidden" name="customerId" value={customerId} />
               <input
                 type="hidden"
@@ -184,19 +223,19 @@ export function CustomerBillingPanel({
 
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <button
-                  type="submit"
+                  type="button"
                   disabled={busy}
+                  onClick={openSendDialog}
                   className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600"
                 >
-                  {checkoutPending ? "Creating…" : "Create payment link"}
+                  {sendPending ? "Sending…" : "Send to customer"}
                 </button>
                 <button
                   type="submit"
-                  formAction={emailFormAction}
                   disabled={busy}
                   className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900"
                 >
-                  {emailPending ? "Sending…" : "Email link to customer"}
+                  {checkoutPending ? "Creating…" : "Create link only"}
                 </button>
                 <button
                   type="submit"
@@ -214,14 +253,28 @@ export function CustomerBillingPanel({
             </p>
           )}
 
+          {previewError ? <p className="mt-2 text-sm text-red-600">{previewError}</p> : null}
           {checkoutError ? <p className="mt-2 text-sm text-red-600">{checkoutError}</p> : null}
           {pricingState.error ? <p className="mt-2 text-sm text-red-600">{pricingState.error}</p> : null}
           {pricingState.message && !pricingState.error ? (
             <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">{pricingState.message}</p>
           ) : null}
           {paymentUrl ? (
-            <CheckoutPaymentLink url={paymentUrl} message={paymentMessage} emailSent={paymentEmailSent} />
+            <CheckoutPaymentLink
+              url={paymentUrl}
+              message={paymentMessage}
+              emailSent={paymentEmailSent}
+              whatsappSent={paymentWhatsAppSent}
+            />
           ) : null}
+
+          <CheckoutSendConfirmDialog
+            open={sendDialogOpen}
+            preview={sendPreview}
+            pending={sendPending}
+            onCancel={() => setSendDialogOpen(false)}
+            onConfirm={submitSendToCustomer}
+          />
 
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -338,10 +391,12 @@ function CheckoutPaymentLink({
   url,
   message,
   emailSent,
+  whatsappSent,
 }: {
   url: string;
   message?: string;
   emailSent?: boolean;
+  whatsappSent?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -361,6 +416,9 @@ function CheckoutPaymentLink({
       {message ? <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">{message}</p> : null}
       {emailSent ? (
         <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">Email sent via your SMTP settings.</p>
+      ) : null}
+      {whatsappSent ? (
+        <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">WhatsApp sent via Twilio.</p>
       ) : null}
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input

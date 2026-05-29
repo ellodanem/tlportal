@@ -44,6 +44,13 @@ Invoiless email reminders remain authoritative for invoice copy; WhatsApp is a s
 
 `BillingWhatsAppReminder` unique on `(customerId, reminderKind, nextDueDate)` — at most one WhatsApp per ladder step per due date.
 
+## On-demand (manual triggers)
+
+| Trigger | Where | Template env |
+|---------|--------|----------------|
+| Stripe payment link | Customer → Billing → **Send to customer** | `TWILIO_WA_TEMPLATE_STRIPE_PAYMENT_LINK` (resend: `_RESEND`) |
+| New Invoiless invoice | Admin → Invoices → create (status not Draft) | `TWILIO_WA_TEMPLATE_INVOICE_NEW` |
+
 ## Env (Vercel)
 
 See `.env.example` — `TWILIO_*`, template SIDs, `CRON_SECRET`, optional `BILLING_REMINDER_TIMEZONE` (default `America/Barbados`).

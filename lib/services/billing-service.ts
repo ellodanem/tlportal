@@ -197,7 +197,9 @@ export async function startStripeCheckout(
     vehicleCount?: number;
     useCustomPricing?: boolean;
   },
-): Promise<{ ok: true; url: string; pricingMode: string } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; url: string; sessionId: string; pricingMode: string } | { ok: false; error: string }
+> {
   if (!isStripeBillingEnabled()) {
     return { ok: false, error: "Stripe billing is not enabled." };
   }
@@ -220,7 +222,7 @@ export async function startStripeCheckout(
       monthlyRateXcd,
       vehicleCount,
     });
-    const { url, pricingMode } = await createStripeSubscriptionCheckout({
+    const { url, sessionId, pricingMode } = await createStripeSubscriptionCheckout({
       customer,
       durationMonths,
       tlSubscriptionId,
@@ -238,9 +240,10 @@ export async function startStripeCheckout(
         monthlyRateXcd,
         vehicleCount,
         pricingMode,
+        checkoutSessionId: sessionId,
       },
     });
-    return { ok: true, url, pricingMode };
+    return { ok: true, url, sessionId, pricingMode };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Checkout failed." };
   }

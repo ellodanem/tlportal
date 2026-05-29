@@ -1,4 +1,8 @@
-export type InvoiceCreateFormState = { error: string | null };
+export type InvoiceCreateFormState = {
+  error: string | null;
+  whatsappSent?: boolean;
+  whatsappSkipped?: string;
+};
 
 export const invoiceCreateInitialState: InvoiceCreateFormState = { error: null };
 

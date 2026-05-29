@@ -48,7 +48,7 @@ export async function createStripeSubscriptionCheckout(input: {
   monthlyRateXcd?: number | null;
   vehicleCount: number;
   useCustomPricing?: boolean;
-}): Promise<{ url: string; pricingMode: "catalog" | "dynamic" }> {
+}): Promise<{ url: string; sessionId: string; pricingMode: "catalog" | "dynamic" }> {
   const monthlyRate = input.monthlyRateXcd ?? null;
 
   const resolved = await resolveCheckoutLineItem({
@@ -101,5 +101,5 @@ export async function createStripeSubscriptionCheckout(input: {
     throw new Error("Stripe did not return a Checkout URL.");
   }
 
-  return { url: session.url, pricingMode };
+  return { url: session.url, sessionId: session.id, pricingMode };
 }

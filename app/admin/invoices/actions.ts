@@ -45,7 +45,7 @@ export async function createInvoiceFromPortal(
 
   const customer = await prisma.customer.findUnique({
     where: { id: tlCustomerId },
-    select: { id: true },
+    select: { id: true, firstName: true, lastName: true, company: true, phone: true },
   });
   if (!customer) {
     return { error: "Customer not found." };
@@ -67,8 +67,9 @@ export async function createInvoiceFromPortal(
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const invoiceDateRaw = String(formData.get("invoiceDate") ?? "").trim() || null;
   const dueDateRaw = String(formData.get("dueDate") ?? "").trim() || null;
+  let created: { id: string; url: string; number: string | null };
   try {
-    await createInvoilessInvoiceApi({
+    created = await createInvoilessInvoiceApi({
       invoilessCustomerId,
       items: parsedLines.items,
       status,
@@ -81,8 +82,52 @@ export async function createInvoiceFromPortal(
     return { error: e instanceof Error ? e.message : "Failed to create invoice in Invoiless." };
   }
 
+  const { isInvoiceStatusEligibleForCustomerWhatsApp, sendNewInvoiceWhatsApp, sumInvoiceItemsXcd } =
+    await import("@/lib/billing/customer-whatsapp");
+
+  let whatsappSent = false;
+  let whatsappSkipped: string | undefined;
+
+  if (isInvoiceStatusEligibleForCustomerWhatsApp(status)) {
+    const wa = await sendNewInvoiceWhatsApp({
+      customer,
+      invoilessInvoiceId: created.id,
+      invoiceNumber: created.number,
+      amountDueLabel: sumInvoiceItemsXcd(parsedLines.items),
+      dueDateYmd: dueDateRaw,
+      previewUrl: created.url,
+    });
+    if (wa.ok) {
+      whatsappSent = true;
+      const { recordOperationalEvent } = await import("@/lib/services/operational-event-service");
+      await recordOperationalEvent({
+        category: "billing",
+        customerId: customer.id,
+        actorUserId: session.sub,
+        summary: "Invoice WhatsApp sent to customer",
+        payload: { invoilessInvoiceId: created.id, invoiceNumber: created.number },
+      });
+    } else {
+      whatsappSkipped = wa.error;
+    }
+  } else {
+    whatsappSkipped = "Draft invoices do not trigger WhatsApp (Invoiless email only when sent).";
+  }
+
+  if (whatsappSkipped && isInvoiceStatusEligibleForCustomerWhatsApp(status)) {
+    const { recordOperationalEvent } = await import("@/lib/services/operational-event-service");
+    await recordOperationalEvent({
+      category: "billing",
+      customerId: customer.id,
+      actorUserId: session.sub,
+      summary: "Invoice created; WhatsApp not sent",
+      payload: { invoilessInvoiceId: created.id, reason: whatsappSkipped },
+    });
+  }
+
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/customers/${customer.id}`);
+  revalidatePath(`/admin/customers/${customer.id}/billing`);
   redirect("/admin/invoices");
 }
 

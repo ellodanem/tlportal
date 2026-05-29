@@ -2,7 +2,12 @@ import "server-only";
 
 import twilio from "twilio";
 
-import { getTwilioContentSid, getTwilioWhatsAppFrom, type TwilioWhatsAppTemplateKey } from "./config";
+import {
+  getTwilioContentSid,
+  getTwilioWhatsAppFrom,
+  type TwilioWhatsAppReminderTemplateKey,
+  type TwilioWhatsAppTemplateKey,
+} from "./config";
 
 export type BillingWhatsAppVariables = {
   firstName: string;
@@ -15,10 +20,10 @@ export type SendBillingWhatsAppResult =
   | { ok: true; messageSid: string }
   | { ok: false; error: string; skipped?: boolean };
 
-export async function sendBillingWhatsAppTemplate(
+export async function sendTwilioWhatsAppContent(
   toWhatsApp: string,
   kind: TwilioWhatsAppTemplateKey,
-  vars: BillingWhatsAppVariables,
+  variables: Record<string, string>,
 ): Promise<SendBillingWhatsAppResult> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
   const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
@@ -38,16 +43,24 @@ export async function sendBillingWhatsAppTemplate(
       from: getTwilioWhatsAppFrom(),
       to: toWhatsApp,
       contentSid,
-      contentVariables: JSON.stringify({
-        "1": vars.firstName,
-        "2": vars.dueDate,
-        "3": vars.amountDue,
-        "4": vars.payLink,
-      }),
+      contentVariables: JSON.stringify(variables),
     });
     return { ok: true, messageSid: message.sid };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };
   }
+}
+
+export async function sendBillingWhatsAppTemplate(
+  toWhatsApp: string,
+  kind: TwilioWhatsAppReminderTemplateKey,
+  vars: BillingWhatsAppVariables,
+): Promise<SendBillingWhatsAppResult> {
+  return sendTwilioWhatsAppContent(toWhatsApp, kind, {
+    "1": vars.firstName,
+    "2": vars.dueDate,
+    "3": vars.amountDue,
+    "4": vars.payLink,
+  });
 }

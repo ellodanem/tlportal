@@ -243,8 +243,9 @@ model Customer {
   billingAccounts       BillingAccount[]
   billingInvoices          BillingInvoice[]
   billingWhatsAppReminders  BillingWhatsAppReminder[]
-  billingPayLinkAdminAlerts BillingPayLinkAdminAlert[]
-  customerSubscriptions     CustomerSubscription[]
+  billingPayLinkAdminAlerts  BillingPayLinkAdminAlert[]
+  customerWhatsAppDeliveries CustomerWhatsAppDelivery[]
+  customerSubscriptions      CustomerSubscription[]
   operationalEvents        OperationalEvent[]
   broadcastDeliveries   BroadcastDelivery[]
 
@@ -588,6 +589,20 @@ model BillingWhatsAppReminder {
   sentAt           DateTime @default(now())
 
   @@unique([customerId, reminderKind, nextDueDate])
+  @@index([customerId, sentAt(sort: Desc)])
+}
+
+/// One-off customer WhatsApp (Stripe checkout link, new Invoiless invoice).
+model CustomerWhatsAppDelivery {
+  id               String   @id @default(uuid())
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  kind             String
+  externalRef      String
+  twilioMessageSid String?
+  sentAt           DateTime @default(now())
+
+  @@unique([kind, externalRef])
   @@index([customerId, sentAt(sort: Desc)])
 }
 

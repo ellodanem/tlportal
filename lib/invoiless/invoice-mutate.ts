@@ -290,7 +290,7 @@ export async function updateInvoilessInvoiceApi(params: {
   );
 }
 
-function parseCreateInvoiceResponse(body: unknown): { id: string; url: string } {
+function parseCreateInvoiceResponse(body: unknown): { id: string; url: string; number: string | null } {
   if (!body || typeof body !== "object") {
     throw new Error("Invoiless did not return a JSON invoice body.");
   }
@@ -303,7 +303,9 @@ function parseCreateInvoiceResponse(body: unknown): { id: string; url: string } 
   }
   const urlRaw = typeof root.url === "string" ? root.url : typeof o.url === "string" ? o.url : null;
   const url = urlRaw ?? `https://invoiless.com/i/${encodeURIComponent(id)}`;
-  return { id, url };
+  const number =
+    uPickString(root.number) ?? uPickString(root.invoiceNumber) ?? uPickString(root.invoice_number) ?? null;
+  return { id, url, number };
 }
 
 /**
@@ -323,7 +325,7 @@ export async function createInvoilessInvoiceApi(params: {
   dueDate?: string | null;
   /** Standard one-off invoice vs Invoiless retainer (`isRetainer`). */
   scheduleType?: InvoilessInvoiceScheduleKind;
-}): Promise<{ id: string; url: string }> {
+}): Promise<{ id: string; url: string; number: string | null }> {
   const cid = params.invoilessCustomerId.trim();
   if (!cid) {
     throw new Error("Invoiless customer id is required.");

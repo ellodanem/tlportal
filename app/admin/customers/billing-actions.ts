@@ -17,6 +17,16 @@ import {
   generateAndStorePaidInvoicePdf,
   loadBillingInvoicePdfBytes,
 } from "@/lib/services/billing-paid-pdf-service";
+import {
+  findRecentCheckoutLinkSentAt,
+  recordCheckoutLinkSentToCustomer,
+} from "@/lib/billing/checkout-link-recent";
+import {
+  buildStripeCheckoutAmountLine,
+  sendStripePaymentLinkWhatsApp,
+} from "@/lib/billing/customer-whatsapp";
+import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
+import { toWhatsAppAddress } from "@/lib/twilio/phone";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import {
   effectiveMonthlyRateForCheckout,
@@ -30,7 +40,18 @@ export type BillingActionState = {
   error: string | null;
   url?: string;
   emailSent?: boolean;
+  whatsappSent?: boolean;
   message?: string;
+};
+
+export type CheckoutSendPreview = {
+  customerName: string;
+  email: string | null;
+  phone: string | null;
+  phoneValid: boolean;
+  hasRecentLink: boolean;
+  recentSentAt: string | null;
+  whatsAppConfigured: boolean;
 };
 
 async function parseCheckoutForm(formData: FormData): Promise<
@@ -161,6 +182,208 @@ export async function setBillingModeAction(
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
   return { error: null };
+}
+
+export async function getStripeCheckoutSendPreview(
+  customerId: string,
+): Promise<CheckoutSendPreview | { error: string }> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId.trim() },
+    select: { company: true, firstName: true, lastName: true, email: true, phone: true },
+  });
+  if (!customer) {
+    return { error: "Customer not found." };
+  }
+
+  const customerName =
+    customer.company?.trim() ||
+    [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
+    "Customer";
+
+  const recent = await findRecentCheckoutLinkSentAt(customerId);
+  return {
+    customerName,
+    email: customer.email?.trim() || null,
+    phone: customer.phone?.trim() || null,
+    phoneValid: Boolean(toWhatsAppAddress(customer.phone)),
+    hasRecentLink: Boolean(recent),
+    recentSentAt: recent ? recent.toISOString() : null,
+    whatsAppConfigured: isTwilioWhatsAppConfigured(),
+  };
+}
+
+function parseCheckoutSendFlags(formData: FormData): {
+  sendEmail: boolean;
+  sendWhatsApp: boolean;
+  forceResend: boolean;
+} {
+  return {
+    sendEmail: formData.get("sendEmail") === "on" || formData.get("sendEmail") === "true",
+    sendWhatsApp: formData.get("sendWhatsApp") === "on" || formData.get("sendWhatsApp") === "true",
+    forceResend: formData.get("forceResend") === "on" || formData.get("forceResend") === "true",
+  };
+}
+
+export async function sendStripeCheckoutToCustomerAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return { error: "You must be signed in." };
+    }
+
+    const parsed = await parseCheckoutForm(formData);
+    if ("error" in parsed) {
+      return { error: parsed.error };
+    }
+
+    const flags = parseCheckoutSendFlags(formData);
+    if (!flags.sendEmail && !flags.sendWhatsApp) {
+      return { error: "Choose email and/or WhatsApp to send the payment link." };
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: parsed.customerId },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        company: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+    if (!customer) {
+      return { error: "Customer not found." };
+    }
+
+    if (flags.sendEmail && !customer.email?.trim()) {
+      return { error: "Customer has no email on file. Add one on the profile, or send WhatsApp only." };
+    }
+    if (flags.sendWhatsApp && !toWhatsAppAddress(customer.phone)) {
+      return {
+        error: "Customer has no valid phone for WhatsApp. Add a mobile number on the profile, or send email only.",
+      };
+    }
+
+    const recent = await findRecentCheckoutLinkSentAt(parsed.customerId);
+    if (recent && !flags.forceResend) {
+      return {
+        error:
+          "A payment link was already sent to this customer recently. Confirm resend in the dialog and try again.",
+      };
+    }
+
+    const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+    if ("error" in saved) {
+      return { error: saved.error };
+    }
+
+    const checkout = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      vehicleCount: parsed.vehicleCount,
+      useCustomPricing: parsed.useCustomPricing,
+    });
+    if (!checkout.ok) {
+      return { error: checkout.error };
+    }
+
+    revalidateCustomerBillingPaths(parsed.customerId);
+
+    const greetingName =
+      customer.company?.trim() ||
+      [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
+      "there";
+
+    const amountLine = buildStripeCheckoutAmountLine({
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      durationMonths: parsed.months,
+      vehicleCount: parsed.vehicleCount,
+    });
+
+    let emailSent = false;
+    let whatsappSent = false;
+    const partialErrors: string[] = [];
+
+    if (flags.sendEmail && customer.email?.trim()) {
+      const emailBody = checkoutInitialEmailBody({
+        greetingName,
+        paymentUrl: checkout.url,
+      });
+      const sent = await sendAppEmail({
+        to: customer.email.trim(),
+        subject: "Complete your Track Lucia subscription payment",
+        text: emailBody.text,
+        html: emailBody.html,
+      });
+      if (sent.ok) {
+        emailSent = true;
+      } else {
+        partialErrors.push(`Email: ${sent.error}`);
+      }
+    }
+
+    if (flags.sendWhatsApp) {
+      const wa = await sendStripePaymentLinkWhatsApp({
+        customer,
+        paymentUrl: checkout.url,
+        checkoutSessionId: checkout.sessionId,
+        amountLine,
+        isResend: Boolean(recent),
+      });
+      if (wa.ok) {
+        whatsappSent = true;
+      } else {
+        partialErrors.push(`WhatsApp: ${wa.error}`);
+      }
+    }
+
+    if (emailSent || whatsappSent) {
+      await recordCheckoutLinkSentToCustomer({
+        customerId: parsed.customerId,
+        actorUserId: session.sub,
+        checkoutSessionId: checkout.sessionId,
+        channels: { email: emailSent, whatsapp: whatsappSent },
+        paymentUrl: checkout.url,
+      });
+    }
+
+    if (!emailSent && !whatsappSent) {
+      return {
+        error: partialErrors.join(" ") || "Could not send payment link.",
+        url: checkout.url,
+      };
+    }
+
+    const channelParts: string[] = [];
+    if (emailSent) channelParts.push("email");
+    if (whatsappSent) channelParts.push("WhatsApp");
+
+    const pricingNote =
+      checkout.pricingMode === "catalog"
+        ? "Using Stripe catalog price × vehicle count."
+        : "Using dynamic pricing.";
+
+    return {
+      error: partialErrors.length > 0 ? partialErrors.join(" ") : null,
+      url: checkout.url,
+      emailSent,
+      whatsappSent,
+      message: `Payment link sent via ${channelParts.join(" and ")}. ${checkoutInitialLinkNotice()} ${pricingNote}`,
+    };
+  } catch (e) {
+    console.error("sendStripeCheckoutToCustomerAction", e);
+    return {
+      error: e instanceof Error ? e.message : "Could not send payment link. Try again.",
+    };
+  }
 }
 
 export async function startStripeCheckoutAction(

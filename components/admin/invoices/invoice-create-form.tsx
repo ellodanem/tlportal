@@ -157,13 +157,17 @@ export function InvoiceCreateForm({ customers }: { customers: InvoiceCreateCusto
         <select
           id="status"
           name="status"
-          defaultValue="Draft"
+          defaultValue="Unpaid"
           className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
         >
           <option value="Draft">Draft</option>
           <option value="Pending">Pending</option>
           <option value="Unpaid">Unpaid</option>
         </select>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Pending or Unpaid sends a WhatsApp to the customer (if phone on file). Draft skips WhatsApp; Invoiless may still
+          email when you send from their app.
+        </p>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
