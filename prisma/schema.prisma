@@ -179,6 +179,8 @@ model AppSettings {
   smtpPassword  String?
   smtpFromEmail String?
   smtpFromName  String?
+  /// Comma- or newline-separated E.164-ish phones for billing ops SMS (missing pay link, etc.).
+  billingAlertPhones String? @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -239,9 +241,11 @@ model Customer {
 
   serviceAssignments ServiceAssignment[]
   billingAccounts       BillingAccount[]
-  billingInvoices       BillingInvoice[]
-  customerSubscriptions CustomerSubscription[]
-  operationalEvents     OperationalEvent[]
+  billingInvoices          BillingInvoice[]
+  billingWhatsAppReminders  BillingWhatsAppReminder[]
+  billingPayLinkAdminAlerts BillingPayLinkAdminAlert[]
+  customerSubscriptions     CustomerSubscription[]
+  operationalEvents        OperationalEvent[]
   broadcastDeliveries   BroadcastDelivery[]
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
@@ -569,6 +573,35 @@ model BillingInvoice {
   @@unique([provider, externalInvoiceId])
   @@index([customerId, createdAt(sort: Desc)])
   @@index([status])
+}
+
+/// Sent billing WhatsApp reminders (Twilio Content); one row per customer × kind × due date.
+model BillingWhatsAppReminder {
+  id               String   @id @default(uuid())
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// due_5d | due_3d | due_0d | overdue_3d | overdue_5d
+  reminderKind     String
+  nextDueDate      DateTime @db.Date
+  twilioMessageSid String?
+  payLinkSource    String?
+  sentAt           DateTime @default(now())
+
+  @@unique([customerId, reminderKind, nextDueDate])
+  @@index([customerId, sentAt(sort: Desc)])
+}
+
+/// Staff SMS sent when a customer reminder was skipped (no pay link).
+model BillingPayLinkAdminAlert {
+  id           String   @id @default(uuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reminderKind String
+  nextDueDate  DateTime @db.Date
+  notifiedAt   DateTime @default(now())
+
+  @@unique([customerId, reminderKind, nextDueDate])
+  @@index([notifiedAt(sort: Desc)])
 }
 
 /// Idempotency for Stripe webhooks (`evt_…` primary key).

@@ -15,7 +15,9 @@ import {
 } from "@/lib/branding/app-settings";
 import { parseBrandingLogoSize } from "@/lib/branding/logo-size";
 import { prisma } from "@/lib/db";
+import { normalizeBillingAlertSmsAddresses, parseBillingAlertPhonesRaw } from "@/lib/billing/billing-alert-phones";
 import { sendAppEmailWithConfig } from "@/lib/email/send-mail";
+import { canSendTwilioAdminSms, sendTwilioAdminSms } from "@/lib/twilio/admin-sms";
 
 const SETTINGS_ID = "default";
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -28,6 +30,10 @@ export type BrandingLogoSizeFormState = { ok?: boolean; error?: string };
 export type SmtpSettingsFormState = { ok?: boolean; error?: string };
 
 export type SmtpTestFormState = { ok?: boolean; error?: string; sentTo?: string };
+
+export type BillingAlertPhonesFormState = { ok?: boolean; error?: string };
+
+export type BillingAlertTestSmsState = { ok?: boolean; error?: string; sentCount?: number };
 
 function publicPathToFs(publicUrl: string): string {
   const relative = publicUrl.replace(/^\/+/, "");
@@ -393,4 +399,85 @@ export async function updateSmtpSettings(
 
   revalidatePath("/admin/settings");
   return { ok: true };
+}
+
+function serializeBillingAlertPhones(formData: FormData): string | null {
+  const raw = String(formData.get("billingAlertPhones") ?? "");
+  const parsed = parseBillingAlertPhonesRaw(raw);
+  if (parsed.length === 0) return null;
+  return parsed.join("\n");
+}
+
+export async function updateBillingAlertPhones(
+  _prev: BillingAlertPhonesFormState,
+  formData: FormData,
+): Promise<BillingAlertPhonesFormState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const stored = serializeBillingAlertPhones(formData);
+  const normalized = normalizeBillingAlertSmsAddresses(stored);
+  const parsed = parseBillingAlertPhonesRaw(stored ?? "");
+  if (parsed.length > 0 && normalized.length === 0) {
+    return {
+      error: "Could not parse any valid phone numbers. Use country code, e.g. +17585551234.",
+    };
+  }
+
+  await prisma.appSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID, billingAlertPhones: stored },
+    update: { billingAlertPhones: stored },
+  });
+
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+export async function sendBillingAlertTestSms(
+  _prev: BillingAlertTestSmsState,
+  formData: FormData,
+): Promise<BillingAlertTestSmsState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  if (!canSendTwilioAdminSms()) {
+    return {
+      error:
+        "Twilio SMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_SMS_FROM (or TWILIO_WHATSAPP_FROM).",
+    };
+  }
+
+  const stored = serializeBillingAlertPhones(formData);
+  const recipients = normalizeBillingAlertSmsAddresses(stored);
+  if (recipients.length === 0) {
+    return { error: "Add at least one valid staff phone number and save, then send a test." };
+  }
+
+  const body = [
+    "AUTOMATED — TL Portal test",
+    "",
+    "This is a test billing alert SMS. You will receive messages like this when a customer reminder is skipped (no pay link).",
+  ].join("\n");
+
+  let sentCount = 0;
+  const errors: string[] = [];
+  for (const to of recipients) {
+    const result = await sendTwilioAdminSms(to, body);
+    if (result.ok) {
+      sentCount += 1;
+    } else {
+      errors.push(result.error);
+    }
+  }
+
+  if (sentCount === 0) {
+    return { error: errors[0] ?? "Test SMS failed." };
+  }
+
+  return { ok: true, sentCount };
 }

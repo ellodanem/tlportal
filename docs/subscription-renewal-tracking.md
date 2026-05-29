@@ -42,7 +42,9 @@ Thresholds discussed (relative to resolved renewal date / `nextDueDate`):
 - **On renewal date**
 - **Past due** (renewal date passed and period not marked satisfied)
 
-_Implementation note:_ needs a daily job and a consistent timezone for "calendar day." Not necessarily implemented yet.
+_Implementation note:_ needs a daily job and a consistent timezone for "calendar day."
+
+**WhatsApp (implemented):** Twilio Content templates + daily cron — see [billing-whatsapp-reminders.md](./billing-whatsapp-reminders.md).
 
 ## Paid period handling
 

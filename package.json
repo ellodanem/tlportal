@@ -18,7 +18,8 @@
     "postinstall": "prisma generate",
     "hooks:install": "git config core.hooksPath .githooks",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "logo:optimize": "node scripts/optimize-traq-portal-logo.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -37,6 +38,7 @@
     "react-dom": "19.2.4",
     "server-only": "^0.0.1",
     "stripe": "^17.7.0",
+    "twilio": "^6.0.2",
     "xlsx": "^0.18.5"
   },
   "prisma": {
@@ -52,6 +54,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "prisma": "^6.19.3",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "tsx": "^4.19.3",
     "typescript": "^5"

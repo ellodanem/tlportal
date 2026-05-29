@@ -78,6 +78,8 @@ Import the repo, set `DATABASE_URL` and other secrets in the Vercel project sett
 
 **Broadcast send cron:** `GET /api/cron/broadcast-send` runs daily at **04:10 UTC** (`10 4 * * *` in `vercel.json`) — required on **Vercel Hobby**, which only allows **once-per-day** cron schedules (not `*/2 * * * *`). Each run processes up to `BROADCAST_CRON_BATCH_SIZE` pending emails per campaign (default **50**). For near-real-time mass email, upgrade to **Vercel Pro** and use a more frequent schedule, or call the endpoint yourself with the same Bearer token.
 
+**Billing WhatsApp reminders:** `GET /api/cron/billing-whatsapp-reminders` at **04:15 UTC** (`15 4 * * *`). Requires Twilio env vars and Content template SIDs — see `docs/billing-whatsapp-reminders.md`.
+
 **SIM usage range:** On `/admin/sims/{id}`, optional query `usageFrom` and `usageTo` (`YYYY-MM-DD`, UTC calendar) set the 1NCE usage window (max **183** inclusive days). Omit both for the default (~181-day) window.
 
 **Public registration:** `/register` (not under `/admin`). Staff set **XCD prices** (Eastern Caribbean dollars) for the four fixed plans (1 / 3 / 6 / 12 month) under **Settings → Plans** (`/admin/subscription-options`), review submissions under **Registrations** (`/admin/registration-requests`). Approve creates a `Customer` with snapshot notes and tag `from-registration`; Invoiless is still a separate step. Run `npm run db:seed` once if you need a default admin user; empty plan rows are filled automatically when you open Plans or `/register`.
