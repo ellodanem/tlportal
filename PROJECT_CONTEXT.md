@@ -2202,3 +2202,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-05-29 10:56 UTC — commit `f796066`
+
+- docs: project context log (c5f058f)
+
+
+### 2026-05-29 10:56 UTC — pre-push (`main` → origin) @ `f796066`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-05-29 11:39 UTC — commit `ff3fcb2`
+
+- feat(billing): WhatsApp on Stripe payment link and new invoices
+
+
+### 2026-05-29 11:39 UTC — pre-push (`main` → origin) @ `ff3fcb2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
