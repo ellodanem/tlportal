@@ -61,31 +61,31 @@ function formatInvoiceDate(d: Date): string {
   return `${day}-${month}-${year}`;
 }
 
-function placeBrandMark(doc: jsPDF, logo: LogoImage | null, issuerName: string, y: number): number {
-  const markSize = 36;
-  let textX = MARGIN;
+function placeHeaderLogo(doc: jsPDF, logo: LogoImage | null, issuerName: string, y: number): number {
+  const maxW = 140;
+  const maxH = 48;
 
   if (logo) {
     try {
       const props = doc.getImageProperties(logo.dataUrl);
-      const scale = Math.min(markSize / props.width, markSize / props.height, 1);
+      const scale = Math.min(maxW / props.width, maxH / props.height);
       const dw = props.width * scale;
       const dh = props.height * scale;
       const fmt = logo.format === "JPEG" ? "JPEG" : "PNG";
       doc.addImage(logo.dataUrl, fmt, MARGIN, y, dw, dh);
-      textX = MARGIN + markSize + 10;
+      return y + dh + 12;
     } catch {
-      textX = MARGIN;
+      // fall through to text fallback
     }
   }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(...PALETTE.green);
-  doc.text(issuerName.toUpperCase(), textX, y + 22);
+  doc.text(issuerName.toUpperCase(), MARGIN, y + 22);
   doc.setTextColor(0);
 
-  return y + markSize + 12;
+  return y + 36 + 12;
 }
 
 function drawTopPaidBar(doc: jsPDF): void {
@@ -257,7 +257,7 @@ export function buildPaidInvoicePdfBuffer(input: PaidInvoicePdfInput): Buffer {
     { label: "Status", value: "Paid", valueGreen: true },
   ], metaStartY);
 
-  const brandBottom = placeBrandMark(doc, input.headerLogo, issuer.legalName, HEADER_TOP);
+  const brandBottom = placeHeaderLogo(doc, input.headerLogo, issuer.legalName, HEADER_TOP);
   let y = Math.max(brandBottom, metaEndY) + 16;
 
   const fromLines = [issuer.legalName, ...issuer.addressLines];

@@ -117,6 +117,11 @@ function InvoicePdfActions({
       {isPaid && !inv.pdfGeneratedAt ? (
         <span className="text-xs text-amber-700 dark:text-amber-400">TL PDF pending</span>
       ) : null}
+      {isPaid && inv.receiptEmailedAt ? (
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+          Emailed {formatDate(inv.receiptEmailedAt)}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -136,7 +141,7 @@ export function StripeInvoicesList({
         No Stripe invoices mirrored yet. They appear after Checkout and subscription renewals (webhooks:
         invoice.paid, invoice.finalized). Paid invoices receive a TL-branded PDF (
         <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code>) when Blob storage is
-        configured.
+        configured; paid receipts are emailed automatically when SMTP and Settings allow.
       </p>
     );
   }

@@ -1,16 +1,19 @@
 import { BillingAlertPhonesForm } from "@/components/admin/settings/billing-alert-phones-form";
+import { AutoReceiptEmailForm } from "@/components/admin/settings/auto-receipt-email-form";
 import { BrandingForm } from "@/components/admin/settings/branding-form";
 import { SmtpSettingsForm } from "@/components/admin/settings/smtp-settings-form";
+import { getAutoEmailPaidStripeReceiptsForForm } from "@/lib/billing/auto-receipt-email-settings";
 import { getBillingAlertPhonesForForm } from "@/lib/billing/billing-alert-phones";
 import { getSession } from "@/lib/auth/get-session";
 import { getBrandingSettings } from "@/lib/branding/app-settings";
 import { getSmtpSettingsForForm } from "@/lib/email/smtp-settings";
 
 export default async function AdminSettingsPage() {
-  const [branding, smtpInitial, billingAlertPhones, session] = await Promise.all([
+  const [branding, smtpInitial, billingAlertPhones, autoReceiptEmail, session] = await Promise.all([
     getBrandingSettings(),
     getSmtpSettingsForForm(),
     getBillingAlertPhonesForForm(),
+    getAutoEmailPaidStripeReceiptsForForm(),
     getSession(),
   ]);
 
@@ -30,6 +33,7 @@ export default async function AdminSettingsPage() {
         initialLogoSize={branding.logoSize}
       />
       <SmtpSettingsForm initial={smtpInitial} defaultTestTo={session?.email ?? ""} />
+      <AutoReceiptEmailForm initialEnabled={autoReceiptEmail} />
       <BillingAlertPhonesForm initialPhones={billingAlertPhones} />
     </div>
   );

@@ -9,6 +9,7 @@ import {
   recordInvoilessMirrorEvent,
 } from "@/lib/services/invoiless-stripe-mirror-service";
 import { generateAndStorePaidInvoicePdf } from "@/lib/services/billing-paid-pdf-service";
+import { autoEmailPaidInvoiceReceiptAfterPayment } from "@/lib/services/billing-paid-receipt-email-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 
 import { getStripeClient } from "./config";
@@ -162,6 +163,17 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
             const pdfResult = await generateAndStorePaidInvoicePdf(tlBillingInvoiceId);
             if (!pdfResult.ok) {
               console.error("[stripe webhook] paid PDF failed", pdfResult.error);
+            } else {
+              try {
+                const emailResult = await autoEmailPaidInvoiceReceiptAfterPayment(tlBillingInvoiceId);
+                if (!emailResult.ok) {
+                  console.error("[stripe webhook] paid receipt email failed", emailResult.error);
+                } else if ("skipped" in emailResult && emailResult.skipped) {
+                  console.info("[stripe webhook] paid receipt email skipped", emailResult.reason);
+                }
+              } catch (e) {
+                console.error("[stripe webhook] paid receipt email failed", e);
+              }
             }
           } catch (e) {
             console.error("[stripe webhook] paid PDF failed", e);

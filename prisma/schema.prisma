@@ -181,6 +181,8 @@ model AppSettings {
   smtpFromName  String?
   /// Comma- or newline-separated E.164-ish phones for billing ops SMS (missing pay link, etc.).
   billingAlertPhones String? @db.Text
+  /// When true, email TL paid receipt PDFs on Stripe `invoice.paid` (requires SMTP).
+  autoEmailPaidStripeReceipts Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -568,6 +570,8 @@ model BillingInvoice {
   /// Vercel Blob path prefix `private:` + url, or public blob url for TL paid PDF.
   pdfStoragePath         String?
   pdfGeneratedAt         DateTime?
+  /// When the TL paid receipt PDF was emailed to the customer (auto or manual).
+  receiptEmailedAt       DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 

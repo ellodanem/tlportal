@@ -1,5 +1,7 @@
 import type { Customer } from "@prisma/client";
 
+import { parseInvoiceEmailCcBccList } from "@/lib/billing/invoice-email-recipients";
+
 import { invoilessFetch } from "./client";
 
 export type BillTo = {
@@ -17,7 +19,6 @@ const LEGAL_MAX = 100;
 const NOTES_MAX = 1000;
 const TAG_MAX_LEN = 50;
 const TAG_MAX_COUNT = 10;
-const CC_MAX = 3;
 
 /**
  * Compose a single billTo.address string for Invoiless (max 500 chars), matching typical
@@ -76,27 +77,7 @@ function normalizeNotes(notes: string | null): string | undefined {
 
 /** Cc/Bcc: comma-separated, max 3, unique, must not duplicate primary billing email (Invoiless rules). */
 function parseCcBccList(raw: string | null | undefined, primaryEmail: string | null | undefined): string[] | undefined {
-  const primary = primaryEmail?.trim().toLowerCase();
-  if (!raw?.trim()) {
-    return undefined;
-  }
-  const parts = raw
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const e of parts) {
-    if (e === primary || seen.has(e)) {
-      continue;
-    }
-    seen.add(e);
-    out.push(e);
-    if (out.length >= CC_MAX) {
-      break;
-    }
-  }
-  return out.length ? out : undefined;
+  return parseInvoiceEmailCcBccList(raw, primaryEmail);
 }
 
 /**

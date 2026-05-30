@@ -35,6 +35,8 @@ export type BillingAlertPhonesFormState = { ok?: boolean; error?: string };
 
 export type BillingAlertTestSmsState = { ok?: boolean; error?: string; sentCount?: number };
 
+export type AutoReceiptEmailFormState = { ok?: boolean; error?: string };
+
 function publicPathToFs(publicUrl: string): string {
   const relative = publicUrl.replace(/^\/+/, "");
   return path.join(process.cwd(), "public", relative);
@@ -480,4 +482,25 @@ export async function sendBillingAlertTestSms(
   }
 
   return { ok: true, sentCount };
+}
+
+export async function updateAutoEmailPaidStripeReceipts(
+  _prev: AutoReceiptEmailFormState,
+  formData: FormData,
+): Promise<AutoReceiptEmailFormState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const enabled = formData.get("autoEmailPaidStripeReceipts") === "on";
+
+  await prisma.appSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID, autoEmailPaidStripeReceipts: enabled },
+    update: { autoEmailPaidStripeReceipts: enabled },
+  });
+
+  revalidatePath("/admin/settings");
+  return { ok: true };
 }
