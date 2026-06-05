@@ -139,42 +139,6 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
         </section>
       ) : null}
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">GPS provider (Traqcare)</h2>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Tracking portal for this device. API integration is not connected yet — staff use the vendor portal directly.
-        </p>
-        <DeviceGpsLinkForm
-          deviceId={device.id}
-          defaults={{
-            portalUrl: gpsLink?.portalUrl ?? "",
-            externalDeviceId: gpsLink?.externalDeviceId ?? "",
-            externalAccountRef: gpsLink?.externalAccountRef ?? "",
-          }}
-          customerTraqcareClientId={openAssignment?.customer.traqcareClientId}
-          customerLabel={
-            openAssignment ? customerDisplayName(openAssignment.customer) : null
-          }
-          openTrackingUrl={openTrackingUrl}
-        />
-      </section>
-
-      <DeviceSimEditSection
-        deviceId={device.id}
-        canEditSim={device.status !== "decommissioned" && device.status !== "lost"}
-        currentSim={
-          device.simCard
-            ? {
-                id: device.simCard.id,
-                iccid: device.simCard.iccid,
-                msisdn: device.simCard.msisdn,
-                label: device.simCard.label,
-              }
-            : null
-        }
-        swapSims={simsForSwap}
-      />
-
       <section
         id="assign-customer"
         className="scroll-mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
@@ -217,6 +181,42 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
             tags={device.tags}
           />
         </div>
+      </section>
+
+      <DeviceSimEditSection
+        deviceId={device.id}
+        canEditSim={device.status !== "decommissioned" && device.status !== "lost"}
+        currentSim={
+          device.simCard
+            ? {
+                id: device.simCard.id,
+                iccid: device.simCard.iccid,
+                msisdn: device.simCard.msisdn,
+                label: device.simCard.label,
+              }
+            : null
+        }
+        swapSims={simsForSwap}
+      />
+
+      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">GPS provider (Traqcare)</h2>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Tracking portal for this device. API integration is not connected yet — staff use the vendor portal directly.
+        </p>
+        <DeviceGpsLinkForm
+          deviceId={device.id}
+          defaults={{
+            portalUrl: gpsLink?.portalUrl ?? "",
+            externalDeviceId: gpsLink?.externalDeviceId ?? "",
+            externalAccountRef: gpsLink?.externalAccountRef ?? "",
+          }}
+          customerTraqcareClientId={openAssignment?.customer.traqcareClientId}
+          customerLabel={
+            openAssignment ? customerDisplayName(openAssignment.customer) : null
+          }
+          openTrackingUrl={openTrackingUrl}
+        />
       </section>
     </div>
   );
