@@ -2267,3 +2267,33 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-06-05 09:51 UTC — commit `362232e`
+
+- Reorder Manage device sections for a clearer setup flow.
+
+
+### 2026-06-05 09:51 UTC — pre-push (`main` → origin) @ `362232e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-10 08:37 UTC — commit `62b4647`
+
+- Move Needs attention beside Devices needing review on admin dashboard.
+
+
+### 2026-06-10 08:37 UTC — pre-push (`main` → origin) @ `62b4647`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-10 08:38 UTC — commit `6c4d6c4`
+
+- feat(billing): optional next-due date on manual mark paid
+
+
+### 2026-06-10 08:38 UTC — pre-push (`main` → origin) @ `6c4d6c4`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
