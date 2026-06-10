@@ -164,129 +164,91 @@ export default async function AdminPage() {
         />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <section className="flex flex-col gap-6">
         <FleetHealthSummary
           counts={s.fleetHealth.counts}
           title="Fleet attention"
           subtitle="Open service assignments across all customers (TL ops signals, not live GPS telemetry)"
           generatedAt={new Date()}
         />
-        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Devices needing review</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Suspended units, missing SIM/GPS link, or Stripe payment issues
-          </p>
-          <ul className="mt-4 space-y-3">
-            {s.fleetHealth.reviewRows.length === 0 ? (
-              <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
-                No assignments flagged for review.
-              </li>
-            ) : (
-              s.fleetHealth.reviewRows.map((row) => (
-                <li
-                  key={row.assignmentId}
-                  className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass("warning")}`}
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {row.deviceLabel} — {row.customerName}
-                    </p>
-                    <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
-                      IMEI {row.imei} · {row.reasons.map(reviewReasonLabel).join(", ")}
-                    </p>
-                    </div>
-                  <Link
-                    href={row.href}
-                    className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                  >
-                    Open customer
-                  </Link>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Devices needing review</h2>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Suspended units, missing SIM/GPS link, or Stripe payment issues
+            </p>
+            <ul className="mt-4 space-y-3">
+              {s.fleetHealth.reviewRows.length === 0 ? (
+                <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
+                  No assignments flagged for review.
                 </li>
-              ))
-            )}
-          </ul>
-        </div>
-      </section>
-
-      {/* Fleet + billing signals — high on the page after KPIs */}
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Device inventory by fleet segment ({totalDevices.toLocaleString()} total)
-          </p>
-          <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
-                <IconAlert className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Overdue services, Stripe payment issues, and Invoiless gaps
-                </p>
-              </div>
-            </div>
-            {s.attentionCount > 0 ? (
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
-                  {s.attentionCount} open
-                </span>
-                <Link
-                  href="/admin/customers"
-                  className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-                >
-                  Customers →
-                </Link>
-              </span>
-            ) : (
-              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
-                All clear
-              </span>
-            )}
+              ) : (
+                s.fleetHealth.reviewRows.map((row) => (
+                  <li
+                    key={row.assignmentId}
+                    className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass("warning")}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                        {row.deviceLabel} — {row.customerName}
+                      </p>
+                      <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
+                        IMEI {row.imei} · {row.reasons.map(reviewReasonLabel).join(", ")}
+                      </p>
+                    </div>
+                    <Link
+                      href={row.href}
+                      className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                    >
+                      Open customer
+                    </Link>
+                  </li>
+                ))
+              )}
+            </ul>
           </div>
 
-          <ul className="mt-4 space-y-3">
-            {s.attentionItems.length === 0 ? (
-              <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
-                No overdue services or Invoiless gaps surfaced. Data will populate as you add assignments and sync
-                billing.
-              </li>
-            ) : (
-              s.attentionItems.map((item) => (
-                <li
-                  key={item.id}
-                  className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
-                    <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p>
-                  </div>
-                  <Link
-                    href={item.href}
-                    className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                  >
-                    Open
-                  </Link>
-                </li>
-              ))
-            )}
-          </ul>
-
-          {s.upcomingBillItems.length > 0 ? (
-            <>
-              <div className="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-800">
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Upcoming bill dates</h3>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Active services with a next due date (soonest first). Amounts live in Invoiless when linked.
-                </p>
+          <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+                  <IconAlert className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Overdue services, Stripe payment issues, and Invoiless gaps
+                  </p>
+                </div>
               </div>
-              <ul className="mt-4 space-y-3">
-                {s.upcomingBillItems.map((item) => (
+              {s.attentionCount > 0 ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
+                    {s.attentionCount} open
+                  </span>
+                  <Link
+                    href="/admin/customers"
+                    className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                  >
+                    Customers →
+                  </Link>
+                </span>
+              ) : (
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                  All clear
+                </span>
+              )}
+            </div>
+
+            <ul className="mt-4 space-y-3">
+              {s.attentionItems.length === 0 ? (
+                <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
+                  No overdue services or Invoiless gaps surfaced. Data will populate as you add assignments and sync
+                  billing.
+                </li>
+              ) : (
+                s.attentionItems.map((item) => (
                   <li
                     key={item.id}
                     className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
@@ -302,11 +264,49 @@ export default async function AdminPage() {
                       Open
                     </Link>
                   </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+                ))
+              )}
+            </ul>
+
+            {s.upcomingBillItems.length > 0 ? (
+              <>
+                <div className="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Upcoming bill dates</h3>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Active services with a next due date (soonest first). Amounts live in Invoiless when linked.
+                  </p>
+                </div>
+                <ul className="mt-4 space-y-3">
+                  {s.upcomingBillItems.map((item) => (
+                    <li
+                      key={item.id}
+                      className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
+                        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p>
+                      </div>
+                      <Link
+                        href={item.href}
+                        className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                      >
+                        Open
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Device inventory by fleet segment ({totalDevices.toLocaleString()} total)
+        </p>
+        <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
       </section>
 
       <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
