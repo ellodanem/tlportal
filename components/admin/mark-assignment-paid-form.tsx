@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import { renewalActionInitialState } from "@/app/admin/customers/renewal-action-state";
 import { markAssignmentPeriodPaidAction } from "@/app/admin/customers/renewal-actions";
+import { MarkPaidOptionalNextDueField } from "@/components/admin/mark-paid-optional-next-due-field";
 import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
@@ -62,14 +63,19 @@ export function MarkAssignmentPaidForm({
       <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Mark period paid</h3>
       <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
         Advances next due by {formatPlanTerm(intervalMonths)} from{" "}
-        {nextDue ? formatAssignmentDateLabel(nextDue) : "today (first period)"}. Use after cash or bank
-        payment, or to correct the renewal ladder.
+        {nextDue ? formatAssignmentDateLabel(nextDue) : "today (first period)"}, or set a custom next-due
+        date below for late payments.
       </p>
       <form
         action={action}
-        className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
+        className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
         onSubmit={(e) => {
-          if (!window.confirm("Mark this period paid and advance next due?")) {
+          const form = e.currentTarget;
+          const customDue = (form.elements.namedItem("nextDueOverride") as HTMLInputElement | null)?.value?.trim();
+          const confirmMsg = customDue
+            ? `Mark this period paid and set next due to ${customDue}?`
+            : "Mark this period paid and advance next due by the billing term?";
+          if (!window.confirm(confirmMsg)) {
             e.preventDefault();
           }
         }}
@@ -77,6 +83,12 @@ export function MarkAssignmentPaidForm({
         <input type="hidden" name="assignmentId" value={assignmentId} />
         <input type="hidden" name="customerId" value={customerId} />
         <input type="hidden" name="deviceId" value={deviceId} />
+        <MarkPaidOptionalNextDueField
+          intervalMonths={intervalMonths}
+          nextDueDate={nextDue}
+          labelClassName="text-zinc-600 dark:text-zinc-400"
+          inputClassName="mt-1 block w-full max-w-xs rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        />
         <label className="block flex-1 text-sm">
           <span className="text-zinc-600 dark:text-zinc-400">Invoice ref (optional)</span>
           <input

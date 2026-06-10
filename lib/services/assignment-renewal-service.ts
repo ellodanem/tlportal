@@ -15,6 +15,8 @@ export type MarkAssignmentPeriodPaidInput = {
   source: MarkAssignmentPaidSource;
   /** Stripe `in_…` or Invoiless invoice id — stored on assignment for idempotency / audit. */
   invoiceRef?: string | null;
+  /** Manual only: set next due explicitly instead of advancing by billing term. */
+  nextDueOverride?: Date | null;
   actorUserId?: string | null;
 };
 
@@ -27,6 +29,7 @@ export type MarkAssignmentPeriodPaidResult =
       previousNextDue: Date | null;
       newNextDue: Date;
       alreadyRecorded: boolean;
+      usedOverride: boolean;
     }
   | { ok: false; error: string };
 
@@ -59,6 +62,21 @@ export function computeNextDueAfterPayment(
   }
   const baseDate = resolveAdvanceBaseDate(assignment);
   return { baseDate, newNextDue: addCalendarMonths(baseDate, months) };
+}
+
+export function resolveNextDueAfterPayment(
+  assignment: Pick<ServiceAssignment, "nextDueDate" | "startDate" | "intervalMonths">,
+  nextDueOverride?: Date | null,
+): { baseDate: Date; newNextDue: Date; usedOverride: boolean } | { error: string } {
+  if (nextDueOverride) {
+    const baseDate = resolveAdvanceBaseDate(assignment);
+    return { baseDate, newNextDue: nextDueOverride, usedOverride: true };
+  }
+  const next = computeNextDueAfterPayment(assignment);
+  if ("error" in next) {
+    return next;
+  }
+  return { ...next, usedOverride: false };
 }
 
 export async function markAssignmentPeriodPaid(
@@ -94,10 +112,11 @@ export async function markAssignmentPeriodPaid(
       previousNextDue: assignment.nextDueDate,
       newNextDue: next.newNextDue,
       alreadyRecorded: true,
+      usedOverride: false,
     };
   }
 
-  const next = computeNextDueAfterPayment(assignment);
+  const next = resolveNextDueAfterPayment(assignment, input.nextDueOverride);
   if ("error" in next) {
     return { ok: false, error: next.error };
   }
@@ -131,6 +150,7 @@ export async function markAssignmentPeriodPaid(
       intervalMonths: assignment.intervalMonths,
       previousNextDue: assignment.nextDueDate?.toISOString() ?? null,
       newNextDue: next.newNextDue.toISOString(),
+      nextDueOverride: next.usedOverride,
       previousLabel: formatAssignmentDateLabel(assignment.nextDueDate),
       newLabel: formatAssignmentDateLabel(next.newNextDue),
       termLabel: assignment.intervalMonths != null ? formatPlanTerm(assignment.intervalMonths) : null,
@@ -145,6 +165,7 @@ export async function markAssignmentPeriodPaid(
     previousNextDue: assignment.nextDueDate,
     newNextDue: next.newNextDue,
     alreadyRecorded: false,
+    usedOverride: next.usedOverride,
   };
 }
 

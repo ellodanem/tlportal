@@ -7,8 +7,7 @@ import {
   listActiveAssignmentsForRenewal,
   markAssignmentPeriodPaid,
 } from "@/lib/services/assignment-renewal-service";
-import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
-import { formatPlanTerm } from "@/lib/subscription-options/display";
+import { formatAssignmentDateLabel, parseAssignmentDateInput } from "@/lib/domain/assignment-renewal";
 
 import type { RenewalActionState } from "@/app/admin/customers/renewal-action-state";
 
@@ -36,6 +35,11 @@ export async function markAssignmentPeriodPaidAction(
   const customerId = String(formData.get("customerId") ?? "").trim();
   const deviceId = String(formData.get("deviceId") ?? "").trim() || undefined;
   const invoiceRef = String(formData.get("invoiceRef") ?? "").trim() || null;
+  const nextDueOverrideRaw = String(formData.get("nextDueOverride") ?? "").trim();
+  const nextDueOverride = nextDueOverrideRaw ? parseAssignmentDateInput(nextDueOverrideRaw) : null;
+  if (nextDueOverrideRaw && !nextDueOverride) {
+    return { error: "Invalid next due date." };
+  }
 
   if (!assignmentId || !customerId) {
     return { error: "Missing assignment or customer." };
@@ -45,6 +49,7 @@ export async function markAssignmentPeriodPaidAction(
     assignmentId,
     source: "manual",
     invoiceRef,
+    nextDueOverride,
     actorUserId: session.sub,
   });
 
@@ -63,11 +68,12 @@ export async function markAssignmentPeriodPaidAction(
 
   const prev = formatAssignmentDateLabel(result.previousNextDue);
   const next = formatAssignmentDateLabel(result.newNextDue);
+  const verb = result.usedOverride ? "set" : "advanced";
   return {
     error: null,
     message:
       result.previousNextDue != null
-        ? `Period marked paid. Next due advanced from ${prev} to ${next}.`
+        ? `Period marked paid. Next due ${verb} from ${prev} to ${next}.`
         : `Period marked paid. Next due set to ${next}.`,
   };
 }

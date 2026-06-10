@@ -17,6 +17,7 @@ import {
   renewalOpsSummaryLabel,
   sortRenewalRowsByUrgency,
 } from "@/lib/admin/renewal-ops-display";
+import { MarkPaidOptionalNextDueField } from "@/components/admin/mark-paid-optional-next-due-field";
 import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 import type { CustomerBillingMode, DeviceObjectType, ServiceAssignmentStatus } from "@prisma/client";
@@ -80,11 +81,12 @@ function MarkOneForm({ row, customerId }: { row: RenewalRow; customerId: string 
         action={oneAction}
         className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
         onSubmit={(e) => {
-          if (
-            !window.confirm(
-              `Mark the current period paid for ${deviceLabel} and advance next due by ${row.intervalMonths != null ? formatPlanTerm(row.intervalMonths) : "the billing term"}?`,
-            )
-          ) {
+          const form = e.currentTarget;
+          const customDue = (form.elements.namedItem("nextDueOverride") as HTMLInputElement | null)?.value?.trim();
+          const confirmMsg = customDue
+            ? `Mark the current period paid for ${deviceLabel} and set next due to ${customDue}?`
+            : `Mark the current period paid for ${deviceLabel} and advance next due by ${row.intervalMonths != null ? formatPlanTerm(row.intervalMonths) : "the billing term"}?`;
+          if (!window.confirm(confirmMsg)) {
             e.preventDefault();
           }
         }}
@@ -115,7 +117,10 @@ function MarkOneForm({ row, customerId }: { row: RenewalRow; customerId: string 
             ) : null}
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+          {row.intervalMonths != null ? (
+            <MarkPaidOptionalNextDueField intervalMonths={row.intervalMonths} nextDueDate={nextDue} />
+          ) : null}
           <label className="block text-xs">
             <span className="font-medium text-zinc-600 dark:text-zinc-400">Invoice ref (optional)</span>
             <input
@@ -164,7 +169,7 @@ function RenewalOpsBody({
         {isManual ? (
           <>
             When payment is received (cash, transfer, or Invoiless paid), <strong>mark period paid</strong> to advance{" "}
-            <strong>next due</strong> per device.
+            <strong>next due</strong> per device — or pick a custom next-due date for late payments.
           </>
         ) : (
           <>
