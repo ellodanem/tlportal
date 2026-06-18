@@ -10,6 +10,7 @@ import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-servi
 import { MarkAssignmentPaidForm } from "@/components/admin/mark-assignment-paid-form";
 import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
+import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { fetchSimsAvailableForDeviceSwap } from "@/lib/admin/sims-available-for-device";
 import { getGpsLink, resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { prisma } from "@/lib/db";
@@ -31,6 +32,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
       include: { deviceModel: true, simCard: true },
     }),
     prisma.customer.findMany({
+      where: activeCustomerWhere,
       orderBy: [{ company: "asc" }, { lastName: "asc" }],
       select: { id: true, company: true, firstName: true, lastName: true },
     }),

@@ -30,6 +30,7 @@ type CustomerWithAssignments = {
   billingMode: CustomerBillingMode;
   tags: string[];
   updatedAt: Date;
+  archivedAt?: Date | null;
   billingAccounts: { provider: "invoiless" | "stripe"; externalCustomerId: string | null; status: string | null }[];
   serviceAssignments: {
     id: string;
@@ -78,6 +79,7 @@ export function buildCustomerTableRows(customers: CustomerWithAssignments[]): Cu
       stripeStatus: stripeAccount?.status ?? null,
       rollup: rollupFromAssignments(open),
       updatedAt: c.updatedAt,
+      archivedAt: c.archivedAt ?? null,
     };
   });
 

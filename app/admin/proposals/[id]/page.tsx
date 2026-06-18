@@ -8,6 +8,7 @@ import {
   type ProposalEditorLine,
   type ProposalEditorVisual,
 } from "@/components/admin/proposal-editor-form";
+import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { prisma } from "@/lib/db";
 import { parseTimelineSteps } from "@/lib/proposals/visual-timeline";
 
@@ -92,6 +93,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
   }
 
   const customers = await prisma.customer.findMany({
+    where: activeCustomerWhere,
     orderBy: [{ company: "asc" }, { lastName: "asc" }],
     select: { id: true, company: true, firstName: true, lastName: true },
   });

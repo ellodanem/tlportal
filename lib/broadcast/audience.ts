@@ -1,6 +1,7 @@
 import "server-only";
 
 import { customerDisplayName } from "@/lib/admin/customer-list";
+import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { prisma } from "@/lib/db";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,8 +35,9 @@ export async function resolveBroadcastRecipients(includeInactive: boolean): Prom
 }> {
   const customers = await prisma.customer.findMany({
     where: includeInactive
-      ? undefined
+      ? activeCustomerWhere
       : {
+          ...activeCustomerWhere,
           serviceAssignments: {
             some: { endDate: null, status: { not: "cancelled" } },
           },

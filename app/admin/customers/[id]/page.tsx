@@ -21,6 +21,7 @@ import {
 } from "@/lib/admin/fleet-health";
 import { CopyValueButton } from "@/components/admin/copy-value-button";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
+import { UnarchiveCustomerButton } from "@/components/archive-customer-button";
 import {
   getInvoilessExternalCustomerId,
   getStripeBillingAccount,
@@ -36,7 +37,7 @@ import { formatPlanTerm } from "@/lib/subscription-options/display";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fleet?: string }>;
+  searchParams: Promise<{ fleet?: string; archived?: string; unarchived?: string; unarchiveError?: string }>;
 };
 
 function parseFleetFilter(raw: string | undefined): FleetHealthFilter {
@@ -74,7 +75,7 @@ function statusPill(status: string) {
 
 export default async function CustomerDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { fleet: fleetParam } = await searchParams;
+  const { fleet: fleetParam, archived, unarchived, unarchiveError } = await searchParams;
   const fleetFilter = parseFleetFilter(fleetParam);
 
   const customer = await prisma.customer.findUnique({
@@ -184,6 +185,32 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
 
   return (
     <div className="flex flex-col gap-8">
+      {customer.archivedAt ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              <strong>Archived</strong> since {formatDate(customer.archivedAt)} — hidden from active lists and billing
+              reminders.
+            </p>
+            <UnarchiveCustomerButton customerId={customer.id} displayName={name} />
+          </div>
+        </div>
+      ) : null}
+      {archived === "1" ? (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+          Customer archived. They will no longer receive billing reminders.
+        </p>
+      ) : null}
+      {unarchived === "1" ? (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+          Customer restored to the active list.
+        </p>
+      ) : null}
+      {unarchiveError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {decodeURIComponent(unarchiveError)}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-4 border-b border-zinc-200 pb-6 dark:border-zinc-800 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <Link

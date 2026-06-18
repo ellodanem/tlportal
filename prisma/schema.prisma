@@ -238,6 +238,8 @@ model Customer {
   traqcareClientId    String?
   notes               String?
   tags                String[]  @default([])
+  /// Set when staff archives a churned / inactive account — hidden from active lists and billing reminders.
+  archivedAt          DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -256,6 +258,7 @@ model Customer {
   proposals                  Proposal[]
 
   @@index([email])
+  @@index([archivedAt])
 }
 
 /// Public registration form — four fixed terms (1 / 3 / 6 / 12 month); staff edit price only.

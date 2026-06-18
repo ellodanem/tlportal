@@ -165,7 +165,7 @@ export async function processBillingWhatsAppReminders(
       endDate: null,
       status: { notIn: ["cancelled", "suspended"] },
       nextDueDate: { not: null },
-      customer: { phone: { not: null } },
+      customer: { phone: { not: null }, archivedAt: null },
     },
     include: {
       customer: {

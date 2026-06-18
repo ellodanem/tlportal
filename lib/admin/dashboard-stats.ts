@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { FleetSegmentKey } from "@/lib/admin/fleet-segments";
+import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { opsUrgencyFromNextDueDate, opsUrgencyRank } from "@/lib/admin/assignment-ops-urgency";
 import { getGlobalFleetHealth } from "@/lib/admin/fleet-health";
 
@@ -71,7 +72,7 @@ export async function getDashboardStats() {
     prisma.device.count({
       where: { usagePurpose: "personal" },
     }),
-    prisma.customer.count(),
+    prisma.customer.count({ where: activeCustomerWhere }),
     prisma.device.count({ where: { status: "assigned", usagePurpose: "customer" } }),
     prisma.device.count({ where: { status: "in_stock", usagePurpose: "customer" } }),
     prisma.device.count({ where: { status: "suspended", usagePurpose: "customer" } }),
@@ -92,7 +93,7 @@ export async function getDashboardStats() {
       },
     }),
     invoilessConfigured
-      ? prisma.customer.count({ where: unlinkedInvoilessWhere })
+      ? prisma.customer.count({ where: { ...unlinkedInvoilessWhere, ...activeCustomerWhere } })
       : Promise.resolve(0),
     prisma.serviceAssignment.findMany({
       where: {
@@ -110,6 +111,7 @@ export async function getDashboardStats() {
       },
     }),
     prisma.customer.findMany({
+      where: activeCustomerWhere,
       orderBy: { updatedAt: "desc" },
       take: 6,
       select: {
@@ -234,7 +236,7 @@ export async function getDashboardStats() {
 
   if (invoilessConfigured && unlinkedInvoilessCount > 0) {
     const unlinked = await prisma.customer.findMany({
-      where: unlinkedInvoilessWhere,
+      where: { ...unlinkedInvoilessWhere, ...activeCustomerWhere },
       take: Math.min(3, 6 - attentionItems.length),
       orderBy: { updatedAt: "desc" },
       select: { id: true, company: true, firstName: true, lastName: true },

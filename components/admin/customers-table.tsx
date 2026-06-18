@@ -22,6 +22,7 @@ export type CustomerTableRow = {
   stripeStatus: string | null;
   rollup: AssignmentRollup;
   updatedAt: Date;
+  archivedAt: Date | null;
 };
 
 function RollupPill({ rollup }: { rollup: AssignmentRollup }) {
@@ -127,9 +128,11 @@ function formatDue(d: Date) {
 export function CustomersTable({
   rows,
   invoilessConfigured,
+  showArchived = false,
 }: {
   rows: CustomerTableRow[];
   invoilessConfigured: boolean;
+  showArchived?: boolean;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -158,16 +161,25 @@ export function CustomersTable({
           {rows.length === 0 ? (
             <tr>
               <td className="px-4 py-14 text-center text-zinc-500" colSpan={6}>
-                No customers yet.{" "}
-                <Link href="/admin/customers/new" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
-                  Create one
-                </Link>
-                .
+                {showArchived ? (
+                  "No archived customers."
+                ) : (
+                  <>
+                    No customers yet.{" "}
+                    <Link href="/admin/customers/new" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                      Create one
+                    </Link>
+                    .
+                  </>
+                )}
               </td>
             </tr>
           ) : (
             rows.map((r) => (
-              <tr key={r.id} className="group transition-colors hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40">
+              <tr
+                key={r.id}
+                className={`group transition-colors hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 ${r.archivedAt ? "opacity-80" : ""}`}
+              >
                 <td className="px-4 py-4 align-top">
                   <Link href={`/admin/customers/${r.id}`} className="flex gap-3">
                     <span
@@ -182,6 +194,11 @@ export function CustomersTable({
                           {r.displayName}
                         </span>
                         <BillingModeBadge billingMode={r.billingMode} stripeStatus={r.stripeStatus} />
+                        {r.archivedAt ? (
+                          <span className="inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                            Archived
+                          </span>
+                        ) : null}
                         {invoilessConfigured && r.billingMode !== "stripe_subscription" ? (
                           <InvoilessLinkIcon linked={r.invoilessLinked} />
                         ) : null}

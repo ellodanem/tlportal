@@ -341,10 +341,13 @@ export async function assignDeviceToCustomer(
 
   const customer = await prisma.customer.findFirst({
     where: { id: customerId },
-    select: { id: true },
+    select: { id: true, archivedAt: true },
   });
   if (!customer) {
     return { error: "Selected customer was not found." };
+  }
+  if (customer.archivedAt) {
+    return { error: "Cannot assign a device to an archived customer. Restore them from the archive first." };
   }
 
   try {

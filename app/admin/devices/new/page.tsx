@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { DeviceRegisterForm } from "@/components/admin/device-register-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
+import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { fetchSimsAvailableForDeviceLink } from "@/lib/admin/sims-available-for-device";
 import { prisma } from "@/lib/db";
 
@@ -16,6 +17,7 @@ export default async function RegisterDevicePage() {
     }),
     fetchSimsAvailableForDeviceLink(),
     prisma.customer.findMany({
+      where: activeCustomerWhere,
       orderBy: [{ company: "asc" }, { lastName: "asc" }],
       select: { id: true, company: true, firstName: true, lastName: true },
     }),

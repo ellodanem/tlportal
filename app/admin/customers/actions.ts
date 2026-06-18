@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
 import { syncCustomerToInvoilessBilling } from "@/lib/services/billing-service";
+import { archiveCustomer, unarchiveCustomer } from "@/lib/services/customer-archive-service";
 import { enableCustomerBillingLifecycle } from "@/lib/services/billing-lifecycle-service";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 
@@ -210,6 +211,53 @@ export async function deleteCustomer(formData: FormData): Promise<void> {
   await prisma.customer.delete({ where: { id } });
   revalidatePath("/admin/customers");
   redirect("/admin/customers");
+}
+
+export async function archiveCustomerAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) {
+    return;
+  }
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) {
+    return;
+  }
+
+  const result = await archiveCustomer(id, session.sub ?? null);
+  if (!result.ok) {
+    redirect(`/admin/customers/${id}/edit?archiveError=${encodeURIComponent(result.error)}`);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/customers");
+  revalidatePath(`/admin/customers/${id}`);
+  revalidatePath(`/admin/customers/${id}/edit`);
+  revalidatePath("/admin/devices");
+  redirect(`/admin/customers/${id}?archived=1`);
+}
+
+export async function unarchiveCustomerAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) {
+    return;
+  }
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) {
+    return;
+  }
+
+  const result = await unarchiveCustomer(id, session.sub ?? null);
+  if (!result.ok) {
+    redirect(`/admin/customers/${id}?unarchiveError=${encodeURIComponent(result.error)}`);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/customers");
+  revalidatePath(`/admin/customers/${id}`);
+  revalidatePath(`/admin/customers/${id}/edit`);
+  redirect(`/admin/customers/${id}?unarchived=1`);
 }
 
 export async function syncCustomerToInvoiless(customerId: string): Promise<{ ok: true } | { ok: false; error: string }> {
