@@ -2307,3 +2307,18 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-06-10 08:39 UTC — commit `b4f5569`
+
+- docs: project context log (0b2ee8d)
+
+
+### 2026-06-10 08:39 UTC — pre-push (`main` → origin) @ `b4f5569`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-18 13:28 UTC — commit `c4680f1`
+
+- feat(customers): add archive for churned accounts
+
