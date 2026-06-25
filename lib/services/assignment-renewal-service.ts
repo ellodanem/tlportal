@@ -261,6 +261,47 @@ export async function updateAssignmentNextDue(
   };
 }
 
+export type UpdateAssignmentIntervalMonthsInput = {
+  assignmentId: string;
+  intervalMonths: number | null;
+};
+
+export type UpdateAssignmentIntervalMonthsResult =
+  | {
+      ok: true;
+      customerId: string;
+      deviceId: string;
+      previousIntervalMonths: number | null;
+      newIntervalMonths: number | null;
+    }
+  | { ok: false; error: string };
+
+export async function updateAssignmentIntervalMonths(
+  input: UpdateAssignmentIntervalMonthsInput,
+): Promise<UpdateAssignmentIntervalMonthsResult> {
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: activeAssignmentWhere(input.assignmentId),
+    select: { id: true, customerId: true, deviceId: true, intervalMonths: true },
+  });
+
+  if (!assignment) {
+    return { ok: false, error: "Active assignment not found." };
+  }
+
+  await prisma.serviceAssignment.update({
+    where: { id: assignment.id },
+    data: { intervalMonths: input.intervalMonths },
+  });
+
+  return {
+    ok: true,
+    customerId: assignment.customerId,
+    deviceId: assignment.deviceId,
+    previousIntervalMonths: assignment.intervalMonths,
+    newIntervalMonths: input.intervalMonths,
+  };
+}
+
 export async function listActiveAssignmentsForRenewal(customerId: string) {
   return prisma.serviceAssignment.findMany({
     where: {

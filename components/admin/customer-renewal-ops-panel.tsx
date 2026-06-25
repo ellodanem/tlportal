@@ -8,7 +8,9 @@ import { renewalActionInitialState } from "@/app/admin/customers/renewal-action-
 import {
   markAllCustomerAssignmentsPaidAction,
   markAssignmentPeriodPaidAction,
+  updateAllCustomerAssignmentsBillingTermAction,
   updateAllCustomerAssignmentsNextDueAction,
+  updateAssignmentBillingTermAction,
   updateAssignmentNextDueAction,
 } from "@/app/admin/customers/renewal-actions";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
@@ -21,7 +23,7 @@ import {
 } from "@/lib/admin/renewal-ops-display";
 import { MarkPaidOptionalNextDueField } from "@/components/admin/mark-paid-optional-next-due-field";
 import { dateInputValueFromDate } from "@/lib/domain/assignment-renewal";
-import { formatPlanTerm } from "@/lib/subscription-options/display";
+import { formatPlanTerm, SUBSCRIPTION_PLAN_MONTHS } from "@/lib/subscription-options/display";
 import type { CustomerBillingMode, DeviceObjectType, ServiceAssignmentStatus } from "@prisma/client";
 
 type RenewalRow = {
@@ -70,7 +72,7 @@ function MarkPaidSubmit({ label }: { label: string }) {
   );
 }
 
-function NextDueSaveSubmit({ label = "Save" }: { label?: string }) {
+function SecondarySaveSubmit({ label = "Save" }: { label?: string }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -80,6 +82,56 @@ function NextDueSaveSubmit({ label = "Save" }: { label?: string }) {
     >
       {pending ? "Saving…" : label}
     </button>
+  );
+}
+
+const renewalFieldClass =
+  "rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950";
+
+function BillingTermSelect({
+  name,
+  defaultValue,
+}: {
+  name: string;
+  defaultValue: number | null;
+}) {
+  return (
+    <select
+      name={name}
+      key={defaultValue == null ? "unset" : String(defaultValue)}
+      defaultValue={defaultValue == null ? "" : String(defaultValue)}
+      className={renewalFieldClass}
+    >
+      <option value="">Not set</option>
+      {SUBSCRIPTION_PLAN_MONTHS.map((m) => (
+        <option key={m} value={String(m)}>
+          {formatPlanTerm(m)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function TermEditForm({ row, customerId }: { row: RenewalRow; customerId: string }) {
+  const [termState, termAction] = useActionState(updateAssignmentBillingTermAction, renewalActionInitialState);
+
+  return (
+    <form action={termAction} className="flex flex-col gap-1">
+      <input type="hidden" name="assignmentId" value={row.id} />
+      <input type="hidden" name="customerId" value={customerId} />
+      <input type="hidden" name="deviceId" value={row.device.id} />
+      <label className="block text-xs">
+        <span className="font-medium text-zinc-600 dark:text-zinc-400">Billing term</span>
+        <div className="mt-0.5 flex flex-wrap items-center gap-2">
+          <BillingTermSelect name="intervalMonths" defaultValue={row.intervalMonths} />
+          <SecondarySaveSubmit />
+        </div>
+      </label>
+      {termState.error ? <p className="text-sm text-red-600">{termState.error}</p> : null}
+      {termState.message ? (
+        <p className="text-sm text-emerald-800 dark:text-emerald-200">{termState.message}</p>
+      ) : null}
+    </form>
   );
 }
 
@@ -100,9 +152,9 @@ function NextDueEditForm({ row, customerId }: { row: RenewalRow; customerId: str
             type="date"
             key={dateInputValueFromDate(nextDue)}
             defaultValue={dateInputValueFromDate(nextDue)}
-            className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            className={renewalFieldClass}
           />
-          <NextDueSaveSubmit />
+          <SecondarySaveSubmit />
         </div>
       </label>
       {dueState.error ? <p className="text-sm text-red-600">{dueState.error}</p> : null}
@@ -134,17 +186,14 @@ function MarkOneForm({ row, customerId }: { row: RenewalRow; customerId: string 
             </Link>
             {statusPill(displayStatus)}
           </div>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-            Term: {row.intervalMonths != null ? formatPlanTerm(row.intervalMonths) : "not set"}
-            {row.lastPaymentStatus ? (
-              <>
-                {" · "}
-                Last: {row.lastPaymentStatus}
-              </>
-            ) : null}
-          </p>
+          {row.lastPaymentStatus ? (
+            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Last: {row.lastPaymentStatus}</p>
+          ) : null}
         </div>
-        <NextDueEditForm row={row} customerId={customerId} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <TermEditForm row={row} customerId={customerId} />
+          <NextDueEditForm row={row} customerId={customerId} />
+        </div>
       </div>
       <form
         action={oneAction}
@@ -204,6 +253,10 @@ function RenewalOpsBody({
     updateAllCustomerAssignmentsNextDueAction,
     renewalActionInitialState,
   );
+  const [bulkTermState, bulkTermAction] = useActionState(
+    updateAllCustomerAssignmentsBillingTermAction,
+    renewalActionInitialState,
+  );
 
   const missingTerm = rows.some((r) => r.intervalMonths == null);
   const isManual = billingMode === "manual_legacy";
@@ -219,22 +272,21 @@ function RenewalOpsBody({
         {isManual ? (
           <>
             When payment is received (cash, transfer, or Invoiless paid), <strong>mark period paid</strong> to advance{" "}
-            <strong>next due</strong> per device — or pick a custom next-due date for late payments. You can also set or
-            change <strong>next due</strong> directly on each device without marking paid. When every device shares the
-            same renewal date, use <strong>apply to all</strong> below.
+            <strong>next due</strong> per device — or pick a custom next-due date for late payments. Set{" "}
+            <strong>billing term</strong> and <strong>next due</strong> on each device, or use{" "}
+            <strong>apply to all</strong> when every device shares the same values.
           </>
         ) : (
           <>
             Stripe <strong>invoice.paid</strong> can auto-advance next due on all active devices. Mark paid manually for
-            cash or corrections, or set next due for all devices at once below.
+            cash or corrections, or set billing term and next due for all devices at once below.
           </>
         )}
       </p>
 
       {missingTerm ? (
         <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-          One or more assignments have no billing term — set 1 / 3 / 6 / 12 months on{" "}
-          <strong>Manage device</strong> before marking paid.
+          One or more assignments have no billing term — choose 1 / 3 / 6 / 12 months below before marking paid.
         </p>
       ) : null}
 
@@ -259,8 +311,39 @@ function RenewalOpsBody({
         {rows.length > 1 ? (
           <div className="mt-3 flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
             <form
-              action={bulkDueAction}
+              action={bulkTermAction}
               className="flex flex-col gap-2 sm:flex-row sm:items-end"
+              onSubmit={(e) => {
+                const form = e.currentTarget;
+                const termRaw = (form.elements.namedItem("intervalMonths") as HTMLSelectElement | null)?.value ?? "";
+                const termLabel = termRaw ? formatPlanTerm(Number.parseInt(termRaw, 10)) : "not set";
+                const confirmMsg = termRaw
+                  ? `Set billing term to ${termLabel} for all ${rows.length} active devices?`
+                  : `Clear billing term on all ${rows.length} active devices?`;
+                if (!window.confirm(confirmMsg)) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="customerId" value={customerId} />
+              <label className="block flex-1 text-xs">
+                <span className="font-medium text-zinc-600 dark:text-zinc-400">Billing term for all devices</span>
+                <div className="mt-0.5">
+                  <BillingTermSelect name="intervalMonths" defaultValue={null} />
+                </div>
+              </label>
+              <SecondarySaveSubmit label={`Apply to all ${rows.length}`} />
+              {bulkTermState.error ? (
+                <p className="w-full text-sm text-red-600 sm:order-last">{bulkTermState.error}</p>
+              ) : null}
+              {bulkTermState.message ? (
+                <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkTermState.message}</p>
+              ) : null}
+            </form>
+
+            <form
+              action={bulkDueAction}
+              className="flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:flex-row sm:items-end"
               onSubmit={(e) => {
                 const form = e.currentTarget;
                 const nextDue = (form.elements.namedItem("nextDueDate") as HTMLInputElement | null)?.value?.trim();
@@ -278,10 +361,10 @@ function RenewalOpsBody({
                 <input
                   name="nextDueDate"
                   type="date"
-                  className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  className={`mt-0.5 block w-full ${renewalFieldClass}`}
                 />
               </label>
-              <NextDueSaveSubmit label={`Apply to all ${rows.length}`} />
+              <SecondarySaveSubmit label={`Apply to all ${rows.length}`} />
               {bulkDueState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkDueState.error}</p> : null}
               {bulkDueState.message ? (
                 <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkDueState.message}</p>
