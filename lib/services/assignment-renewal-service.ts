@@ -220,6 +220,47 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
   return { advanced, skipped };
 }
 
+export type UpdateAssignmentNextDueInput = {
+  assignmentId: string;
+  nextDueDate: Date | null;
+};
+
+export type UpdateAssignmentNextDueResult =
+  | {
+      ok: true;
+      customerId: string;
+      deviceId: string;
+      previousNextDue: Date | null;
+      newNextDue: Date | null;
+    }
+  | { ok: false; error: string };
+
+export async function updateAssignmentNextDue(
+  input: UpdateAssignmentNextDueInput,
+): Promise<UpdateAssignmentNextDueResult> {
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: activeAssignmentWhere(input.assignmentId),
+    select: { id: true, customerId: true, deviceId: true, nextDueDate: true },
+  });
+
+  if (!assignment) {
+    return { ok: false, error: "Active assignment not found." };
+  }
+
+  await prisma.serviceAssignment.update({
+    where: { id: assignment.id },
+    data: { nextDueDate: input.nextDueDate },
+  });
+
+  return {
+    ok: true,
+    customerId: assignment.customerId,
+    deviceId: assignment.deviceId,
+    previousNextDue: assignment.nextDueDate,
+    newNextDue: input.nextDueDate,
+  };
+}
+
 export async function listActiveAssignmentsForRenewal(customerId: string) {
   return prisma.serviceAssignment.findMany({
     where: {

@@ -8,6 +8,8 @@ import { renewalActionInitialState } from "@/app/admin/customers/renewal-action-
 import {
   markAllCustomerAssignmentsPaidAction,
   markAssignmentPeriodPaidAction,
+  updateAllCustomerAssignmentsNextDueAction,
+  updateAssignmentNextDueAction,
 } from "@/app/admin/customers/renewal-actions";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { displayAssignmentOpsStatus } from "@/lib/admin/assignment-ops-urgency";
@@ -18,7 +20,7 @@ import {
   sortRenewalRowsByUrgency,
 } from "@/lib/admin/renewal-ops-display";
 import { MarkPaidOptionalNextDueField } from "@/components/admin/mark-paid-optional-next-due-field";
-import { formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
+import { dateInputValueFromDate } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 import type { CustomerBillingMode, DeviceObjectType, ServiceAssignmentStatus } from "@prisma/client";
 
@@ -68,6 +70,49 @@ function MarkPaidSubmit({ label }: { label: string }) {
   );
 }
 
+function NextDueSaveSubmit({ label = "Save" }: { label?: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+    >
+      {pending ? "Saving…" : label}
+    </button>
+  );
+}
+
+function NextDueEditForm({ row, customerId }: { row: RenewalRow; customerId: string }) {
+  const [dueState, dueAction] = useActionState(updateAssignmentNextDueAction, renewalActionInitialState);
+  const nextDue = row.nextDueDate ? new Date(row.nextDueDate) : null;
+
+  return (
+    <form action={dueAction} className="flex flex-col gap-1">
+      <input type="hidden" name="assignmentId" value={row.id} />
+      <input type="hidden" name="customerId" value={customerId} />
+      <input type="hidden" name="deviceId" value={row.device.id} />
+      <label className="block text-xs">
+        <span className="font-medium text-zinc-600 dark:text-zinc-400">Next due</span>
+        <div className="mt-0.5 flex flex-wrap items-center gap-2">
+          <input
+            name="nextDueDate"
+            type="date"
+            key={dateInputValueFromDate(nextDue)}
+            defaultValue={dateInputValueFromDate(nextDue)}
+            className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+          />
+          <NextDueSaveSubmit />
+        </div>
+      </label>
+      {dueState.error ? <p className="text-sm text-red-600">{dueState.error}</p> : null}
+      {dueState.message ? (
+        <p className="text-sm text-emerald-800 dark:text-emerald-200">{dueState.message}</p>
+      ) : null}
+    </form>
+  );
+}
+
 function MarkOneForm({ row, customerId }: { row: RenewalRow; customerId: string }) {
   const [oneState, oneAction] = useActionState(markAssignmentPeriodPaidAction, renewalActionInitialState);
 
@@ -77,9 +122,33 @@ function MarkOneForm({ row, customerId }: { row: RenewalRow; customerId: string 
 
   return (
     <li className="rounded-lg border border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/admin/devices/${row.device.id}/edit#active-service`}
+              className="inline-flex items-center gap-1.5 font-medium text-emerald-800 hover:underline dark:text-emerald-300"
+            >
+              <ObjectTypeIcon type={row.device.objectType} className="h-4 w-4 text-zinc-500" />
+              {deviceLabel}
+            </Link>
+            {statusPill(displayStatus)}
+          </div>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Term: {row.intervalMonths != null ? formatPlanTerm(row.intervalMonths) : "not set"}
+            {row.lastPaymentStatus ? (
+              <>
+                {" · "}
+                Last: {row.lastPaymentStatus}
+              </>
+            ) : null}
+          </p>
+        </div>
+        <NextDueEditForm row={row} customerId={customerId} />
+      </div>
       <form
         action={oneAction}
-        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
+        className="mt-3 flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:flex-row sm:flex-wrap sm:items-end"
         onSubmit={(e) => {
           const form = e.currentTarget;
           const customDue = (form.elements.namedItem("nextDueOverride") as HTMLInputElement | null)?.value?.trim();
@@ -94,30 +163,7 @@ function MarkOneForm({ row, customerId }: { row: RenewalRow; customerId: string 
         <input type="hidden" name="assignmentId" value={row.id} />
         <input type="hidden" name="customerId" value={customerId} />
         <input type="hidden" name="deviceId" value={row.device.id} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/admin/devices/${row.device.id}/edit#active-service`}
-              className="inline-flex items-center gap-1.5 font-medium text-emerald-800 hover:underline dark:text-emerald-300"
-            >
-              <ObjectTypeIcon type={row.device.objectType} className="h-4 w-4 text-zinc-500" />
-              {deviceLabel}
-            </Link>
-            {statusPill(displayStatus)}
-          </div>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-            Term: {row.intervalMonths != null ? formatPlanTerm(row.intervalMonths) : "not set"}
-            {" · "}
-            Next due: {formatAssignmentDateLabel(nextDue)}
-            {row.lastPaymentStatus ? (
-              <>
-                {" · "}
-                Last: {row.lastPaymentStatus}
-              </>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row sm:flex-wrap sm:items-end">
           {row.intervalMonths != null ? (
             <MarkPaidOptionalNextDueField intervalMonths={row.intervalMonths} nextDueDate={nextDue} />
           ) : null}
@@ -154,6 +200,10 @@ function RenewalOpsBody({
     markAllCustomerAssignmentsPaidAction,
     renewalActionInitialState,
   );
+  const [bulkDueState, bulkDueAction] = useActionState(
+    updateAllCustomerAssignmentsNextDueAction,
+    renewalActionInitialState,
+  );
 
   const missingTerm = rows.some((r) => r.intervalMonths == null);
   const isManual = billingMode === "manual_legacy";
@@ -169,12 +219,14 @@ function RenewalOpsBody({
         {isManual ? (
           <>
             When payment is received (cash, transfer, or Invoiless paid), <strong>mark period paid</strong> to advance{" "}
-            <strong>next due</strong> per device — or pick a custom next-due date for late payments.
+            <strong>next due</strong> per device — or pick a custom next-due date for late payments. You can also set or
+            change <strong>next due</strong> directly on each device without marking paid. When every device shares the
+            same renewal date, use <strong>apply to all</strong> below.
           </>
         ) : (
           <>
             Stripe <strong>invoice.paid</strong> can auto-advance next due on all active devices. Mark paid manually for
-            cash or corrections.
+            cash or corrections, or set next due for all devices at once below.
           </>
         )}
       </p>
@@ -205,37 +257,69 @@ function RenewalOpsBody({
         </summary>
 
         {rows.length > 1 ? (
-          <form
-            action={bulkAction}
-            className="mt-3 flex flex-col gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:flex-row sm:items-end"
-            onSubmit={(e) => {
-              if (
-                !window.confirm(
-                  `Mark the current period paid for all ${rows.length} active devices and advance each next due date?`,
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <input type="hidden" name="customerId" value={customerId} />
-            <label className="block flex-1 text-xs">
-              <span className="font-medium text-zinc-600 dark:text-zinc-400">
-                Invoice ref for all devices (optional)
-              </span>
-              <input
-                name="invoiceRef"
-                type="text"
-                placeholder="e.g. Invoiless invoice id"
-                className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-              />
-            </label>
-            <MarkPaidSubmit label={`Mark all ${rows.length} paid`} />
-            {bulkState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkState.error}</p> : null}
-            {bulkState.message ? (
-              <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkState.message}</p>
-            ) : null}
-          </form>
+          <div className="mt-3 flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+            <form
+              action={bulkDueAction}
+              className="flex flex-col gap-2 sm:flex-row sm:items-end"
+              onSubmit={(e) => {
+                const form = e.currentTarget;
+                const nextDue = (form.elements.namedItem("nextDueDate") as HTMLInputElement | null)?.value?.trim();
+                const confirmMsg = nextDue
+                  ? `Set next due to ${nextDue} for all ${rows.length} active devices?`
+                  : `Clear next due on all ${rows.length} active devices?`;
+                if (!window.confirm(confirmMsg)) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="customerId" value={customerId} />
+              <label className="block flex-1 text-xs">
+                <span className="font-medium text-zinc-600 dark:text-zinc-400">Next due for all devices</span>
+                <input
+                  name="nextDueDate"
+                  type="date"
+                  className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                />
+              </label>
+              <NextDueSaveSubmit label={`Apply to all ${rows.length}`} />
+              {bulkDueState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkDueState.error}</p> : null}
+              {bulkDueState.message ? (
+                <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkDueState.message}</p>
+              ) : null}
+            </form>
+
+            <form
+              action={bulkAction}
+              className="flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:flex-row sm:items-end"
+              onSubmit={(e) => {
+                if (
+                  !window.confirm(
+                    `Mark the current period paid for all ${rows.length} active devices and advance each next due date?`,
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="customerId" value={customerId} />
+              <label className="block flex-1 text-xs">
+                <span className="font-medium text-zinc-600 dark:text-zinc-400">
+                  Invoice ref for all devices (optional)
+                </span>
+                <input
+                  name="invoiceRef"
+                  type="text"
+                  placeholder="e.g. Invoiless invoice id"
+                  className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                />
+              </label>
+              <MarkPaidSubmit label={`Mark all ${rows.length} paid`} />
+              {bulkState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkState.error}</p> : null}
+              {bulkState.message ? (
+                <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkState.message}</p>
+              ) : null}
+            </form>
+          </div>
         ) : null}
 
         <ul className="mt-3 flex flex-col gap-3">
