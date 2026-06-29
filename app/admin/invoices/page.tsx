@@ -115,10 +115,23 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
         </div>
       ) : null}
 
-      {loadError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50/90 p-4 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-          <p className="font-medium">Could not load invoices</p>
-          <p className="mt-1 font-mono text-xs opacity-90">{loadError}</p>
+      {!invoilessConfigured || loadError ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <p className="font-medium">
+            {loadError ? "Invoiless is not responding" : "Invoiless is not configured"}
+          </p>
+          <p className="mt-1 text-amber-900/90 dark:text-amber-200/90">
+            {loadError ? (
+              <span className="font-mono text-xs opacity-90">{loadError}</span>
+            ) : (
+              "Set INVOILESS_API_KEY to list and create invoices here."
+            )}{" "}
+            Need to send a quote now? Use{" "}
+            <Link href="/admin/quotes" className="font-semibold underline underline-offset-2">
+              Quick quote
+            </Link>{" "}
+            to download a branded PDF without Invoiless.
+          </p>
         </div>
       ) : null}
 

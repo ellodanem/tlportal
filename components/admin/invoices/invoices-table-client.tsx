@@ -336,7 +336,11 @@ export function InvoicesTableClient({
         <p className="font-medium">Invoiless is not configured</p>
         <p className="mt-2 text-amber-900/90 dark:text-amber-200/90">
           Set <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">INVOILESS_API_KEY</code> in the
-          environment to load invoices from Invoiless (same key as customer sync).
+          environment to load invoices from Invoiless (same key as customer sync). To send a quote without Invoiless, use{" "}
+          <Link href="/admin/quotes" className="font-semibold underline underline-offset-2">
+            Quick quote
+          </Link>
+          .
         </p>
       </div>
     );

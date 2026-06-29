@@ -5,6 +5,11 @@ import { useEffect, useRef, useState } from "react";
 
 const items = [
   {
+    href: "/admin/quotes",
+    label: "Quick quote",
+    description: "Download a PDF estimate without Invoiless.",
+  },
+  {
     href: "/admin/proposals/new",
     label: "Proposal",
     description: "Start a sales proposal with default sections.",
