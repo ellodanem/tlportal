@@ -111,6 +111,46 @@ enum BillingInvoiceKind {
   one_time
 }
 
+// --- Native billing (Phase 0): TL-owned quotes / invoices / payments ---
+
+/// Lifecycle of a native TL quote (estimate). `converted` once an Invoice is generated from it.
+enum QuoteStatus {
+  draft
+  sent
+  accepted
+  declined
+  expired
+  converted
+}
+
+/// Lifecycle of a native TL invoice (the AR record). Distinct from the Stripe `BillingInvoice` mirror.
+enum InvoiceStatus {
+  draft
+  open
+  partially_paid
+  paid
+  overdue
+  void
+  written_off
+}
+
+/// Origin of a native invoice. `subscription_mirror` reserved for unifying Stripe invoices (Phase 4).
+enum InvoiceKind {
+  one_off
+  recurring
+  subscription_mirror
+}
+
+/// How a recorded payment was received against a native invoice.
+enum PaymentMethod {
+  stripe
+  cash
+  bank_transfer
+  cheque
+  card_manual
+  other
+}
+
 /// TL-owned subscription lifecycle (Stripe mirrors payment; this is ops source of truth).
 enum CustomerSubscriptionStatus {
   pending_payment
@@ -158,7 +198,15 @@ enum DeviceLinkRole {
 }
 
 /// Atomic counter for customer-facing `TL-INV-{n}` numbers (singleton id = "default").
+/// Shared by the Stripe `BillingInvoice` mirror AND native `Invoice` so numbers never collide.
 model InvoiceSequence {
+  id        String   @id
+  nextValue Int
+  updatedAt DateTime @updatedAt
+}
+
+/// Atomic counter for customer-facing `TL-Q-{n}` quote numbers (singleton id = "default").
+model QuoteSequence {
   id        String   @id
   nextValue Int
   updatedAt DateTime @updatedAt
@@ -167,24 +215,24 @@ model InvoiceSequence {
 // --- App config (singleton row id = "default") ---
 
 model AppSettings {
-  id      String   @id
-  logoUrl String?
-  logoSize BrandingLogoSize @default(m)
+  id                          String           @id
+  logoUrl                     String?
+  logoSize                    BrandingLogoSize @default(m)
   /// Outgoing mail (SMTP). When `smtpHost` is null, other SMTP fields are ignored.
-  smtpHost      String?
-  smtpPort      Int @default(587)
+  smtpHost                    String?
+  smtpPort                    Int              @default(587)
   /// When true, Nodemailer uses implicit TLS (typical for port 465).
-  smtpSecure    Boolean @default(false)
-  smtpUser      String?
-  smtpPassword  String?
-  smtpFromEmail String?
-  smtpFromName  String?
+  smtpSecure                  Boolean          @default(false)
+  smtpUser                    String?
+  smtpPassword                String?
+  smtpFromEmail               String?
+  smtpFromName                String?
   /// Comma- or newline-separated E.164-ish phones for billing ops SMS (missing pay link, etc.).
-  billingAlertPhones String? @db.Text
+  billingAlertPhones          String?          @db.Text
   /// When true, email TL paid receipt PDFs on Stripe `invoice.paid` (requires SMTP).
-  autoEmailPaidStripeReceipts Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  autoEmailPaidStripeReceipts Boolean          @default(true)
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
 }
 
 // --- Auth (admin) ---
@@ -198,64 +246,74 @@ model User {
   updatedAt    DateTime @updatedAt
 
   reviewedRegistrationRequests RegistrationRequest[] @relation("RegistrationReviewedBy")
-  proposalsCreated           Proposal[]
+  proposalsCreated             Proposal[]
+
+  // Native billing (Phase 0) — staff authorship / payment recording.
+  quotesCreated    Quote[]
+  invoicesCreated  Invoice[]
+  paymentsRecorded Payment[]
 }
 
 // --- Core domain ---
 
 model Customer {
-  id                  String    @id @default(uuid())
-  firstName           String?
-  lastName            String?
-  company             String?
-  email               String?
-  phone               String?
+  id                   String              @id @default(uuid())
+  firstName            String?
+  lastName             String?
+  company              String?
+  email                String?
+  phone                String?
   /// Street / multi-line address (Invoiless “Address”); city/state/postal/country are composed into billTo.address on sync.
-  address             String?
-  city                String?
-  state               String?
-  postalCode          String?
-  country             String?
+  address              String?
+  city                 String?
+  state                String?
+  postalCode           String?
+  country              String?
   /// Maps to Invoiless billTo.legal (e.g. company / tax registration).
-  legalInfo           String?
+  legalInfo            String?
   /// Comma-separated Cc emails for invoice sends (Invoiless max 3).
-  invoiceCc           String?
+  invoiceCc            String?
   /// Comma-separated Bcc emails (Invoiless max 3).
-  invoiceBcc          String?
+  invoiceBcc           String?
   /// Preferred billing path for new workflows (legacy rows default manual_legacy).
-  billingMode CustomerBillingMode @default(manual_legacy)
+  billingMode          CustomerBillingMode @default(manual_legacy)
   /// Custom Stripe subscription monthly rate (XCD). Null = default catalog / env Price ids.
-  stripeMonthlyRateXcd Decimal? @db.Decimal(10, 2)
+  stripeMonthlyRateXcd Decimal?            @db.Decimal(10, 2)
   /// @deprecated Prefer BillingAccount — kept for backward compatibility during Phase 1.
-  invoilessCustomerId String?   @unique
+  invoilessCustomerId  String?             @unique
   /// @deprecated Prefer ProviderDeviceLink on Device — kept during Phase 1 migration.
-  traqcareUsername    String?
+  traqcareUsername     String?
   /// Stored in DB as plain text — restrict DB access; prefer env/secret store for production.
-  traqcarePassword    String?
+  traqcarePassword     String?
   /// Traqcare / white-label portal base URL if not the default (e.g. https://…).
-  traqcarePortalUrl   String?
+  traqcarePortalUrl    String?
   /// Traqcare live API `clientid` — one fleet id per customer (copy from Traqcare platform).
-  traqcareClientId    String?
-  notes               String?
-  tags                String[]  @default([])
+  traqcareClientId     String?
+  notes                String?
+  tags                 String[]            @default([])
   /// Set when staff archives a churned / inactive account — hidden from active lists and billing reminders.
-  archivedAt          DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  archivedAt           DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
-  serviceAssignments ServiceAssignment[]
-  billingAccounts       BillingAccount[]
-  billingInvoices          BillingInvoice[]
-  billingWhatsAppReminders  BillingWhatsAppReminder[]
+  serviceAssignments         ServiceAssignment[]
+  billingAccounts            BillingAccount[]
+  billingInvoices            BillingInvoice[]
+  billingWhatsAppReminders   BillingWhatsAppReminder[]
   billingPayLinkAdminAlerts  BillingPayLinkAdminAlert[]
   customerWhatsAppDeliveries CustomerWhatsAppDelivery[]
   customerSubscriptions      CustomerSubscription[]
-  operationalEvents        OperationalEvent[]
-  broadcastDeliveries   BroadcastDelivery[]
+  operationalEvents          OperationalEvent[]
+  broadcastDeliveries        BroadcastDelivery[]
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
-  createdFromRegistration    RegistrationRequest?  @relation("RegistrationCreatedCustomer")
-  proposals                  Proposal[]
+  createdFromRegistration  RegistrationRequest?  @relation("RegistrationCreatedCustomer")
+  proposals                Proposal[]
+
+  // Native billing (Phase 0) — TL-owned quotes, invoices, payments.
+  quotes   Quote[]
+  invoices Invoice[]
+  payments Payment[]
 
   @@index([email])
   @@index([archivedAt])
@@ -300,12 +358,12 @@ model RegistrationRequest {
   firstName String
   lastName  String
   /// WhatsApp / primary phone from the registration form.
-  phone String
-  email String
+  phone     String
+  email     String
 
-  vehicleDetails       String  @db.Text
+  vehicleDetails       String              @db.Text
   /// Optional extra portal users from the registration form (free text, one per line).
-  additionalUsers String? @db.Text
+  additionalUsers      String?             @db.Text
   subscriptionOptionId String?
   subscriptionOption   SubscriptionOption? @relation(fields: [subscriptionOptionId], references: [id], onDelete: SetNull)
 
@@ -314,18 +372,18 @@ model RegistrationRequest {
   termTravelFee           Boolean
 
   /// Existing customer with the same email (reviewer duplicate flag).
-  matchesCustomerId String?
-  matchesCustomer   Customer? @relation("RegistrationEmailMatchCustomer", fields: [matchesCustomerId], references: [id], onDelete: SetNull)
+  matchesCustomerId     String?
+  matchesCustomer       Customer? @relation("RegistrationEmailMatchCustomer", fields: [matchesCustomerId], references: [id], onDelete: SetNull)
   /// Count of other pending rows with the same email when this row was submitted.
-  otherPendingSameEmail Int @default(0)
+  otherPendingSameEmail Int       @default(0)
 
-  submittedAt DateTime  @default(now())
-  reviewedAt  DateTime?
-  reviewedById String?
-  reviewedBy   User?   @relation("RegistrationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  rejectionReason String? @db.Text
+  submittedAt     DateTime  @default(now())
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewedBy      User?     @relation("RegistrationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  rejectionReason String?   @db.Text
 
-  createdCustomerId String?  @unique
+  createdCustomerId String?   @unique
   createdCustomer   Customer? @relation("RegistrationCreatedCustomer", fields: [createdCustomerId], references: [id], onDelete: SetNull)
 
   updatedAt DateTime @updatedAt
@@ -353,24 +411,24 @@ model DeviceModel {
 }
 
 model Device {
-  id                String          @id @default(uuid())
-  imei              String          @unique
+  id                String             @id @default(uuid())
+  imei              String             @unique
   serialNumber      String?
   label             String?
-  status            DeviceStatus    @default(in_stock)
-  condition         DeviceCondition @default(new)
+  status            DeviceStatus       @default(in_stock)
+  condition         DeviceCondition    @default(new)
   purchasedAt       DateTime?
   warrantyExpiresAt DateTime?
   firmwareVersion   String?
   notes             String?
   /// Billable / customer-facing vs internal, demo, or personal test units.
-  usagePurpose DeviceUsagePurpose @default(customer)
+  usagePurpose      DeviceUsagePurpose @default(customer)
   /// Vehicle / asset class for UI and reporting (optional).
-  objectType   DeviceObjectType?
+  objectType        DeviceObjectType?
   /// Free-form labels (e.g. demo-booth, test-vehicle-a); use for search and reporting.
-  tags         String[]           @default([])
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  tags              String[]           @default([])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   deviceModelId String
   deviceModel   DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
@@ -378,9 +436,9 @@ model Device {
   simCardId String?  @unique
   simCard   SimCard? @relation(fields: [simCardId], references: [id], onDelete: SetNull)
 
-  serviceAssignments   ServiceAssignment[]
-  providerDeviceLinks  ProviderDeviceLink[]
-  operationalEvents    OperationalEvent[]
+  serviceAssignments  ServiceAssignment[]
+  providerDeviceLinks ProviderDeviceLink[]
+  operationalEvents   OperationalEvent[]
 
   @@index([deviceModelId])
   @@index([status])
@@ -412,18 +470,18 @@ model SimCard {
 }
 
 model ServiceAssignment {
-  id                   String                   @id @default(uuid())
+  id                   String                  @id @default(uuid())
   startDate            DateTime?
   endDate              DateTime?
-  status               ServiceAssignmentStatus  @default(active)
+  status               ServiceAssignmentStatus @default(active)
   invoilessRecurringId String?
   intervalMonths       Int?
   lastInvoiceId        String?
   lastPaymentStatus    String?
   nextDueDate          DateTime?
   notes                String?
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -511,9 +569,9 @@ model ProposalVisualBlock {
   proposalId String
   proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
-  sortOrder Int     @default(0)
+  sortOrder       Int                  @default(0)
   title           String
-  caption         String? @db.Text
+  caption         String?              @db.Text
   imageUrl        String?
   placeholderHint String?
   /// Accessibility / PDF note when an image is present.
@@ -549,34 +607,34 @@ model BillingAccount {
 
 /// Mirrored invoice from a billing provider (Stripe subscription/one-time, future Invoiless).
 model BillingInvoice {
-  id                     String             @id @default(uuid())
-  customerId             String
-  customer               Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  provider               BillingProvider
-  externalInvoiceId      String
-  kind                   BillingInvoiceKind @default(subscription)
-  status                 String
-  amountXcd              Decimal            @db.Decimal(12, 2)
-  currency               String             @default("xcd")
+  id                       String             @id @default(uuid())
+  customerId               String
+  customer                 Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider                 BillingProvider
+  externalInvoiceId        String
+  kind                     BillingInvoiceKind @default(subscription)
+  status                   String
+  amountXcd                Decimal            @db.Decimal(12, 2)
+  currency                 String             @default("xcd")
   /// Customer-facing number on PDF and Billing UI (e.g. TL-INV-100837).
-  displayNumber          String?            @unique
+  displayNumber            String?            @unique
   /// Provider invoice number (Stripe `invoice.number`).
-  providerInvoiceNumber  String?
-  periodStart            DateTime?
-  periodEnd              DateTime?
-  hostedInvoiceUrl       String?
-  invoicePdfUrl          String?
-  stripeSubscriptionId   String?
-  paidAt                 DateTime?
+  providerInvoiceNumber    String?
+  periodStart              DateTime?
+  periodEnd                DateTime?
+  hostedInvoiceUrl         String?
+  invoicePdfUrl            String?
+  stripeSubscriptionId     String?
+  paidAt                   DateTime?
   /// Invoiless invoice id created when mirroring Stripe `invoice.paid` (accounting copy).
   invoilessMirrorInvoiceId String?
   /// Vercel Blob path prefix `private:` + url, or public blob url for TL paid PDF.
-  pdfStoragePath         String?
-  pdfGeneratedAt         DateTime?
+  pdfStoragePath           String?
+  pdfGeneratedAt           DateTime?
   /// When the TL paid receipt PDF was emailed to the customer (auto or manual).
-  receiptEmailedAt       DateTime?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  receiptEmailedAt         DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
 
   @@unique([provider, externalInvoiceId])
   @@index([customerId, createdAt(sort: Desc)])
@@ -681,20 +739,20 @@ model ProviderDeviceLink {
 
 /// Reusable copy for customer broadcast emails (and future WhatsApp).
 model BroadcastTemplate {
-  id           String                   @id @default(uuid())
+  id           String                    @id @default(uuid())
   /// Stable key for seeded system templates (`outage-investigating`, etc.).
-  slug         String?                  @unique
+  slug         String?                   @unique
   name         String
   category     BroadcastTemplateCategory @default(general)
   subject      String
-  bodyText     String                   @db.Text
+  bodyText     String                    @db.Text
   /// Phase 2: shorter plain body for WhatsApp when channel is enabled.
-  whatsappBody String?                  @db.Text
-  isSystem     Boolean                  @default(false)
-  isActive     Boolean                  @default(true)
-  sortOrder    Int                      @default(0)
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
+  whatsappBody String?                   @db.Text
+  isSystem     Boolean                   @default(false)
+  isActive     Boolean                   @default(true)
+  sortOrder    Int                       @default(0)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
   campaigns    BroadcastCampaign[]
 
   @@index([category])
@@ -703,26 +761,26 @@ model BroadcastTemplate {
 
 /// Mass email send to a filtered customer audience (snapshot subject/body at send time).
 model BroadcastCampaign {
-  id                String                  @id @default(uuid())
-  templateId        String?
-  template          BroadcastTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  subjectSnapshot   String
-  bodyTextSnapshot  String                  @db.Text
+  id               String                  @id @default(uuid())
+  templateId       String?
+  template         BroadcastTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  subjectSnapshot  String
+  bodyTextSnapshot String                  @db.Text
   /// When false, only customers with an active service assignment; when true, all customers with email.
-  includeInactive   Boolean                 @default(false)
-  incidentTitle     String?
-  incidentStatus    String?
-  incidentEta       String?
-  status            BroadcastCampaignStatus @default(queued)
-  totalRecipients   Int                     @default(0)
-  sentCount         Int                     @default(0)
-  failedCount       Int                     @default(0)
-  skippedCount      Int                     @default(0)
-  actorUserId       String?
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
-  startedAt         DateTime?
-  completedAt       DateTime?
+  includeInactive  Boolean                 @default(false)
+  incidentTitle    String?
+  incidentStatus   String?
+  incidentEta      String?
+  status           BroadcastCampaignStatus @default(queued)
+  totalRecipients  Int                     @default(0)
+  sentCount        Int                     @default(0)
+  failedCount      Int                     @default(0)
+  skippedCount     Int                     @default(0)
+  actorUserId      String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  startedAt        DateTime?
+  completedAt      DateTime?
 
   deliveries BroadcastDelivery[]
 
@@ -764,4 +822,188 @@ model OperationalEvent {
   @@index([customerId, occurredAt])
   @@index([deviceId, occurredAt])
   @@index([category, occurredAt])
+}
+
+// --- Native billing (Phase 0) ---
+// TL-owned quote → invoice → payment lifecycle. Additive to the existing
+// Invoiless (external) and Stripe `BillingInvoice` (mirror) flows; nothing here
+// replaces them yet. UI wiring and cutover happen in later phases.
+
+/// TL-native quote / estimate. Persisted (unlike the legacy stateless quick-quote).
+model Quote {
+  id     String      @id @default(uuid())
+  status QuoteStatus @default(draft)
+
+  /// Customer-facing number, `TL-Q-{n}`, allocated from QuoteSequence when sent.
+  number String? @unique
+
+  /// Optional linked customer; free-text bill-to is supported for ad-hoc estimates.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  /// Snapshot of who the quote is addressed to (stable even if the Customer is later edited).
+  billToName  String?
+  billToLines String[] @default([])
+
+  currency       String   @default("XCD")
+  /// Stored money snapshots (computed from line items at save time).
+  subtotal       Decimal  @default(0) @db.Decimal(12, 2)
+  /// Single document-level tax (e.g. VAT). Per-line tax is out of scope for Phase 0.
+  taxLabel       String?
+  taxRatePercent Decimal? @db.Decimal(5, 2)
+  taxTotal       Decimal  @default(0) @db.Decimal(12, 2)
+  total          Decimal  @default(0) @db.Decimal(12, 2)
+
+  issueDate  DateTime  @default(now())
+  validUntil DateTime?
+  notes      String?   @db.Text
+
+  /// Public accept/decline token for a shareable quote link.
+  publicToken String?   @unique
+  sentAt      DateTime?
+  acceptedAt  DateTime?
+  declinedAt  DateTime?
+
+  pdfStoragePath String?
+  pdfGeneratedAt DateTime?
+
+  /// Invoice generated from this quote (set when status = converted).
+  convertedInvoiceId String?  @unique
+  convertedInvoice   Invoice? @relation("QuoteConvertedInvoice", fields: [convertedInvoiceId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  lineItems QuoteLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model QuoteLineItem {
+  id String @id @default(uuid())
+
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  sortOrder   Int     @default(0)
+  description String
+  quantity    Decimal @default(1) @db.Decimal(12, 4)
+  unitLabel   String?
+  unitPrice   Decimal @db.Decimal(12, 2)
+  /// quantity × unitPrice, snapshotted at save time.
+  lineTotal   Decimal @default(0) @db.Decimal(12, 2)
+
+  @@index([quoteId])
+}
+
+/// TL-native invoice — the going-forward AR record (Invoiless replacement).
+/// Separate from `BillingInvoice` (Stripe mirror) for now; may unify in Phase 4.
+model Invoice {
+  id     String        @id @default(uuid())
+  status InvoiceStatus @default(draft)
+  kind   InvoiceKind   @default(one_off)
+
+  /// Customer-facing number `TL-INV-{n}`, allocated from the shared InvoiceSequence on finalize.
+  number String? @unique
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  billToName  String?
+  billToLines String[] @default([])
+
+  currency       String   @default("XCD")
+  subtotal       Decimal  @default(0) @db.Decimal(12, 2)
+  taxLabel       String?
+  taxRatePercent Decimal? @db.Decimal(5, 2)
+  taxTotal       Decimal  @default(0) @db.Decimal(12, 2)
+  total          Decimal  @default(0) @db.Decimal(12, 2)
+  /// Sum of recorded payments; `amountDue` = total − amountPaid.
+  amountPaid     Decimal  @default(0) @db.Decimal(12, 2)
+  amountDue      Decimal  @default(0) @db.Decimal(12, 2)
+
+  issueDate           DateTime  @default(now())
+  dueDate             DateTime?
+  notes               String?   @db.Text
+  /// Cash/bank/cheque payment instructions printed on the PDF (key for non-card payers).
+  paymentInstructions String?   @db.Text
+
+  publicToken String?   @unique
+  sentAt      DateTime?
+  paidAt      DateTime?
+  voidedAt    DateTime?
+
+  pdfStoragePath String?
+  pdfGeneratedAt DateTime?
+
+  /// Quote this invoice was converted from (back-reference; FK lives on Quote.convertedInvoiceId).
+  sourceQuote         Quote?  @relation("QuoteConvertedInvoice")
+  /// Optional ops link for traceability to a device service assignment.
+  serviceAssignmentId String?
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([updatedAt])
+}
+
+model InvoiceLineItem {
+  id String @id @default(uuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  sortOrder   Int     @default(0)
+  description String
+  quantity    Decimal @default(1) @db.Decimal(12, 4)
+  unitLabel   String?
+  unitPrice   Decimal @db.Decimal(12, 2)
+  lineTotal   Decimal @default(0) @db.Decimal(12, 2)
+
+  @@index([invoiceId])
+}
+
+/// A payment received against a native invoice (supports partial + manual methods).
+model Payment {
+  id String @id @default(uuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  /// Denormalized for AR/customer reporting; nullable for ad-hoc invoices.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  amount                Decimal       @db.Decimal(12, 2)
+  currency              String        @default("XCD")
+  method                PaymentMethod @default(cash)
+  /// External or manual reference (cheque #, bank ref, Stripe PaymentIntent id).
+  reference             String?
+  stripePaymentIntentId String?
+  receivedAt            DateTime      @default(now())
+  notes                 String?
+
+  recordedById String?
+  recordedBy   User?   @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  voidedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([invoiceId])
+  @@index([customerId, receivedAt(sort: Desc)])
 }
