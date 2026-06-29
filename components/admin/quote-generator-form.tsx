@@ -9,6 +9,7 @@ import {
   defaultQuoteEmailBody,
   defaultQuoteEmailSubject,
 } from "@/lib/billing/quote-email-body";
+import { DEFAULT_QUOTE_EMAIL_BCC } from "@/lib/billing/quote-email-recipients";
 import type { QuoteRequestPayload } from "@/lib/billing/quote-payload";
 
 export type QuoteCustomerOption = {
@@ -85,6 +86,8 @@ export function QuoteGeneratorForm({
 
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
+  const [emailCc, setEmailCc] = useState("");
+  const [emailBcc, setEmailBcc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [quotePayloadJson, setQuotePayloadJson] = useState("");
@@ -233,6 +236,8 @@ export function QuoteGeneratorForm({
 
     setQuotePayloadJson(JSON.stringify(payload));
     setEmailTo(selectedCustomer?.email?.trim() ?? "");
+    setEmailCc("");
+    setEmailBcc(DEFAULT_QUOTE_EMAIL_BCC);
     setEmailSubject(defaultQuoteEmailSubject(payload.quoteNumber));
     setEmailBody(draft.text);
     setEmailOpen(true);
@@ -481,12 +486,16 @@ export function QuoteGeneratorForm({
         quoteNumber={quoteNumber.trim()}
         attachmentName={attachmentName}
         to={emailTo}
+        cc={emailCc}
+        bcc={emailBcc}
         subject={emailSubject}
         bodyText={emailBody}
         quotePayloadJson={quotePayloadJson}
         sendState={sendState}
         sendAction={sendAction}
         onToChange={setEmailTo}
+        onCcChange={setEmailCc}
+        onBccChange={setEmailBcc}
         onSubjectChange={setEmailSubject}
         onBodyTextChange={setEmailBody}
         onBack={() => setEmailOpen(false)}

@@ -5,6 +5,7 @@ import nodemailer from "nodemailer";
 import { getSession } from "@/lib/auth/get-session";
 import { buildQuotePdfFromPayload } from "@/lib/billing/quote-build";
 import { quoteEmailHtmlFromText } from "@/lib/billing/quote-email-body";
+import { parseQuoteEmailRecipientField } from "@/lib/billing/quote-email-recipients";
 import { parseQuoteRequestBody } from "@/lib/billing/quote-payload";
 import { getSmtpMailFrom, getSmtpTransportOptions } from "@/lib/email/smtp-settings";
 
@@ -37,6 +38,16 @@ export async function sendQuoteEmailAction(
   const bodyText = String(formData.get("bodyText") ?? "").trim();
   if (!bodyText) {
     return { error: "Message body is required." };
+  }
+
+  const ccParsed = parseQuoteEmailRecipientField(String(formData.get("cc") ?? ""), to, "Cc");
+  if ("error" in ccParsed) {
+    return { error: ccParsed.error };
+  }
+
+  const bccParsed = parseQuoteEmailRecipientField(String(formData.get("bcc") ?? ""), to, "Bcc");
+  if ("error" in bccParsed) {
+    return { error: bccParsed.error };
   }
 
   const payloadRaw = String(formData.get("quotePayloadJson") ?? "").trim();
@@ -72,6 +83,8 @@ export async function sendQuoteEmailAction(
     await transporter.sendMail({
       from: from.name ? `"${from.name}" <${from.address}>` : from.address,
       to,
+      cc: ccParsed.emails,
+      bcc: bccParsed.emails,
       subject: subject.slice(0, 200),
       text: bodyText.slice(0, 8000),
       html: quoteEmailHtmlFromText(bodyText.slice(0, 8000)),
@@ -87,5 +100,10 @@ export async function sendQuoteEmailAction(
     return { error: e instanceof Error ? e.message : "Could not send email." };
   }
 
-  return { ok: true, message: `Quote emailed to ${to}.` };
+  const extras: string[] = [];
+  if (ccParsed.emails?.length) extras.push(`cc ${ccParsed.emails.join(", ")}`);
+  if (bccParsed.emails?.length) extras.push(`bcc ${bccParsed.emails.join(", ")}`);
+  const extraNote = extras.length ? ` (${extras.join("; ")})` : "";
+
+  return { ok: true, message: `Quote emailed to ${to}${extraNote}.` };
 }

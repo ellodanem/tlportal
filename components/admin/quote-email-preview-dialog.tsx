@@ -22,12 +22,16 @@ export function QuoteEmailPreviewDialog({
   quoteNumber,
   attachmentName,
   to,
+  cc,
+  bcc,
   subject,
   bodyText,
   quotePayloadJson,
   sendState,
   sendAction,
   onToChange,
+  onCcChange,
+  onBccChange,
   onSubjectChange,
   onBodyTextChange,
   onBack,
@@ -36,12 +40,16 @@ export function QuoteEmailPreviewDialog({
   quoteNumber: string;
   attachmentName: string;
   to: string;
+  cc: string;
+  bcc: string;
   subject: string;
   bodyText: string;
   quotePayloadJson: string;
   sendState: SendQuoteEmailState;
   sendAction: (formData: FormData) => void;
   onToChange: (value: string) => void;
+  onCcChange: (value: string) => void;
+  onBccChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
   onBodyTextChange: (value: string) => void;
   onBack: () => void;
@@ -80,6 +88,38 @@ export function QuoteEmailPreviewDialog({
               onChange={(e) => onToChange(e.target.value)}
               className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
             />
+          </div>
+
+          <div>
+            <label htmlFor="quote-email-cc" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Cc <span className="font-normal text-zinc-500">(optional)</span>
+            </label>
+            <input
+              id="quote-email-cc"
+              name="cc"
+              type="text"
+              value={cc}
+              onChange={(e) => onCcChange(e.target.value)}
+              placeholder="one@example.com, two@example.com"
+              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+            />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Comma-separated, up to 3 addresses.</p>
+          </div>
+
+          <div>
+            <label htmlFor="quote-email-bcc" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Bcc <span className="font-normal text-zinc-500">(optional)</span>
+            </label>
+            <input
+              id="quote-email-bcc"
+              name="bcc"
+              type="text"
+              value={bcc}
+              onChange={(e) => onBccChange(e.target.value)}
+              placeholder="one@example.com, two@example.com"
+              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+            />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Comma-separated, up to 3 addresses.</p>
           </div>
 
           <div>
