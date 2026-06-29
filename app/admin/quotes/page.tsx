@@ -27,6 +27,7 @@ export default async function AdminQuotesPage() {
   const customerOptions: QuoteCustomerOption[] = customers.map((c) => ({
     id: c.id,
     label: customerDisplayName(c),
+    email: c.email?.trim() || null,
     billToLines: customerBillToLines(c),
   }));
 
@@ -41,7 +42,7 @@ export default async function AdminQuotesPage() {
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Quick quote</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
           Build a one-page PDF estimate when Invoiless is unavailable. Pick a customer (or type a name), set line items,
-          and download — no external billing account required.
+          then download or email — SMTP must be configured under Settings.
         </p>
       </div>
 

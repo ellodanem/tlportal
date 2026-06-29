@@ -212,7 +212,7 @@ export function buildQuotePdfBuffer(input: QuotePdfInput): Buffer {
   doc.text("Quote", PAGE_W - MARGIN, titleY, { align: "right" });
   doc.setTextColor(0);
 
-  const metaStartY = titleY + 12;
+  const metaStartY = titleY + 22;
   const metaEndY = drawMetaGrid(
     doc,
     [

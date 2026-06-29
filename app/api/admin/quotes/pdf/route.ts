@@ -1,14 +1,9 @@
 import { getSession } from "@/lib/auth/get-session";
-import { getBrandingLogoStored } from "@/lib/branding/app-settings";
-import { customerBillToLines } from "@/lib/billing/customer-bill-to";
+import { buildQuotePdfFromPayload } from "@/lib/billing/quote-build";
 import { parseQuoteRequestBody } from "@/lib/billing/quote-payload";
-import { buildQuotePdfBuffer } from "@/lib/billing/quote-pdf";
-import { prisma } from "@/lib/db";
-import { fetchImageAsLogo } from "@/lib/proposals/fetch-image";
-import { resolveProposalHeaderLogoStored } from "@/lib/proposals/proposal-cover-assets";
-import { resolveAssetFetchOrigin } from "@/lib/proposals/resolve-asset-url";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -28,55 +23,21 @@ export async function POST(req: Request) {
     return Response.json({ error: parsed.error }, { status: 400 });
   }
 
-  const { payload } = parsed;
-  let billToLines = payload.billToLines ?? [];
+  try {
+    const built = await buildQuotePdfFromPayload(parsed.payload);
+    if ("error" in built) {
+      return Response.json({ error: built.error }, { status: 400 });
+    }
 
-  if (!billToLines.length && payload.customerId) {
-    const customer = await prisma.customer.findUnique({
-      where: { id: payload.customerId },
-      select: {
-        company: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        address: true,
-        city: true,
-        state: true,
-        postalCode: true,
-        country: true,
+    return new Response(new Uint8Array(built.buffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${built.filename}"`,
       },
     });
-    if (!customer) {
-      return Response.json({ error: "Customer not found." }, { status: 404 });
-    }
-    billToLines = customerBillToLines(customer);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Could not build quote PDF.";
+    console.error("[quotes/pdf]", message);
+    return Response.json({ error: message }, { status: 500 });
   }
-
-  if (!billToLines.length) {
-    return Response.json({ error: "Choose a customer or enter a client name." }, { status: 400 });
-  }
-
-  const origin = resolveAssetFetchOrigin(req);
-  const brandingStored = await getBrandingLogoStored();
-  const headerLogo = await fetchImageAsLogo(origin, resolveProposalHeaderLogoStored(brandingStored));
-
-  const buf = buildQuotePdfBuffer({
-    quoteNumber: payload.quoteNumber,
-    quoteDate: new Date(`${payload.quoteDate}T12:00:00.000Z`),
-    validUntil: new Date(`${payload.validUntil}T12:00:00.000Z`),
-    currency: payload.currency,
-    billToLines,
-    lineItems: payload.lineItems,
-    notes: payload.notes,
-    headerLogo,
-  });
-
-  const safeName = `quote-${payload.quoteNumber.replace(/[^\w.-]+/g, "_").slice(0, 40)}.pdf`;
-  return new Response(new Uint8Array(buf), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${safeName}"`,
-    },
-  });
 }

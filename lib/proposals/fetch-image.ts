@@ -10,7 +10,45 @@ import {
   stripBrandingPrivateBlobPrefix,
 } from "@/lib/branding/app-settings";
 import type { LogoImage } from "@/lib/proposals/pdf";
-import { resolvePublicAssetUrl } from "@/lib/proposals/resolve-asset-url";
+import { resolvePublicAssetUrl, getServerOriginFromEnv } from "@/lib/proposals/resolve-asset-url";
+
+const FETCH_TIMEOUT_MS = 8_000;
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function isSameAppOrigin(url: string): boolean {
+  try {
+    const target = new URL(url);
+    const base = new URL(getServerOriginFromEnv());
+    return target.host === base.host || isLoopbackHost(target.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function fetchHttpImageAsLogo(url: string): Promise<LogoImage | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (!res.ok) return null;
+    const mime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
+    const buf = await res.arrayBuffer();
+    if (mime === "image/png") {
+      return { dataUrl: toDataUrl(buf, mime), format: "PNG" };
+    }
+    if (mime === "image/jpeg" || mime === "image/jpg") {
+      return { dataUrl: toDataUrl(buf, "image/jpeg"), format: "JPEG" };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function toDataUrl(buf: ArrayBuffer, mime: string): string {
   const b64 = Buffer.from(buf).toString("base64");
@@ -97,7 +135,10 @@ async function tryLoadPublicStaticImage(sitePath: string): Promise<LogoImage | n
   return null;
 }
 
-export async function fetchImageAsLogo(origin: string, pathOrUrl: string | null | undefined): Promise<LogoImage | null> {
+export async function fetchImageAsLogo(
+  originArg: string | null | undefined,
+  pathOrUrl: string | null | undefined,
+): Promise<LogoImage | null> {
   if (!pathOrUrl?.trim()) return null;
   const trimmed = pathOrUrl.trim();
 
@@ -108,8 +149,10 @@ export async function fetchImageAsLogo(origin: string, pathOrUrl: string | null 
     const blobUrl = stripBrandingPrivateBlobPrefix(trimmed);
     const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
     if (!token) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const out = await get(blobUrl, { access: "private", token });
+      const out = await get(blobUrl, { access: "private", token, abortSignal: controller.signal });
       if (!out || out.statusCode !== 200 || !out.stream) return null;
       const buf = await new Response(out.stream).arrayBuffer();
       const rawMime = out.blob.contentType;
@@ -124,30 +167,26 @@ export async function fetchImageAsLogo(origin: string, pathOrUrl: string | null 
       return null;
     } catch {
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   const isHttp = trimmed.startsWith("http://") || trimmed.startsWith("https://");
-  if (!isHttp) {
-    const sitePath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-    const fromDisk = await tryLoadPublicStaticImage(sitePath);
-    if (fromDisk) return fromDisk;
+  if (isHttp) {
+    return fetchHttpImageAsLogo(trimmed);
   }
 
+  const sitePath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const fromDisk = await tryLoadPublicStaticImage(sitePath);
+  if (fromDisk) return fromDisk;
+
+  // Avoid loopback HTTP during PDF export — it can deadlock the dev server.
+  const origin = originArg?.trim();
+  if (!origin) return null;
+
   const url = resolvePublicAssetUrl(origin, trimmed);
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null;
-    const mime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
-    const buf = await res.arrayBuffer();
-    if (mime === "image/png") {
-      return { dataUrl: toDataUrl(buf, mime), format: "PNG" };
-    }
-    if (mime === "image/jpeg" || mime === "image/jpg") {
-      return { dataUrl: toDataUrl(buf, "image/jpeg"), format: "JPEG" };
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  if (isSameAppOrigin(url)) return null;
+
+  return fetchHttpImageAsLogo(url);
 }
