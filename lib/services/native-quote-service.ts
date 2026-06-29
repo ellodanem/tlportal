@@ -73,6 +73,47 @@ export async function createQuote(input: CreateQuoteInput): Promise<string> {
   return created.id;
 }
 
+/** Replace line items and totals on a draft quote. */
+export async function updateDraftQuote(quoteId: string, input: CreateQuoteInput): Promise<void> {
+  if (!input.lineItems.length) {
+    throw new Error("A quote needs at least one line item.");
+  }
+
+  const existing = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: { status: true },
+  });
+  if (!existing) throw new Error("Quote not found");
+  if (existing.status !== "draft") {
+    throw new Error("Only draft quotes can be edited.");
+  }
+
+  const currency = (input.currency ?? "XCD").toUpperCase();
+  const totals = computeDocumentTotals(input.lineItems, input.taxRatePercent ?? null);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.quoteLineItem.deleteMany({ where: { quoteId } });
+    await tx.quote.update({
+      where: { id: quoteId },
+      data: {
+        customerId: input.customerId ?? null,
+        billToName: input.billToName ?? null,
+        billToLines: input.billToLines ?? [],
+        currency,
+        subtotal: toMoneyString(totals.subtotal),
+        taxLabel: input.taxLabel ?? null,
+        taxRatePercent: input.taxRatePercent != null ? input.taxRatePercent.toFixed(2) : null,
+        taxTotal: toMoneyString(totals.taxTotal),
+        total: toMoneyString(totals.total),
+        issueDate: input.issueDate ?? new Date(),
+        validUntil: input.validUntil ?? null,
+        notes: input.notes ?? null,
+        lineItems: { create: lineCreateData(input.lineItems) },
+      },
+    });
+  });
+}
+
 /** Mark a quote sent: allocate `TL-Q-{n}`, mint a public token, set sentAt. Idempotent. */
 export async function markQuoteSent(quoteId: string): Promise<{ number: string; publicToken: string }> {
   return prisma.$transaction(async (tx) => {

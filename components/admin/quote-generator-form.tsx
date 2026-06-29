@@ -1,9 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 
-import { sendQuoteEmailAction, type SendQuoteEmailState } from "@/app/admin/quotes/actions";
+import {
+  saveQuoteAction,
+  sendQuoteEmailAction,
+  type SaveQuoteState,
+  type SendQuoteEmailState,
+} from "@/app/admin/quotes/actions";
 import { QuoteEmailPreviewDialog } from "@/components/admin/quote-email-preview-dialog";
 import {
   defaultQuoteEmailBody,
@@ -17,6 +23,20 @@ export type QuoteCustomerOption = {
   label: string;
   email: string | null;
   billToLines: string[];
+};
+
+export type QuoteFormInitial = {
+  quoteId: string;
+  status: string;
+  number: string | null;
+  customerId: string | null;
+  clientName: string;
+  quoteDate: string;
+  validUntil: string;
+  currency: string;
+  notes: string;
+  lines: { description: string; quantity: string; unitPrice: string }[];
+  convertedInvoiceId: string | null;
 };
 
 type LineRow = {
@@ -62,25 +82,35 @@ const DEFAULT_LINES: Omit<LineRow, "id">[] = [
 ];
 
 const initialSendState: SendQuoteEmailState = {};
+const initialSaveState: SaveQuoteState = {};
 
 export function QuoteGeneratorForm({
   customers,
-  defaultQuoteNumber,
+  initial,
+  readOnly = false,
 }: {
   customers: QuoteCustomerOption[];
-  defaultQuoteNumber: string;
+  initial?: QuoteFormInitial;
+  readOnly?: boolean;
 }) {
+  const router = useRouter();
   const lineIdRef = useRef(0);
-  const [customerId, setCustomerId] = useState("");
-  const [clientName, setClientName] = useState("");
-  const [quoteNumber, setQuoteNumber] = useState(defaultQuoteNumber);
-  const [quoteDate, setQuoteDate] = useState(todayDateInputValue);
-  const [validUntil, setValidUntil] = useState(() => addDaysToDateInput(todayDateInputValue(), 14));
-  const [currency, setCurrency] = useState("XCD");
-  const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<LineRow[]>(() =>
-    DEFAULT_LINES.map((row) => ({ ...row, id: lineIdRef.current++ })),
+  const quoteId = initial?.quoteId ?? "";
+  const assignedNumber = initial?.number ?? null;
+  const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
+  const [clientName, setClientName] = useState(initial?.clientName ?? "");
+  const [quoteDate, setQuoteDate] = useState(initial?.quoteDate ?? todayDateInputValue);
+  const [validUntil, setValidUntil] = useState(
+    initial?.validUntil ?? addDaysToDateInput(todayDateInputValue(), 14),
   );
+  const [currency, setCurrency] = useState(initial?.currency ?? "XCD");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [lines, setLines] = useState<LineRow[]>(() => {
+    const source = initial?.lines?.length
+      ? initial.lines
+      : DEFAULT_LINES;
+    return source.map((row) => ({ ...row, id: lineIdRef.current++ }));
+  });
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -92,13 +122,29 @@ export function QuoteGeneratorForm({
   const [emailBody, setEmailBody] = useState("");
   const [quotePayloadJson, setQuotePayloadJson] = useState("");
   const [sendState, sendAction] = useActionState(sendQuoteEmailAction, initialSendState);
+  const [saveState, saveAction] = useActionState(saveQuoteAction, initialSaveState);
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId) ?? null,
     [customers, customerId],
   );
 
-  const attachmentName = `quote-${quoteNumber.trim().replace(/[^\w.-]+/g, "_").slice(0, 40)}.pdf`;
+  const displayNumber = assignedNumber ?? "Draft";
+  const attachmentName = `quote-${displayNumber.replace(/[^\w.-]+/g, "_").slice(0, 40)}.pdf`;
+  const isConverted = Boolean(initial?.convertedInvoiceId);
+
+  useEffect(() => {
+    if (sendState.ok) {
+      router.refresh();
+    }
+  }, [sendState.ok, router]);
+
+  useEffect(() => {
+    if (saveState.ok && saveState.next) {
+      router.push(saveState.next);
+      router.refresh();
+    }
+  }, [saveState, router]);
 
   function addLine() {
     setLines((prev) => [...prev, { id: lineIdRef.current++, description: "", quantity: "1", unitPrice: "0" }]);
@@ -141,10 +187,6 @@ export function QuoteGeneratorForm({
       return { error: "Choose a customer or enter a client name." };
     }
 
-    if (!quoteNumber.trim()) {
-      return { error: "Quote number is required." };
-    }
-
     const greetingName =
       selectedCustomer?.label?.trim() || clientName.trim() || billToLines[0] || "there";
 
@@ -152,7 +194,7 @@ export function QuoteGeneratorForm({
       payload: {
         customerId: customerId || null,
         billToLines,
-        quoteNumber: quoteNumber.trim(),
+        quoteNumber: assignedNumber ?? "Draft",
         quoteDate,
         validUntil,
         currency,
@@ -173,15 +215,19 @@ export function QuoteGeneratorForm({
 
     setDownloading(true);
     try {
+      const useDbPdf = Boolean(quoteId && readOnly);
+      const url = useDbPdf ? `/api/admin/quotes/${quoteId}/pdf` : "/api/admin/quotes/pdf";
+      const init: RequestInit = useDbPdf
+        ? { method: "GET" }
+        : {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(built.payload),
+          };
+
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 45_000);
-
-      const res = await fetch("/api/admin/quotes/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(built.payload),
-        signal: controller.signal,
-      });
+      const res = await fetch(url, { ...init, signal: controller.signal });
       window.clearTimeout(timeout);
 
       if (!res.ok) {
@@ -197,17 +243,17 @@ export function QuoteGeneratorForm({
       }
 
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const disposition = res.headers.get("Content-Disposition") ?? "";
       const match = /filename="([^"]+)"/.exec(disposition);
-      a.href = url;
+      a.href = blobUrl;
       a.download = match?.[1] ?? attachmentName;
       a.style.display = "none";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("PDF generation timed out — try again or use fewer line items.");
@@ -220,6 +266,11 @@ export function QuoteGeneratorForm({
   }
 
   function openEmailPreview() {
+    if (!quoteId) {
+      setError("Save the draft first — emailing assigns a TL-Q number and stores the quote.");
+      return;
+    }
+
     const built = buildPayload();
     if ("error" in built) {
       setError(built.error);
@@ -243,14 +294,30 @@ export function QuoteGeneratorForm({
     setEmailOpen(true);
   }
 
+  function submitSaveDraft(formData: FormData) {
+    const built = buildPayload();
+    if ("error" in built) {
+      setError(built.error);
+      return;
+    }
+    setError(null);
+    formData.set("quotePayloadJson", JSON.stringify(built.payload));
+    if (quoteId) {
+      formData.set("quoteId", quoteId);
+    }
+    saveAction(formData);
+  }
+
+  const fieldsDisabled = readOnly || isConverted;
+
   return (
     <>
       <div className="flex max-w-3xl flex-col gap-5">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-sm text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-100">
-          <p className="font-medium">Works without Invoiless</p>
+          <p className="font-medium">Native TL quotes</p>
           <p className="mt-1 text-emerald-900/90 dark:text-emerald-200/90">
-            Fill in the client and line items, then download a PDF or email it to the customer. For full sales
-            proposals with visuals and terms, use{" "}
+            Save drafts in TL Portal, email with a TL-Q number, and convert to a native invoice. For full sales decks,
+            use{" "}
             <Link href="/admin/proposals/new" className="font-semibold underline underline-offset-2">
               Proposals
             </Link>
@@ -266,11 +333,12 @@ export function QuoteGeneratorForm({
             <select
               id="customerId"
               value={customerId}
+              disabled={fieldsDisabled}
               onChange={(e) => {
                 setCustomerId(e.target.value);
                 setClientName("");
               }}
-              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
             >
               <option value="">Select or enter name below…</option>
               {customers.map((c) => (
@@ -297,26 +365,21 @@ export function QuoteGeneratorForm({
                 id="clientName"
                 type="text"
                 value={clientName}
+                disabled={fieldsDisabled}
                 onChange={(e) => setClientName(e.target.value)}
                 placeholder="Company or contact name"
-                className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               />
             </div>
           ) : null}
 
           <div>
-            <label htmlFor="quoteNumber" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Quote number
-            </label>
-            <input
-              id="quoteNumber"
-              type="text"
-              required
-              maxLength={40}
-              value={quoteNumber}
-              onChange={(e) => setQuoteNumber(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-            />
+            <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Quote number</span>
+            <p className="mt-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200">
+              {assignedNumber ?? (
+                <span className="text-zinc-500 dark:text-zinc-400">Assigned when you email (TL-Q-…)</span>
+              )}
+            </p>
           </div>
 
           <div>
@@ -328,8 +391,9 @@ export function QuoteGeneratorForm({
               type="text"
               maxLength={8}
               value={currency}
+              disabled={fieldsDisabled}
               onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
             />
           </div>
 
@@ -342,8 +406,9 @@ export function QuoteGeneratorForm({
               type="date"
               required
               value={quoteDate}
+              disabled={fieldsDisabled}
               onChange={(e) => setQuoteDate(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
             />
           </div>
 
@@ -356,13 +421,14 @@ export function QuoteGeneratorForm({
               type="date"
               required
               value={validUntil}
+              disabled={fieldsDisabled}
               onChange={(e) => setValidUntil(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
             />
           </div>
         </div>
 
-        <fieldset className="min-w-0 border-0 p-0">
+        <fieldset className="min-w-0 border-0 p-0" disabled={fieldsDisabled}>
           <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Line items</legend>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             Default rows match typical fleet tracking quotes — adjust quantities and prices before sending.
@@ -377,7 +443,7 @@ export function QuoteGeneratorForm({
                   <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                     Line {index + 1}
                   </span>
-                  {lines.length > 1 ? (
+                  {lines.length > 1 && !fieldsDisabled ? (
                     <button
                       type="button"
                       onClick={() => removeLine(row.id)}
@@ -423,13 +489,15 @@ export function QuoteGeneratorForm({
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={addLine}
-            className="mt-3 rounded-lg border border-dashed border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:border-emerald-400 hover:text-emerald-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-emerald-600 dark:hover:text-emerald-300"
-          >
-            + Add line item
-          </button>
+          {!fieldsDisabled ? (
+            <button
+              type="button"
+              onClick={addLine}
+              className="mt-3 rounded-lg border border-dashed border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:border-emerald-400 hover:text-emerald-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-emerald-600 dark:hover:text-emerald-300"
+            >
+              + Add line item
+            </button>
+          ) : null}
         </fieldset>
 
         <div>
@@ -441,22 +509,39 @@ export function QuoteGeneratorForm({
             rows={3}
             maxLength={2000}
             value={notes}
+            disabled={fieldsDisabled}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Payment terms, deposit, travel assumptions… (included on the PDF, not in the email unless you add them in the preview)"
-            className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+            placeholder="Payment terms, deposit, travel assumptions…"
+            className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
           />
         </div>
 
-        {error ? (
+        {error || saveState.error ? (
           <p
             className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
             role="alert"
           >
-            {error}
+            {error ?? saveState.error}
+          </p>
+        ) : null}
+
+        {saveState.ok ? (
+          <p className="text-sm text-emerald-800 dark:text-emerald-300" role="status">
+            Quote saved.
           </p>
         ) : null}
 
         <div className="flex flex-wrap items-center gap-3">
+          {!fieldsDisabled ? (
+            <form action={submitSaveDraft}>
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              >
+                {quoteId ? "Save changes" : "Save draft"}
+              </button>
+            </form>
+          ) : null}
           <button
             type="button"
             onClick={handleDownload}
@@ -465,25 +550,28 @@ export function QuoteGeneratorForm({
           >
             {downloading ? "Generating…" : "Download PDF"}
           </button>
-          <button
-            type="button"
-            onClick={openEmailPreview}
-            className="rounded-lg border border-emerald-600 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50 dark:border-emerald-500 dark:bg-zinc-950 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
-          >
-            Email quote…
-          </button>
+          {!isConverted ? (
+            <button
+              type="button"
+              onClick={openEmailPreview}
+              className="rounded-lg border border-emerald-600 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50 dark:border-emerald-500 dark:bg-zinc-950 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
+            >
+              Email quote…
+            </button>
+          ) : null}
           <Link
-            href="/admin/invoices"
+            href="/admin/quotes"
             className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
-            Invoices
+            All quotes
           </Link>
         </div>
       </div>
 
       <QuoteEmailPreviewDialog
         open={emailOpen}
-        quoteNumber={quoteNumber.trim()}
+        quoteId={quoteId || undefined}
+        quoteNumber={displayNumber}
         attachmentName={attachmentName}
         to={emailTo}
         cc={emailCc}

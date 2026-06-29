@@ -62,10 +62,7 @@ export function parseQuoteRequestBody(body: unknown): { payload: QuoteRequestPay
   }
   const b = body as Record<string, unknown>;
 
-  const quoteNumber = String(b.quoteNumber ?? "").trim();
-  if (!quoteNumber) {
-    return { error: "Quote number is required." };
-  }
+  const quoteNumber = String(b.quoteNumber ?? "").trim() || "Draft";
 
   const quoteDateParsed = parseYmd(String(b.quoteDate ?? ""), "Quote date");
   if ("error" in quoteDateParsed) return quoteDateParsed;

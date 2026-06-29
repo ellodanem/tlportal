@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "react";
 
 const items = [
   {
-    href: "/admin/quotes",
-    label: "Quick quote",
+    href: "/admin/quotes/new",
+    label: "Quote",
     description: "Download a PDF estimate without Invoiless.",
   },
   {

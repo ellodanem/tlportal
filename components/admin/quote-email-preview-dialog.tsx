@@ -19,6 +19,7 @@ function SendButton() {
 
 export function QuoteEmailPreviewDialog({
   open,
+  quoteId,
   quoteNumber,
   attachmentName,
   to,
@@ -37,6 +38,7 @@ export function QuoteEmailPreviewDialog({
   onBack,
 }: {
   open: boolean;
+  quoteId?: string;
   quoteNumber: string;
   attachmentName: string;
   to: string;
@@ -74,6 +76,7 @@ export function QuoteEmailPreviewDialog({
 
         <form action={sendAction} className="mt-5 flex flex-col gap-4">
           <input type="hidden" name="quotePayloadJson" value={quotePayloadJson} />
+          {quoteId ? <input type="hidden" name="quoteId" value={quoteId} /> : null}
 
           <div>
             <label htmlFor="quote-email-to" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">

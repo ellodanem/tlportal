@@ -28,7 +28,7 @@ const links = [
   { href: "/admin", label: "Dashboard", Icon: IconNavDashboard },
   { href: "/admin/customers", label: "Customers", Icon: IconUsers },
   { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
-  { href: "/admin/quotes", label: "Quick quote", Icon: IconNavInvoice },
+  { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
   { href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast },
   { href: "/admin/invoices", label: "Invoices", Icon: IconNavInvoice },
   { href: "/admin/devices", label: "Devices", Icon: IconDevice },
