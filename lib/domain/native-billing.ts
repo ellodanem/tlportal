@@ -1,4 +1,4 @@
-import type { InvoiceKind, InvoiceStatus, PaymentMethod, QuoteStatus } from "@prisma/client";
+import type { InvoiceKind, InvoiceStatus, PaymentMethod, QuoteStatus, RecurringScheduleStatus } from "@prisma/client";
 
 /** Round to 2 decimal places, avoiding common float drift. */
 export function round2(n: number): number {
@@ -89,6 +89,19 @@ export const INVOICE_KIND_LABELS: Record<InvoiceKind, string> = {
   recurring: "Recurring",
   subscription_mirror: "Subscription",
 };
+
+export const RECURRING_SCHEDULE_STATUS_LABELS: Record<RecurringScheduleStatus, string> = {
+  active: "Active",
+  paused: "Paused",
+  ended: "Ended",
+};
+
+export const RECURRING_INTERVAL_MONTH_OPTIONS = [
+  { months: 1, label: "Monthly" },
+  { months: 3, label: "Quarterly (3 mo)" },
+  { months: 6, label: "Semi-annual (6 mo)" },
+  { months: 12, label: "Annual (12 mo)" },
+] as const;
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   stripe: "Stripe (card)",

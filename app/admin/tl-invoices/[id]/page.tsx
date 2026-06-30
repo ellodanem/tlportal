@@ -31,6 +31,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         lineItems: { orderBy: { sortOrder: "asc" } },
         payments: { where: { voidedAt: null }, orderBy: { receivedAt: "desc" } },
         sourceQuote: { select: { id: true, number: true } },
+        recurringSchedule: { select: { id: true, name: true, status: true } },
       },
     }),
     prisma.customer.findMany({
@@ -119,6 +120,20 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
             : ""}
         </p>
       </div>
+
+      {invoice.recurringSchedule ? (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+          <p className="font-medium text-zinc-900 dark:text-zinc-100">From recurring schedule</p>
+          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+            <Link
+              href={`/admin/recurring-invoices/${invoice.recurringSchedule.id}`}
+              className="text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              {invoice.recurringSchedule.name?.trim() || "Recurring schedule"}
+            </Link>
+          </p>
+        </div>
+      ) : null}
 
       {invoice.sourceQuote ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">

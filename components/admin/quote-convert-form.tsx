@@ -35,7 +35,7 @@ export function QuoteConvertForm({ quoteId }: { quoteId: string }) {
     <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Convert to native invoice</p>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Creates a draft invoice in TL Portal with the same line items — ready for cash/cheque billing in Phase 2.
+        Creates a draft TL invoice with the same line items — finalize and send from TL invoices.
       </p>
 
       <form action={action} className="mt-4 flex flex-wrap items-end gap-3">

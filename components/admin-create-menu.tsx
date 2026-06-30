@@ -15,6 +15,11 @@ const items = [
     description: "One-off invoice for cash, cheque, or bank payers.",
   },
   {
+    href: "/admin/recurring-invoices/new",
+    label: "Recurring schedule",
+    description: "Auto-bill cash/cheque customers on a monthly or quarterly cadence.",
+  },
+  {
     href: "/admin/proposals/new",
     label: "Proposal",
     description: "Start a sales proposal with default sections.",

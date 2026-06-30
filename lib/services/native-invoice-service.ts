@@ -29,6 +29,7 @@ export type CreateDraftInvoiceInput = {
   billToLines?: string[];
   currency?: string;
   kind?: InvoiceKind;
+  recurringScheduleId?: string | null;
   taxLabel?: string | null;
   taxRatePercent?: number | null;
   issueDate?: Date;
@@ -70,6 +71,7 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promis
       status: "draft",
       kind: input.kind ?? "one_off",
       customerId: input.customerId ?? null,
+      recurringScheduleId: input.recurringScheduleId ?? null,
       billToName: input.billToName ?? null,
       billToLines: input.billToLines ?? [],
       currency,

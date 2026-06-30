@@ -122,7 +122,7 @@ export async function convertQuoteToInvoiceAction(
     return {
       ok: true,
       invoiceId,
-      message: "Draft invoice created from this quote. Native invoicing UI ships in Phase 2.",
+      message: "Draft invoice created — open it under TL invoices to review and send.",
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not convert quote." };
