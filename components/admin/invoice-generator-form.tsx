@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import {
   markInvoiceSentAction,
@@ -66,6 +67,19 @@ const initialSend: SendInvoiceEmailState = {};
 const initialSave: SaveInvoiceState = {};
 const initialMarkSent: MarkInvoiceSentState = {};
 
+function SaveDraftButton({ hasInvoiceId }: { hasInvoiceId: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-lg border px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+    >
+      {pending ? "Saving…" : hasInvoiceId ? "Save changes" : "Save draft"}
+    </button>
+  );
+}
+
 export function InvoiceGeneratorForm({
   customers,
   initial,
@@ -81,7 +95,7 @@ export function InvoiceGeneratorForm({
 }) {
   const router = useRouter();
   const lineIdRef = useRef(0);
-  const invoiceId = initial?.invoiceId ?? "";
+  const [invoiceId, setInvoiceId] = useState(initial?.invoiceId ?? "");
   const assignedNumber = initial?.number ?? null;
 
   const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
@@ -124,9 +138,24 @@ export function InvoiceGeneratorForm({
   const fieldsDisabled = readOnly || isVoid;
 
   useEffect(() => {
+    if (initial?.invoiceId) {
+      setInvoiceId(initial.invoiceId);
+    }
+  }, [initial?.invoiceId]);
+
+  useEffect(() => {
+    if (saveState.ok && saveState.invoiceId) {
+      setInvoiceId(saveState.invoiceId);
+    }
+  }, [saveState.ok, saveState.invoiceId]);
+
+  useEffect(() => {
     if (saveState.ok && saveState.next) {
-      router.push(saveState.next);
-      router.refresh();
+      if (saveState.next !== window.location.pathname) {
+        router.push(saveState.next);
+      } else {
+        router.refresh();
+      }
     }
   }, [saveState, router]);
 
@@ -245,8 +274,11 @@ export function InvoiceGeneratorForm({
       setError(built.error);
       return;
     }
+    setError(null);
     formData.set("invoicePayloadJson", JSON.stringify(built.payload));
-    if (invoiceId) formData.set("invoiceId", invoiceId);
+    if (invoiceId) {
+      formData.set("invoiceId", invoiceId);
+    }
     saveAction(formData);
   }
 
@@ -502,13 +534,13 @@ export function InvoiceGeneratorForm({
         <div className="flex flex-wrap gap-3">
           {!fieldsDisabled ? (
             <form action={submitSave}>
-              <button type="submit" className="rounded-lg border px-5 py-2.5 text-sm font-semibold">
-                {invoiceId ? "Save changes" : "Save draft"}
-              </button>
+              {invoiceId ? <input type="hidden" name="invoiceId" value={invoiceId} /> : null}
+              <SaveDraftButton hasInvoiceId={Boolean(invoiceId)} />
             </form>
           ) : null}
           {invoiceId && !fieldsDisabled ? (
             <form action={submitMarkSent}>
+              <input type="hidden" name="invoiceId" value={invoiceId} />
               <button
                 type="submit"
                 className="rounded-lg border border-zinc-400 bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-200 dark:border-zinc-500 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
