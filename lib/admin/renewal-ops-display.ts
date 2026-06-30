@@ -3,10 +3,13 @@ import { opsUrgencyFromNextDueDate, opsUrgencyRank, type OpsUrgency } from "@/li
 export type RenewalOpsRowInput = {
   id: string;
   nextDueDate: string | null;
+  status?: string;
 };
 
 export type RenewalOpsCounts = {
   total: number;
+  active: number;
+  paused: number;
   overdue: number;
   dueSoon: number;
   ok: number;
@@ -20,12 +23,19 @@ export function renewalRowUrgency(nextDueDate: string | null): OpsUrgency {
 export function countRenewalOps(rows: RenewalOpsRowInput[]): RenewalOpsCounts {
   const counts: RenewalOpsCounts = {
     total: rows.length,
+    active: 0,
+    paused: 0,
     overdue: 0,
     dueSoon: 0,
     ok: 0,
     unknown: 0,
   };
   for (const row of rows) {
+    if (row.status === "suspended") {
+      counts.paused += 1;
+      continue;
+    }
+    counts.active += 1;
     const u = renewalRowUrgency(row.nextDueDate);
     if (u === "overdue") counts.overdue += 1;
     else if (u === "due_soon") counts.dueSoon += 1;
@@ -48,6 +58,7 @@ export function sortRenewalRowsByUrgency<T extends RenewalOpsRowInput>(rows: T[]
 
 export function priorityRenewalRows<T extends RenewalOpsRowInput>(rows: T[], max = 5): T[] {
   const urgent = sortRenewalRowsByUrgency(rows).filter((r) => {
+    if (r.status === "suspended") return false;
     const u = renewalRowUrgency(r.nextDueDate);
     return u === "overdue" || u === "due_soon";
   });
@@ -55,7 +66,16 @@ export function priorityRenewalRows<T extends RenewalOpsRowInput>(rows: T[], max
 }
 
 export function renewalOpsSummaryLabel(counts: RenewalOpsCounts): string {
-  const parts: string[] = [`${counts.total} active`];
+  const parts: string[] = [];
+  if (counts.active > 0) {
+    parts.push(`${counts.active} active`);
+  }
+  if (counts.paused > 0) {
+    parts.push(`${counts.paused} paused`);
+  }
+  if (parts.length === 0) {
+    parts.push(`${counts.total} device${counts.total === 1 ? "" : "s"}`);
+  }
   if (counts.overdue > 0) {
     parts.push(`${counts.overdue} overdue`);
   }

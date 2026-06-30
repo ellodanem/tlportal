@@ -17,6 +17,7 @@ export type CustomerTableDeviceRow = {
   imei: string;
   nextDueDate: string | null;
   urgency: OpsUrgency;
+  status: ServiceAssignmentStatus;
 };
 
 type CustomerWithAssignments = {
@@ -51,8 +52,10 @@ function deviceFriendlyLabel(label: string | null | undefined, imei: string): st
 export function buildCustomerTableRows(customers: CustomerWithAssignments[]): CustomerTableRow[] {
   const rows: CustomerTableRow[] = customers.map((c) => {
     const open = c.serviceAssignments.filter((a) => a.endDate == null && a.status !== "cancelled");
+    const billable = open.filter((a) => a.status === "active");
+    const paused = open.filter((a) => a.status === "suspended");
     const distinctDevices = new Set(open.map((a) => a.deviceId)).size;
-    const nextDue = earliestNextDue(open);
+    const nextDue = earliestNextDue(billable);
     const stripeAccount = c.billingAccounts.find((a) => a.provider === "stripe");
     const invoilessAccount = c.billingAccounts.find((a) => a.provider === "invoiless");
     const invoilessLinked = Boolean(c.invoilessCustomerId || invoilessAccount?.externalCustomerId);
@@ -62,7 +65,8 @@ export function buildCustomerTableRows(customers: CustomerWithAssignments[]): Cu
       deviceLabel: deviceFriendlyLabel(a.device.label, a.device.imei),
       imei: a.device.imei,
       nextDueDate: a.nextDueDate?.toISOString() ?? null,
-      urgency: opsUrgencyFromNextDueDate(a.nextDueDate),
+      urgency: a.status === "suspended" ? "unknown" : opsUrgencyFromNextDueDate(a.nextDueDate),
+      status: a.status,
     }));
     return {
       id: c.id,
@@ -70,7 +74,8 @@ export function buildCustomerTableRows(customers: CustomerWithAssignments[]): Cu
       initials: customerInitials(c),
       subtitle: c.email?.trim() || c.phone?.trim() || "—",
       tagsLine: tagsPreview(c.tags),
-      activeServices: open.length,
+      activeServices: billable.length,
+      pausedServices: paused.length,
       distinctDevices,
       devices,
       nextDue,

@@ -7,7 +7,15 @@ import { getSession } from "@/lib/auth/get-session";
 import { parseDeviceObjectType } from "@/lib/admin/device-object-type";
 import { parseDeviceTagsInput, parseDeviceUsagePurpose } from "@/lib/admin/device-usage-purpose";
 import { prisma } from "@/lib/db";
+import {
+  parseServicePauseDisposition,
+  parseServicePauseReason,
+} from "@/lib/domain/service-pause";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import {
+  pauseServiceAssignment,
+  resumeServiceAssignment,
+} from "@/lib/services/service-pause-service";
 import { parseSubscriptionIntervalMonths } from "@/lib/subscription-options/display";
 
 import type { DeviceFormActionState } from "./device-form-state";
@@ -709,4 +717,147 @@ export async function updateDeviceLinkedSim(
     revalidatePath(`/admin/customers/${assignment.customerId}`);
   }
   return { error: null, next: `/admin/devices/${deviceId}/edit` };
+}
+
+function revalidateAfterServicePause(customerId: string, deviceId: string, simCardId: string | null) {
+  revalidatePath("/admin");
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${deviceId}/edit`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  if (simCardId) {
+    revalidatePath(`/admin/sims/${simCardId}`);
+  }
+}
+
+function stripePauseNotice(billingMode: string): string | null {
+  if (billingMode !== "stripe_subscription") {
+    return null;
+  }
+  return "Service paused in TL Portal. If this customer pays by card, pause the Stripe subscription or set vehicle quantity to 0 until they reinstall.";
+}
+
+/**
+ * Pause live service (accident, no vehicle, etc.) while keeping the customer link.
+ */
+export async function pauseServiceAssignmentAction(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  const reasonRaw = String(formData.get("pauseReason") ?? "").trim();
+  const note = String(formData.get("pauseNote") ?? "").trim();
+  const dispositionRaw = String(formData.get("deviceDisposition") ?? "returned").trim();
+
+  if (!assignmentId || !deviceId) {
+    return { error: "Missing assignment or device." };
+  }
+
+  const reason = parseServicePauseReason(reasonRaw);
+  if (!reason) {
+    return { error: "Select a pause reason." };
+  }
+
+  const deviceDisposition = parseServicePauseDisposition(dispositionRaw);
+  if (!deviceDisposition) {
+    return { error: "Select a hardware disposition." };
+  }
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: { id: assignmentId, deviceId },
+    select: {
+      customer: { select: { billingMode: true } },
+      device: { select: { simCardId: true } },
+    },
+  });
+  if (!assignment) {
+    return { error: "Assignment not found for this device." };
+  }
+
+  const result = await pauseServiceAssignment({
+    assignmentId,
+    reason,
+    note: note || null,
+    deviceDisposition,
+    actorUserId: session.sub,
+  });
+
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  revalidateAfterServicePause(result.customerId, result.deviceId, assignment.device.simCardId);
+
+  const stripeNotice = stripePauseNotice(assignment.customer.billingMode);
+  const scheduleNote =
+    result.pausedRecurringSchedules > 0
+      ? ` Paused ${result.pausedRecurringSchedules} recurring invoice schedule(s).`
+      : "";
+
+  return {
+    error: null,
+    message: `Service paused.${scheduleNote}${stripeNotice ? ` ${stripeNotice}` : ""}`,
+  };
+}
+
+/**
+ * Resume a paused service assignment when the customer is ready to go live again.
+ */
+export async function resumeServiceAssignmentAction(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+
+  if (!assignmentId || !deviceId) {
+    return { error: "Missing assignment or device." };
+  }
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: { id: assignmentId, deviceId },
+    select: {
+      customer: { select: { billingMode: true } },
+      device: { select: { simCardId: true } },
+    },
+  });
+  if (!assignment) {
+    return { error: "Assignment not found for this device." };
+  }
+
+  const result = await resumeServiceAssignment({
+    assignmentId,
+    actorUserId: session.sub,
+  });
+
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  revalidateAfterServicePause(result.customerId, result.deviceId, assignment.device.simCardId);
+
+  const stripeNotice =
+    assignment.customer.billingMode === "stripe_subscription"
+      ? " If this customer pays by card, resume billing or restore vehicle quantity in Stripe."
+      : null;
+
+  const dueLabel = result.restoredNextDue
+    ? ` Next due restored to ${result.restoredNextDue.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}.`
+    : "";
+
+  return {
+    error: null,
+    message: `Service resumed.${dueLabel}${stripeNotice ?? ""}`,
+  };
 }

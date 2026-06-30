@@ -31,8 +31,9 @@ export function DeviceUnassignForm({ deviceId }: { deviceId: string }) {
         Remove from customer
       </h3>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Ends the active service, sets the device to <strong className="font-medium text-zinc-800 dark:text-zinc-200">in stock</strong>, and
-        keeps history on the customer. Use when hardware is removed or moved before re-assigning elsewhere.
+        Permanently ends service, sets the device to <strong className="font-medium text-zinc-800 dark:text-zinc-200">in stock</strong>, and
+        keeps history on the customer. For a temporary break (accident, no vehicle), use{" "}
+        <strong className="font-medium text-zinc-800 dark:text-zinc-200">Pause service</strong> instead.
       </p>
       {state.error ? (
         <p

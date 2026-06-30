@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { DeviceAssignToCustomerForm } from "@/components/admin/device-assign-customer-form";
 import { DeviceCommercialEditForm } from "@/components/admin/device-commercial-edit-form";
 import { DeviceGpsLinkForm } from "@/components/admin/device-gps-link-form";
+import { DevicePauseServiceForm } from "@/components/admin/device-pause-service-form";
+import { DeviceResumeServiceForm } from "@/components/admin/device-resume-service-form";
 import { DeviceSimEditSection } from "@/components/admin/device-sim-edit-section";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-service-assignment-edit-form";
@@ -12,6 +14,7 @@ import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { fetchSimsAvailableForDeviceSwap } from "@/lib/admin/sims-available-for-device";
+import { SERVICE_PAUSE_REASON_LABEL } from "@/lib/domain/service-pause";
 import { getGpsLink, resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { prisma } from "@/lib/db";
 
@@ -45,9 +48,14 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
       select: {
         id: true,
         customerId: true,
+        status: true,
         intervalMonths: true,
         startDate: true,
         nextDueDate: true,
+        frozenNextDueDate: true,
+        pausedAt: true,
+        pauseReason: true,
+        pauseNote: true,
         invoilessRecurringId: true,
         updatedAt: true,
         customer: {
@@ -57,6 +65,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
             firstName: true,
             lastName: true,
             traqcareClientId: true,
+            billingMode: true,
           },
         },
       },
@@ -73,6 +82,7 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
   const customers = customerRows.map((c) => ({ id: c.id, label: customerDisplayName(c) }));
   const canAssign =
     !openAssignment && device.status !== "decommissioned" && device.status !== "lost";
+  const isPaused = openAssignment?.status === "suspended";
 
   const openTrackingUrl = gpsLink
     ? resolveGpsPortalUrl(gpsLink)
@@ -105,7 +115,9 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
           id="active-service"
           className="scroll-mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
         >
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Active service</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            {isPaused ? "Paused service" : "Active service"}
+          </h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             Customer{" "}
             <Link
@@ -114,27 +126,78 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
             >
               {customerDisplayName(openAssignment.customer)}
             </Link>
-            . Set billing term and dates for this assignment below.
+            {isPaused ? (
+              <>
+                . Service is paused — renewal reminders are off until you resume.
+              </>
+            ) : (
+              <>. Set billing term and dates for this assignment below.</>
+            )}
           </p>
-          <div className="mt-4">
-            <DeviceServiceAssignmentEditForm
-              key={`${openAssignment.id}-${openAssignment.updatedAt.toISOString()}`}
-              deviceId={device.id}
-              assignmentId={openAssignment.id}
-              defaultIntervalMonths={openAssignment.intervalMonths}
-              defaultStartDate={dateInputValue(openAssignment.startDate)}
-              defaultNextDueDate={dateInputValue(openAssignment.nextDueDate)}
-              defaultInvoilessRecurringId={openAssignment.invoilessRecurringId ?? ""}
-            />
-            <MarkAssignmentPaidForm
-              key={`paid-${openAssignment.id}-${openAssignment.intervalMonths ?? "x"}-${openAssignment.updatedAt.toISOString()}`}
-              assignmentId={openAssignment.id}
-              customerId={openAssignment.customerId}
-              deviceId={device.id}
-              intervalMonths={openAssignment.intervalMonths}
-              nextDueDate={openAssignment.nextDueDate}
-            />
-          </div>
+
+          {isPaused ? (
+            <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-950/40">
+              {openAssignment.pauseReason ? (
+                <p className="text-zinc-800 dark:text-zinc-200">
+                  <span className="font-medium">Reason:</span>{" "}
+                  {SERVICE_PAUSE_REASON_LABEL[openAssignment.pauseReason]}
+                </p>
+              ) : null}
+              {openAssignment.pausedAt ? (
+                <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                  Paused{" "}
+                  {openAssignment.pausedAt.toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </p>
+              ) : null}
+              {openAssignment.pauseNote ? (
+                <p className="mt-2 text-zinc-600 dark:text-zinc-400">{openAssignment.pauseNote}</p>
+              ) : null}
+              {openAssignment.frozenNextDueDate ? (
+                <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+                  Next due frozen at{" "}
+                  {openAssignment.frozenNextDueDate.toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </p>
+              ) : null}
+              <DeviceResumeServiceForm
+                deviceId={device.id}
+                assignmentId={openAssignment.id}
+                billingMode={openAssignment.customer.billingMode}
+              />
+            </div>
+          ) : (
+            <div className="mt-4">
+              <DeviceServiceAssignmentEditForm
+                key={`${openAssignment.id}-${openAssignment.updatedAt.toISOString()}`}
+                deviceId={device.id}
+                assignmentId={openAssignment.id}
+                defaultIntervalMonths={openAssignment.intervalMonths}
+                defaultStartDate={dateInputValue(openAssignment.startDate)}
+                defaultNextDueDate={dateInputValue(openAssignment.nextDueDate)}
+                defaultInvoilessRecurringId={openAssignment.invoilessRecurringId ?? ""}
+              />
+              <MarkAssignmentPaidForm
+                key={`paid-${openAssignment.id}-${openAssignment.intervalMonths ?? "x"}-${openAssignment.updatedAt.toISOString()}`}
+                assignmentId={openAssignment.id}
+                customerId={openAssignment.customerId}
+                deviceId={device.id}
+                intervalMonths={openAssignment.intervalMonths}
+                nextDueDate={openAssignment.nextDueDate}
+              />
+              <DevicePauseServiceForm
+                deviceId={device.id}
+                assignmentId={openAssignment.id}
+                billingMode={openAssignment.customer.billingMode}
+              />
+            </div>
+          )}
           {device.status !== "decommissioned" && device.status !== "lost" ? (
             <DeviceUnassignForm deviceId={device.id} />
           ) : null}

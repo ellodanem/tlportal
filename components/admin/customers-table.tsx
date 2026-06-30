@@ -14,6 +14,7 @@ export type CustomerTableRow = {
   subtitle: string;
   tagsLine: string | null;
   activeServices: number;
+  pausedServices: number;
   distinctDevices: number;
   devices: CustomerTableDeviceRow[];
   nextDue: Date | null;
@@ -216,6 +217,11 @@ export function CustomersTable({
                 </td>
                 <td className="hidden align-top px-4 py-4 md:table-cell">
                   <span className="block font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{r.activeServices}</span>
+                  {r.pausedServices > 0 ? (
+                    <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                      {r.pausedServices} paused
+                    </span>
+                  ) : null}
                   <div className="mt-1">
                     <CustomerServicesExpand customerId={r.id} billingMode={r.billingMode} devices={r.devices} />
                   </div>

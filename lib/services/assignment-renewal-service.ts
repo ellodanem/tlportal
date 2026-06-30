@@ -3,6 +3,7 @@ import "server-only";
 import type { ServiceAssignment } from "@prisma/client";
 
 import { addCalendarMonths, formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
+import { billableAssignmentWhere, openAssignmentWhere } from "@/lib/domain/service-assignment-queries";
 import { prisma } from "@/lib/db";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
@@ -33,11 +34,10 @@ export type MarkAssignmentPeriodPaidResult =
     }
   | { ok: false; error: string };
 
-function activeAssignmentWhere(assignmentId: string) {
+function billableAssignmentWhereById(assignmentId: string) {
   return {
     id: assignmentId,
-    endDate: null,
-    status: { not: "cancelled" as const },
+    ...billableAssignmentWhere,
   };
 }
 
@@ -83,7 +83,7 @@ export async function markAssignmentPeriodPaid(
   input: MarkAssignmentPeriodPaidInput,
 ): Promise<MarkAssignmentPeriodPaidResult> {
   const assignment = await prisma.serviceAssignment.findFirst({
-    where: activeAssignmentWhere(input.assignmentId),
+    where: billableAssignmentWhereById(input.assignmentId),
     include: {
       device: { select: { id: true, imei: true, label: true } },
       customer: { select: { id: true, billingMode: true } },
@@ -191,8 +191,7 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
   const assignments = await prisma.serviceAssignment.findMany({
     where: {
       customerId,
-      endDate: null,
-      status: { not: "cancelled" },
+      ...billableAssignmentWhere,
     },
     select: { id: true },
   });
@@ -239,7 +238,7 @@ export async function updateAssignmentNextDue(
   input: UpdateAssignmentNextDueInput,
 ): Promise<UpdateAssignmentNextDueResult> {
   const assignment = await prisma.serviceAssignment.findFirst({
-    where: activeAssignmentWhere(input.assignmentId),
+    where: billableAssignmentWhereById(input.assignmentId),
     select: { id: true, customerId: true, deviceId: true, nextDueDate: true },
   });
 
@@ -280,7 +279,7 @@ export async function updateAssignmentIntervalMonths(
   input: UpdateAssignmentIntervalMonthsInput,
 ): Promise<UpdateAssignmentIntervalMonthsResult> {
   const assignment = await prisma.serviceAssignment.findFirst({
-    where: activeAssignmentWhere(input.assignmentId),
+    where: billableAssignmentWhereById(input.assignmentId),
     select: { id: true, customerId: true, deviceId: true, intervalMonths: true },
   });
 
@@ -306,8 +305,28 @@ export async function listActiveAssignmentsForRenewal(customerId: string) {
   return prisma.serviceAssignment.findMany({
     where: {
       customerId,
-      endDate: null,
-      status: { not: "cancelled" },
+      ...openAssignmentWhere,
+    },
+    orderBy: [{ nextDueDate: "asc" }, { createdAt: "asc" }],
+    include: {
+      device: {
+        select: {
+          id: true,
+          imei: true,
+          label: true,
+          objectType: true,
+        },
+      },
+    },
+  });
+}
+
+/** Billable assignments only — bulk mark paid, Stripe advance, vehicle count. */
+export async function listBillableAssignmentsForRenewal(customerId: string) {
+  return prisma.serviceAssignment.findMany({
+    where: {
+      customerId,
+      ...billableAssignmentWhere,
     },
     orderBy: [{ nextDueDate: "asc" }, { createdAt: "asc" }],
     include: {

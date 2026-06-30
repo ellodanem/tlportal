@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/lib/auth/get-session";
 import {
-  listActiveAssignmentsForRenewal,
+  listBillableAssignmentsForRenewal,
   markAssignmentPeriodPaid,
   updateAssignmentIntervalMonths,
   updateAssignmentNextDue,
@@ -89,7 +89,7 @@ export async function updateAllCustomerAssignmentsNextDueAction(
     return { error: "Missing customer id." };
   }
 
-  const assignments = await listActiveAssignmentsForRenewal(customerId);
+  const assignments = await listBillableAssignmentsForRenewal(customerId);
   if (assignments.length === 0) {
     return { error: "No active device assignments to update." };
   }
@@ -181,7 +181,7 @@ export async function updateAllCustomerAssignmentsBillingTermAction(
     return { error: "Missing customer id." };
   }
 
-  const assignments = await listActiveAssignmentsForRenewal(customerId);
+  const assignments = await listBillableAssignmentsForRenewal(customerId);
   if (assignments.length === 0) {
     return { error: "No active device assignments to update." };
   }
@@ -285,7 +285,7 @@ export async function markAllCustomerAssignmentsPaidAction(
     return { error: "Missing customer id." };
   }
 
-  const assignments = await listActiveAssignmentsForRenewal(customerId);
+  const assignments = await listBillableAssignmentsForRenewal(customerId);
 
   if (assignments.length === 0) {
     return { error: "No active device assignments to update." };
