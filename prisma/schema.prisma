@@ -645,6 +645,9 @@ model BillingInvoice {
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
+  /// Unified AR row in native `Invoice` (Phase 4).
+  nativeMirror Invoice?
+
   @@unique([provider, externalInvoiceId])
   @@index([customerId, createdAt(sort: Desc)])
   @@index([status])
@@ -957,6 +960,9 @@ model Invoice {
   /// Recurring schedule that generated this invoice (when kind = recurring).
   recurringScheduleId String?
   recurringSchedule   RecurringInvoiceSchedule? @relation("ScheduleGeneratedInvoices", fields: [recurringScheduleId], references: [id], onDelete: SetNull)
+  /// Stripe `BillingInvoice` mirror row (when kind = subscription_mirror).
+  billingInvoiceId String?        @unique
+  billingInvoice   BillingInvoice? @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)
 
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)

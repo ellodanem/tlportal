@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { customerDisplayName } from "@/lib/admin/customer-display";
-import { formatMoney, INVOICE_STATUS_LABELS } from "@/lib/domain/native-billing";
+import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
 
 function invoiceClientLabel(row: {
@@ -20,6 +20,7 @@ export default async function AdminTlInvoicesPage() {
     select: {
       id: true,
       number: true,
+      kind: true,
       status: true,
       billToName: true,
       total: true,
@@ -45,8 +46,8 @@ export default async function AdminTlInvoicesPage() {
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">TL invoices</h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-            Native one-off invoices with TL-INV numbering — cash, cheque, and bank payers. Replaces Invoiless for new
-            one-offs; card subscriptions still run through Stripe.
+            Unified AR — one-off and recurring TL invoices plus Stripe subscription mirrors. Cash/cheque payers use
+            native invoices; card subscriptions sync from Stripe automatically.
           </p>
         </div>
         <Link
@@ -68,6 +69,7 @@ export default async function AdminTlInvoicesPage() {
             <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-950 dark:text-zinc-400">
               <tr>
                 <th className="px-4 py-3">Number</th>
+                <th className="px-4 py-3">Kind</th>
                 <th className="px-4 py-3">Client</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Total</th>
@@ -80,6 +82,7 @@ export default async function AdminTlInvoicesPage() {
               {invoices.map((inv) => (
                 <tr key={inv.id} className="text-zinc-800 dark:text-zinc-200">
                   <td className="px-4 py-3 font-medium">{inv.number ?? "Draft"}</td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{INVOICE_KIND_LABELS[inv.kind]}</td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{invoiceClientLabel(inv)}</td>
                   <td className="px-4 py-3">{INVOICE_STATUS_LABELS[inv.status]}</td>
                   <td className="px-4 py-3 tabular-nums">{formatMoney(Number(inv.total), inv.currency)}</td>

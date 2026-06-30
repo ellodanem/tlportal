@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { StripeSubscriptionInvoicePanel } from "@/components/admin/stripe-subscription-invoice-panel";
 import {
   InvoiceGeneratorForm,
   type InvoiceCustomerOption,
@@ -10,7 +11,7 @@ import { InvoicePaymentForm, InvoiceVoidForm } from "@/components/admin/invoice-
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
-import { formatMoney, INVOICE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/domain/native-billing";
+import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
 
@@ -32,6 +33,16 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         payments: { where: { voidedAt: null }, orderBy: { receivedAt: "desc" } },
         sourceQuote: { select: { id: true, number: true } },
         recurringSchedule: { select: { id: true, name: true, status: true } },
+        billingInvoice: {
+          select: {
+            id: true,
+            externalInvoiceId: true,
+            providerInvoiceNumber: true,
+            hostedInvoiceUrl: true,
+            invoicePdfUrl: true,
+            customerId: true,
+          },
+        },
       },
     }),
     prisma.customer.findMany({
@@ -82,16 +93,19 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
     })),
   };
 
-  const readOnly = invoice.status !== "draft";
+  const isStripeMirror = invoice.kind === "subscription_mirror";
+  const readOnly = invoice.status !== "draft" || isStripeMirror;
   const publicPayUrl =
-    invoice.publicToken && invoice.status !== "draft"
+    !isStripeMirror && invoice.publicToken && invoice.status !== "draft"
       ? `${getAppBaseUrl()}/pay/i/${invoice.publicToken}`
       : null;
 
   const canRecordPayment =
-    invoice.status === "open" || invoice.status === "partially_paid" || invoice.status === "overdue";
+    !isStripeMirror &&
+    (invoice.status === "open" || invoice.status === "partially_paid" || invoice.status === "overdue");
   const canVoid =
-    invoice.status === "draft" || invoice.status === "open" || invoice.status === "partially_paid";
+    !isStripeMirror &&
+    (invoice.status === "draft" || invoice.status === "open" || invoice.status === "partially_paid");
 
   return (
     <div className="flex flex-col gap-8">
@@ -109,6 +123,9 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
           <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {INVOICE_STATUS_LABELS[invoice.status]}
           </span>
+          <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            {INVOICE_KIND_LABELS[invoice.kind]}
+          </span>
         </div>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Total {formatMoney(Number(invoice.total), invoice.currency)}
@@ -120,6 +137,17 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
             : ""}
         </p>
       </div>
+
+      {invoice.billingInvoice ? (
+        <StripeSubscriptionInvoicePanel
+          billingInvoiceId={invoice.billingInvoice.id}
+          customerId={invoice.billingInvoice.customerId}
+          hostedInvoiceUrl={invoice.billingInvoice.hostedInvoiceUrl}
+          invoicePdfUrl={invoice.billingInvoice.invoicePdfUrl}
+          stripeExternalId={invoice.billingInvoice.externalInvoiceId}
+          providerInvoiceNumber={invoice.billingInvoice.providerInvoiceNumber}
+        />
+      ) : null}
 
       {invoice.recurringSchedule ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
@@ -175,12 +203,28 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
 
       {canVoid ? <InvoiceVoidForm invoiceId={invoice.id} /> : null}
 
-      <InvoiceGeneratorForm
-        customers={customerOptions}
-        initial={initial}
-        readOnly={readOnly}
-        publicPayUrl={publicPayUrl}
-      />
+      {!isStripeMirror ? (
+        <InvoiceGeneratorForm
+          customers={customerOptions}
+          initial={initial}
+          readOnly={readOnly}
+          publicPayUrl={publicPayUrl}
+        />
+      ) : (
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="font-medium">Line items</p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {invoice.lineItems.map((line) => (
+              <li key={line.id} className="flex justify-between gap-4">
+                <span>{line.description}</span>
+                <span className="tabular-nums">
+                  {formatMoney(Number(line.lineTotal), invoice.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

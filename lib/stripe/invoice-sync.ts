@@ -6,6 +6,7 @@ import type Stripe from "stripe";
 
 import { ensureBillingInvoiceDisplayNumber } from "@/lib/billing/invoice-display-number";
 import { prisma } from "@/lib/db";
+import { syncBillingInvoiceToNativeMirror } from "@/lib/services/stripe-native-invoice-mirror-service";
 
 import { getStripeClient } from "./config";
 
@@ -114,6 +115,12 @@ export async function syncStripeInvoiceToDatabase(
 
   if (invoice.status === "open" || invoice.status === "paid") {
     await ensureBillingInvoiceDisplayNumber(row.id);
+  }
+
+  try {
+    await syncBillingInvoiceToNativeMirror(row.id);
+  } catch (e) {
+    console.error("[stripe invoice-sync] native AR mirror failed", e);
   }
 
   return { customerId, invoiceId: row.id };
