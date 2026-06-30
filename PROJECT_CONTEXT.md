@@ -2487,3 +2487,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-06-30 23:33 UTC — commit `df01876`
+
+- feat(ops): add service pause and resume for offline devices
+
+
+### 2026-06-30 23:33 UTC — pre-push (`main` → origin) @ `df01876`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:34 UTC — commit `bc497cd`
+
+- fix(billing): add allowOnlinePayment to Invoice schema
+
+
+### 2026-06-30 23:34 UTC — pre-push (`main` → origin) @ `bc497cd`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
