@@ -1,12 +1,10 @@
 import "server-only";
 
-import { getBrandingLogoStored } from "@/lib/branding/app-settings";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
 import type { QuoteRequestPayload } from "@/lib/billing/quote-payload";
 import { buildQuotePdfBuffer } from "@/lib/billing/quote-pdf";
 import { prisma } from "@/lib/db";
-import { fetchImageAsLogo } from "@/lib/proposals/fetch-image";
-import { resolveProposalHeaderLogoStored } from "@/lib/proposals/proposal-cover-assets";
+import { loadPdfHeaderLogo } from "@/lib/proposals/pdf-header-logo";
 
 export type BuiltQuotePdf = {
   buffer: Buffer;
@@ -58,8 +56,7 @@ export async function buildQuotePdfFromPayload(payload: QuoteRequestPayload): Pr
     return resolved;
   }
 
-  const brandingStored = await getBrandingLogoStored();
-  const headerLogo = await fetchImageAsLogo(null, resolveProposalHeaderLogoStored(brandingStored));
+  const headerLogo = await loadPdfHeaderLogo();
 
   const buffer = buildQuotePdfBuffer({
     quoteNumber: payload.quoteNumber,

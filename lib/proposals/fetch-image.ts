@@ -36,6 +36,7 @@ async function fetchHttpImageAsLogo(url: string): Promise<LogoImage | null> {
     if (!res.ok) return null;
     const mime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
     const buf = await res.arrayBuffer();
+    if (buf.byteLength > 12_000_000) return null;
     if (mime === "image/png") {
       return { dataUrl: toDataUrl(buf, mime), format: "PNG" };
     }
@@ -114,6 +115,7 @@ async function tryLoadPublicStaticImage(sitePath: string): Promise<LogoImage | n
       continue;
     }
     if (!st.isFile()) continue;
+    if (st.size > 12_000_000) continue;
 
     const ext = path.extname(abs).toLowerCase();
     const mime =
@@ -155,6 +157,7 @@ export async function fetchImageAsLogo(
       const out = await get(blobUrl, { access: "private", token, abortSignal: controller.signal });
       if (!out || out.statusCode !== 200 || !out.stream) return null;
       const buf = await new Response(out.stream).arrayBuffer();
+      if (buf.byteLength > 12_000_000) return null;
       const rawMime = out.blob.contentType;
       if (!rawMime) return null;
       const mime = rawMime.split(";")[0]?.trim().toLowerCase() || "";

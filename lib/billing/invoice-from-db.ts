@@ -1,10 +1,8 @@
 import "server-only";
 
-import { getBrandingLogoStored } from "@/lib/branding/app-settings";
 import { buildNativeInvoicePdfBuffer } from "@/lib/billing/native-invoice-pdf";
 import { prisma } from "@/lib/db";
-import { fetchImageAsLogo } from "@/lib/proposals/fetch-image";
-import { resolveProposalHeaderLogoStored } from "@/lib/proposals/proposal-cover-assets";
+import { loadPdfHeaderLogo } from "@/lib/proposals/pdf-header-logo";
 
 export async function buildInvoicePdfFromInvoiceId(
   invoiceId: string,
@@ -16,8 +14,7 @@ export async function buildInvoicePdfFromInvoiceId(
   if (!invoice) return { error: "Invoice not found." };
   if (!invoice.lineItems.length) return { error: "Invoice has no line items." };
 
-  const brandingStored = await getBrandingLogoStored();
-  const headerLogo = await fetchImageAsLogo(null, resolveProposalHeaderLogoStored(brandingStored));
+  const headerLogo = await loadPdfHeaderLogo();
 
   const buffer = buildNativeInvoicePdfBuffer({
     invoiceNumber: invoice.number ?? "Draft",

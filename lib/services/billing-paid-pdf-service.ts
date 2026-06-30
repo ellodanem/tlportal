@@ -9,22 +9,10 @@ import {
 } from "@/lib/billing/paid-invoice-blob";
 import { buildPaidInvoicePdfBuffer } from "@/lib/billing/paid-invoice-pdf";
 import { stripePaymentMethodLabel } from "@/lib/billing/stripe-invoice-for-pdf";
-import { getBrandingLogoStored } from "@/lib/branding/app-settings";
-import { fetchImageAsLogo } from "@/lib/proposals/fetch-image";
-import {
-  resolveProposalHeaderLogoStored,
-} from "@/lib/proposals/proposal-cover-assets";
+import { loadPdfHeaderLogo } from "@/lib/proposals/pdf-header-logo";
 import { isStripeConfigured } from "@/lib/services/billing-service";
 import { getStripeClient } from "@/lib/stripe/config";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
-
-function pdfAssetOrigin(): string {
-  return (
-    process.env.APP_BASE_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    "http://127.0.0.1:3000"
-  );
-}
 
 export async function loadBillingInvoicePdfBytes(
   pdfStoragePath: string,
@@ -104,11 +92,7 @@ export async function generateAndStorePaidInvoicePdf(
       ? new Date(stripeInvoice.status_transitions.paid_at * 1000)
       : new Date());
 
-  const brandingStored = await getBrandingLogoStored();
-  const headerLogo = await fetchImageAsLogo(
-    pdfAssetOrigin(),
-    resolveProposalHeaderLogoStored(brandingStored),
-  );
+  const headerLogo = await loadPdfHeaderLogo();
 
   const paymentMethodLabel = await stripePaymentMethodLabel(stripe, stripeInvoice);
 
