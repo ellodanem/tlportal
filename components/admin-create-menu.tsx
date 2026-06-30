@@ -20,6 +20,11 @@ const items = [
     description: "Auto-bill cash/cheque customers on a monthly or quarterly cadence.",
   },
   {
+    href: "/admin/expenses/new",
+    label: "Expense",
+    description: "Record a vendor payment with optional receipt.",
+  },
+  {
     href: "/admin/proposals/new",
     label: "Proposal",
     description: "Start a sales proposal with default sections.",

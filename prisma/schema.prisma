@@ -158,6 +158,15 @@ enum RecurringScheduleStatus {
   ended
 }
 
+/// How an expense was paid (Phase 5 — simple expense register).
+enum ExpensePaymentMethod {
+  cash
+  bank_transfer
+  card
+  cheque
+  other
+}
+
 /// TL-owned subscription lifecycle (Stripe mirrors payment; this is ops source of truth).
 enum CustomerSubscriptionStatus {
   pending_payment
@@ -260,6 +269,7 @@ model User {
   invoicesCreated               Invoice[]
   paymentsRecorded              Payment[]
   recurringSchedulesCreated     RecurringInvoiceSchedule[]
+  expensesRecorded              Expense[]
 }
 
 // --- Core domain ---
@@ -323,8 +333,7 @@ model Customer {
   invoices                Invoice[]
   payments                Payment[]
   recurringInvoiceSchedules RecurringInvoiceSchedule[]
-
-  @@index([email])
+  expenses                Expense[]
   @@index([archivedAt])
 }
 
@@ -448,6 +457,7 @@ model Device {
   serviceAssignments  ServiceAssignment[]
   providerDeviceLinks ProviderDeviceLink[]
   operationalEvents   OperationalEvent[]
+  expenses            Expense[]
 
   @@index([deviceModelId])
   @@index([status])
@@ -1091,4 +1101,57 @@ model Payment {
 
   @@index([invoiceId])
   @@index([customerId, receivedAt(sort: Desc)])
+}
+
+// --- Native billing (Phase 5): expense register ---
+
+model ExpenseCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  expenses Expense[]
+
+  @@index([sortOrder])
+}
+
+/// Simple ops expense — vendor, amount, date, optional receipt and cost attribution.
+model Expense {
+  id          String               @id @default(uuid())
+  vendor      String
+  description String?
+  amount      Decimal              @db.Decimal(12, 2)
+  currency    String               @default("XCD")
+  expenseDate DateTime
+  method      ExpensePaymentMethod @default(card)
+  /// Cheque #, bank ref, card last four, etc.
+  reference   String?
+  notes       String?              @db.Text
+
+  categoryId String?
+  category   ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  deviceId String?
+  device   Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  /// Vercel Blob url or `private:` prefix, or local `/uploads/expenses/…` path.
+  receiptStoragePath String?
+
+  recordedById String?
+  recordedBy   User?   @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expenseDate(sort: Desc)])
+  @@index([categoryId])
+  @@index([customerId])
+  @@index([deviceId])
 }
