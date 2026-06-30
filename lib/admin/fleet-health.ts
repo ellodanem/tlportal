@@ -6,6 +6,7 @@ import { opsUrgencyFromNextDueDate, type OpsUrgency } from "@/lib/admin/assignme
 import { prisma } from "@/lib/db";
 import { isOnceSimOperational } from "@/lib/nce/sim-status";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
+import { listRecentPaymentFailureCustomerIds } from "@/lib/stripe/payment-failure-recovery";
 
 export type FleetHealthBucket = "healthy" | "renewal" | "review";
 
@@ -144,7 +145,7 @@ export type FleetHealthReviewRow = {
 
 export async function getGlobalFleetHealth() {
   const stripeConfigured = isStripeBillingEnabled();
-  const [assignments, stripeIssueCustomerIds] = await Promise.all([
+  const [assignments, stripePastDueCustomerIds, paymentFailureCustomerIds] = await Promise.all([
     prisma.serviceAssignment.findMany({
       where: { endDate: null, status: { not: "cancelled" } },
       include: openAssignmentInclude,
@@ -157,7 +158,10 @@ export async function getGlobalFleetHealth() {
           })
           .then((rows) => new Set(rows.map((r) => r.customerId)))
       : Promise.resolve(new Set<string>()),
+    stripeConfigured ? listRecentPaymentFailureCustomerIds() : Promise.resolve(new Set<string>()),
   ]);
+
+  const stripeIssueCustomerIds = new Set([...stripePastDueCustomerIds, ...paymentFailureCustomerIds]);
 
   const classifications = assignments.map((a) =>
     classifyOpenAssignment(a, {

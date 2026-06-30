@@ -363,3 +363,18 @@ export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise
 
   return out;
 }
+
+/** Customer IDs with a recorded card decline in the last N days. */
+export async function listRecentPaymentFailureCustomerIds(withinDays = 7): Promise<Set<string>> {
+  const since = new Date(Date.now() - withinDays * 24 * 60 * 60 * 1000);
+  const events = await prisma.operationalEvent.findMany({
+    where: {
+      category: "billing.payment_failed",
+      occurredAt: { gte: since },
+      customerId: { not: null },
+    },
+    select: { customerId: true },
+    distinct: ["customerId"],
+  });
+  return new Set(events.map((e) => e.customerId!).filter(Boolean));
+}

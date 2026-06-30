@@ -218,7 +218,7 @@ export default async function AdminPage() {
                 <div>
                   <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Overdue services, Stripe payment issues, and Invoiless gaps
+                    Overdue services, declined payments, Stripe issues, and Invoiless gaps
                   </p>
                 </div>
               </div>

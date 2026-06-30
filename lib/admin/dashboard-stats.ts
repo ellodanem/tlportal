@@ -172,8 +172,6 @@ export async function getDashboardStats() {
     return dx;
   });
 
-  const attentionAssignments = attentionCandidates.slice(0, 6).map((c) => c.assignment);
-
   const stripeBillingIssueCount = stripeBillingIssues.length;
   const paymentFailureCount = recentPaymentFailures.length;
 
@@ -195,27 +193,136 @@ export async function getDashboardStats() {
     return p || "Customer";
   };
 
-  const attentionItems: DashboardAttentionItem[] = [];
+  type RankedAttention = {
+    rank: number;
+    sortKey: number;
+    customerId: string;
+    item: DashboardAttentionItem;
+  };
 
-  for (const a of attentionAssignments) {
-    const name = displayName(a.customer);
-    const urgent = opsUrgencyFromNextDueDate(a.nextDueDate) === "overdue";
-    const duePart = a.nextDueDate
-      ? `Next due ${formatShortDue(a.nextDueDate)}`
-      : "Next due not set";
-    attentionItems.push({
-      id: a.id,
-      title: urgent ? `Overdue service — ${name}` : `Due soon — ${name}`,
-      meta: `${duePart} · IMEI ${a.device.imei}`,
-      href: `/admin/customers/${a.customer.id}/billing`,
-      tone: urgent ? "urgent" : "warning",
+  const ATTENTION_LIMIT = 6;
+  const rankedAttention: RankedAttention[] = [];
+
+  for (const failure of recentPaymentFailures) {
+    const name = displayName(failure.customer);
+    const amountLabel = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: failure.currency,
+    }).format(failure.amount);
+    const declinePart = failure.declineCode ? ` · ${failure.declineCode}` : "";
+    rankedAttention.push({
+      rank: 0,
+      sortKey: -failure.occurredAt.getTime(),
+      customerId: failure.customerId,
+      item: {
+        id: `pay-fail-${failure.customerId}`,
+        title: `Payment declined — ${name}`,
+        meta: `${amountLabel}${declinePart} — follow up on billing.`,
+        href: `/admin/customers/${failure.customerId}/billing`,
+        tone: "urgent",
+      },
     });
   }
 
-  const attentionIds = new Set(attentionAssignments.map((a) => a.id));
+  for (const { assignment: a, urgency } of attentionCandidates) {
+    if (urgency !== "overdue") continue;
+    const name = displayName(a.customer);
+    const duePart = a.nextDueDate
+      ? `Next due ${formatShortDue(a.nextDueDate)}`
+      : "Next due not set";
+    rankedAttention.push({
+      rank: 1,
+      sortKey: a.nextDueDate?.getTime() ?? 0,
+      customerId: a.customer.id,
+      item: {
+        id: a.id,
+        title: `Overdue service — ${name}`,
+        meta: `${duePart} · IMEI ${a.device.imei}`,
+        href: `/admin/customers/${a.customer.id}/billing`,
+        tone: "urgent",
+      },
+    });
+  }
+
+  for (const account of stripeBillingIssues) {
+    const name = displayName(account.customer);
+    rankedAttention.push({
+      rank: 2,
+      sortKey: 0,
+      customerId: account.customer.id,
+      item: {
+        id: `stripe-${account.id}`,
+        title: `Stripe ${account.status} — ${name}`,
+        meta: "Open customer billing to review card subscription.",
+        href: `/admin/customers/${account.customer.id}/billing`,
+        tone: "urgent",
+      },
+    });
+  }
+
+  for (const { assignment: a, urgency } of attentionCandidates) {
+    if (urgency !== "due_soon") continue;
+    const name = displayName(a.customer);
+    const duePart = a.nextDueDate
+      ? `Next due ${formatShortDue(a.nextDueDate)}`
+      : "Next due not set";
+    rankedAttention.push({
+      rank: 3,
+      sortKey: a.nextDueDate?.getTime() ?? 0,
+      customerId: a.customer.id,
+      item: {
+        id: a.id,
+        title: `Due soon — ${name}`,
+        meta: `${duePart} · IMEI ${a.device.imei}`,
+        href: `/admin/customers/${a.customer.id}/billing`,
+        tone: "warning",
+      },
+    });
+  }
+
+  if (invoilessConfigured && unlinkedInvoilessCount > 0) {
+    const unlinked = await prisma.customer.findMany({
+      where: { ...unlinkedInvoilessWhere, ...activeCustomerWhere },
+      take: 12,
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, company: true, firstName: true, lastName: true },
+    });
+    for (const c of unlinked) {
+      rankedAttention.push({
+        rank: 4,
+        sortKey: 0,
+        customerId: c.id,
+        item: {
+          id: `inv-${c.id}`,
+          title: `Invoiless not linked — ${displayName(c)}`,
+          meta: "Link billing accounts on the customer Billing tab.",
+          href: `/admin/customers/${c.id}/billing`,
+          tone: "info",
+        },
+      });
+    }
+  }
+
+  rankedAttention.sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    return a.sortKey - b.sortKey;
+  });
+
+  const attentionByCustomer = new Set<string>();
+  const attentionItems: DashboardAttentionItem[] = [];
+  for (const candidate of rankedAttention) {
+    if (attentionByCustomer.has(candidate.customerId)) continue;
+    attentionByCustomer.add(candidate.customerId);
+    attentionItems.push(candidate.item);
+    if (attentionItems.length >= ATTENTION_LIMIT) break;
+  }
+
+  const attentionAssignmentIds = new Set(
+    attentionCandidates.map((c) => c.assignment.id),
+  );
   const upcomingBillItems: DashboardAttentionItem[] = [];
   for (const a of upcomingBillAssignments) {
-    if (attentionIds.has(a.id)) continue;
+    if (attentionAssignmentIds.has(a.id)) continue;
     if (!a.nextDueDate) continue;
     const name = displayName(a.customer);
     upcomingBillItems.push({
@@ -226,54 +333,6 @@ export async function getDashboardStats() {
       tone: "info",
     });
     if (upcomingBillItems.length >= 6) break;
-  }
-
-  for (const account of stripeBillingIssues) {
-    if (attentionItems.length >= 6) break;
-    const name = displayName(account.customer);
-    attentionItems.push({
-      id: `stripe-${account.id}`,
-      title: `Stripe ${account.status} — ${name}`,
-      meta: "Open customer billing to review card subscription.",
-      href: `/admin/customers/${account.customer.id}/billing`,
-      tone: "urgent",
-    });
-  }
-
-  for (const failure of recentPaymentFailures) {
-    if (attentionItems.length >= 6) break;
-    const name = displayName(failure.customer);
-    const amountLabel = new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: failure.currency,
-    }).format(failure.amount);
-    const declinePart = failure.declineCode ? ` · ${failure.declineCode}` : "";
-    attentionItems.push({
-      id: `pay-fail-${failure.customerId}`,
-      title: `Payment declined — ${name}`,
-      meta: `${amountLabel}${declinePart} — follow up on billing.`,
-      href: `/admin/customers/${failure.customerId}/billing`,
-      tone: "urgent",
-    });
-  }
-
-  if (invoilessConfigured && unlinkedInvoilessCount > 0) {
-    const unlinked = await prisma.customer.findMany({
-      where: { ...unlinkedInvoilessWhere, ...activeCustomerWhere },
-      take: Math.min(3, 6 - attentionItems.length),
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, company: true, firstName: true, lastName: true },
-    });
-    for (const c of unlinked) {
-      if (attentionItems.length >= 6) break;
-      attentionItems.push({
-        id: `inv-${c.id}`,
-        title: `Invoiless not linked — ${displayName(c)}`,
-        meta: "Link billing accounts on the customer Billing tab.",
-        href: `/admin/customers/${c.id}/billing`,
-        tone: "info",
-      });
-    }
   }
 
   const simUsedSumMb = simDataSums._sum.usedDataMB ?? 0;
