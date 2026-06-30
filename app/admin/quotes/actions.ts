@@ -22,6 +22,7 @@ import {
 export type SendQuoteEmailState = { error?: string; ok?: boolean; message?: string };
 export type SaveQuoteState = { error?: string; ok?: boolean; quoteId?: string; next?: string };
 export type ConvertQuoteState = { error?: string; ok?: boolean; invoiceId?: string; message?: string };
+export type MarkQuoteSentState = { error?: string; ok?: boolean; message?: string; number?: string };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -86,6 +87,64 @@ export async function saveQuoteAction(_prev: SaveQuoteState, formData: FormData)
     return { ok: true, quoteId: id, next: `/admin/quotes/${id}` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save quote." };
+  }
+}
+
+async function persistDraftAndMarkSent(
+  quoteId: string,
+  payload: QuoteRequestPayload,
+  createdById: string,
+): Promise<{ number: string }> {
+  const existing = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: { status: true },
+  });
+  if (!existing) {
+    throw new Error("Quote not found.");
+  }
+  if (existing.status === "converted") {
+    throw new Error("This quote was already converted to an invoice.");
+  }
+  if (existing.status === "draft") {
+    await updateDraftQuote(quoteId, {
+      ...payloadToCreateInput(payload),
+      createdById,
+    });
+  }
+  const { number } = await markQuoteSent(quoteId);
+  return { number };
+}
+
+export async function markQuoteSentAction(
+  _prev: MarkQuoteSentState,
+  formData: FormData,
+): Promise<MarkQuoteSentState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const quoteId = String(formData.get("quoteId") ?? "").trim();
+  if (!quoteId) {
+    return { error: "Save the draft first, then mark as sent." };
+  }
+
+  const parsed = parsePayloadFromForm(formData);
+  if ("error" in parsed) {
+    return { error: parsed.error };
+  }
+
+  try {
+    const { number } = await persistDraftAndMarkSent(quoteId, parsed.payload, session.sub);
+    revalidatePath("/admin/quotes");
+    revalidatePath(`/admin/quotes/${quoteId}`);
+    return {
+      ok: true,
+      number,
+      message: `Quote marked sent as ${number}. Download the PDF or convert to an invoice when ready.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not mark quote as sent." };
   }
 }
 
@@ -187,13 +246,7 @@ export async function sendQuoteEmailAction(
     }
 
     try {
-      if (existing.status === "draft") {
-        await updateDraftQuote(quoteId, {
-          ...payloadToCreateInput(parsed.payload),
-          createdById: session.sub,
-        });
-      }
-      await markQuoteSent(quoteId);
+      await persistDraftAndMarkSent(quoteId, parsed.payload, session.sub);
       built = await buildQuotePdfFromQuoteId(quoteId);
     } catch (e) {
       return { error: e instanceof Error ? e.message : "Could not prepare quote for sending." };

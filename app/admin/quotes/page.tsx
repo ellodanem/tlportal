@@ -44,7 +44,7 @@ export default async function AdminQuotesPage() {
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Quotes</h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-            Saved estimates with TL-Q numbering when sent. Convert accepted quotes to draft native invoices — no
+            Saved estimates with TL-Q numbering when marked sent or emailed. Convert accepted quotes to draft native invoices — no
             Invoiless required.
           </p>
         </div>

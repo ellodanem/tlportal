@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  markQuoteSentAction,
   saveQuoteAction,
   sendQuoteEmailAction,
+  type MarkQuoteSentState,
   type SaveQuoteState,
   type SendQuoteEmailState,
 } from "@/app/admin/quotes/actions";
@@ -83,6 +85,7 @@ const DEFAULT_LINES: Omit<LineRow, "id">[] = [
 
 const initialSendState: SendQuoteEmailState = {};
 const initialSaveState: SaveQuoteState = {};
+const initialMarkSentState: MarkQuoteSentState = {};
 
 export function QuoteGeneratorForm({
   customers,
@@ -123,6 +126,7 @@ export function QuoteGeneratorForm({
   const [quotePayloadJson, setQuotePayloadJson] = useState("");
   const [sendState, sendAction] = useActionState(sendQuoteEmailAction, initialSendState);
   const [saveState, saveAction] = useActionState(saveQuoteAction, initialSaveState);
+  const [markSentState, markSentAction] = useActionState(markQuoteSentAction, initialMarkSentState);
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId) ?? null,
@@ -138,6 +142,12 @@ export function QuoteGeneratorForm({
       router.refresh();
     }
   }, [sendState.ok, router]);
+
+  useEffect(() => {
+    if (markSentState.ok) {
+      router.refresh();
+    }
+  }, [markSentState.ok, router]);
 
   useEffect(() => {
     if (saveState.ok && saveState.next) {
@@ -215,7 +225,7 @@ export function QuoteGeneratorForm({
 
     setDownloading(true);
     try {
-      const useDbPdf = Boolean(quoteId && readOnly);
+      const useDbPdf = Boolean(quoteId);
       const url = useDbPdf ? `/api/admin/quotes/${quoteId}/pdf` : "/api/admin/quotes/pdf";
       const init: RequestInit = useDbPdf
         ? { method: "GET" }
@@ -267,7 +277,7 @@ export function QuoteGeneratorForm({
 
   function openEmailPreview() {
     if (!quoteId) {
-      setError("Save the draft first — emailing assigns a TL-Q number and stores the quote.");
+      setError("Save the draft first — marking sent assigns a TL-Q number.");
       return;
     }
 
@@ -306,6 +316,22 @@ export function QuoteGeneratorForm({
       formData.set("quoteId", quoteId);
     }
     saveAction(formData);
+  }
+
+  function submitMarkSent(formData: FormData) {
+    const built = buildPayload();
+    if ("error" in built) {
+      setError(built.error);
+      return;
+    }
+    if (!quoteId) {
+      setError("Save the draft first, then mark as sent.");
+      return;
+    }
+    setError(null);
+    formData.set("quotePayloadJson", JSON.stringify(built.payload));
+    formData.set("quoteId", quoteId);
+    markSentAction(formData);
   }
 
   const fieldsDisabled = readOnly || isConverted;
@@ -377,7 +403,7 @@ export function QuoteGeneratorForm({
             <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Quote number</span>
             <p className="mt-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200">
               {assignedNumber ?? (
-                <span className="text-zinc-500 dark:text-zinc-400">Assigned when you email (TL-Q-…)</span>
+                <span className="text-zinc-500 dark:text-zinc-400">Assigned when you mark sent or email (TL-Q-…)</span>
               )}
             </p>
           </div>
@@ -531,6 +557,24 @@ export function QuoteGeneratorForm({
           </p>
         ) : null}
 
+        {markSentState.error ? (
+          <p
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+            role="alert"
+          >
+            {markSentState.error}
+          </p>
+        ) : null}
+
+        {markSentState.ok && markSentState.message ? (
+          <p
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
+            role="status"
+          >
+            {markSentState.message}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-3">
           {!fieldsDisabled ? (
             <form action={submitSaveDraft}>
@@ -539,6 +583,16 @@ export function QuoteGeneratorForm({
                 className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
               >
                 {quoteId ? "Save changes" : "Save draft"}
+              </button>
+            </form>
+          ) : null}
+          {quoteId && !fieldsDisabled && !isConverted ? (
+            <form action={submitMarkSent}>
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-400 bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-200 dark:border-zinc-500 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+              >
+                Mark as sent
               </button>
             </form>
           ) : null}
