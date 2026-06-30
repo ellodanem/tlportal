@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  *
  * Subscribe to: checkout.session.completed, checkout.session.expired,
  * customer.subscription.*, invoice.paid, invoice.finalized,
- * invoice.payment_failed, invoice.voided.
+ * invoice.payment_failed, invoice.voided, payment_intent.payment_failed.
  */
 export async function POST(req: Request) {
   const secret = stripeWebhookSecret();

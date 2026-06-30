@@ -16,7 +16,14 @@ import { recordOperationalEvent } from "@/lib/services/operational-event-service
 import { getStripeClient } from "./config";
 import { handleCheckoutSessionExpired } from "./checkout-recovery";
 import { syncStripeInvoiceToDatabase } from "./invoice-sync";
+import { handleStripePaymentFailure, loadPaymentIntentForFailure } from "./payment-failure-recovery";
 import { markStripeSubscriptionCanceled, syncStripeSubscriptionToDatabase } from "./subscription-sync";
+
+function stripeInvoicePaymentIntentId(invoice: Stripe.Invoice): string | null {
+  const ref = invoice.payment_intent;
+  if (typeof ref === "string") return ref;
+  return ref?.id ?? null;
+}
 
 async function loadSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
   const stripe = getStripeClient();
@@ -107,6 +114,15 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       }
       break;
     }
+    case "payment_intent.payment_failed": {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      try {
+        await handleStripePaymentFailure({ paymentIntent });
+      } catch (e) {
+        console.error("[stripe webhook] payment failure recovery failed", e);
+      }
+      break;
+    }
     case "invoice.paid":
     case "invoice.finalized":
     case "invoice.payment_failed":
@@ -120,6 +136,17 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (subId) {
         const sub = await loadSubscription(subId);
         await syncStripeSubscriptionToDatabase(sub);
+      }
+      if (event.type === "invoice.payment_failed") {
+        const paymentIntentId = stripeInvoicePaymentIntentId(invoice);
+        if (paymentIntentId) {
+          try {
+            const paymentIntent = await loadPaymentIntentForFailure(paymentIntentId);
+            await handleStripePaymentFailure({ paymentIntent, stripeInvoice: invoice });
+          } catch (e) {
+            console.error("[stripe webhook] invoice payment failure recovery failed", e);
+          }
+        }
       }
       if (customerId && event.type === "invoice.paid") {
         await recordOperationalEvent({

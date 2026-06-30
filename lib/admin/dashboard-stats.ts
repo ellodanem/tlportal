@@ -8,6 +8,7 @@ import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover"
 
 import { prisma } from "@/lib/db";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
+import { listRecentPaymentFailureAttentionItems } from "@/lib/stripe/payment-failure-recovery";
 
 const unlinkedInvoilessWhere = {
   invoilessCustomerId: null,
@@ -59,6 +60,7 @@ export async function getDashboardStats() {
     simDataSums,
     simCardCount,
     stripeBillingIssues,
+    recentPaymentFailures,
   ] = await Promise.all([
     getGlobalFleetHealth(),
     prisma.device.count({
@@ -143,6 +145,7 @@ export async function getDashboardStats() {
           },
         })
       : Promise.resolve([]),
+    stripeConfigured ? listRecentPaymentFailureAttentionItems(6) : Promise.resolve([]),
   ]);
 
   type DueAssignment = (typeof openAssignmentsWithDue)[number];
@@ -172,12 +175,14 @@ export async function getDashboardStats() {
   const attentionAssignments = attentionCandidates.slice(0, 6).map((c) => c.assignment);
 
   const stripeBillingIssueCount = stripeBillingIssues.length;
+  const paymentFailureCount = recentPaymentFailures.length;
 
   const attentionCount =
     overdueAssignmentCount +
     dueSoonAssignmentCount +
     (invoilessConfigured ? unlinkedInvoilessCount : 0) +
-    stripeBillingIssueCount;
+    stripeBillingIssueCount +
+    paymentFailureCount;
 
   const displayName = (c: {
     company: string | null;
@@ -231,6 +236,23 @@ export async function getDashboardStats() {
       title: `Stripe ${account.status} — ${name}`,
       meta: "Open customer billing to review card subscription.",
       href: `/admin/customers/${account.customer.id}/billing`,
+      tone: "urgent",
+    });
+  }
+
+  for (const failure of recentPaymentFailures) {
+    if (attentionItems.length >= 6) break;
+    const name = displayName(failure.customer);
+    const amountLabel = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: failure.currency,
+    }).format(failure.amount);
+    const declinePart = failure.declineCode ? ` · ${failure.declineCode}` : "";
+    attentionItems.push({
+      id: `pay-fail-${failure.customerId}`,
+      title: `Payment declined — ${name}`,
+      meta: `${amountLabel}${declinePart} — follow up on billing.`,
+      href: `/admin/customers/${failure.customerId}/billing`,
       tone: "urgent",
     });
   }

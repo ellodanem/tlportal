@@ -7,6 +7,7 @@ export const OPERATIONAL_EVENT_CATEGORIES = [
   "sim.linked",
   "billing.synced",
   "billing.checkout_recovery_sent",
+  "billing.payment_failed",
   "billing.mode_changed",
   "gps.link.updated",
   "registration.approved",

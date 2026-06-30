@@ -49,8 +49,8 @@ export function BillingAlertPhonesForm({ initialPhones }: { initialPhones: strin
       <div className="flex flex-col gap-2 border-b border-emerald-100/80 pb-4 dark:border-emerald-900/50">
         <h2 className="text-lg font-semibold text-emerald-950 dark:text-emerald-100">Billing alert phones</h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          When a customer billing WhatsApp cannot be sent because there is no pay link, TL Portal sends an{" "}
-          <strong>SMS</strong> to these numbers (Twilio). Add staff or assistants — one number per line or
+          TL Portal sends an <strong>SMS</strong> to these numbers when billing needs staff attention: a customer
+          WhatsApp could not be sent (no pay link), or a card payment was declined. One number per line or
           comma-separated. Include country code (e.g. <code className="text-xs">+1758…</code>).
         </p>
       </div>

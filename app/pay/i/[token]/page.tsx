@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { InvoicePayOnlineForm } from "@/components/pay/invoice-pay-online-form";
 import { loadInvoiceByPublicToken } from "@/lib/billing/invoice-from-db";
 import { formatMoney, INVOICE_STATUS_LABELS } from "@/lib/domain/native-billing";
+import { declineCodeGuidance } from "@/lib/stripe/payment-failure-messaging";
+import { getRecentNativeInvoicePaymentFailure } from "@/lib/stripe/payment-failure-recovery";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 
 function formatDate(d: Date): string {
@@ -16,10 +18,10 @@ export default async function PublicInvoicePayPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ paid?: string }>;
+  searchParams: Promise<{ paid?: string; payment_failed?: string }>;
 }) {
   const { token } = await params;
-  const { paid } = await searchParams;
+  const { paid, payment_failed: paymentFailedParam } = await searchParams;
   const invoice = await loadInvoiceByPublicToken(token);
   if (!invoice || invoice.status === "draft") notFound();
 
@@ -27,6 +29,12 @@ export default async function PublicInvoicePayPage({
     invoice.billToLines.length > 0 ? invoice.billToLines : [invoice.billToName ?? "Customer"];
   const isPaid = invoice.status === "paid";
   const isVoid = invoice.status === "void" || invoice.status === "written_off";
+  const recentPaymentFailure =
+    !isPaid && !isVoid ? await getRecentNativeInvoicePaymentFailure(invoice.id) : null;
+  const showPaymentFailedBanner =
+    (paymentFailedParam === "1" || recentPaymentFailure != null) && !isPaid && !isVoid;
+  const paymentFailedGuidance =
+    recentPaymentFailure?.guidance ?? declineCodeGuidance(null);
   const amountDue = Number(invoice.amountDue);
   const showPayOnline =
     invoice.allowOnlinePayment &&
@@ -49,6 +57,15 @@ export default async function PublicInvoicePayPage({
             {INVOICE_STATUS_LABELS[invoice.status]}
           </span>
         </div>
+
+        {showPaymentFailedBanner ? (
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="font-medium">Payment declined</p>
+            <p className="mt-1 text-amber-900/90 dark:text-amber-200/90">
+              No charge was made. {paymentFailedGuidance}
+            </p>
+          </div>
+        ) : null}
 
         {paid === "1" && !isPaid && !isVoid ? (
           <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
