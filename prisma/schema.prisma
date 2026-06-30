@@ -35,6 +35,15 @@ enum ServiceAssignmentStatus {
   cancelled
 }
 
+/// Why a service assignment was paused (hardware offline, no vehicle, etc.).
+enum ServiceAssignmentPauseReason {
+  accident
+  no_vehicle
+  seasonal
+  delinquent
+  other
+}
+
 enum RegistrationRequestStatus {
   pending
   approved
@@ -501,6 +510,12 @@ model ServiceAssignment {
   lastPaymentStatus    String?
   nextDueDate          DateTime?
   notes                String?
+  pausedAt             DateTime?
+  pauseReason          ServiceAssignmentPauseReason?
+  pauseNote            String?                     @db.Text
+  /// Snapshot of next due at pause (time-freeze on resume for manual billing).
+  frozenNextDueDate    DateTime?
+  resumedAt            DateTime?
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 

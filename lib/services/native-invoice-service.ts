@@ -36,6 +36,7 @@ export type CreateDraftInvoiceInput = {
   dueDate?: Date | null;
   notes?: string | null;
   paymentInstructions?: string | null;
+  allowOnlinePayment?: boolean;
   serviceAssignmentId?: string | null;
   createdById?: string | null;
   lineItems: NativeLineInput[];
@@ -86,6 +87,7 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promis
       dueDate: input.dueDate ?? null,
       notes: input.notes ?? null,
       paymentInstructions: input.paymentInstructions ?? null,
+      allowOnlinePayment: input.allowOnlinePayment ?? false,
       serviceAssignmentId: input.serviceAssignmentId ?? null,
       createdById: input.createdById ?? null,
       lineItems: { create: lineCreateData(input.lineItems) },
@@ -133,6 +135,7 @@ export async function updateDraftInvoice(invoiceId: string, input: CreateDraftIn
         dueDate: input.dueDate ?? null,
         notes: input.notes ?? null,
         paymentInstructions: input.paymentInstructions ?? null,
+        allowOnlinePayment: input.allowOnlinePayment ?? false,
         serviceAssignmentId: input.serviceAssignmentId ?? null,
         lineItems: { create: lineCreateData(input.lineItems) },
       },

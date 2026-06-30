@@ -14,6 +14,7 @@ import { customerBillToLines } from "@/lib/billing/customer-bill-to";
 import { displayInvoiceNumber } from "@/lib/domain/native-billing-cutover";
 import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
+import { isStripeBillingEnabled } from "@/lib/stripe/config";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
 
 function formatYmd(d: Date): string {
@@ -86,6 +87,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
     currency: invoice.currency,
     notes: invoice.notes ?? "",
     paymentInstructions: invoice.paymentInstructions ?? "",
+    allowOnlinePayment: invoice.allowOnlinePayment,
     amountDue: Number(invoice.amountDue),
     lines: invoice.lineItems.map((line) => ({
       description: line.description,
@@ -212,6 +214,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
           initial={initial}
           readOnly={readOnly}
           publicPayUrl={publicPayUrl}
+          stripeConfigured={isStripeBillingEnabled()}
         />
       ) : (
         <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">

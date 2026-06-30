@@ -22,6 +22,7 @@ export function defaultInvoiceEmailBody(input: {
   amountDue: number;
   currency: string;
   payUrl: string | null;
+  allowOnlinePayment?: boolean;
 }): { text: string; html: string } {
   const greeting = input.greetingName.trim() || "there";
   const dueLabel = formatDateLabel(input.dueDate);
@@ -29,7 +30,9 @@ export function defaultInvoiceEmailBody(input: {
   const amountStr = input.currency.toUpperCase() === "XCD" ? `EC$${amount}` : `${input.currency} ${amount}`;
 
   const payLine = input.payUrl
-    ? `\nView invoice and payment details: ${input.payUrl}\n`
+    ? input.allowOnlinePayment
+      ? `\nView and pay online: ${input.payUrl}\n`
+      : `\nView invoice and payment details: ${input.payUrl}\n`
     : "";
 
   const text = `Hello ${greeting},
@@ -41,7 +44,9 @@ If you have questions, reply to this email.
 — Track Lucia`;
 
   const payHtml = input.payUrl
-    ? `<p><a href="${escapeHtml(input.payUrl)}">View invoice online</a></p>`
+    ? input.allowOnlinePayment
+      ? `<p><a href="${escapeHtml(input.payUrl)}">View and pay online</a></p>`
+      : `<p><a href="${escapeHtml(input.payUrl)}">View invoice online</a></p>`
     : "";
 
   const html = `<p>Hello ${escapeHtml(greeting)},</p>

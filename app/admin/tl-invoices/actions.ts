@@ -38,6 +38,7 @@ function payloadToCreateInput(payload: InvoiceRequestPayload): CreateDraftInvoic
     dueDate: payload.dueDate ? new Date(`${payload.dueDate}T12:00:00.000Z`) : null,
     notes: payload.notes,
     paymentInstructions: payload.paymentInstructions,
+    allowOnlinePayment: payload.allowOnlinePayment,
     lineItems: payload.lineItems.map((line, index) => ({
       description: line.description,
       quantity: line.quantity,

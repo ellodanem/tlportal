@@ -8,6 +8,7 @@ import {
   mirrorStripePaidInvoiceToInvoiless,
   recordInvoilessMirrorEvent,
 } from "@/lib/services/invoiless-stripe-mirror-service";
+import { recordNativeInvoiceStripeCheckout } from "@/lib/services/native-invoice-stripe-payment-service";
 import { generateAndStorePaidInvoicePdf } from "@/lib/services/billing-paid-pdf-service";
 import { autoEmailPaidInvoiceReceiptAfterPayment } from "@/lib/services/billing-paid-receipt-email-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
@@ -31,6 +32,14 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     }
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
+      if (session.mode === "payment" && session.metadata?.tl_checkout_kind === "native_invoice") {
+        try {
+          await recordNativeInvoiceStripeCheckout(session);
+        } catch (e) {
+          console.error("[stripe webhook] native invoice payment failed", e);
+        }
+        break;
+      }
       const tlCustomerId = session.metadata?.tl_customer_id?.trim();
       const subId =
         typeof session.subscription === "string"

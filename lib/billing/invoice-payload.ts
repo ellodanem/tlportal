@@ -10,6 +10,7 @@ export type InvoiceRequestPayload = {
   currency: string;
   notes: string | null;
   paymentInstructions: string | null;
+  allowOnlinePayment: boolean;
   lineItems: NativeInvoicePdfLine[];
 };
 
@@ -74,6 +75,7 @@ export function parseInvoiceRequestBody(body: unknown): { payload: InvoiceReques
   const notesRaw = String(b.notes ?? "").trim();
   const paymentRaw = String(b.paymentInstructions ?? "").trim();
   const currency = (String(b.currency ?? "XCD").trim() || "XCD").slice(0, 8).toUpperCase();
+  const allowOnlinePayment = b.allowOnlinePayment === true;
 
   return {
     payload: {
@@ -84,6 +86,7 @@ export function parseInvoiceRequestBody(body: unknown): { payload: InvoiceReques
       currency,
       notes: notesRaw.length ? notesRaw.slice(0, 2000) : null,
       paymentInstructions: paymentRaw.length ? paymentRaw.slice(0, 2000) : null,
+      allowOnlinePayment,
       lineItems: lineParsed.items,
     },
   };

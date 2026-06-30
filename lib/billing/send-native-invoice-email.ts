@@ -39,6 +39,7 @@ export async function sendNativeInvoiceEmail(
       amountDue: true,
       currency: true,
       publicToken: true,
+      allowOnlinePayment: true,
       billToName: true,
       billToLines: true,
     },
@@ -68,6 +69,7 @@ export async function sendNativeInvoiceEmail(
     amountDue: Number(invoice.amountDue),
     currency: invoice.currency,
     payUrl,
+    allowOnlinePayment: invoice.allowOnlinePayment,
   });
 
   const subject = (input.subject ?? defaultInvoiceEmailSubject(invoiceNumber)).slice(0, 200);

@@ -1,14 +1,25 @@
 import { notFound } from "next/navigation";
 
+import { InvoicePayOnlineForm } from "@/components/pay/invoice-pay-online-form";
 import { loadInvoiceByPublicToken } from "@/lib/billing/invoice-from-db";
 import { formatMoney, INVOICE_STATUS_LABELS } from "@/lib/domain/native-billing";
+import { isStripeBillingEnabled } from "@/lib/stripe/config";
 
 function formatDate(d: Date): string {
   return d.toLocaleDateString("en-029", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default async function PublicInvoicePayPage({ params }: { params: Promise<{ token: string }> }) {
+const PAYABLE_STATUSES = new Set(["open", "partially_paid", "overdue"]);
+
+export default async function PublicInvoicePayPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ paid?: string }>;
+}) {
   const { token } = await params;
+  const { paid } = await searchParams;
   const invoice = await loadInvoiceByPublicToken(token);
   if (!invoice || invoice.status === "draft") notFound();
 
@@ -16,6 +27,15 @@ export default async function PublicInvoicePayPage({ params }: { params: Promise
     invoice.billToLines.length > 0 ? invoice.billToLines : [invoice.billToName ?? "Customer"];
   const isPaid = invoice.status === "paid";
   const isVoid = invoice.status === "void" || invoice.status === "written_off";
+  const amountDue = Number(invoice.amountDue);
+  const showPayOnline =
+    invoice.allowOnlinePayment &&
+    isStripeBillingEnabled() &&
+    !isPaid &&
+    !isVoid &&
+    PAYABLE_STATUSES.has(invoice.status) &&
+    amountDue > 0;
+  const showPaidBanner = paid === "1" || isPaid;
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
@@ -29,6 +49,25 @@ export default async function PublicInvoicePayPage({ params }: { params: Promise
             {INVOICE_STATUS_LABELS[invoice.status]}
           </span>
         </div>
+
+        {paid === "1" && !isPaid && !isVoid ? (
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="font-medium">Payment submitted</p>
+            <p className="mt-1 text-amber-900/90 dark:text-amber-200/90">
+              Thank you — your card payment is being confirmed. Refresh this page in a moment if the status has not
+              updated yet.
+            </p>
+          </div>
+        ) : null}
+
+        {showPaidBanner && isPaid ? (
+          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
+            <p className="font-medium">Payment received — thank you.</p>
+            <p className="mt-1 text-emerald-900/90 dark:text-emerald-200/90">
+              This invoice is paid in full. A receipt may arrive by email from your card provider.
+            </p>
+          </div>
+        ) : null}
 
         <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
           <div>
@@ -84,7 +123,7 @@ export default async function PublicInvoicePayPage({ params }: { params: Promise
             </p>
             {!isPaid && !isVoid ? (
               <p className="mt-1 text-lg font-semibold">
-                Amount due {formatMoney(Number(invoice.amountDue), invoice.currency)}
+                Amount due {formatMoney(amountDue, invoice.currency)}
               </p>
             ) : null}
             {isPaid ? (
@@ -92,6 +131,18 @@ export default async function PublicInvoicePayPage({ params }: { params: Promise
             ) : null}
           </div>
         </div>
+
+        {showPayOnline ? (
+          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+            <p className="text-sm font-medium text-emerald-950 dark:text-emerald-100">Pay online</p>
+            <p className="mt-1 text-sm text-emerald-900/90 dark:text-emerald-200/90">
+              Pay the outstanding balance securely by card.
+            </p>
+            <div className="mt-4">
+              <InvoicePayOnlineForm token={token} />
+            </div>
+          </div>
+        ) : null}
 
         {invoice.paymentInstructions && !isPaid && !isVoid ? (
           <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
@@ -109,7 +160,7 @@ export default async function PublicInvoicePayPage({ params }: { params: Promise
         <div className="mt-8 flex flex-wrap gap-4">
           <a
             href={`/api/pay/i/${token}/pdf`}
-            className="inline-flex rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500"
+            className="inline-flex rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
           >
             Download PDF
           </a>

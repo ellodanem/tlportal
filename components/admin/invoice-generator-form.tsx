@@ -40,6 +40,7 @@ export type InvoiceFormInitial = {
   currency: string;
   notes: string;
   paymentInstructions: string;
+  allowOnlinePayment: boolean;
   amountDue: number;
   lines: { description: string; quantity: string; unitPrice: string }[];
 };
@@ -69,11 +70,13 @@ export function InvoiceGeneratorForm({
   initial,
   readOnly = false,
   publicPayUrl = null,
+  stripeConfigured = false,
 }: {
   customers: InvoiceCustomerOption[];
   initial?: InvoiceFormInitial;
   readOnly?: boolean;
   publicPayUrl?: string | null;
+  stripeConfigured?: boolean;
 }) {
   const router = useRouter();
   const lineIdRef = useRef(0);
@@ -89,6 +92,7 @@ export function InvoiceGeneratorForm({
   const [paymentInstructions, setPaymentInstructions] = useState(
     initial?.paymentInstructions || DEFAULT_PAYMENT_INSTRUCTIONS,
   );
+  const [allowOnlinePayment, setAllowOnlinePayment] = useState(initial?.allowOnlinePayment ?? false);
   const [lines, setLines] = useState<LineRow[]>(() =>
     (initial?.lines?.length ? initial.lines : [{ description: "", quantity: "1", unitPrice: "0" }]).map((row) => ({
       ...row,
@@ -164,6 +168,7 @@ export function InvoiceGeneratorForm({
         currency,
         notes: notes.trim() || null,
         paymentInstructions: paymentInstructions.trim() || null,
+        allowOnlinePayment: allowOnlinePayment && stripeConfigured,
         lineItems,
       },
       greetingName,
@@ -222,6 +227,7 @@ export function InvoiceGeneratorForm({
       amountDue: initial?.amountDue ?? total,
       currency: payload.currency,
       payUrl: publicPayUrl,
+      allowOnlinePayment: allowOnlinePayment && stripeConfigured,
     });
     setPayloadJson(JSON.stringify(payload));
     setEmailTo(selectedCustomer?.email?.trim() ?? "");
@@ -419,6 +425,33 @@ export function InvoiceGeneratorForm({
             className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950"
           />
         </div>
+
+        {!fieldsDisabled ? (
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-700 dark:bg-zinc-900/40">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={allowOnlinePayment}
+                disabled={!stripeConfigured}
+                onChange={(e) => setAllowOnlinePayment(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-zinc-300 text-emerald-600 disabled:opacity-50"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">Allow pay by card online</span>
+                <span className="mt-1 block text-zinc-600 dark:text-zinc-400">
+                  {stripeConfigured
+                    ? "Adds a Pay with card button on the customer pay link. Cash, cheque, and bank instructions still apply."
+                    : "Stripe is not configured — online card payment is unavailable."}
+                </span>
+              </span>
+            </label>
+          </div>
+        ) : initial?.allowOnlinePayment ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Online card payment: <span className="font-medium text-zinc-800 dark:text-zinc-200">enabled</span>
+          </p>
+        ) : null}
+
         <div>
           <label className="block text-sm font-medium">Notes</label>
           <textarea
