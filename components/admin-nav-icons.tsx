@@ -141,3 +141,32 @@ export function IconNavReports({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function IconNavExternal({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M14 4h6v6M10 14 20 4M15 9h5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconNavRecurring({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M16 14.5a3 3 0 1 1-2.2-2.9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M14.5 14.5h2v2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconNavExpenses({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 8.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+      <path d="M4 10h16M8 14h3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M16 6.5a2.5 2.5 0 1 0-5 0v2h5v-2Z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+    </svg>
+  );
+}

@@ -1,21 +1,24 @@
 "use client";
 
 import type { BrandingLogoSize } from "@prisma/client";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 
-import { AdminCreateMenu } from "@/components/admin-create-menu";
+import { AdminCreateMenu, AdminSectionCreateMenu } from "@/components/admin-create-menu";
 import {
+  IconNavBroadcast,
   IconNavChevronLeft,
   IconNavChevronRight,
-  IconNavBroadcast,
   IconNavDashboard,
+  IconNavExpenses,
+  IconNavExternal,
   IconNavInbox,
   IconNavInvoice,
   IconNavPackage,
   IconNavProposal,
+  IconNavRecurring,
   IconNavReports,
   IconNavSettings,
   IconNavSim,
@@ -25,21 +28,63 @@ import { brandingLogoHeightClass } from "@/lib/branding/logo-size";
 
 const STORAGE_KEY = "tl-admin-sidebar-collapsed";
 
-const links = [
+type NavLink = {
+  href: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+};
+
+type NavSection = {
+  id: string;
+  label: string;
+  createSection?: "sales" | "billing" | "fleet";
+  links: NavLink[];
+};
+
+const overviewLinks: NavLink[] = [
   { href: "/admin", label: "Dashboard", Icon: IconNavDashboard },
   { href: "/admin/customers", label: "Customers", Icon: IconUsers },
-  { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
-  { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
-  { href: "/admin/tl-invoices", label: "TL invoices", Icon: IconNavInvoice },
-  { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavInvoice },
-  { href: "/admin/expenses", label: "Expenses", Icon: IconNavPackage },
   { href: "/admin/reports", label: "Reports", Icon: IconNavReports },
-  { href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast },
-  { href: "/admin/invoices", label: "Invoiless", Icon: IconNavInvoice },
-  { href: "/admin/devices", label: "Devices", Icon: IconDevice },
-  { href: "/admin/sims", label: "SIMs", Icon: IconNavSim },
-  { href: "/admin/settings", label: "Settings", Icon: IconNavSettings },
-] as const;
+];
+
+const navSections: NavSection[] = [
+  {
+    id: "sales",
+    label: "Sales",
+    createSection: "sales",
+    links: [
+      { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
+      { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
+    ],
+  },
+  {
+    id: "billing",
+    label: "Billing",
+    createSection: "billing",
+    links: [
+      { href: "/admin/tl-invoices", label: "TL invoices", Icon: IconNavInvoice },
+      { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
+      { href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses },
+      { href: "/admin/invoices", label: "Invoiless", Icon: IconNavExternal },
+    ],
+  },
+  {
+    id: "fleet",
+    label: "Fleet",
+    createSection: "fleet",
+    links: [
+      { href: "/admin/devices", label: "Devices", Icon: IconDevice },
+      { href: "/admin/sims", label: "SIMs", Icon: IconNavSim },
+    ],
+  },
+  {
+    id: "communications",
+    label: "Communications",
+    links: [{ href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast }],
+  },
+];
+
+const settingsLink: NavLink = { href: "/admin/settings", label: "Settings", Icon: IconNavSettings };
 
 /** Show Device models sub-link only while browsing the devices area (fleet + catalog). */
 function isDevicesSection(pathname: string): boolean {
@@ -76,6 +121,12 @@ function subNavClass(active: boolean) {
     : "ml-2 mt-0.5 flex items-center gap-2 rounded-md border-l-2 border-transparent py-2 pl-3 pr-2 text-sm font-medium text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-50";
 }
 
+function sectionHeaderClass(collapsed: boolean) {
+  return collapsed
+    ? "sr-only"
+    : "mb-1 mt-4 flex items-center justify-between px-3 first:mt-1";
+}
+
 function NavIcon({
   Icon,
   className,
@@ -84,6 +135,25 @@ function NavIcon({
   className?: string;
 }) {
   return <Icon className={`h-5 w-5 shrink-0 opacity-90 ${className ?? ""}`} />;
+}
+
+function NavSectionHeader({
+  label,
+  createSection,
+  collapsed,
+}: {
+  label: string;
+  createSection?: NavSection["createSection"];
+  collapsed: boolean;
+}) {
+  if (collapsed) return null;
+
+  return (
+    <div className={sectionHeaderClass(collapsed)}>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</span>
+      {createSection ? <AdminSectionCreateMenu section={createSection} sectionLabel={label} /> : null}
+    </div>
+  );
 }
 
 export function AdminSidebar({
@@ -103,8 +173,8 @@ export function AdminSidebar({
   });
 
   function toggleCollapsed() {
-    setCollapsed((c) => {
-      const next = !c;
+    setCollapsed((current) => {
+      const next = !current;
       try {
         window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
       } catch {
@@ -112,6 +182,85 @@ export function AdminSidebar({
       }
       return next;
     });
+  }
+
+  function renderNavLink({ href, label, Icon }: NavLink): ReactNode {
+    if (href === "/admin/customers") {
+      const customerParentActive = isCustomerSection(pathname);
+      const registrationsActive = pathname.startsWith("/admin/registration-requests");
+      const showSub = isCustomerSection(pathname) && !collapsed;
+      return (
+        <div key={href} className="flex flex-col gap-0.5">
+          <Link href={href} className={navClass(customerParentActive, collapsed)} title={collapsed ? label : undefined}>
+            <NavIcon Icon={Icon} />
+            <span className={collapsed ? "sr-only" : ""}>{label}</span>
+          </Link>
+          {showSub ? (
+            <Link href="/admin/registration-requests" className={subNavClass(registrationsActive)}>
+              <IconNavInbox className="h-4 w-4 shrink-0 opacity-80" />
+              <span>Registration queue</span>
+            </Link>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (href === "/admin/devices") {
+      const devicesParentActive = isDevicesSection(pathname);
+      const deviceModelsActive = pathname.startsWith("/admin/device-models");
+      const showSub = isDevicesSection(pathname) && !collapsed;
+      return (
+        <div key={href} className="flex flex-col gap-0.5">
+          <Link href={href} className={navClass(devicesParentActive, collapsed)} title={collapsed ? label : undefined}>
+            <NavIcon Icon={Icon} />
+            <span className={collapsed ? "sr-only" : ""}>{label}</span>
+          </Link>
+          {showSub ? (
+            <Link href="/admin/device-models" className={subNavClass(deviceModelsActive)}>
+              <IconNavPackage className="h-4 w-4 shrink-0 opacity-80" />
+              <span>Device models</span>
+            </Link>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (href === "/admin/settings") {
+      const settingsParentActive = isSettingsSection(pathname);
+      const plansActive = pathname.startsWith("/admin/subscription-options");
+      const usersActive = pathname.startsWith("/admin/users");
+      const showSub = isSettingsSection(pathname) && !collapsed;
+      return (
+        <div key={href} className="flex flex-col gap-0.5">
+          <Link href={href} className={navClass(settingsParentActive, collapsed)} title={collapsed ? label : undefined}>
+            <NavIcon Icon={Icon} />
+            <span className={collapsed ? "sr-only" : ""}>{label}</span>
+          </Link>
+          {showSub ? (
+            <>
+              <Link href="/admin/subscription-options" className={subNavClass(plansActive)}>
+                <IconLayers className="h-4 w-4 shrink-0 opacity-80" />
+                <span>Plans</span>
+              </Link>
+              <Link href="/admin/users" className={subNavClass(usersActive)}>
+                <IconUsers className="h-4 w-4 shrink-0 opacity-80" />
+                <span>Users</span>
+              </Link>
+            </>
+          ) : null}
+        </div>
+      );
+    }
+
+    const active =
+      href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
+
+    return (
+      <Link key={href} href={href} className={navClass(active, collapsed)} title={collapsed ? label : undefined}>
+        <NavIcon Icon={Icon} />
+        <span className={collapsed ? "sr-only" : ""}>{label}</span>
+      </Link>
+    );
   }
 
   return (
@@ -194,95 +343,20 @@ export function AdminSidebar({
         <AdminCreateMenu sidebarCollapsed={collapsed} />
       </div>
 
-      <nav className={`flex flex-1 flex-col gap-1 ${collapsed ? "p-2" : "p-3"}`}>
-        {links.map(({ href, label, Icon }) => {
-          if (href === "/admin/customers") {
-            const customerParentActive = isCustomerSection(pathname);
-            const registrationsActive = pathname.startsWith("/admin/registration-requests");
-            const showSub = isCustomerSection(pathname) && !collapsed;
-            return (
-              <div key={href} className="flex flex-col gap-0.5">
-                <Link href={href} className={navClass(customerParentActive, collapsed)} title={collapsed ? label : undefined}>
-                  <NavIcon Icon={Icon} />
-                  <span className={collapsed ? "sr-only" : ""}>{label}</span>
-                </Link>
-                {showSub ? (
-                  <Link href="/admin/registration-requests" className={subNavClass(registrationsActive)}>
-                    <IconNavInbox className="h-4 w-4 shrink-0 opacity-80" />
-                    <span>Registrations</span>
-                  </Link>
-                ) : null}
-              </div>
-            );
-          }
+      <nav className={`flex min-h-0 flex-1 flex-col ${collapsed ? "overflow-y-auto p-2" : "overflow-y-auto p-3"}`}>
+        <div className="flex flex-col gap-1">{overviewLinks.map((link) => renderNavLink(link))}</div>
 
-          if (href === "/admin/devices") {
-            const devicesParentActive = isDevicesSection(pathname);
-            const deviceModelsActive = pathname.startsWith("/admin/device-models");
-            const showSub = isDevicesSection(pathname) && !collapsed;
-            return (
-              <div key={href} className="flex flex-col gap-0.5">
-                <Link href={href} className={navClass(devicesParentActive, collapsed)} title={collapsed ? label : undefined}>
-                  <NavIcon Icon={Icon} />
-                  <span className={collapsed ? "sr-only" : ""}>{label}</span>
-                </Link>
-                {showSub ? (
-                  <Link href="/admin/device-models" className={subNavClass(deviceModelsActive)}>
-                    <IconNavPackage className="h-4 w-4 shrink-0 opacity-80" />
-                    <span>Device models</span>
-                  </Link>
-                ) : null}
-              </div>
-            );
-          }
+        {navSections.map((section) => (
+          <div key={section.id} className="flex flex-col gap-1">
+            <NavSectionHeader label={section.label} createSection={section.createSection} collapsed={collapsed} />
+            {section.links.map((link) => renderNavLink(link))}
+          </div>
+        ))}
 
-          if (href === "/admin/settings") {
-            const settingsParentActive = isSettingsSection(pathname);
-            const plansActive = pathname.startsWith("/admin/subscription-options");
-            const usersActive = pathname.startsWith("/admin/users");
-            const showSub = isSettingsSection(pathname) && !collapsed;
-            return (
-              <div key={href} className="flex flex-col gap-0.5">
-                <Link href={href} className={navClass(settingsParentActive, collapsed)} title={collapsed ? label : undefined}>
-                  <NavIcon Icon={Icon} />
-                  <span className={collapsed ? "sr-only" : ""}>{label}</span>
-                </Link>
-                {showSub ? (
-                  <>
-                    <Link href="/admin/subscription-options" className={subNavClass(plansActive)}>
-                      <IconLayers className="h-4 w-4 shrink-0 opacity-80" />
-                      <span>Plans</span>
-                    </Link>
-                    <Link href="/admin/users" className={subNavClass(usersActive)}>
-                      <IconUsers className="h-4 w-4 shrink-0 opacity-80" />
-                      <span>Users</span>
-                    </Link>
-                  </>
-                ) : null}
-              </div>
-            );
-          }
-
-          const active =
-            href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link key={href} href={href} className={navClass(active, collapsed)} title={collapsed ? label : undefined}>
-              <NavIcon Icon={Icon} />
-              <span className={collapsed ? "sr-only" : ""}>{label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {!collapsed ? (
-        <div className="border-t border-zinc-100 p-4 dark:border-zinc-800">
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Subscription and device alerts will appear here as we wire monitoring.
-          </p>
+        <div className="mt-auto flex flex-col gap-1 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          {renderNavLink(settingsLink)}
         </div>
-      ) : (
-        <div className="mt-auto border-t border-zinc-100 p-2 dark:border-zinc-800" aria-hidden />
-      )}
+      </nav>
     </aside>
   );
 }
