@@ -3,14 +3,14 @@ import "server-only";
 import type { Customer, CustomerSubscription, ServiceAssignment } from "@prisma/client";
 import { formatInTimeZone } from "date-fns-tz";
 
-import { opsUrgencyFromNextDueDate } from "@/lib/admin/assignment-ops-urgency";
 import { getBroadcastSupportEmail } from "@/lib/broadcast/support-contact";
 import { prisma } from "@/lib/db";
+import { getPortalTimezone } from "@/lib/portal/timezone-settings";
+import { opsUrgencyFromNextDueDate } from "@/lib/admin/assignment-ops-urgency";
 import { isSubscriptionAttentionStatus } from "@/lib/services/customer-subscription-service";
 import { formatXcd } from "@/lib/subscription-options/display";
 import {
   allowWhatsAppWithoutPayLink,
-  billingReminderTimezone,
   getTwilioContentSid,
   isTwilioWhatsAppConfigured,
   type TwilioWhatsAppReminderTemplateKey,
@@ -36,10 +36,9 @@ function ymdInTimezone(d: Date, tz: string): string {
 }
 
 /** Calendar-day difference: dueYmd minus todayYmd (positive = due in future). */
-export function calendarDaysUntilDue(nextDueDate: Date, now = new Date(), tz?: string): number {
-  const zone = tz ?? billingReminderTimezone();
-  const dueYmd = ymdInTimezone(nextDueDate, zone);
-  const todayYmd = ymdInTimezone(now, zone);
+export function calendarDaysUntilDue(nextDueDate: Date, now: Date, tz: string): number {
+  const dueYmd = ymdInTimezone(nextDueDate, tz);
+  const todayYmd = ymdInTimezone(now, tz);
   const dueMs = Date.parse(`${dueYmd}T12:00:00Z`);
   const todayMs = Date.parse(`${todayYmd}T12:00:00Z`);
   return Math.round((dueMs - todayMs) / 86_400_000);
@@ -142,7 +141,7 @@ export type ProcessBillingWhatsAppRemindersResult = {
 export async function processBillingWhatsAppReminders(
   now = new Date(),
 ): Promise<ProcessBillingWhatsAppRemindersResult> {
-  const tz = billingReminderTimezone();
+  const tz = await getPortalTimezone();
   const at = now.toISOString();
   const details: ProcessBillingWhatsAppRemindersResult["details"] = [];
 

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { DEFAULT_PORTAL_TIMEZONE } from "@/lib/portal/timezone-options";
+
 export type TwilioWhatsAppReminderTemplateKey =
   | "due_5d"
   | "due_3d"
@@ -53,8 +55,9 @@ export function getTwilioContentSid(kind: TwilioWhatsAppTemplateKey): string | n
   return null;
 }
 
+/** @deprecated Use getPortalTimezone() from @/lib/portal/timezone-settings */
 export function billingReminderTimezone(): string {
-  return process.env.BILLING_REMINDER_TIMEZONE?.trim() || "America/Barbados";
+  return process.env.BILLING_REMINDER_TIMEZONE?.trim() || DEFAULT_PORTAL_TIMEZONE;
 }
 
 /** When true, send WhatsApp even if no pay URL ({{4}} = mailto support). Default: skip. */

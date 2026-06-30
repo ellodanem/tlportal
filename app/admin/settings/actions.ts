@@ -17,6 +17,10 @@ import { parseBrandingLogoSize } from "@/lib/branding/logo-size";
 import { prisma } from "@/lib/db";
 import { normalizeBillingAlertSmsAddresses, parseBillingAlertPhonesRaw } from "@/lib/billing/billing-alert-phones";
 import { sendAppEmailWithConfig } from "@/lib/email/send-mail";
+import {
+  parsePortalLocationInput,
+  parsePortalTimezoneInput,
+} from "@/lib/portal/timezone-settings";
 import { canSendTwilioAdminSms, sendTwilioAdminSms } from "@/lib/twilio/admin-sms";
 
 const SETTINGS_ID = "default";
@@ -36,6 +40,8 @@ export type BillingAlertPhonesFormState = { ok?: boolean; error?: string };
 export type BillingAlertTestSmsState = { ok?: boolean; error?: string; sentCount?: number };
 
 export type AutoReceiptEmailFormState = { ok?: boolean; error?: string };
+
+export type PortalTimezoneFormState = { ok?: boolean; error?: string };
 
 function publicPathToFs(publicUrl: string): string {
   const relative = publicUrl.replace(/^\/+/, "");
@@ -499,6 +505,35 @@ export async function updateAutoEmailPaidStripeReceipts(
     where: { id: SETTINGS_ID },
     create: { id: SETTINGS_ID, autoEmailPaidStripeReceipts: enabled },
     update: { autoEmailPaidStripeReceipts: enabled },
+  });
+
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+export async function updatePortalTimezoneSettings(
+  _prev: PortalTimezoneFormState,
+  formData: FormData,
+): Promise<PortalTimezoneFormState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const location = parsePortalLocationInput(formData.get("businessLocation"));
+  if (!location) {
+    return { error: "Enter a business location (max 120 characters)." };
+  }
+
+  const timezone = parsePortalTimezoneInput(formData.get("businessTimezone"));
+  if (!timezone) {
+    return { error: "Choose a valid timezone from the list." };
+  }
+
+  await prisma.appSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID, businessLocation: location, businessTimezone: timezone },
+    update: { businessLocation: location, businessTimezone: timezone },
   });
 
   revalidatePath("/admin/settings");

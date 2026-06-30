@@ -258,6 +258,10 @@ model AppSettings {
   billingAlertPhones          String?          @db.Text
   /// When true, email TL paid receipt PDFs on Stripe `invoice.paid` (requires SMTP).
   autoEmailPaidStripeReceipts Boolean          @default(true)
+  /// IANA timezone for portal calendar dates (billing reminders, due dates). Default St. Lucia.
+  businessTimezone            String           @default("America/St_Lucia")
+  /// Human-readable business location label (e.g. St. Lucia).
+  businessLocation            String           @default("St. Lucia")
   createdAt                   DateTime         @default(now())
   updatedAt                   DateTime         @updatedAt
 }
