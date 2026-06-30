@@ -103,9 +103,15 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
           <p className="font-medium">Converted to draft invoice</p>
           <p className="mt-1 text-emerald-900/90 dark:text-emerald-200/90">
-            Invoice {quote.convertedInvoice.number ?? quote.convertedInvoice.id.slice(0, 8)} —{" "}
-            {formatMoney(Number(quote.convertedInvoice.total), quote.convertedInvoice.currency)} ({quote.convertedInvoice.status.replace("_", " ")}).
-            Native invoice admin UI ships in Phase 2.
+            <Link
+              href={`/admin/tl-invoices/${quote.convertedInvoice.id}`}
+              className="font-semibold underline underline-offset-2"
+            >
+              Invoice {quote.convertedInvoice.number ?? quote.convertedInvoice.id.slice(0, 8)}
+            </Link>
+            {" — "}
+            {formatMoney(Number(quote.convertedInvoice.total), quote.convertedInvoice.currency)} (
+            {quote.convertedInvoice.status.replace("_", " ")}).
           </p>
         </div>
       ) : quote.status !== "converted" && quote.status !== "declined" ? (

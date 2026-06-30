@@ -10,6 +10,11 @@ const items = [
     description: "Download a PDF estimate without Invoiless.",
   },
   {
+    href: "/admin/tl-invoices/new",
+    label: "TL invoice",
+    description: "One-off invoice for cash, cheque, or bank payers.",
+  },
+  {
     href: "/admin/proposals/new",
     label: "Proposal",
     description: "Start a sales proposal with default sections.",

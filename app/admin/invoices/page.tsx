@@ -100,11 +100,12 @@ export default async function AdminInvoicesPage({ searchParams }: Props) {
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Invoices</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Accounting (Invoiless)</strong> — not where
-          card subscriptions run (that is <strong className="font-medium">Customer → Billing</strong>). Lists standard
-          standard invoices from Invoiless; Stripe-paid rows also appear here when Phase 5 mirroring is enabled.
-          Use this module for <strong className="font-medium">one-off</strong> charges (hardware, installation, cash);
-          link customers via Billing → Link billing accounts.
+          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Accounting (Invoiless)</strong> — legacy
+          one-offs. For new invoices use{" "}
+          <Link href="/admin/tl-invoices" className="font-semibold text-emerald-700 underline underline-offset-2 dark:text-emerald-400">
+            TL invoices
+          </Link>
+          . Card subscriptions run through <strong className="font-medium">Customer → Billing</strong> (Stripe).
         </p>
       </div>
 

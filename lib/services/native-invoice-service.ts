@@ -93,6 +93,63 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promis
   return created.id;
 }
 
+/** Replace line items and totals on a draft invoice. */
+export async function updateDraftInvoice(invoiceId: string, input: CreateDraftInvoiceInput): Promise<void> {
+  if (!input.lineItems.length) {
+    throw new Error("An invoice needs at least one line item.");
+  }
+
+  const existing = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { status: true },
+  });
+  if (!existing) throw new Error("Invoice not found");
+  if (existing.status !== "draft") {
+    throw new Error("Only draft invoices can be edited.");
+  }
+
+  const currency = (input.currency ?? "XCD").toUpperCase();
+  const totals = computeDocumentTotals(input.lineItems, input.taxRatePercent ?? null);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.invoiceLineItem.deleteMany({ where: { invoiceId } });
+    await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        customerId: input.customerId ?? null,
+        billToName: input.billToName ?? null,
+        billToLines: input.billToLines ?? [],
+        currency,
+        subtotal: toMoneyString(totals.subtotal),
+        taxLabel: input.taxLabel ?? null,
+        taxRatePercent: input.taxRatePercent != null ? input.taxRatePercent.toFixed(2) : null,
+        taxTotal: toMoneyString(totals.taxTotal),
+        total: toMoneyString(totals.total),
+        amountPaid: "0.00",
+        amountDue: toMoneyString(totals.total),
+        issueDate: input.issueDate ?? new Date(),
+        dueDate: input.dueDate ?? null,
+        notes: input.notes ?? null,
+        paymentInstructions: input.paymentInstructions ?? null,
+        serviceAssignmentId: input.serviceAssignmentId ?? null,
+        lineItems: { create: lineCreateData(input.lineItems) },
+      },
+    });
+  });
+}
+
+/** Finalize and mark sent (allocate TL-INV number, public token, sentAt). */
+export async function finalizeAndSendInvoice(
+  invoiceId: string,
+): Promise<{ number: string; publicToken: string }> {
+  const { number, publicToken } = await finalizeInvoice(invoiceId);
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { sentAt: new Date() },
+  });
+  return { number, publicToken };
+}
+
 /**
  * Finalize a draft invoice: allocate `TL-INV-{n}`, mint a public token, move draft → open.
  * Idempotent — keeps an existing number/token if already set.
