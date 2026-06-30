@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  markInvoiceSentAction,
   saveInvoiceAction,
   sendInvoiceEmailAction,
+  type MarkInvoiceSentState,
   type SaveInvoiceState,
   type SendInvoiceEmailState,
 } from "@/app/admin/tl-invoices/actions";
@@ -60,6 +62,7 @@ function addDaysYmd(base: string, days: number): string {
 
 const initialSend: SendInvoiceEmailState = {};
 const initialSave: SaveInvoiceState = {};
+const initialMarkSent: MarkInvoiceSentState = {};
 
 export function InvoiceGeneratorForm({
   customers,
@@ -104,6 +107,7 @@ export function InvoiceGeneratorForm({
 
   const [sendState, sendAction] = useActionState(sendInvoiceEmailAction, initialSend);
   const [saveState, saveAction] = useActionState(saveInvoiceAction, initialSave);
+  const [markSentState, markSentAction] = useActionState(markInvoiceSentAction, initialMarkSent);
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId) ?? null,
@@ -124,6 +128,10 @@ export function InvoiceGeneratorForm({
   useEffect(() => {
     if (sendState.ok) router.refresh();
   }, [sendState.ok, router]);
+
+  useEffect(() => {
+    if (markSentState.ok) router.refresh();
+  }, [markSentState.ok, router]);
 
   function buildPayload(): { payload: InvoiceRequestPayload; greetingName: string } | { error: string } {
     const lineItems = lines
@@ -197,7 +205,7 @@ export function InvoiceGeneratorForm({
 
   function openEmailPreview() {
     if (!invoiceId) {
-      setError("Save the draft before emailing — sending assigns a TL-INV number.");
+      setError("Save the draft first — marking sent assigns a TL-INV number.");
       return;
     }
     const built = buildPayload();
@@ -233,6 +241,22 @@ export function InvoiceGeneratorForm({
     formData.set("invoicePayloadJson", JSON.stringify(built.payload));
     if (invoiceId) formData.set("invoiceId", invoiceId);
     saveAction(formData);
+  }
+
+  function submitMarkSent(formData: FormData) {
+    const built = buildPayload();
+    if ("error" in built) {
+      setError(built.error);
+      return;
+    }
+    if (!invoiceId) {
+      setError("Save the draft first, then mark as sent.");
+      return;
+    }
+    setError(null);
+    formData.set("invoicePayloadJson", JSON.stringify(built.payload));
+    formData.set("invoiceId", invoiceId);
+    markSentAction(formData);
   }
 
   return (
@@ -287,7 +311,11 @@ export function InvoiceGeneratorForm({
           <div>
             <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Invoice #</span>
             <p className="mt-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900">
-              {assignedNumber ?? "Assigned when sent (TL-INV-…)"}
+              {assignedNumber ?? (
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  Assigned when you mark sent or email (TL-INV-…)
+                </span>
+              )}
             </p>
           </div>
           <div>
@@ -414,11 +442,39 @@ export function InvoiceGeneratorForm({
           </p>
         )}
 
+        {markSentState.error ? (
+          <p
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+            role="alert"
+          >
+            {markSentState.error}
+          </p>
+        ) : null}
+
+        {markSentState.ok && markSentState.message ? (
+          <p
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
+            role="status"
+          >
+            {markSentState.message}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-3">
           {!fieldsDisabled ? (
             <form action={submitSave}>
               <button type="submit" className="rounded-lg border px-5 py-2.5 text-sm font-semibold">
                 {invoiceId ? "Save changes" : "Save draft"}
+              </button>
+            </form>
+          ) : null}
+          {invoiceId && !fieldsDisabled ? (
+            <form action={submitMarkSent}>
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-400 bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-200 dark:border-zinc-500 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+              >
+                Mark as sent
               </button>
             </form>
           ) : null}

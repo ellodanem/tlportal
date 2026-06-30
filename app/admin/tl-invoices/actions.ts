@@ -21,6 +21,7 @@ import {
 
 export type SaveInvoiceState = { error?: string; ok?: boolean; invoiceId?: string; next?: string };
 export type SendInvoiceEmailState = { error?: string; ok?: boolean; message?: string };
+export type MarkInvoiceSentState = { error?: string; ok?: boolean; message?: string; number?: string };
 export type RecordPaymentState = { error?: string; ok?: boolean; message?: string };
 export type VoidInvoiceState = { error?: string; ok?: boolean };
 
@@ -84,6 +85,64 @@ export async function saveInvoiceAction(_prev: SaveInvoiceState, formData: FormD
   }
 }
 
+async function persistDraftAndMarkSent(
+  invoiceId: string,
+  payload: InvoiceRequestPayload,
+  createdById: string,
+): Promise<{ number: string }> {
+  const existing = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { status: true },
+  });
+  if (!existing) {
+    throw new Error("Invoice not found.");
+  }
+  if (existing.status === "void" || existing.status === "written_off") {
+    throw new Error("This invoice cannot be sent.");
+  }
+  if (existing.status === "draft") {
+    await updateDraftInvoice(invoiceId, {
+      ...payloadToCreateInput(payload),
+      createdById,
+    });
+  }
+  const { number } = await finalizeAndSendInvoice(invoiceId);
+  return { number };
+}
+
+export async function markInvoiceSentAction(
+  _prev: MarkInvoiceSentState,
+  formData: FormData,
+): Promise<MarkInvoiceSentState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const invoiceId = String(formData.get("invoiceId") ?? "").trim();
+  if (!invoiceId) {
+    return { error: "Save the draft first, then mark as sent." };
+  }
+
+  const parsed = parsePayloadFromForm(formData);
+  if ("error" in parsed) {
+    return { error: parsed.error };
+  }
+
+  try {
+    const { number } = await persistDraftAndMarkSent(invoiceId, parsed.payload, session.sub);
+    revalidatePath("/admin/tl-invoices");
+    revalidatePath(`/admin/tl-invoices/${invoiceId}`);
+    return {
+      ok: true,
+      number,
+      message: `Invoice marked sent as ${number}. Download the PDF or email it when ready.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not mark invoice as sent." };
+  }
+}
+
 export async function sendInvoiceEmailAction(
   _prev: SendInvoiceEmailState,
   formData: FormData,
@@ -120,11 +179,7 @@ export async function sendInvoiceEmailAction(
 
   try {
     if (existing.status === "draft") {
-      await updateDraftInvoice(invoiceId, {
-        ...payloadToCreateInput(parsed.payload),
-        createdById: session.sub,
-      });
-      await finalizeAndSendInvoice(invoiceId);
+      await persistDraftAndMarkSent(invoiceId, parsed.payload, session.sub);
     }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not finalize invoice." };

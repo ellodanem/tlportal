@@ -43,7 +43,7 @@ export default async function NewTlInvoicePage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">New invoice</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Build a one-off invoice for cash, cheque, or bank payers. A TL-INV number is assigned when you email it.
+          Build a one-off invoice for cash, cheque, or bank payers. A TL-INV number is assigned when you mark it sent or email it.
         </p>
       </div>
 
