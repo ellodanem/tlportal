@@ -14,6 +14,7 @@ import {
   IconNavDashboard,
   IconNavExpenses,
   IconNavExternal,
+  IconNavHealth,
   IconNavInbox,
   IconNavInvoice,
   IconNavPackage,
@@ -50,6 +51,7 @@ const overviewLinks: NavLink[] = [
 function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyUi: boolean }): NavSection[] {
   const invoiceLabel = ctx.nativeBillingPrimary ? "Invoices" : "TL invoices";
   const billingLinks: NavLink[] = [
+    { href: "/admin/billing-health", label: "Health", Icon: IconNavHealth },
     { href: "/admin/tl-invoices", label: invoiceLabel, Icon: IconNavInvoice },
     { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
     { href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses },

@@ -170,3 +170,11 @@ export function IconNavExpenses({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function IconNavHealth({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 12h3.5l2.5-4.5L13 16l2.5-4.5H20" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
