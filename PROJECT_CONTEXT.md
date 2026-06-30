@@ -2322,3 +2322,98 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - feat(customers): add archive for churned accounts
 
+
+### 2026-06-18 13:29 UTC — commit `768fb5f`
+
+- docs: project context log (c4680f1)
+
+
+### 2026-06-18 13:29 UTC — pre-push (`main` → origin) @ `768fb5f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-25 10:52 UTC — commit `a400e8f`
+
+- feat(billing): edit next due inline and in bulk on renewal ops
+
+
+### 2026-06-25 10:52 UTC — pre-push (`main` → origin) @ `a400e8f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-25 11:02 UTC — commit `2cdfa7e`
+
+- feat(billing): edit billing term inline and in bulk on renewal ops
+
+
+### 2026-06-25 11:02 UTC — pre-push (`main` → origin) @ `2cdfa7e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-29 16:24 UTC — commit `2a8b69b`
+
+- feat(admin): add Quick quote PDF generator when Invoiless is unavailable
+
+
+### 2026-06-29 16:25 UTC — pre-push (`main` → origin) @ `2a8b69b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-29 16:37 UTC — commit `087316c`
+
+- feat(admin): email quick quotes with preview and fix PDF generation hang
+
+
+### 2026-06-29 16:37 UTC — pre-push (`main` → origin) @ `087316c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-29 16:38 UTC — pre-push (`main` → origin) @ `087316c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-29 16:49 UTC — commit `7247c5d`
+
+- feat(admin): add Cc and Bcc to quote email with default Bcc for Dane
+
+
+### 2026-06-29 16:49 UTC — pre-push (`main` → origin) @ `7247c5d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-29 22:36 UTC — commit `9e6b209`
+
+- feat(billing): native billing Phase 0 schema and services
+
+
+### 2026-06-29 22:42 UTC — commit `a6029be`
+
+- feat(billing): native billing Phase 1 persisted quotes
+
+
+### 2026-06-29 22:42 UTC — commit `0c20215`
+
+- fix(billing): add persisted quote PDF download route
+
+
+### 2026-06-30 09:03 UTC — pre-push (`main` → origin) @ `0c20215`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 09:10 UTC — commit `d93a32f`
+
+- feat(billing): native billing Phase 2 TL invoices
+
+
+### 2026-06-30 09:10 UTC — pre-push (`main` → origin) @ `d93a32f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
