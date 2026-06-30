@@ -971,6 +971,8 @@ model Invoice {
   notes               String?   @db.Text
   /// Cash/bank/cheque payment instructions printed on the PDF (key for non-card payers).
   paymentInstructions String?   @db.Text
+  /// When true, the public pay link offers Stripe Checkout for the outstanding balance.
+  allowOnlinePayment  Boolean   @default(false)
 
   publicToken String?   @unique
   sentAt      DateTime?
