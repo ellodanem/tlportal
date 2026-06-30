@@ -7,12 +7,12 @@ export const ADMIN_CREATE_ITEMS = [
   {
     href: "/admin/quotes/new",
     label: "Quote",
-    description: "Download a PDF estimate without Invoiless.",
+    description: "Download a PDF estimate.",
     section: "sales",
   },
   {
     href: "/admin/tl-invoices/new",
-    label: "TL invoice",
+    label: "Invoice",
     description: "One-off invoice for cash, cheque, or bank payers.",
     section: "billing",
   },

@@ -88,6 +88,7 @@ export const INVOICE_KIND_LABELS: Record<InvoiceKind, string> = {
   one_off: "One-off",
   recurring: "Recurring",
   subscription_mirror: "Subscription",
+  invoiless_import: "Invoiless (imported)",
 };
 
 export const RECURRING_SCHEDULE_STATUS_LABELS: Record<RecurringScheduleStatus, string> = {

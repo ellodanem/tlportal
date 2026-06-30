@@ -47,42 +47,49 @@ const overviewLinks: NavLink[] = [
   { href: "/admin/reports", label: "Reports", Icon: IconNavReports },
 ];
 
-const navSections: NavSection[] = [
-  {
-    id: "sales",
-    label: "Sales",
-    createSection: "sales",
-    links: [
-      { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
-      { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
-    ],
-  },
-  {
-    id: "billing",
-    label: "Billing",
-    createSection: "billing",
-    links: [
-      { href: "/admin/tl-invoices", label: "TL invoices", Icon: IconNavInvoice },
-      { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
-      { href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses },
-      { href: "/admin/invoices", label: "Invoiless", Icon: IconNavExternal },
-    ],
-  },
-  {
-    id: "fleet",
-    label: "Fleet",
-    createSection: "fleet",
-    links: [
-      { href: "/admin/devices", label: "Devices", Icon: IconDevice },
-      { href: "/admin/sims", label: "SIMs", Icon: IconNavSim },
-    ],
-  },
-  {
-    id: "communications",
-    label: "Communications",
-    links: [{ href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast }],
-  },
-];
+function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyUi: boolean }): NavSection[] {
+  const invoiceLabel = ctx.nativeBillingPrimary ? "Invoices" : "TL invoices";
+  const billingLinks: NavLink[] = [
+    { href: "/admin/tl-invoices", label: invoiceLabel, Icon: IconNavInvoice },
+    { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
+    { href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses },
+  ];
+  if (ctx.invoilessLegacyUi) {
+    billingLinks.push({ href: "/admin/invoices", label: "Invoiless", Icon: IconNavExternal });
+  }
+
+  return [
+    {
+      id: "sales",
+      label: "Sales",
+      createSection: "sales",
+      links: [
+        { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
+        { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
+      ],
+    },
+    {
+      id: "billing",
+      label: "Billing",
+      createSection: "billing",
+      links: billingLinks,
+    },
+    {
+      id: "fleet",
+      label: "Fleet",
+      createSection: "fleet",
+      links: [
+        { href: "/admin/devices", label: "Devices", Icon: IconDevice },
+        { href: "/admin/sims", label: "SIMs", Icon: IconNavSim },
+      ],
+    },
+    {
+      id: "communications",
+      label: "Communications",
+      links: [{ href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast }],
+    },
+  ];
+}
 
 const settingsLink: NavLink = { href: "/admin/settings", label: "Settings", Icon: IconNavSettings };
 
@@ -96,10 +103,11 @@ function isCustomerSection(pathname: string): boolean {
   return pathname.startsWith("/admin/customers") || pathname.startsWith("/admin/registration-requests");
 }
 
-/** Settings + subscription plan prices share one nav group. */
+/** Settings + subscription plan prices + billing cutover share one nav group. */
 function isSettingsSection(pathname: string): boolean {
   return (
     pathname.startsWith("/admin/settings") ||
+    pathname.startsWith("/admin/billing-cutover") ||
     pathname.startsWith("/admin/subscription-options") ||
     pathname.startsWith("/admin/users")
   );
@@ -159,11 +167,16 @@ function NavSectionHeader({
 export function AdminSidebar({
   brandingLogoUrl,
   brandingLogoSize = "m",
+  nativeBillingPrimary = true,
+  invoilessLegacyUi = false,
 }: {
   brandingLogoUrl?: string | null;
   brandingLogoSize?: BrandingLogoSize;
+  nativeBillingPrimary?: boolean;
+  invoilessLegacyUi?: boolean;
 }) {
   const pathname = usePathname();
+  const navSections = buildNavSections({ nativeBillingPrimary, invoilessLegacyUi });
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY) === "1";
@@ -229,6 +242,7 @@ export function AdminSidebar({
       const settingsParentActive = isSettingsSection(pathname);
       const plansActive = pathname.startsWith("/admin/subscription-options");
       const usersActive = pathname.startsWith("/admin/users");
+      const cutoverActive = pathname.startsWith("/admin/billing-cutover");
       const showSub = isSettingsSection(pathname) && !collapsed;
       return (
         <div key={href} className="flex flex-col gap-0.5">
@@ -238,6 +252,10 @@ export function AdminSidebar({
           </Link>
           {showSub ? (
             <>
+              <Link href="/admin/billing-cutover" className={subNavClass(cutoverActive)}>
+                <IconNavInvoice className="h-4 w-4 shrink-0 opacity-80" />
+                <span>Billing cutover</span>
+              </Link>
               <Link href="/admin/subscription-options" className={subNavClass(plansActive)}>
                 <IconLayers className="h-4 w-4 shrink-0 opacity-80" />
                 <span>Plans</span>

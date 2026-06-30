@@ -3,9 +3,14 @@ import { redirect } from "next/navigation";
 
 import { InvoiceCreateForm } from "@/components/admin/invoices/invoice-create-form";
 import { loadInvoilessCustomerLinks } from "@/lib/admin/invoiless-customer-links";
+import { isInvoilessLegacyUiEnabled, isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
 import { isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
 
 export default async function NewInvoicePage() {
+  if (isNativeBillingPrimary() && !isInvoilessLegacyUiEnabled()) {
+    redirect("/admin/tl-invoices/new");
+  }
+
   if (!isInvoilessConfigured()) {
     redirect("/admin/invoices");
   }

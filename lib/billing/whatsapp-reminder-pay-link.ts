@@ -4,9 +4,11 @@ import type { Customer, CustomerSubscription } from "@prisma/client";
 
 import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
 import { prisma } from "@/lib/db";
+import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
 import { isStripeConfigured } from "@/lib/services/billing-service";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
 import { createStripeSubscriptionCheckout } from "@/lib/stripe/checkout";
+import { getAppBaseUrl } from "@/lib/stripe/app-url";
 import { monthlyRateFromCustomer } from "@/lib/stripe/checkout-pricing";
 
 export type PayLinkResolution =
@@ -37,8 +39,28 @@ async function openStripeHostedInvoiceUrl(customerId: string): Promise<string | 
   return row?.hostedInvoiceUrl?.trim() || null;
 }
 
+/** Latest open native TL invoice public pay link. */
+async function nativeInvoicePayUrl(customerId: string): Promise<string | null> {
+  const inv = await prisma.invoice.findFirst({
+    where: {
+      customerId,
+      status: { in: ["open", "partially_paid", "overdue"] },
+      amountDue: { gt: 0 },
+      publicToken: { not: null },
+    },
+    orderBy: { issueDate: "desc" },
+    select: { publicToken: true },
+  });
+  const token = inv?.publicToken?.trim();
+  if (!token) return null;
+  return `${getAppBaseUrl()}/pay/i/${token}`;
+}
+
 /** Invoiless public preview from assignment or mirrored invoice row. */
 async function invoilessPayUrl(customerId: string): Promise<string | null> {
+  if (!isInvoilessLegacyUiEnabled()) {
+    return null;
+  }
   const mirror = await prisma.billingInvoice.findFirst({
     where: {
       customerId,
@@ -112,6 +134,11 @@ export async function resolveBillingReminderPayLink(customerId: string): Promise
   const hosted = await openStripeHostedInvoiceUrl(customerId);
   if (hosted) {
     return { url: hosted, source: "stripe_hosted_invoice" };
+  }
+
+  const nativePay = await nativeInvoicePayUrl(customerId);
+  if (nativePay) {
+    return { url: nativePay, source: "native_invoice_pay" };
   }
 
   const invoiless = await invoilessPayUrl(customerId);

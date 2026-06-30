@@ -139,6 +139,8 @@ enum InvoiceKind {
   one_off
   recurring
   subscription_mirror
+  /// Historical row imported from Invoiless at cutover (Phase 7).
+  invoiless_import
 }
 
 /// How a recorded payment was received against a native invoice.
@@ -973,6 +975,12 @@ model Invoice {
   /// Stripe `BillingInvoice` mirror row (when kind = subscription_mirror).
   billingInvoiceId String?        @unique
   billingInvoice   BillingInvoice? @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)
+
+  /// Source Invoiless invoice id when `kind = invoiless_import` (dedup for backfill).
+  invoilessInvoiceId   String?   @unique
+  /// Original Invoiless invoice number for display on imported rows.
+  legacyInvoiceNumber  String?
+  importedAt           DateTime?
 
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)

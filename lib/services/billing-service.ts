@@ -5,6 +5,7 @@ import { Prisma, type BillingProvider, type CustomerBillingMode } from "@prisma/
 import { invoilessBillingAdapter } from "@/lib/adapters/billing/invoiless/adapter";
 import { stripeBillingAdapter } from "@/lib/adapters/billing/stripe/adapter";
 import { prisma } from "@/lib/db";
+import { isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
 import { parseStripeBillingMetadata } from "@/lib/stripe/metadata";
 import { createStripeSubscriptionCheckout } from "@/lib/stripe/checkout";
 import { createStripeBillingPortalSession } from "@/lib/stripe/portal";
@@ -124,6 +125,12 @@ export async function syncCustomerToInvoilessBilling(
   customerId: string,
   actorUserId?: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isNativeBillingPrimary()) {
+    return {
+      ok: false,
+      error: "Invoiless sync is disabled — native billing is primary. Set INVOILESS_LEGACY_UI=true to re-enable.",
+    };
+  }
   const adapter = invoilessBillingAdapter;
   if (!adapter.isConfigured()) {
     return { ok: false, error: "INVOILESS_API_KEY is not set." };

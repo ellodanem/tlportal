@@ -4,6 +4,7 @@ import type { FleetSegmentKey } from "@/lib/admin/fleet-segments";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { opsUrgencyFromNextDueDate, opsUrgencyRank } from "@/lib/admin/assignment-ops-urgency";
 import { getGlobalFleetHealth } from "@/lib/admin/fleet-health";
+import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
 
 import { prisma } from "@/lib/db";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
@@ -36,7 +37,7 @@ export type DashboardRecentItem = {
 const STRIPE_ATTENTION_STATUSES = ["past_due", "unpaid"] as const;
 
 export async function getDashboardStats() {
-  const invoilessConfigured = Boolean(process.env.INVOILESS_API_KEY?.trim());
+  const invoilessConfigured = isInvoilessLegacyUiEnabled();
   const stripeConfigured = isStripeBillingEnabled();
 
   const [

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { BillingAlertPhonesForm } from "@/components/admin/settings/billing-alert-phones-form";
 import { AutoReceiptEmailForm } from "@/components/admin/settings/auto-receipt-email-form";
 import { BrandingForm } from "@/components/admin/settings/branding-form";
@@ -35,6 +37,19 @@ export default async function AdminSettingsPage() {
       <SmtpSettingsForm initial={smtpInitial} defaultTestTo={session?.email ?? ""} />
       <AutoReceiptEmailForm initialEnabled={autoReceiptEmail} />
       <BillingAlertPhonesForm initialPhones={billingAlertPhones} />
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Billing cutover</h2>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Import historical Invoiless invoices and review native billing mode.
+        </p>
+        <Link
+          href="/admin/billing-cutover"
+          className="mt-3 inline-flex text-sm font-semibold text-emerald-700 hover:underline dark:text-emerald-400"
+        >
+          Open billing cutover →
+        </Link>
+      </section>
     </div>
   );
 }

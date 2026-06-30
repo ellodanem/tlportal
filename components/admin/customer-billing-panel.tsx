@@ -338,7 +338,7 @@ export function CustomerBillingPanel({
                   defaultChecked={!isStripe}
                   className="text-emerald-600"
                 />
-                Manual / Invoiless invoices
+                Manual / native invoices
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -377,7 +377,13 @@ export function CustomerBillingPanel({
               <SyncInvoilessButton customerId={customerId} hasInvoilessId={hasInvoilessId} />
             </div>
           ) : (
-            <p className="text-sm text-zinc-500">Set INVOILESS_API_KEY for accounting sync.</p>
+            <p className="text-sm text-zinc-500">
+              Native billing is primary — create invoices under{" "}
+              <a href="/admin/tl-invoices" className="font-medium text-emerald-700 underline dark:text-emerald-400">
+                Invoices
+              </a>
+              .
+            </p>
           )}
 
           {!stripeConfigured ? (

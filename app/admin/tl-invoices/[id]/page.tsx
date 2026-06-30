@@ -11,6 +11,7 @@ import { InvoicePaymentForm, InvoiceVoidForm } from "@/components/admin/invoice-
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
+import { displayInvoiceNumber } from "@/lib/domain/native-billing-cutover";
 import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
@@ -118,7 +119,9 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            {invoice.number ?? "Draft invoice"}
+            {displayInvoiceNumber(invoice) === "—" && invoice.status === "draft"
+              ? "Draft invoice"
+              : displayInvoiceNumber(invoice)}
           </h1>
           <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {INVOICE_STATUS_LABELS[invoice.status]}

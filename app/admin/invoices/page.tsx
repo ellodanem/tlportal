@@ -1,16 +1,20 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { InvoicesTableClient } from "@/components/admin/invoices/invoices-table-client";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { loadInvoilessCustomerLinks, resolveInvoilessIdForCustomer } from "@/lib/admin/invoiless-customer-links";
 import { prisma } from "@/lib/db";
+import { isInvoilessLegacyUiEnabled, isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
 import {
   fetchInvoicesForInvoilessCustomerId,
   fetchInvoicesPage,
   isInvoilessConfigured,
 } from "@/lib/invoiless/invoices-list";
 
-type Props = { searchParams: Promise<{ page?: string; q?: string; limit?: string; customer?: string }> };
+type Props = {
+  searchParams: Promise<{ page?: string; q?: string; limit?: string; customer?: string; legacy?: string }>;
+};
 
 /** Invoiless web app — create invoice (login required). */
 const INVOILESS_NEW_INVOICE_URL = "https://app.invoiless.com/invoices/create";
@@ -24,6 +28,12 @@ function normalizeLimit(raw: string | undefined): number {
 
 export default async function AdminInvoicesPage({ searchParams }: Props) {
   const sp = await searchParams;
+  const legacy = sp.legacy === "1" || sp.legacy === "true";
+
+  if (isNativeBillingPrimary() && !legacy && !isInvoilessLegacyUiEnabled()) {
+    redirect("/admin/tl-invoices");
+  }
+
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const limit = normalizeLimit(sp.limit);
   const q = (sp.q ?? "").trim();

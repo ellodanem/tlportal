@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
+
 import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 
@@ -19,6 +21,9 @@ import { getStripeClient } from "@/lib/stripe/config";
 import { recordOperationalEvent } from "./operational-event-service";
 
 export function isInvoilessStripeMirrorEnabled(): boolean {
+  if (isNativeBillingPrimary()) {
+    return false;
+  }
   if (!process.env.INVOILESS_API_KEY?.trim()) {
     return false;
   }

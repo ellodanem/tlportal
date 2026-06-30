@@ -6,6 +6,7 @@ import { InactivityTimeout } from "@/components/auth/inactivity-timeout";
 import { SignOutButton } from "@/components/sign-out-button";
 import { getSession } from "@/lib/auth/get-session";
 import { getBrandingSettings } from "@/lib/branding/app-settings";
+import { isInvoilessLegacyUiEnabled, isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
 import { prisma } from "@/lib/db";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -24,7 +25,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <AdminSidebar brandingLogoUrl={branding.logoUrl} brandingLogoSize={branding.logoSize} />
+      <AdminSidebar
+        brandingLogoUrl={branding.logoUrl}
+        brandingLogoSize={branding.logoSize}
+        nativeBillingPrimary={isNativeBillingPrimary()}
+        invoilessLegacyUi={isInvoilessLegacyUiEnabled()}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <InactivityTimeout />
         <header className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900">

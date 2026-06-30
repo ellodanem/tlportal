@@ -2,6 +2,7 @@ import "server-only";
 
 import { toBillingInvoiceClientRow } from "@/lib/admin/billing-invoice-client";
 import { prisma } from "@/lib/db";
+import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
 import { isCatalogRateTier } from "@/lib/domain/billing-catalog";
 import { CUSTOMER_SUBSCRIPTION_STATUS_LABEL } from "@/lib/domain/customer-subscription";
 import { formatPlanTerm, formatXcd } from "@/lib/subscription-options/display";
@@ -26,7 +27,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
   const customer = await prisma.customer.findUnique({ where: { id: customerId } });
   if (!customer) return null;
 
-  const invoilessConfigured = Boolean(process.env.INVOILESS_API_KEY?.trim());
+  const invoilessConfigured = isInvoilessLegacyUiEnabled();
   const stripeConfigured = isStripeConfigured();
   const savedMonthlyRate = monthlyRateFromCustomer(customer.stripeMonthlyRateXcd);
   const defaultMonthlyRate = await getDefaultMonthlyRateXcd();
