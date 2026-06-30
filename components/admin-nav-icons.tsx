@@ -127,3 +127,17 @@ export function IconNavProposal({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function IconNavReports({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 19V5M4 19h16" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path
+        d="M8 17V11M12 17V7M16 17v-4"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

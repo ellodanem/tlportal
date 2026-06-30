@@ -16,6 +16,7 @@ import {
   IconNavInvoice,
   IconNavPackage,
   IconNavProposal,
+  IconNavReports,
   IconNavSettings,
   IconNavSim,
 } from "@/components/admin-nav-icons";
@@ -32,6 +33,7 @@ const links = [
   { href: "/admin/tl-invoices", label: "TL invoices", Icon: IconNavInvoice },
   { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavInvoice },
   { href: "/admin/expenses", label: "Expenses", Icon: IconNavPackage },
+  { href: "/admin/reports", label: "Reports", Icon: IconNavReports },
   { href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast },
   { href: "/admin/invoices", label: "Invoiless", Icon: IconNavInvoice },
   { href: "/admin/devices", label: "Devices", Icon: IconDevice },
