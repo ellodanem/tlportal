@@ -13,6 +13,7 @@ import {
   type SendInvoiceEmailState,
 } from "@/app/admin/tl-invoices/actions";
 import { InvoiceEmailPreviewDialog } from "@/components/admin/invoice-email-preview-dialog";
+import { CopyValueButton } from "@/components/admin/copy-value-button";
 import {
   defaultInvoiceEmailBody,
   defaultInvoiceEmailSubject,
@@ -270,15 +271,20 @@ export function InvoiceGeneratorForm({
       <div className="flex max-w-3xl flex-col gap-5">
         {publicPayUrl ? (
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
-            <p className="font-medium text-zinc-900 dark:text-zinc-100">Customer pay link</p>
-            <a
-              href={publicPayUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 break-all text-emerald-700 hover:underline dark:text-emerald-400"
-            >
-              {publicPayUrl}
-            </a>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-zinc-900 dark:text-zinc-100">Customer pay link</p>
+                <a
+                  href={publicPayUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 block break-all text-emerald-700 hover:underline dark:text-emerald-400"
+                >
+                  {publicPayUrl}
+                </a>
+              </div>
+              <CopyValueButton value={publicPayUrl} kind="pay link" className="mt-0.5 shrink-0" />
+            </div>
           </div>
         ) : null}
 
