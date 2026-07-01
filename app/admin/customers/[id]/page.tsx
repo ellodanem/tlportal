@@ -21,6 +21,7 @@ import {
   type FleetHealthBucket,
 } from "@/lib/admin/fleet-health";
 import { CopyValueButton } from "@/components/admin/copy-value-button";
+import { CustomerActivityEvent, CustomerActivityEventTime } from "@/components/admin/customer-activity-event";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { UnarchiveCustomerButton } from "@/components/archive-customer-button";
 import {
@@ -640,23 +641,10 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
             {activityEvents.map((ev) => (
               <li
                 key={ev.id}
-                className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between"
+                className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
               >
-                <div className="min-w-0">
-                  <p className="text-sm text-zinc-800 dark:text-zinc-200">{ev.summary}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{ev.category.replace(/\./g, " · ")}</p>
-                </div>
-                <time
-                  dateTime={ev.occurredAt.toISOString()}
-                  className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400"
-                >
-                  {ev.occurredAt.toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </time>
+                <CustomerActivityEvent event={ev} />
+                <CustomerActivityEventTime occurredAt={ev.occurredAt} />
               </li>
             ))}
           </ul>
