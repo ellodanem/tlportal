@@ -58,7 +58,14 @@ function statusPill(status: ServiceAssignmentStatus | "due_soon" | "overdue") {
     suspended: "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200",
     cancelled: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
   };
-  const label = status.replace(/_/g, " ");
+  const label =
+    status === "suspended"
+      ? "Paused"
+      : status === "due_soon"
+        ? "Due soon"
+        : status === "overdue"
+          ? "Overdue"
+          : status.replace(/_/g, " ");
   return (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${classes[status] ?? classes.active}`}

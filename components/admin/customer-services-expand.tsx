@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { markAssignmentPeriodPaidAction } from "@/app/admin/customers/renewal-actions";
 import type { RenewalActionState } from "@/app/admin/customers/renewal-action-state";
+import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import type { CustomerTableDeviceRow } from "@/lib/admin/customer-table-rows";
 import type { CustomerBillingMode } from "@prisma/client";
 
@@ -112,6 +113,16 @@ export function CustomerServicesExpand({
                     </button>
                   </form>
                 ) : null}
+                <div className="shrink-0">
+                  <CustomerAssignmentServiceActions
+                    assignmentId={d.assignmentId}
+                    deviceId={d.deviceId}
+                    billingMode={billingMode}
+                    status={d.status}
+                    open
+                    layout="stack"
+                  />
+                </div>
               </li>
             );
           })}

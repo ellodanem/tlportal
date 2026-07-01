@@ -39,11 +39,14 @@ export function opsUrgencyRank(urgency: OpsUrgency): number {
   }
 }
 
-/** Display status for tables: prefer date-based urgency when nextDueDate is set. */
+/** Display status for tables: prefer date-based urgency when nextDueDate is set (active assignments only). */
 export function displayAssignmentOpsStatus(
   status: ServiceAssignmentStatus,
   nextDueDate: Date | null | undefined,
 ): ServiceAssignmentStatus | "due_soon" | "overdue" {
+  if (status === "cancelled" || status === "suspended") {
+    return status;
+  }
   if (nextDueDate) {
     const u = opsUrgencyFromNextDueDate(nextDueDate);
     if (u === "overdue") {
@@ -51,9 +54,6 @@ export function displayAssignmentOpsStatus(
     }
     if (u === "due_soon") {
       return "due_soon";
-    }
-    if (status === "cancelled" || status === "suspended") {
-      return status;
     }
     return "active";
   }

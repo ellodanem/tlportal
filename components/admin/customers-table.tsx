@@ -39,7 +39,7 @@ function RollupPill({ rollup }: { rollup: AssignmentRollup }) {
         "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200",
     },
     suspended: {
-      label: "Suspended",
+      label: "Paused",
       className: "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100",
     },
     active: {

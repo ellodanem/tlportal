@@ -58,7 +58,8 @@ export function classifyOpenAssignment(
   options?: { stripeBillingAttention?: boolean },
 ): FleetHealthClassification {
   const reviewReasons: FleetHealthReviewReason[] = [];
-  const renewalUrgency = opsUrgencyFromNextDueDate(a.nextDueDate);
+  const renewalUrgency =
+    a.status === "suspended" ? "unknown" : opsUrgencyFromNextDueDate(a.nextDueDate);
 
   if (a.status === "suspended") {
     reviewReasons.push("assignment_suspended");
@@ -213,7 +214,7 @@ export function classifyCustomerAssignments(
 export function reviewReasonLabel(reason: FleetHealthReviewReason): string {
   switch (reason) {
     case "assignment_suspended":
-      return "Service suspended";
+      return "Service paused";
     case "device_suspended":
       return "Device suspended";
     case "missing_sim":

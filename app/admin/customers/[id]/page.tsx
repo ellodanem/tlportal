@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import {
   CustomerOverviewBillingRibbon,
   subscriptionStatusLabelForOverview,
@@ -66,9 +67,17 @@ function statusPill(status: string) {
     suspended: "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100",
     cancelled: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   };
+  const label =
+    status === "suspended"
+      ? "Paused"
+      : status === "due_soon"
+        ? "Due soon"
+        : status === "overdue"
+          ? "Overdue"
+          : status.replace(/_/g, " ");
   return (
     <span className={`${base} ${map[status] ?? map.suspended}`}>
-      {status.replace(/_/g, " ")}
+      {label}
     </span>
   );
 }
@@ -474,6 +483,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
                   <th className="px-4 py-3">Billing</th>
                   <th className="px-4 py-3">Next due</th>
                   <th className="px-4 py-3">Started</th>
+                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -597,8 +607,20 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
                           </div>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{formatDate(a.nextDueDate)}</td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                        {a.status === "suspended" ? "—" : formatDate(a.nextDueDate)}
+                      </td>
                       <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{formatDate(a.startDate)}</td>
+                      <td className="px-4 py-3 align-top">
+                        <CustomerAssignmentServiceActions
+                          assignmentId={a.id}
+                          deviceId={a.device.id}
+                          billingMode={customer.billingMode}
+                          status={a.status}
+                          open={assignmentOpen}
+                          layout="inline"
+                        />
+                      </td>
                     </tr>
                   );
                 })}

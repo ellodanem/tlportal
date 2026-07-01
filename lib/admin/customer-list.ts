@@ -46,12 +46,18 @@ export function rollupFromAssignments(
 ): AssignmentRollup {
   if (assignments.length === 0) return "none";
 
+  const active = assignments.filter((a) => a.status === "active");
+  const paused = assignments.filter((a) => a.status === "suspended");
+
+  if (active.length === 0) {
+    return paused.length > 0 ? "suspended" : "none";
+  }
+
   let rollup: AssignmentRollup = "active";
-  for (const a of assignments) {
+  for (const a of active) {
     const display = displayAssignmentOpsStatus(a.status, a.nextDueDate);
     if (display === "overdue") return "overdue";
     if (display === "due_soon") rollup = "due_soon";
-    else if (display === "suspended" && rollup === "active") rollup = "suspended";
   }
   return rollup;
 }

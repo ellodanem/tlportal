@@ -721,6 +721,7 @@ export async function updateDeviceLinkedSim(
 
 function revalidateAfterServicePause(customerId: string, deviceId: string, simCardId: string | null) {
   revalidatePath("/admin");
+  revalidatePath("/admin/customers");
   revalidatePath("/admin/devices");
   revalidatePath(`/admin/devices/${deviceId}/edit`);
   revalidatePath(`/admin/customers/${customerId}`);

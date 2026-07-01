@@ -64,7 +64,7 @@ export function buildCustomerTableRows(customers: CustomerWithAssignments[]): Cu
       deviceId: a.deviceId,
       deviceLabel: deviceFriendlyLabel(a.device.label, a.device.imei),
       imei: a.device.imei,
-      nextDueDate: a.nextDueDate?.toISOString() ?? null,
+      nextDueDate: a.status === "suspended" ? null : a.nextDueDate?.toISOString() ?? null,
       urgency: a.status === "suspended" ? "unknown" : opsUrgencyFromNextDueDate(a.nextDueDate),
       status: a.status,
     }));
