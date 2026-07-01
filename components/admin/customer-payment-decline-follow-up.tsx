@@ -1,4 +1,5 @@
 import { formatMoney } from "@/lib/domain/native-billing";
+import { PaymentDeclineResendForm } from "@/components/admin/payment-decline-resend-form";
 import type { CustomerPaymentDeclineFollowUp } from "@/lib/stripe/payment-failure-recovery";
 
 function formatWhen(d: Date): string {
@@ -13,8 +14,10 @@ function formatWhen(d: Date): string {
 
 export function CustomerPaymentDeclineFollowUpCard({
   followUp,
+  customerId,
 }: {
   followUp: CustomerPaymentDeclineFollowUp;
+  customerId: string;
 }) {
   const amountLabel = formatMoney(followUp.amount, followUp.currency);
   const declinePart = followUp.declineCode ? ` (${followUp.declineCode})` : "";
@@ -105,6 +108,13 @@ export function CustomerPaymentDeclineFollowUpCard({
           </a>
         </p>
       ) : null}
+
+      <PaymentDeclineResendForm
+        customerId={customerId}
+        customerEmail={followUp.customerEmail}
+        hasPayUrl={Boolean(followUp.payUrl && !followUp.payUrl.includes("/admin/"))}
+        emailAlreadySent={followUp.emailSent}
+      />
     </section>
   );
 }

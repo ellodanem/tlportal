@@ -436,6 +436,7 @@ export async function listRecentPaymentFailureCustomerIds(withinDays = 7): Promi
 }
 
 export type CustomerPaymentDeclineFollowUp = {
+  eventId: string;
   occurredAt: Date;
   amount: number;
   currency: string;
@@ -462,7 +463,7 @@ export async function getLatestPaymentDeclineFollowUpForCustomer(
       occurredAt: { gte: since },
     },
     orderBy: { occurredAt: "desc" },
-    select: { occurredAt: true, payload: true },
+    select: { id: true, occurredAt: true, payload: true },
   });
   if (!event) return null;
 
@@ -484,6 +485,7 @@ export async function getLatestPaymentDeclineFollowUpForCustomer(
   });
 
   return {
+    eventId: event.id,
     occurredAt: event.occurredAt,
     amount: payload?.amount ?? 0,
     currency: payload?.currency ?? "XCD",
@@ -496,4 +498,89 @@ export async function getLatestPaymentDeclineFollowUpForCustomer(
     smsRecipientCount: payload?.smsRecipientCount ?? 0,
     payUrl: payload?.payUrl ?? null,
   };
+}
+
+export type ResendPaymentDeclineEmailResult =
+  | { ok: true; email: string }
+  | { ok: false; error: string };
+
+/** Staff-triggered resend of the decline follow-up email (same template as automatic send). */
+export async function resendPaymentDeclineEmailForCustomer(
+  customerId: string,
+  actorUserId?: string | null,
+): Promise<ResendPaymentDeclineEmailResult> {
+  const followUp = await getLatestPaymentDeclineFollowUpForCustomer(customerId, 7);
+  if (!followUp) {
+    return { ok: false, error: "No recent payment decline on file for this customer." };
+  }
+  if (!followUp.payUrl || followUp.payUrl.includes("/admin/")) {
+    return { ok: false, error: "No customer pay link is available for this decline." };
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { email: true, company: true, firstName: true, lastName: true },
+  });
+  const email = customer?.email?.trim();
+  if (!customer || !email) {
+    return { ok: false, error: "Customer has no email on file. Add one on the profile first." };
+  }
+
+  const amountLabel = formatMoney(followUp.amount, followUp.currency);
+  const body = paymentFailureEmailBody({
+    greetingName: customerDisplayName(customer),
+    amountLabel,
+    invoiceLabel: followUp.invoiceNumber,
+    payUrl: followUp.payUrl,
+    declineCode: followUp.declineCode,
+  });
+
+  const sent = await sendAppEmail({
+    to: email,
+    subject: body.subject,
+    text: body.text,
+    html: body.html,
+  });
+  if (!sent.ok) {
+    return { ok: false, error: sent.error };
+  }
+
+  const existingEvent = await prisma.operationalEvent.findUnique({
+    where: { id: followUp.eventId },
+    select: { payload: true },
+  });
+  const existingPayload =
+    existingEvent?.payload && typeof existingEvent.payload === "object" && !Array.isArray(existingEvent.payload)
+      ? (existingEvent.payload as Record<string, unknown>)
+      : {};
+
+  await prisma.operationalEvent.update({
+    where: { id: followUp.eventId },
+    data: {
+      payload: {
+        ...existingPayload,
+        emailSent: true,
+        emailError: null,
+        emailResentAt: new Date().toISOString(),
+        emailResentBy: actorUserId ?? null,
+      },
+    },
+  });
+
+  await recordOperationalEvent({
+    category: "billing.payment_decline_email_resent",
+    customerId,
+    actorUserId: actorUserId ?? undefined,
+    summary: `Decline email resent to ${email}`,
+    payload: {
+      sourceEventId: followUp.eventId,
+      amount: followUp.amount,
+      currency: followUp.currency,
+      declineCode: followUp.declineCode,
+      invoiceNumber: followUp.invoiceNumber,
+      payUrl: followUp.payUrl,
+    },
+  });
+
+  return { ok: true, email };
 }

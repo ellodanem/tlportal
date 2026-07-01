@@ -82,9 +82,32 @@ function PaymentFailedActivity({ event }: { event: ActivityEventRow }) {
   );
 }
 
+function PaymentDeclineEmailResentActivity({ event }: { event: ActivityEventRow }) {
+  const payload = event.payload as { amount?: number; currency?: string; invoiceNumber?: string | null } | null;
+  const amount =
+    payload?.amount != null && payload.amount > 0
+      ? formatMoney(payload.amount, payload?.currency ?? "XCD")
+      : null;
+
+  return (
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{event.summary}</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <ActivityChip label="Decline email resent" tone="emerald" />
+        {amount ? <ActivityChip label={amount} /> : null}
+        {payload?.invoiceNumber ? <ActivityChip label={payload.invoiceNumber} /> : null}
+      </div>
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">billing · payment decline email resent</p>
+    </div>
+  );
+}
+
 export function CustomerActivityEvent({ event }: { event: ActivityEventRow }) {
   if (event.category === "billing.payment_failed") {
     return <PaymentFailedActivity event={event} />;
+  }
+  if (event.category === "billing.payment_decline_email_resent") {
+    return <PaymentDeclineEmailResentActivity event={event} />;
   }
 
   return (

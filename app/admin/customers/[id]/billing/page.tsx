@@ -109,7 +109,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
       />
 
       {paymentDeclineFollowUp ? (
-        <CustomerPaymentDeclineFollowUpCard followUp={paymentDeclineFollowUp} />
+        <CustomerPaymentDeclineFollowUpCard followUp={paymentDeclineFollowUp} customerId={customer.id} />
       ) : null}
 
       {isManual ? (
