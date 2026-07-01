@@ -378,3 +378,66 @@ export async function listRecentPaymentFailureCustomerIds(withinDays = 7): Promi
   });
   return new Set(events.map((e) => e.customerId!).filter(Boolean));
 }
+
+export type CustomerPaymentDeclineFollowUp = {
+  occurredAt: Date;
+  amount: number;
+  currency: string;
+  declineCode: string | null;
+  invoiceNumber: string | null;
+  last4: string | null;
+  emailSent: boolean;
+  emailError: string | null;
+  customerEmail: string | null;
+  smsRecipientCount: number;
+  payUrl: string | null;
+};
+
+/** Latest recorded card decline and follow-up delivery status for billing UI. */
+export async function getLatestPaymentDeclineFollowUpForCustomer(
+  customerId: string,
+  withinDays = 7,
+): Promise<CustomerPaymentDeclineFollowUp | null> {
+  const since = new Date(Date.now() - withinDays * 24 * 60 * 60 * 1000);
+  const event = await prisma.operationalEvent.findFirst({
+    where: {
+      category: "billing.payment_failed",
+      customerId,
+      occurredAt: { gte: since },
+    },
+    orderBy: { occurredAt: "desc" },
+    select: { occurredAt: true, payload: true },
+  });
+  if (!event) return null;
+
+  const payload = event.payload as {
+    amount?: number;
+    currency?: string;
+    declineCode?: string | null;
+    invoiceNumber?: string | null;
+    last4?: string | null;
+    emailSent?: boolean;
+    emailError?: string | null;
+    smsRecipientCount?: number;
+    payUrl?: string | null;
+  } | null;
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { email: true },
+  });
+
+  return {
+    occurredAt: event.occurredAt,
+    amount: payload?.amount ?? 0,
+    currency: payload?.currency ?? "XCD",
+    declineCode: payload?.declineCode ?? null,
+    invoiceNumber: payload?.invoiceNumber ?? null,
+    last4: payload?.last4 ?? null,
+    emailSent: payload?.emailSent === true,
+    emailError: payload?.emailError ?? null,
+    customerEmail: customer?.email?.trim() || null,
+    smsRecipientCount: payload?.smsRecipientCount ?? 0,
+    payUrl: payload?.payUrl ?? null,
+  };
+}

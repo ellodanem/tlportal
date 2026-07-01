@@ -15,6 +15,7 @@ import { listBillingInvoicesForCustomer } from "@/lib/services/billing-invoice-s
 import { listActiveAssignmentsForRenewal } from "@/lib/services/assignment-renewal-service";
 import { getBillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
+import { getLatestPaymentDeclineFollowUpForCustomer } from "@/lib/stripe/payment-failure-recovery";
 import {
   effectiveMonthlyRateForCheckout,
   getDefaultMonthlyRateXcd,
@@ -54,6 +55,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     customerSubscription,
     billingSetup,
     renewalAssignments,
+    paymentDeclineFollowUp,
   ] = await Promise.all([
       getInvoilessExternalCustomerId(customer.id),
       getStripeBillingAccount(customer.id),
@@ -66,6 +68,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
       getCurrentCustomerSubscription(customer.id),
       getBillingSetupStatus(customer.id),
       listActiveAssignmentsForRenewal(customer.id),
+      getLatestPaymentDeclineFollowUpForCustomer(customer.id),
     ]);
 
   const stripeMeta = stripeAccount ? parseStripeBillingMetadata(stripeAccount.metadata) : null;
@@ -125,6 +128,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     stripePeriodEnd,
     stripeInvoices: stripeInvoices.map(toBillingInvoiceClientRow),
     subscriptionSummary,
+    paymentDeclineFollowUp,
     renewalAssignments: renewalAssignments.map((a) => ({
       id: a.id,
       intervalMonths: a.intervalMonths,

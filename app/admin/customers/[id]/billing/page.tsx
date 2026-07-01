@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
 import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-status-strip";
+import { CustomerPaymentDeclineFollowUpCard } from "@/components/admin/customer-payment-decline-follow-up";
 import { CustomerRenewalOpsPanel } from "@/components/admin/customer-renewal-ops-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
@@ -45,6 +46,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     stripeInvoices,
     subscriptionSummary,
     renewalAssignments,
+    paymentDeclineFollowUp,
   } = data;
 
   const title = customerDisplayName(customer);
@@ -105,6 +107,10 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         stripeConfigured={stripeConfigured}
         invoilessConfigured={invoilessConfigured}
       />
+
+      {paymentDeclineFollowUp ? (
+        <CustomerPaymentDeclineFollowUpCard followUp={paymentDeclineFollowUp} />
+      ) : null}
 
       {isManual ? (
         <>
