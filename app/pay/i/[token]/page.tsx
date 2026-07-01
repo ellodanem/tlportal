@@ -109,31 +109,48 @@ export default async function PublicInvoicePayPage({
           </div>
         </dl>
 
-        <div className="mt-8 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <table className="min-w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500 dark:bg-zinc-950">
-              <tr>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3 text-right">Qty</th>
-                <th className="px-4 py-3 text-right">Price</th>
-                <th className="px-4 py-3 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {invoice.lineItems.map((line) => (
-                <tr key={line.id}>
-                  <td className="px-4 py-3">{line.description}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{Number(line.quantity)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatMoney(Number(line.unitPrice), invoice.currency)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+        <div className="mt-8 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800 md:hidden">
+            {invoice.lineItems.map((line) => (
+              <div key={line.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-medium">{line.description}</p>
+                  <p className="shrink-0 font-medium tabular-nums">
                     {formatMoney(Number(line.lineTotal), invoice.currency)}
-                  </td>
+                  </p>
+                </div>
+                <p className="mt-1 text-xs text-zinc-500 tabular-nums dark:text-zinc-400">
+                  Qty {Number(line.quantity)} · {formatMoney(Number(line.unitPrice), invoice.currency)} each
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-full text-sm">
+              <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500 dark:bg-zinc-950">
+                <tr>
+                  <th className="px-4 py-3">Description</th>
+                  <th className="px-4 py-3 text-right">Qty</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Price</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {invoice.lineItems.map((line) => (
+                  <tr key={line.id}>
+                    <td className="px-4 py-3">{line.description}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{Number(line.quantity)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                      {formatMoney(Number(line.unitPrice), invoice.currency)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                      {formatMoney(Number(line.lineTotal), invoice.currency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="border-t border-zinc-200 px-4 py-4 text-right dark:border-zinc-800">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Total {formatMoney(Number(invoice.total), invoice.currency)}
