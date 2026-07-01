@@ -280,10 +280,22 @@ export async function handleStripePaymentFailure(input: {
   });
 }
 
-export async function getRecentNativeInvoicePaymentFailure(
+export type NativeInvoiceDeclineFollowUp = {
+  occurredAt: Date;
+  amount: number;
+  currency: string;
+  declineCode: string | null;
+  last4: string | null;
+  emailSent: boolean;
+  emailError: string | null;
+  smsRecipientCount: number;
+};
+
+export async function getNativeInvoiceDeclineFollowUp(
   invoiceId: string,
-): Promise<{ declineCode: string | null; guidance: string; occurredAt: Date } | null> {
-  const since = new Date(Date.now() - RECENT_FAILURE_HOURS * 60 * 60 * 1000);
+  withinDays = 7,
+): Promise<NativeInvoiceDeclineFollowUp | null> {
+  const since = new Date(Date.now() - withinDays * 24 * 60 * 60 * 1000);
   const row = await prisma.operationalEvent.findFirst({
     where: {
       category: "billing.payment_failed",
@@ -298,12 +310,37 @@ export async function getRecentNativeInvoicePaymentFailure(
   });
   if (!row) return null;
 
-  const payload = row.payload as { declineCode?: string | null } | null;
-  const declineCode = payload?.declineCode ?? null;
+  const payload = row.payload as {
+    amount?: number;
+    currency?: string;
+    declineCode?: string | null;
+    last4?: string | null;
+    emailSent?: boolean;
+    emailError?: string | null;
+    smsRecipientCount?: number;
+  } | null;
+
   return {
-    declineCode,
-    guidance: declineCodeGuidance(declineCode),
     occurredAt: row.occurredAt,
+    amount: payload?.amount ?? 0,
+    currency: payload?.currency ?? "XCD",
+    declineCode: payload?.declineCode ?? null,
+    last4: payload?.last4 ?? null,
+    emailSent: payload?.emailSent === true,
+    emailError: payload?.emailError ?? null,
+    smsRecipientCount: payload?.smsRecipientCount ?? 0,
+  };
+}
+
+export async function getRecentNativeInvoicePaymentFailure(
+  invoiceId: string,
+): Promise<{ declineCode: string | null; guidance: string; occurredAt: Date } | null> {
+  const followUp = await getNativeInvoiceDeclineFollowUp(invoiceId, RECENT_FAILURE_HOURS / 24);
+  if (!followUp) return null;
+  return {
+    declineCode: followUp.declineCode,
+    guidance: declineCodeGuidance(followUp.declineCode),
+    occurredAt: followUp.occurredAt,
   };
 }
 

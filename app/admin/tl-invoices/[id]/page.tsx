@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { InvoiceDeclineFollowUpBanner } from "@/components/admin/invoice-decline-follow-up-banner";
 import { StripeSubscriptionInvoicePanel } from "@/components/admin/stripe-subscription-invoice-panel";
 import { InvoiceScheduledEmailBanner } from "@/components/admin/invoice-scheduled-email-banner";
 import {
@@ -17,6 +18,7 @@ import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS, PAYMENT_METHOD
 import { prisma } from "@/lib/db";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
+import { getNativeInvoiceDeclineFollowUp } from "@/lib/stripe/payment-failure-recovery";
 
 function formatYmd(d: Date): string {
   const y = d.getUTCFullYear();
@@ -28,7 +30,7 @@ function formatYmd(d: Date): string {
 export default async function TlInvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [invoice, customers, pendingScheduledEmail] = await Promise.all([
+  const [invoice, customers, pendingScheduledEmail, declineFollowUp] = await Promise.all([
     prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -69,6 +71,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
       where: { invoiceId: id, status: "pending" },
       select: { sendAt: true, to: true },
     }),
+    getNativeInvoiceDeclineFollowUp(id),
   ]);
 
   if (!invoice) notFound();
@@ -154,6 +157,10 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
           sendAtIso={pendingScheduledEmail.sendAt.toISOString()}
           to={pendingScheduledEmail.to}
         />
+      ) : null}
+
+      {declineFollowUp && invoice.status !== "paid" && invoice.status !== "void" && invoice.status !== "written_off" ? (
+        <InvoiceDeclineFollowUpBanner followUp={declineFollowUp} />
       ) : null}
 
       {invoice.billingInvoice ? (
