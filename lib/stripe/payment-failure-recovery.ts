@@ -307,6 +307,16 @@ export async function getRecentNativeInvoicePaymentFailure(
   };
 }
 
+export function paymentFailureEmailFollowUpLabel(input: {
+  emailSent: boolean;
+  emailError: string | null;
+}): string {
+  if (input.emailSent) return "Email sent";
+  if (input.emailError?.toLowerCase().includes("no email")) return "No email on file";
+  if (input.emailError) return "Email not sent";
+  return "Email not sent";
+}
+
 export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise<
   {
     customerId: string;
@@ -316,6 +326,9 @@ export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise
     declineCode: string | null;
     invoiceNumber: string | null;
     occurredAt: Date;
+    emailSent: boolean;
+    emailError: string | null;
+    smsRecipientCount: number;
   }[]
 > {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -347,6 +360,9 @@ export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise
       currency?: string;
       declineCode?: string | null;
       invoiceNumber?: string | null;
+      emailSent?: boolean;
+      emailError?: string | null;
+      smsRecipientCount?: number;
     } | null;
 
     out.push({
@@ -357,6 +373,9 @@ export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise
       declineCode: payload?.declineCode ?? null,
       invoiceNumber: payload?.invoiceNumber ?? null,
       occurredAt: event.occurredAt,
+      emailSent: payload?.emailSent === true,
+      emailError: payload?.emailError ?? null,
+      smsRecipientCount: payload?.smsRecipientCount ?? 0,
     });
     if (out.length >= limit) break;
   }
