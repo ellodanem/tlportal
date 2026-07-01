@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { processDueRecurringSchedules } from "@/lib/services/native-recurring-schedule-service";
+import { processDueScheduledInvoiceEmails } from "@/lib/services/scheduled-invoice-email-service";
 import { backfillStripeNativeInvoiceMirrors } from "@/lib/services/stripe-native-invoice-mirror-service";
 
 export const maxDuration = 300;
@@ -21,9 +22,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const [recurring, stripeMirror] = await Promise.all([
+  const [recurring, stripeMirror, scheduledEmails] = await Promise.all([
     processDueRecurringSchedules(),
     backfillStripeNativeInvoiceMirrors(),
+    processDueScheduledInvoiceEmails(),
   ]);
-  return NextResponse.json({ ...recurring, stripeMirror });
+  return NextResponse.json({ ...recurring, stripeMirror, scheduledEmails });
 }

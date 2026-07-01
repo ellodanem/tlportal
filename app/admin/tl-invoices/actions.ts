@@ -10,17 +10,22 @@ import { parseInvoiceRequestBody, type InvoiceRequestPayload } from "@/lib/billi
 import { parseQuoteEmailRecipientField } from "@/lib/billing/quote-email-recipients";
 import { getSmtpMailFrom, getSmtpTransportOptions } from "@/lib/email/smtp-settings";
 import { prisma } from "@/lib/db";
-import type { CreateDraftInvoiceInput } from "@/lib/services/native-invoice-service";
+import {
+  cancelPendingScheduledInvoiceEmail,
+  scheduleInvoiceEmail,
+} from "@/lib/services/scheduled-invoice-email-service";
 import {
   createDraftInvoice,
   finalizeAndSendInvoice,
   recordInvoicePayment,
   updateDraftInvoice,
   voidInvoice,
+  type CreateDraftInvoiceInput,
 } from "@/lib/services/native-invoice-service";
 
 export type SaveInvoiceState = { error?: string; ok?: boolean; invoiceId?: string; next?: string };
 export type SendInvoiceEmailState = { error?: string; ok?: boolean; message?: string };
+export type CancelScheduledEmailState = { error?: string; ok?: boolean; message?: string };
 export type MarkInvoiceSentState = { error?: string; ok?: boolean; message?: string; number?: string };
 export type RecordPaymentState = { error?: string; ok?: boolean; message?: string };
 export type VoidInvoiceState = { error?: string; ok?: boolean };
@@ -186,6 +191,34 @@ export async function sendInvoiceEmailAction(
     return { error: e instanceof Error ? e.message : "Could not finalize invoice." };
   }
 
+  const sendMode = String(formData.get("sendMode") ?? "now").trim();
+  const scheduledDate = String(formData.get("scheduledDate") ?? "").trim();
+
+  if (sendMode === "scheduled") {
+    if (!scheduledDate) {
+      return { error: "Choose a date to schedule the email." };
+    }
+    const scheduled = await scheduleInvoiceEmail({
+      invoiceId,
+      sendDateYmd: scheduledDate,
+      to,
+      cc: ccParsed.emails ?? [],
+      bcc: bccParsed.emails ?? [],
+      subject: subject.slice(0, 200),
+      bodyText: bodyText.slice(0, 8000),
+      scheduledById: session.sub,
+    });
+    if ("error" in scheduled) {
+      return { error: scheduled.error };
+    }
+    revalidatePath("/admin/tl-invoices");
+    revalidatePath(`/admin/tl-invoices/${invoiceId}`);
+    return {
+      ok: true,
+      message: `Invoice finalized. Email scheduled for ${scheduled.label} (morning processing run, Atlantic time).`,
+    };
+  }
+
   const built = await buildInvoicePdfFromInvoiceId(invoiceId);
   if ("error" in built) return { error: built.error };
 
@@ -214,6 +247,26 @@ export async function sendInvoiceEmailAction(
   revalidatePath("/admin/tl-invoices");
   revalidatePath(`/admin/tl-invoices/${invoiceId}`);
   return { ok: true, message: `Invoice emailed to ${to}.` };
+}
+
+export async function cancelScheduledInvoiceEmailAction(
+  _prev: CancelScheduledEmailState,
+  formData: FormData,
+): Promise<CancelScheduledEmailState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+
+  const invoiceId = String(formData.get("invoiceId") ?? "").trim();
+  if (!invoiceId) return { error: "Invoice id is missing." };
+
+  const result = await cancelPendingScheduledInvoiceEmail(invoiceId);
+  if ("error" in result) {
+    return { error: result.error };
+  }
+
+  revalidatePath("/admin/tl-invoices");
+  revalidatePath(`/admin/tl-invoices/${invoiceId}`);
+  return { ok: true, message: "Scheduled send cancelled." };
 }
 
 export async function recordPaymentAction(

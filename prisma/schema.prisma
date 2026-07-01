@@ -169,6 +169,13 @@ enum RecurringScheduleStatus {
   ended
 }
 
+enum ScheduledInvoiceEmailStatus {
+  pending
+  sent
+  failed
+  cancelled
+}
+
 /// How an expense was paid (Phase 5 — simple expense register).
 enum ExpensePaymentMethod {
   cash
@@ -282,6 +289,7 @@ model User {
   // Native billing (Phase 0) — staff authorship / payment recording.
   quotesCreated                 Quote[]
   invoicesCreated               Invoice[]
+  scheduledInvoiceEmailsCreated ScheduledInvoiceEmail[]
   paymentsRecorded              Payment[]
   recurringSchedulesCreated     RecurringInvoiceSchedule[]
   expensesRecorded              Expense[]
@@ -1008,6 +1016,7 @@ model Invoice {
 
   lineItems InvoiceLineItem[]
   payments  Payment[]
+  scheduledEmails ScheduledInvoiceEmail[]
   lastOnSchedule RecurringInvoiceSchedule? @relation("ScheduleLastInvoice")
 
   createdAt DateTime @default(now())
@@ -1018,6 +1027,33 @@ model Invoice {
   @@index([dueDate])
   @@index([updatedAt])
   @@index([recurringScheduleId])
+}
+
+/// Staff-scheduled native invoice email (processed by daily cron).
+model ScheduledInvoiceEmail {
+  id        String                      @id @default(uuid())
+  invoiceId String
+  invoice   Invoice                     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  status    ScheduledInvoiceEmailStatus @default(pending)
+  /// Send on or after this instant (start of chosen Atlantic calendar day).
+  sendAt    DateTime
+  to        String
+  cc        String[]                    @default([])
+  bcc       String[]                    @default([])
+  subject   String
+  bodyText  String                      @db.Text
+
+  scheduledById String?
+  scheduledBy   User?   @relation(fields: [scheduledById], references: [id], onDelete: SetNull)
+
+  sentAt    DateTime?
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, sendAt])
+  @@index([invoiceId])
 }
 
 /// Template for auto-generated recurring TL invoices (replaces Invoiless retainers).

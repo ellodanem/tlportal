@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StripeSubscriptionInvoicePanel } from "@/components/admin/stripe-subscription-invoice-panel";
+import { InvoiceScheduledEmailBanner } from "@/components/admin/invoice-scheduled-email-banner";
 import {
   InvoiceGeneratorForm,
   type InvoiceCustomerOption,
@@ -27,7 +28,7 @@ function formatYmd(d: Date): string {
 export default async function TlInvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [invoice, customers] = await Promise.all([
+  const [invoice, customers, pendingScheduledEmail] = await Promise.all([
     prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -63,6 +64,10 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         postalCode: true,
         country: true,
       },
+    }),
+    prisma.scheduledInvoiceEmail.findFirst({
+      where: { invoiceId: id, status: "pending" },
+      select: { sendAt: true, to: true },
     }),
   ]);
 
@@ -142,6 +147,14 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
             : ""}
         </p>
       </div>
+
+      {pendingScheduledEmail ? (
+        <InvoiceScheduledEmailBanner
+          invoiceId={invoice.id}
+          sendAtIso={pendingScheduledEmail.sendAt.toISOString()}
+          to={pendingScheduledEmail.to}
+        />
+      ) : null}
 
       {invoice.billingInvoice ? (
         <StripeSubscriptionInvoicePanel
