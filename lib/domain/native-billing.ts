@@ -84,6 +84,22 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   written_off: "Written off",
 };
 
+const INVOICE_STATUS_BADGE_BASE = "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium";
+
+/** Tailwind classes for native invoice status pills in admin and pay UIs. */
+export function invoiceStatusBadgeClass(status: InvoiceStatus): string {
+  const tone: Record<InvoiceStatus, string> = {
+    draft: "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100",
+    open: "bg-sky-100 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200",
+    partially_paid: "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200",
+    paid: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200",
+    overdue: "bg-red-100 text-red-900 dark:bg-red-950/60 dark:text-red-200",
+    void: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+    written_off: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  };
+  return `${INVOICE_STATUS_BADGE_BASE} ${tone[status]}`;
+}
+
 export const INVOICE_KIND_LABELS: Record<InvoiceKind, string> = {
   one_off: "One-off",
   recurring: "Recurring",

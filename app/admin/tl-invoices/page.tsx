@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { displayInvoiceNumber, isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
-import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS } from "@/lib/domain/native-billing";
+import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS, invoiceStatusBadgeClass } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
 
 function invoiceClientLabel(row: {
@@ -97,7 +97,11 @@ export default async function AdminTlInvoicesPage() {
                   </td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{INVOICE_KIND_LABELS[inv.kind]}</td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{invoiceClientLabel(inv)}</td>
-                  <td className="px-4 py-3">{INVOICE_STATUS_LABELS[inv.status]}</td>
+                  <td className="px-4 py-3">
+                    <span className={invoiceStatusBadgeClass(inv.status)}>
+                      {INVOICE_STATUS_LABELS[inv.status]}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 tabular-nums">{formatMoney(Number(inv.total), inv.currency)}</td>
                   <td className="px-4 py-3 tabular-nums text-zinc-600 dark:text-zinc-400">
                     {inv.status === "draft"
