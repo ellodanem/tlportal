@@ -35,6 +35,7 @@ export type NativeInvoicePdfInput = {
   billToLines: string[];
   lineItems: NativeInvoicePdfLine[];
   subtotal: number;
+  discountTotal: number;
   taxLabel: string | null;
   taxTotal: number;
   total: number;
@@ -210,9 +211,12 @@ export function buildNativeInvoicePdfBuffer(input: NativeInvoicePdfInput): Buffe
   const boxX = tableRight - boxW;
   let ty = tableMeta.finalY + 14;
 
-  const rows: { label: string; amount: number; bold?: boolean }[] = [
+  const rows: { label: string; amount: number; bold?: boolean; negative?: boolean }[] = [
     { label: "Subtotal", amount: input.subtotal },
   ];
+  if (input.discountTotal > 0) {
+    rows.push({ label: "Discount", amount: input.discountTotal, negative: true });
+  }
   if (input.taxTotal > 0) {
     rows.push({ label: input.taxLabel ?? "Tax", amount: input.taxTotal });
   }
@@ -238,7 +242,8 @@ export function buildNativeInvoicePdfBuffer(input: NativeInvoicePdfInput): Buffe
     doc.setFontSize(9);
     doc.setTextColor(0);
     doc.text(row.label, boxX + 12, ry);
-    doc.text(money(row.amount, cur), boxX + boxW - 12, ry, { align: "right" });
+    const amountText = row.negative ? `−${money(row.amount, cur)}` : money(row.amount, cur);
+    doc.text(amountText, boxX + boxW - 12, ry, { align: "right" });
     ry += rowH;
   }
   ty += boxH + 16;

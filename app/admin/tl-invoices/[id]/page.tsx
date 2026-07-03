@@ -96,6 +96,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
     notes: invoice.notes ?? "",
     paymentInstructions: invoice.paymentInstructions ?? "",
     allowOnlinePayment: invoice.allowOnlinePayment,
+    discountAmount: Number(invoice.discountTotal),
     amountDue: Number(invoice.amountDue),
     lines: invoice.lineItems.map((line) => ({
       description: line.description,

@@ -153,6 +153,14 @@ export default async function PublicInvoicePayPage({
           </div>
           <div className="border-t border-zinc-200 px-4 py-4 text-right dark:border-zinc-800">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Subtotal {formatMoney(Number(invoice.subtotal), invoice.currency)}
+            </p>
+            {Number(invoice.discountTotal) > 0 ? (
+              <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">
+                Discount −{formatMoney(Number(invoice.discountTotal), invoice.currency)}
+              </p>
+            ) : null}
+            <p className="mt-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">
               Total {formatMoney(Number(invoice.total), invoice.currency)}
             </p>
             {!isPaid && !isVoid ? (

@@ -970,6 +970,8 @@ model Invoice {
 
   currency       String   @default("XCD")
   subtotal       Decimal  @default(0) @db.Decimal(12, 2)
+  /// Flat document-level discount (applied before tax). Snapshotted at save time.
+  discountTotal  Decimal  @default(0) @db.Decimal(12, 2)
   taxLabel       String?
   taxRatePercent Decimal? @db.Decimal(5, 2)
   taxTotal       Decimal  @default(0) @db.Decimal(12, 2)

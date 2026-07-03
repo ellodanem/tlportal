@@ -11,6 +11,7 @@ export type InvoiceRequestPayload = {
   notes: string | null;
   paymentInstructions: string | null;
   allowOnlinePayment: boolean;
+  discountAmount: number;
   lineItems: NativeInvoicePdfLine[];
 };
 
@@ -76,6 +77,8 @@ export function parseInvoiceRequestBody(body: unknown): { payload: InvoiceReques
   const paymentRaw = String(b.paymentInstructions ?? "").trim();
   const currency = (String(b.currency ?? "XCD").trim() || "XCD").slice(0, 8).toUpperCase();
   const allowOnlinePayment = b.allowOnlinePayment === true;
+  const discountRaw = Number(b.discountAmount ?? 0);
+  const discountAmount = Number.isFinite(discountRaw) && discountRaw > 0 ? discountRaw : 0;
 
   return {
     payload: {
@@ -87,6 +90,7 @@ export function parseInvoiceRequestBody(body: unknown): { payload: InvoiceReques
       notes: notesRaw.length ? notesRaw.slice(0, 2000) : null,
       paymentInstructions: paymentRaw.length ? paymentRaw.slice(0, 2000) : null,
       allowOnlinePayment,
+      discountAmount,
       lineItems: lineParsed.items,
     },
   };

@@ -15,6 +15,28 @@ export function defaultInvoiceEmailSubject(invoiceNumber: string): string {
   return `Invoice ${invoiceNumber} — Track Lucia`;
 }
 
+/** Shown in admin preview before finalize; replaced with TL-INV-{n} on send. */
+export const INVOICE_NUMBER_EMAIL_PLACEHOLDER = "TL-INV-…";
+
+/** Swap preview placeholders for the finalized invoice number before delivery. */
+export function applyFinalInvoiceNumberToEmailContent(
+  subject: string,
+  bodyText: string,
+  invoiceNumber: string,
+): { subject: string; bodyText: string } {
+  const placeholders = [INVOICE_NUMBER_EMAIL_PLACEHOLDER, "Draft", "draft"];
+  let nextSubject = subject;
+  let nextBody = bodyText;
+  for (const placeholder of placeholders) {
+    nextSubject = nextSubject.split(placeholder).join(invoiceNumber);
+    nextBody = nextBody.split(placeholder).join(invoiceNumber);
+  }
+  if (nextSubject === defaultInvoiceEmailSubject("Draft")) {
+    nextSubject = defaultInvoiceEmailSubject(invoiceNumber);
+  }
+  return { subject: nextSubject, bodyText: nextBody };
+}
+
 export function defaultInvoiceEmailBody(input: {
   greetingName: string;
   invoiceNumber: string;

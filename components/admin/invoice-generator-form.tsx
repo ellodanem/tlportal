@@ -18,10 +18,11 @@ import { CopyValueButton } from "@/components/admin/copy-value-button";
 import {
   defaultInvoiceEmailBody,
   defaultInvoiceEmailSubject,
+  INVOICE_NUMBER_EMAIL_PLACEHOLDER,
 } from "@/lib/billing/invoice-email-body";
 import { DEFAULT_QUOTE_EMAIL_BCC } from "@/lib/billing/quote-email-recipients";
 import type { InvoiceRequestPayload } from "@/lib/billing/invoice-payload";
-import { formatMoney } from "@/lib/domain/native-billing";
+import { formatMoney, computeDocumentTotals } from "@/lib/domain/native-billing";
 
 export type InvoiceCustomerOption = {
   id: string;
@@ -43,6 +44,7 @@ export type InvoiceFormInitial = {
   notes: string;
   paymentInstructions: string;
   allowOnlinePayment: boolean;
+  discountAmount: number;
   amountDue: number;
   lines: { description: string; quantity: string; unitPrice: string }[];
 };
@@ -108,6 +110,9 @@ export function InvoiceGeneratorForm({
     initial?.paymentInstructions || DEFAULT_PAYMENT_INSTRUCTIONS,
   );
   const [allowOnlinePayment, setAllowOnlinePayment] = useState(initial?.allowOnlinePayment ?? false);
+  const [discountAmount, setDiscountAmount] = useState(
+    initial?.discountAmount != null && initial.discountAmount > 0 ? String(initial.discountAmount) : "",
+  );
   const [lines, setLines] = useState<LineRow[]>(() =>
     (initial?.lines?.length ? initial.lines : [{ description: "", quantity: "1", unitPrice: "0" }]).map((row) => ({
       ...row,
@@ -133,7 +138,20 @@ export function InvoiceGeneratorForm({
     [customers, customerId],
   );
 
-  const displayNumber = assignedNumber ?? "Draft";
+  const previewTotals = useMemo(() => {
+    const lineItems = lines
+      .map((row) => ({
+        description: row.description.trim(),
+        quantity: Number(row.quantity),
+        unitPrice: Number(row.unitPrice),
+      }))
+      .filter((row) => row.description.length > 0);
+    const discountRaw = discountAmount.trim() === "" ? 0 : Number(discountAmount);
+    const discount = Number.isFinite(discountRaw) && discountRaw > 0 ? discountRaw : 0;
+    return computeDocumentTotals(lineItems, null, discount);
+  }, [lines, discountAmount]);
+
+  const displayNumber = assignedNumber ?? INVOICE_NUMBER_EMAIL_PLACEHOLDER;
   const isVoid = initial?.status === "void" || initial?.status === "written_off";
   const fieldsDisabled = readOnly || isVoid;
 
@@ -182,6 +200,9 @@ export function InvoiceGeneratorForm({
       if (!Number.isFinite(row.unitPrice) || row.unitPrice < 0) return { error: "Invalid unit price." };
     }
 
+    const discountRaw = discountAmount.trim() === "" ? 0 : Number(discountAmount);
+    if (!Number.isFinite(discountRaw) || discountRaw < 0) return { error: "Invalid discount amount." };
+
     const billToLines =
       selectedCustomer?.billToLines ?? (clientName.trim() ? [clientName.trim()] : null);
     if (!billToLines?.length) return { error: "Choose a customer or enter a client name." };
@@ -199,6 +220,7 @@ export function InvoiceGeneratorForm({
         notes: notes.trim() || null,
         paymentInstructions: paymentInstructions.trim() || null,
         allowOnlinePayment: allowOnlinePayment && stripeConfigured,
+        discountAmount: discountRaw > 0 ? discountRaw : 0,
         lineItems,
       },
       greetingName,
@@ -249,12 +271,11 @@ export function InvoiceGeneratorForm({
       return;
     }
     const { payload, greetingName } = built;
-    const total = payload.lineItems.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
     const draft = defaultInvoiceEmailBody({
       greetingName,
-      invoiceNumber: assignedNumber ?? "Draft",
+      invoiceNumber: assignedNumber ?? INVOICE_NUMBER_EMAIL_PLACEHOLDER,
       dueDate: payload.dueDate ? new Date(`${payload.dueDate}T12:00:00.000Z`) : null,
-      amountDue: initial?.amountDue ?? total,
+      amountDue: initial?.amountDue ?? previewTotals.total,
       currency: payload.currency,
       payUrl: publicPayUrl,
       allowOnlinePayment: allowOnlinePayment && stripeConfigured,
@@ -263,7 +284,9 @@ export function InvoiceGeneratorForm({
     setEmailTo(selectedCustomer?.email?.trim() ?? "");
     setEmailCc("");
     setEmailBcc(DEFAULT_QUOTE_EMAIL_BCC);
-    setEmailSubject(defaultInvoiceEmailSubject(assignedNumber ?? "Draft"));
+    setEmailSubject(
+      defaultInvoiceEmailSubject(assignedNumber ?? INVOICE_NUMBER_EMAIL_PLACEHOLDER),
+    );
     setEmailBody(draft.text);
     setEmailOpen(true);
   }
@@ -452,6 +475,42 @@ export function InvoiceGeneratorForm({
             </button>
           ) : null}
         </fieldset>
+
+        <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Discount <span className="font-normal text-zinc-500">(optional, flat amount)</span>
+          </label>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={discountAmount}
+            disabled={fieldsDisabled}
+            onChange={(e) => setDiscountAmount(e.target.value)}
+            placeholder="0.00"
+            className="mt-1.5 w-full max-w-xs rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950"
+          />
+          {previewTotals.subtotal > 0 ? (
+            <dl className="mt-4 space-y-1 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-zinc-600 dark:text-zinc-400">Subtotal</dt>
+                <dd className="font-medium tabular-nums">{formatMoney(previewTotals.subtotal, currency)}</dd>
+              </div>
+              {previewTotals.discountTotal > 0 ? (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-zinc-600 dark:text-zinc-400">Discount</dt>
+                  <dd className="font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+                    −{formatMoney(previewTotals.discountTotal, currency)}
+                  </dd>
+                </div>
+              ) : null}
+              <div className="flex justify-between gap-4 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                <dt className="font-medium">Total</dt>
+                <dd className="font-semibold tabular-nums">{formatMoney(previewTotals.total, currency)}</dd>
+              </div>
+            </dl>
+          ) : null}
+        </div>
 
         <div>
           <label className="block text-sm font-medium">Payment instructions</label>

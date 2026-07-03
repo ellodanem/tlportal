@@ -32,6 +32,7 @@ export type CreateDraftInvoiceInput = {
   recurringScheduleId?: string | null;
   taxLabel?: string | null;
   taxRatePercent?: number | null;
+  discountAmount?: number | null;
   issueDate?: Date;
   dueDate?: Date | null;
   notes?: string | null;
@@ -65,7 +66,11 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promis
     throw new Error("An invoice needs at least one line item.");
   }
   const currency = (input.currency ?? "XCD").toUpperCase();
-  const totals = computeDocumentTotals(input.lineItems, input.taxRatePercent ?? null);
+  const totals = computeDocumentTotals(
+    input.lineItems,
+    input.taxRatePercent ?? null,
+    input.discountAmount ?? null,
+  );
 
   const created = await prisma.invoice.create({
     data: {
@@ -77,6 +82,7 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promis
       billToLines: input.billToLines ?? [],
       currency,
       subtotal: toMoneyString(totals.subtotal),
+      discountTotal: toMoneyString(totals.discountTotal),
       taxLabel: input.taxLabel ?? null,
       taxRatePercent: input.taxRatePercent != null ? input.taxRatePercent.toFixed(2) : null,
       taxTotal: toMoneyString(totals.taxTotal),
@@ -113,7 +119,11 @@ export async function updateDraftInvoice(invoiceId: string, input: CreateDraftIn
   }
 
   const currency = (input.currency ?? "XCD").toUpperCase();
-  const totals = computeDocumentTotals(input.lineItems, input.taxRatePercent ?? null);
+  const totals = computeDocumentTotals(
+    input.lineItems,
+    input.taxRatePercent ?? null,
+    input.discountAmount ?? null,
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.invoiceLineItem.deleteMany({ where: { invoiceId } });
@@ -125,6 +135,7 @@ export async function updateDraftInvoice(invoiceId: string, input: CreateDraftIn
         billToLines: input.billToLines ?? [],
         currency,
         subtotal: toMoneyString(totals.subtotal),
+        discountTotal: toMoneyString(totals.discountTotal),
         taxLabel: input.taxLabel ?? null,
         taxRatePercent: input.taxRatePercent != null ? input.taxRatePercent.toFixed(2) : null,
         taxTotal: toMoneyString(totals.taxTotal),

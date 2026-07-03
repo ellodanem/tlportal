@@ -25,6 +25,7 @@ export type DocumentLineInput = {
 
 export type DocumentTotals = {
   subtotal: number;
+  discountTotal: number;
   taxTotal: number;
   total: number;
 };
@@ -34,20 +35,25 @@ export function computeLineTotal(quantity: number, unitPrice: number): number {
 }
 
 /**
- * Compute subtotal / single document-level tax / total from line items.
- * `taxRatePercent` is an optional whole/decimal percent (e.g. 15 for 15% VAT).
+ * Compute subtotal / document-level discount / tax / total from line items.
+ * Discount is applied to subtotal before tax. `taxRatePercent` is an optional whole/decimal percent (e.g. 15 for 15% VAT).
+ * `discountAmount` is an optional flat amount capped at subtotal.
  */
 export function computeDocumentTotals(
   lines: DocumentLineInput[],
   taxRatePercent?: number | null,
+  discountAmount?: number | null,
 ): DocumentTotals {
   const subtotal = round2(
     lines.reduce((sum, line) => sum + computeLineTotal(line.quantity, line.unitPrice), 0),
   );
+  const discountRaw = discountAmount != null && Number.isFinite(discountAmount) ? discountAmount : 0;
+  const discountTotal = round2(Math.min(Math.max(0, discountRaw), subtotal));
+  const taxableBase = round2(subtotal - discountTotal);
   const rate = taxRatePercent && Number.isFinite(taxRatePercent) ? taxRatePercent : 0;
-  const taxTotal = round2(subtotal * (rate / 100));
-  const total = round2(subtotal + taxTotal);
-  return { subtotal, taxTotal, total };
+  const taxTotal = round2(taxableBase * (rate / 100));
+  const total = round2(taxableBase + taxTotal);
+  return { subtotal, discountTotal, taxTotal, total };
 }
 
 /**

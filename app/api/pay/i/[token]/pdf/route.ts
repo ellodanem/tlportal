@@ -29,6 +29,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
       unitPrice: Number(line.unitPrice),
     })),
     subtotal: Number(invoice.subtotal),
+    discountTotal: Number(invoice.discountTotal),
     taxLabel: invoice.taxLabel,
     taxTotal: Number(invoice.taxTotal),
     total: Number(invoice.total),

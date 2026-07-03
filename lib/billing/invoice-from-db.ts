@@ -28,6 +28,7 @@ export async function buildInvoicePdfFromInvoiceId(
       unitPrice: Number(line.unitPrice),
     })),
     subtotal: Number(invoice.subtotal),
+    discountTotal: Number(invoice.discountTotal),
     taxLabel: invoice.taxLabel,
     taxTotal: Number(invoice.taxTotal),
     total: Number(invoice.total),

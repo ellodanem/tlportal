@@ -5,7 +5,7 @@ import nodemailer from "nodemailer";
 
 import { getSession } from "@/lib/auth/get-session";
 import { buildInvoicePdfFromInvoiceId } from "@/lib/billing/invoice-from-db";
-import { invoiceEmailHtmlFromText } from "@/lib/billing/invoice-email-body";
+import { invoiceEmailHtmlFromText, applyFinalInvoiceNumberToEmailContent } from "@/lib/billing/invoice-email-body";
 import { parseInvoiceRequestBody, type InvoiceRequestPayload } from "@/lib/billing/invoice-payload";
 import { parseQuoteEmailRecipientField } from "@/lib/billing/quote-email-recipients";
 import { getSmtpMailFrom, getSmtpTransportOptions } from "@/lib/email/smtp-settings";
@@ -32,6 +32,21 @@ export type VoidInvoiceState = { error?: string; ok?: boolean };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+async function emailContentWithFinalInvoiceNumber(
+  invoiceId: string,
+  subject: string,
+  bodyText: string,
+): Promise<{ subject: string; bodyText: string } | { error: string }> {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { number: true },
+  });
+  if (!invoice?.number?.trim()) {
+    return { error: "Invoice number is missing after finalize." };
+  }
+  return applyFinalInvoiceNumberToEmailContent(subject, bodyText, invoice.number);
+}
+
 function payloadToCreateInput(payload: InvoiceRequestPayload): CreateDraftInvoiceInput {
   const billToLines = payload.billToLines ?? [];
   return {
@@ -44,6 +59,7 @@ function payloadToCreateInput(payload: InvoiceRequestPayload): CreateDraftInvoic
     notes: payload.notes,
     paymentInstructions: payload.paymentInstructions,
     allowOnlinePayment: payload.allowOnlinePayment,
+    discountAmount: payload.discountAmount,
     lineItems: payload.lineItems.map((line, index) => ({
       description: line.description,
       quantity: line.quantity,
@@ -191,6 +207,13 @@ export async function sendInvoiceEmailAction(
     return { error: e instanceof Error ? e.message : "Could not finalize invoice." };
   }
 
+  const resolvedEmail = await emailContentWithFinalInvoiceNumber(invoiceId, subject, bodyText);
+  if ("error" in resolvedEmail) {
+    return { error: resolvedEmail.error };
+  }
+  const finalSubject = resolvedEmail.subject.slice(0, 200);
+  const finalBodyText = resolvedEmail.bodyText.slice(0, 8000);
+
   const sendMode = String(formData.get("sendMode") ?? "now").trim();
   const scheduledDate = String(formData.get("scheduledDate") ?? "").trim();
 
@@ -204,8 +227,8 @@ export async function sendInvoiceEmailAction(
       to,
       cc: ccParsed.emails ?? [],
       bcc: bccParsed.emails ?? [],
-      subject: subject.slice(0, 200),
-      bodyText: bodyText.slice(0, 8000),
+      subject: finalSubject,
+      bodyText: finalBodyText,
       scheduledById: session.sub,
     });
     if ("error" in scheduled) {
@@ -235,9 +258,9 @@ export async function sendInvoiceEmailAction(
       to,
       cc: ccParsed.emails,
       bcc: bccParsed.emails,
-      subject: subject.slice(0, 200),
-      text: bodyText.slice(0, 8000),
-      html: invoiceEmailHtmlFromText(bodyText.slice(0, 8000)),
+      subject: finalSubject,
+      text: finalBodyText,
+      html: invoiceEmailHtmlFromText(finalBodyText),
       attachments: [{ filename: built.filename, content: built.buffer, contentType: "application/pdf" }],
     });
   } catch (e) {
