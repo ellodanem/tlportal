@@ -50,6 +50,26 @@ Invoiless email reminders remain authoritative for invoice copy; WhatsApp is a s
 |---------|--------|----------------|
 | Stripe payment link | Customer → Billing → **Send to customer** | `TWILIO_WA_TEMPLATE_STRIPE_PAYMENT_LINK` (resend: `_RESEND`) |
 | New Invoiless invoice | Admin → Invoices → create (status not Draft) | `TWILIO_WA_TEMPLATE_INVOICE_NEW` |
+| Payment declined | Auto on Stripe decline; resend on Customer → Billing → **Resend WhatsApp** | `TWILIO_WA_TEMPLATE_PAYMENT_DECLINED` |
+
+## Payment declined (Utility template)
+
+On a Stripe card decline, `handleStripePaymentFailure` notifies the customer over **both** email and WhatsApp (independently), and alerts staff by SMS. Idempotent per Stripe PaymentIntent.
+
+**Content template** — category **Utility**, type **Call to action** (URL button):
+
+```
+Hi {{1}}, we tried to process your card payment for {{3}} ({{4}}), but {{2}}. No money was taken.
+
+Tap below to complete your payment securely. Need help? Just reply to this message.
+
+— Track Lucia
+```
+
+- Button: **Visit website** → `Pay now` → `https://<domain>/pay/go/{{5}}`
+- Variables: `{{1}}` first name · `{{2}}` short decline reason · `{{3}}` payment label (`your Track Lucia Subscription` / `TL-INV-…`) · `{{4}}` amount · `{{5}}` redirect token
+
+**`/pay/go/{token}` redirect:** WhatsApp URL buttons require a fixed base domain, so the pay link is a stable `/pay/go/{token}` on our domain that 302-redirects to the real destination (native pay page or Stripe hosted invoice). The token is stored as `payLinkToken` on the `billing.payment_failed` operational event.
 
 ## Env (Vercel)
 

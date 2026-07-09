@@ -33,7 +33,10 @@ import {
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { toWhatsAppAddress } from "@/lib/twilio/phone";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
-import { resendPaymentDeclineEmailForCustomer } from "@/lib/stripe/payment-failure-recovery";
+import {
+  resendPaymentDeclineEmailForCustomer,
+  resendPaymentDeclineWhatsAppForCustomer,
+} from "@/lib/stripe/payment-failure-recovery";
 import {
   effectiveMonthlyRateForCheckout,
   getDefaultMonthlyRateXcd,
@@ -754,5 +757,40 @@ export async function resendPaymentDeclineEmailAction(
     error: null,
     ok: true,
     message: `Decline follow-up email sent to ${result.email}.`,
+  };
+}
+
+export type ResendPaymentDeclineWhatsAppState = {
+  error: string | null;
+  ok?: boolean;
+  message?: string;
+};
+
+export async function resendPaymentDeclineWhatsAppAction(
+  _prev: ResendPaymentDeclineWhatsAppState,
+  formData: FormData,
+): Promise<ResendPaymentDeclineWhatsAppState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) {
+    return { error: "Missing customer id." };
+  }
+
+  const result = await resendPaymentDeclineWhatsAppForCustomer(customerId, session.sub);
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath("/admin");
+  return {
+    error: null,
+    ok: true,
+    message: `Decline follow-up WhatsApp sent${result.phone ? ` to ${result.phone}` : ""}.`,
   };
 }

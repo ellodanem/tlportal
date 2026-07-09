@@ -10,7 +10,10 @@ import { toWhatsAppAddress } from "@/lib/twilio/phone";
 import { sendTwilioWhatsAppContent, type SendBillingWhatsAppResult } from "@/lib/twilio/whatsapp-send";
 import { CHECKOUT_LINK_VALID_HOURS } from "@/lib/stripe/checkout-messaging";
 
-export type CustomerWhatsAppDeliveryKind = "stripe_checkout" | "invoiless_invoice_new";
+export type CustomerWhatsAppDeliveryKind =
+  | "stripe_checkout"
+  | "invoiless_invoice_new"
+  | "payment_decline";
 
 function customerFirstName(customer: Pick<Customer, "firstName" | "lastName" | "company">): string {
   const first = customer.firstName?.trim();
@@ -133,6 +136,42 @@ export async function sendNewInvoiceWhatsApp(input: {
       input.invoilessInvoiceId,
       result.messageSid,
     );
+  }
+  return result;
+}
+
+/**
+ * Customer WhatsApp on a declined card payment (same approved template as the automatic send).
+ * The pay link is delivered as a stable `/pay/go/{token}` button suffix, so `payLinkToken`
+ * is the token only — not a full URL.
+ */
+export async function sendPaymentDeclineWhatsApp(input: {
+  customer: Pick<Customer, "id" | "firstName" | "lastName" | "company" | "phone">;
+  reasonPhrase: string;
+  paymentLabel: string;
+  amountLabel: string;
+  payLinkToken: string;
+  externalRef: string;
+}): Promise<SendBillingWhatsAppResult> {
+  if (!isTwilioWhatsAppConfigured()) {
+    return { ok: false, error: "Twilio WhatsApp is not configured." };
+  }
+
+  const to = toWhatsAppAddress(input.customer.phone);
+  if (!to) {
+    return { ok: false, error: "Customer has no valid phone number for WhatsApp." };
+  }
+
+  const result = await sendTwilioWhatsAppContent(to, "payment_declined", {
+    "1": customerFirstName(input.customer),
+    "2": input.reasonPhrase,
+    "3": input.paymentLabel,
+    "4": input.amountLabel,
+    "5": input.payLinkToken,
+  });
+
+  if (result.ok) {
+    await recordDelivery(input.customer.id, "payment_decline", input.externalRef, result.messageSid);
   }
   return result;
 }

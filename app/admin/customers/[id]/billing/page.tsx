@@ -12,6 +12,7 @@ import { customerDisplayName } from "@/lib/admin/customer-display";
 import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
 import { formatMoney } from "@/lib/domain/native-billing";
 import { buildPaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-messaging";
+import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -125,6 +126,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
           followUp={paymentDeclineFollowUp}
           customerId={customer.id}
           emailPreview={declineEmailPreview}
+          whatsAppConfigured={isTwilioWhatsAppConfigured()}
         />
       ) : null}
 

@@ -1,5 +1,8 @@
 import { formatMoney } from "@/lib/domain/native-billing";
-import { paymentFailureEmailFollowUpLabel } from "@/lib/stripe/payment-failure-recovery";
+import {
+  paymentFailureEmailFollowUpLabel,
+  paymentFailureWhatsAppFollowUpLabel,
+} from "@/lib/stripe/payment-failure-recovery";
 
 export type ActivityEventRow = {
   id: string;
@@ -41,6 +44,8 @@ function PaymentFailedActivity({ event }: { event: ActivityEventRow }) {
     invoiceNumber?: string | null;
     emailSent?: boolean;
     emailError?: string | null;
+    whatsAppSent?: boolean;
+    whatsAppError?: string | null;
     smsRecipientCount?: number;
   } | null;
 
@@ -61,6 +66,12 @@ function PaymentFailedActivity({ event }: { event: ActivityEventRow }) {
       ? "rose"
       : "amber";
 
+  const whatsAppLabel = paymentFailureWhatsAppFollowUpLabel({
+    whatsAppSent: payload?.whatsAppSent === true,
+    whatsAppError: payload?.whatsAppError ?? null,
+  });
+  const whatsAppTone: ChipTone = payload?.whatsAppSent ? "emerald" : payload?.whatsAppError ? "amber" : "zinc";
+
   return (
     <div className="min-w-0">
       <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{title}</p>
@@ -70,6 +81,7 @@ function PaymentFailedActivity({ event }: { event: ActivityEventRow }) {
         {payload?.last4 ? <ActivityChip label={`•••• ${payload.last4}`} /> : null}
         {payload?.invoiceNumber ? <ActivityChip label={payload.invoiceNumber} /> : null}
         <ActivityChip label={emailLabel} tone={emailTone} />
+        <ActivityChip label={whatsAppLabel} tone={whatsAppTone} />
         {(payload?.smsRecipientCount ?? 0) > 0 ? (
           <ActivityChip
             label={`${payload!.smsRecipientCount} staff SMS`}
@@ -102,12 +114,35 @@ function PaymentDeclineEmailResentActivity({ event }: { event: ActivityEventRow 
   );
 }
 
+function PaymentDeclineWhatsAppResentActivity({ event }: { event: ActivityEventRow }) {
+  const payload = event.payload as { amount?: number; currency?: string; invoiceNumber?: string | null } | null;
+  const amount =
+    payload?.amount != null && payload.amount > 0
+      ? formatMoney(payload.amount, payload?.currency ?? "XCD")
+      : null;
+
+  return (
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{event.summary}</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <ActivityChip label="Decline WhatsApp resent" tone="emerald" />
+        {amount ? <ActivityChip label={amount} /> : null}
+        {payload?.invoiceNumber ? <ActivityChip label={payload.invoiceNumber} /> : null}
+      </div>
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">billing · payment decline WhatsApp resent</p>
+    </div>
+  );
+}
+
 export function CustomerActivityEvent({ event }: { event: ActivityEventRow }) {
   if (event.category === "billing.payment_failed") {
     return <PaymentFailedActivity event={event} />;
   }
   if (event.category === "billing.payment_decline_email_resent") {
     return <PaymentDeclineEmailResentActivity event={event} />;
+  }
+  if (event.category === "billing.payment_decline_whatsapp_resent") {
+    return <PaymentDeclineWhatsAppResentActivity event={event} />;
   }
 
   return (

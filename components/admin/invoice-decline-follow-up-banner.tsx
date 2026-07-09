@@ -1,6 +1,7 @@
 import { formatMoney } from "@/lib/domain/native-billing";
 import {
   paymentFailureEmailFollowUpLabel,
+  paymentFailureWhatsAppFollowUpLabel,
   type NativeInvoiceDeclineFollowUp,
 } from "@/lib/stripe/payment-failure-recovery";
 
@@ -21,6 +22,10 @@ export function InvoiceDeclineFollowUpBanner({ followUp }: { followUp: NativeInv
   const emailLabel = paymentFailureEmailFollowUpLabel({
     emailSent: followUp.emailSent,
     emailError: followUp.emailError,
+  });
+  const whatsAppLabel = paymentFailureWhatsAppFollowUpLabel({
+    whatsAppSent: followUp.whatsAppSent,
+    whatsAppError: followUp.whatsAppError,
   });
 
   const tone = followUp.emailSent ? "emerald" : followUp.emailError?.includes("no email") ? "rose" : "amber";
@@ -61,6 +66,14 @@ export function InvoiceDeclineFollowUpBanner({ followUp }: { followUp: NativeInv
           ? " — customer decline email delivered via SMTP."
           : followUp.emailError
             ? ` — ${followUp.emailError}`
+            : " — follow up manually."}
+      </p>
+      <p className={`mt-1 ${bodyClass}`}>
+        <span className="font-medium">{whatsAppLabel}</span>
+        {followUp.whatsAppSent
+          ? " — customer decline WhatsApp delivered."
+          : followUp.whatsAppError
+            ? ` — ${followUp.whatsAppError}`
             : " — follow up manually."}
       </p>
       {followUp.smsRecipientCount > 0 ? (

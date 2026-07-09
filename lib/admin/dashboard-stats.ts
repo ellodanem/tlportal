@@ -8,7 +8,11 @@ import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover"
 
 import { prisma } from "@/lib/db";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
-import { listRecentPaymentFailureAttentionItems, paymentFailureEmailFollowUpLabel } from "@/lib/stripe/payment-failure-recovery";
+import {
+  listRecentPaymentFailureAttentionItems,
+  paymentFailureEmailFollowUpLabel,
+  paymentFailureWhatsAppFollowUpLabel,
+} from "@/lib/stripe/payment-failure-recovery";
 
 const unlinkedInvoilessWhere = {
   invoilessCustomerId: null,
@@ -214,6 +218,10 @@ export async function getDashboardStats() {
       emailSent: failure.emailSent,
       emailError: failure.emailError,
     });
+    const whatsAppLabel = paymentFailureWhatsAppFollowUpLabel({
+      whatsAppSent: failure.whatsAppSent,
+      whatsAppError: failure.whatsAppError,
+    });
     const smsPart =
       failure.smsRecipientCount > 0
         ? ` · ${failure.smsRecipientCount} staff SMS`
@@ -225,7 +233,7 @@ export async function getDashboardStats() {
       item: {
         id: `pay-fail-${failure.customerId}`,
         title: `Payment declined — ${name}`,
-        meta: `${amountLabel}${declinePart} · ${emailLabel}${smsPart} — follow up on billing.`,
+        meta: `${amountLabel}${declinePart} · ${emailLabel} · ${whatsAppLabel}${smsPart} — follow up on billing.`,
         href: `/admin/customers/${failure.customerId}/billing`,
         tone: "urgent",
       },

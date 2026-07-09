@@ -9,6 +9,7 @@ export const OPERATIONAL_EVENT_CATEGORIES = [
   "billing.checkout_recovery_sent",
   "billing.payment_failed",
   "billing.payment_decline_email_resent",
+  "billing.payment_decline_whatsapp_resent",
   "billing.mode_changed",
   "gps.link.updated",
   "registration.approved",

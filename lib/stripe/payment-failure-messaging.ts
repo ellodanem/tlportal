@@ -1,25 +1,53 @@
 /** Customer-facing copy for declined card payments. */
 
-export const TRACK_LUCIA_SUBSCRIPTION_LABEL = "your Track Lucia Subscription";
+export const TRACK_LUCIA_SUBSCRIPTION_LABEL = "Track Lucia Subscription";
 
 export type PaymentFailureDeclineKind = "native_invoice" | "subscription" | "unknown";
 
-/** Subject lines read cleaner without a leading "your". */
-function declinePaymentSubjectLabel(bodyLabel: string): string {
-  return bodyLabel.replace(/^your /, "");
-}
-
-/** Customer-facing payment description — avoids opaque Stripe invoice ids in email copy. */
+/**
+ * Customer-facing payment description — avoids opaque Stripe invoice ids in copy.
+ * `subjectLabel` is the clean name; `bodyLabel` adds "your" for generic labels
+ * (but not for a specific invoice number, which reads without an article).
+ */
 export function customerFacingDeclinePaymentLabel(input: {
   kind?: PaymentFailureDeclineKind | null;
   invoiceNumber?: string | null;
-}): string {
+}): { subjectLabel: string; bodyLabel: string } {
   const invoiceNumber = input.invoiceNumber?.trim();
   if (input.kind === "native_invoice" || invoiceNumber?.startsWith("TL-INV")) {
-    if (invoiceNumber?.startsWith("TL-INV")) return invoiceNumber;
-    return "your Track Lucia invoice";
+    if (invoiceNumber?.startsWith("TL-INV")) {
+      return { subjectLabel: invoiceNumber, bodyLabel: invoiceNumber };
+    }
+    return { subjectLabel: "Track Lucia invoice", bodyLabel: "your Track Lucia invoice" };
   }
-  return TRACK_LUCIA_SUBSCRIPTION_LABEL;
+  return {
+    subjectLabel: TRACK_LUCIA_SUBSCRIPTION_LABEL,
+    bodyLabel: `your ${TRACK_LUCIA_SUBSCRIPTION_LABEL}`,
+  };
+}
+
+/**
+ * Short, mid-sentence decline reason for WhatsApp/SMS copy (lowercase, no trailing period).
+ * Fits templates like "…but {{2}}. No money was taken."
+ */
+export function declineCodeShortReason(declineCode: string | null | undefined): string {
+  switch (declineCode) {
+    case "insufficient_funds":
+      return "there weren't enough funds available";
+    case "authentication_required":
+      return "your bank needs to verify the payment";
+    case "card_velocity_exceeded":
+    case "withdrawal_count_limit_exceeded":
+      return "your bank flagged a transaction limit";
+    case "expired_card":
+      return "the card appears to be expired";
+    case "incorrect_cvc":
+    case "invalid_cvc":
+      return "the security code was incorrect";
+    case "do_not_honor":
+    default:
+      return "your bank declined the charge";
+  }
 }
 
 export function declineCodeGuidance(declineCode: string | null | undefined): string {
@@ -52,12 +80,12 @@ export function paymentFailureEmailBody(input: {
   invoiceNumber?: string | null;
 }): { text: string; html: string; subject: string } {
   const guidance = declineCodeGuidance(input.declineCode);
-  const invoiceLabel = customerFacingDeclinePaymentLabel({
+  const { subjectLabel, bodyLabel } = customerFacingDeclinePaymentLabel({
     kind: input.kind,
     invoiceNumber: input.invoiceNumber,
   });
-  const invoiceLine = ` for ${invoiceLabel}`;
-  const subject = `Payment declined — ${declinePaymentSubjectLabel(invoiceLabel)}`;
+  const invoiceLine = ` for ${bodyLabel}`;
+  const subject = `Payment declined — ${subjectLabel}`;
 
   const text = `Hello ${input.greetingName},
 

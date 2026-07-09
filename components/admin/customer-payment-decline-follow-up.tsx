@@ -18,10 +18,12 @@ export function CustomerPaymentDeclineFollowUpCard({
   followUp,
   customerId,
   emailPreview,
+  whatsAppConfigured,
 }: {
   followUp: CustomerPaymentDeclineFollowUp;
   customerId: string;
   emailPreview: PaymentDeclineEmailPreview | null;
+  whatsAppConfigured: boolean;
 }) {
   const amountLabel = formatMoney(followUp.amount, followUp.currency);
   const declinePart = followUp.declineCode ? ` (${followUp.declineCode})` : "";
@@ -92,6 +94,25 @@ export function CustomerPaymentDeclineFollowUpCard({
         </p>
       )}
 
+      {followUp.whatsAppSent ? (
+        <p className={`mt-1 text-sm ${bodyClass}`}>
+          <span className="font-medium">Customer WhatsApp sent</span>
+          {followUp.customerPhone ? (
+            <>
+              {" "}
+              to <span className="font-mono text-xs">{followUp.customerPhone}</span>.
+            </>
+          ) : (
+            "."
+          )}
+        </p>
+      ) : (
+        <p className={`mt-1 text-sm ${bodyClass}`}>
+          <span className="font-medium">Customer WhatsApp not sent</span>
+          {followUp.whatsAppError ? <> — {followUp.whatsAppError}</> : "."}
+        </p>
+      )}
+
       {followUp.smsRecipientCount > 0 ? (
         <p className={`mt-1 text-xs ${bodyClass}`}>
           Staff SMS sent to {followUp.smsRecipientCount} billing alert number
@@ -118,8 +139,11 @@ export function CustomerPaymentDeclineFollowUpCard({
       <PaymentDeclineResendForm
         customerId={customerId}
         customerEmail={followUp.customerEmail}
+        customerPhone={followUp.customerPhone}
         hasPayUrl={Boolean(followUp.payUrl && !followUp.payUrl.includes("/admin/"))}
+        whatsAppConfigured={whatsAppConfigured}
         emailAlreadySent={followUp.emailSent}
+        whatsAppAlreadySent={followUp.whatsAppSent}
       />
     </section>
   );

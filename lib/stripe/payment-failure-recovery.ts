@@ -1,21 +1,54 @@
 import "server-only";
 
+import { randomBytes } from "crypto";
+
 import type Stripe from "stripe";
 
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { getBillingAlertSmsRecipients } from "@/lib/billing/billing-alert-phones";
+import { sendPaymentDeclineWhatsApp } from "@/lib/billing/customer-whatsapp";
 import { formatMoney } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
 import { sendAppEmail } from "@/lib/email/send-mail";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { sendTwilioAdminSms } from "@/lib/twilio/admin-sms";
+import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
+import { toWhatsAppAddress } from "@/lib/twilio/phone";
 
 import { getAppBaseUrl } from "./app-url";
 import { getStripeClient } from "./config";
-import { declineCodeGuidance, paymentFailureEmailBody, type PaymentFailureDeclineKind } from "./payment-failure-messaging";
+import {
+  customerFacingDeclinePaymentLabel,
+  declineCodeGuidance,
+  declineCodeShortReason,
+  paymentFailureEmailBody,
+  type PaymentFailureDeclineKind,
+} from "./payment-failure-messaging";
 import { resolveTlCustomerIdFromStripeInvoice } from "./invoice-sync";
 
 const RECENT_FAILURE_HOURS = 48;
+
+/** Short, URL-safe token for the `/pay/go/{token}` decline button. */
+function newPayLinkToken(): string {
+  return randomBytes(9).toString("base64url");
+}
+
+/** Resolve a `/pay/go/{token}` decline token to its real pay destination. */
+export async function resolvePayLinkTokenDestination(token: string): Promise<string | null> {
+  const clean = token.trim();
+  if (!clean) return null;
+  const event = await prisma.operationalEvent.findFirst({
+    where: {
+      category: "billing.payment_failed",
+      payload: { path: ["payLinkToken"], equals: clean },
+    },
+    orderBy: { occurredAt: "desc" },
+    select: { payload: true },
+  });
+  const payUrl = (event?.payload as { payUrl?: string | null } | null)?.payUrl ?? null;
+  if (!payUrl || payUrl.includes("/admin/")) return null;
+  return payUrl;
+}
 
 export type ResolvedPaymentFailure = {
   paymentIntentId: string;
@@ -178,16 +211,25 @@ export async function handleStripePaymentFailure(input: {
   if (!failure) return;
 
   const amountLabel = formatMoney(failure.amount, failure.currency);
+  const payLinkToken = newPayLinkToken();
   let emailSent = false;
   let emailError: string | null = null;
+  let whatsAppSent = false;
+  let whatsAppError: string | null = null;
   let smsRecipientCount = 0;
   const smsErrors: string[] = [];
 
-  if (failure.customerId && failure.payUrl && !failure.payUrl.includes("/admin/")) {
+  const canNotifyCustomer = Boolean(
+    failure.customerId && failure.payUrl && !failure.payUrl.includes("/admin/"),
+  );
+
+  if (canNotifyCustomer) {
     const customer = await prisma.customer.findUnique({
-      where: { id: failure.customerId },
-      select: { email: true, company: true, firstName: true, lastName: true },
+      where: { id: failure.customerId! },
+      select: { email: true, company: true, firstName: true, lastName: true, phone: true, id: true },
     });
+
+    // Email
     const email = customer?.email?.trim();
     if (customer && email) {
       const body = paymentFailureEmailBody({
@@ -195,7 +237,7 @@ export async function handleStripePaymentFailure(input: {
         amountLabel,
         kind: failure.kind,
         invoiceNumber: failure.invoiceNumber,
-        payUrl: failure.payUrl,
+        payUrl: failure.payUrl!,
         declineCode: failure.declineCode,
       });
       const sent = await sendAppEmail({
@@ -212,10 +254,39 @@ export async function handleStripePaymentFailure(input: {
     } else {
       emailError = "Customer has no email on file.";
     }
+
+    // WhatsApp (independent of email)
+    if (!customer) {
+      whatsAppError = "Customer could not be resolved.";
+    } else if (!isTwilioWhatsAppConfigured()) {
+      whatsAppError = "Twilio WhatsApp is not configured.";
+    } else if (!toWhatsAppAddress(customer.phone)) {
+      whatsAppError = "Customer has no valid phone for WhatsApp.";
+    } else {
+      const { bodyLabel } = customerFacingDeclinePaymentLabel({
+        kind: failure.kind,
+        invoiceNumber: failure.invoiceNumber,
+      });
+      const waResult = await sendPaymentDeclineWhatsApp({
+        customer,
+        reasonPhrase: declineCodeShortReason(failure.declineCode),
+        paymentLabel: bodyLabel,
+        amountLabel,
+        payLinkToken,
+        externalRef: failure.paymentIntentId,
+      });
+      if (waResult.ok) {
+        whatsAppSent = true;
+      } else {
+        whatsAppError = waResult.error;
+      }
+    }
   } else if (!failure.payUrl) {
     emailError = "No pay link available for this failure.";
+    whatsAppError = "No pay link available for this failure.";
   } else {
     emailError = "Customer could not be resolved.";
+    whatsAppError = "Customer could not be resolved.";
   }
 
   const recipients = await getBillingAlertSmsRecipients();
@@ -256,6 +327,7 @@ export async function handleStripePaymentFailure(input: {
   const summaryParts = [`Payment declined — ${amountLabel}`];
   if (failure.declineCode) summaryParts.push(failure.declineCode);
   if (emailSent) summaryParts.push("customer emailed");
+  if (whatsAppSent) summaryParts.push("customer WhatsApp");
   if (smsRecipientCount > 0) summaryParts.push(`${smsRecipientCount} staff SMS`);
 
   await recordOperationalEvent({
@@ -273,8 +345,11 @@ export async function handleStripePaymentFailure(input: {
       last4: failure.last4,
       declineCode: failure.declineCode,
       payUrl: failure.payUrl,
+      payLinkToken,
       emailSent,
       emailError,
+      whatsAppSent,
+      whatsAppError,
       smsRecipientCount,
       smsErrors: smsErrors.length > 0 ? smsErrors : undefined,
     },
@@ -289,6 +364,8 @@ export type NativeInvoiceDeclineFollowUp = {
   last4: string | null;
   emailSent: boolean;
   emailError: string | null;
+  whatsAppSent: boolean;
+  whatsAppError: string | null;
   smsRecipientCount: number;
 };
 
@@ -318,6 +395,8 @@ export async function getNativeInvoiceDeclineFollowUp(
     last4?: string | null;
     emailSent?: boolean;
     emailError?: string | null;
+    whatsAppSent?: boolean;
+    whatsAppError?: string | null;
     smsRecipientCount?: number;
   } | null;
 
@@ -329,6 +408,8 @@ export async function getNativeInvoiceDeclineFollowUp(
     last4: payload?.last4 ?? null,
     emailSent: payload?.emailSent === true,
     emailError: payload?.emailError ?? null,
+    whatsAppSent: payload?.whatsAppSent === true,
+    whatsAppError: payload?.whatsAppError ?? null,
     smsRecipientCount: payload?.smsRecipientCount ?? 0,
   };
 }
@@ -355,6 +436,18 @@ export function paymentFailureEmailFollowUpLabel(input: {
   return "Email not sent";
 }
 
+export function paymentFailureWhatsAppFollowUpLabel(input: {
+  whatsAppSent: boolean;
+  whatsAppError: string | null;
+}): string {
+  if (input.whatsAppSent) return "WhatsApp sent";
+  const err = input.whatsAppError?.toLowerCase() ?? "";
+  if (err.includes("phone")) return "No phone for WhatsApp";
+  if (err.includes("not configured")) return "WhatsApp not configured";
+  if (input.whatsAppError) return "WhatsApp not sent";
+  return "WhatsApp not sent";
+}
+
 export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise<
   {
     customerId: string;
@@ -366,6 +459,8 @@ export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise
     occurredAt: Date;
     emailSent: boolean;
     emailError: string | null;
+    whatsAppSent: boolean;
+    whatsAppError: string | null;
     smsRecipientCount: number;
   }[]
 > {
@@ -400,6 +495,8 @@ export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise
       invoiceNumber?: string | null;
       emailSent?: boolean;
       emailError?: string | null;
+      whatsAppSent?: boolean;
+      whatsAppError?: string | null;
       smsRecipientCount?: number;
     } | null;
 
@@ -413,6 +510,8 @@ export async function listRecentPaymentFailureAttentionItems(limit = 6): Promise
       occurredAt: event.occurredAt,
       emailSent: payload?.emailSent === true,
       emailError: payload?.emailError ?? null,
+      whatsAppSent: payload?.whatsAppSent === true,
+      whatsAppError: payload?.whatsAppError ?? null,
       smsRecipientCount: payload?.smsRecipientCount ?? 0,
     });
     if (out.length >= limit) break;
@@ -447,7 +546,11 @@ export type CustomerPaymentDeclineFollowUp = {
   last4: string | null;
   emailSent: boolean;
   emailError: string | null;
+  whatsAppSent: boolean;
+  whatsAppError: string | null;
   customerEmail: string | null;
+  customerPhone: string | null;
+  payLinkToken: string | null;
   smsRecipientCount: number;
   payUrl: string | null;
 };
@@ -478,13 +581,16 @@ export async function getLatestPaymentDeclineFollowUpForCustomer(
     last4?: string | null;
     emailSent?: boolean;
     emailError?: string | null;
+    whatsAppSent?: boolean;
+    whatsAppError?: string | null;
+    payLinkToken?: string | null;
     smsRecipientCount?: number;
     payUrl?: string | null;
   } | null;
 
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
-    select: { email: true },
+    select: { email: true, phone: true },
   });
 
   return {
@@ -498,7 +604,11 @@ export async function getLatestPaymentDeclineFollowUpForCustomer(
     last4: payload?.last4 ?? null,
     emailSent: payload?.emailSent === true,
     emailError: payload?.emailError ?? null,
+    whatsAppSent: payload?.whatsAppSent === true,
+    whatsAppError: payload?.whatsAppError ?? null,
     customerEmail: customer?.email?.trim() || null,
+    customerPhone: customer?.phone?.trim() || null,
+    payLinkToken: payload?.payLinkToken ?? null,
     smsRecipientCount: payload?.smsRecipientCount ?? 0,
     payUrl: payload?.payUrl ?? null,
   };
@@ -588,4 +698,108 @@ export async function resendPaymentDeclineEmailForCustomer(
   });
 
   return { ok: true, email };
+}
+
+export type ResendPaymentDeclineWhatsAppResult =
+  | { ok: true; phone: string }
+  | { ok: false; error: string };
+
+/** Staff-triggered resend of the decline follow-up over WhatsApp (same approved template). */
+export async function resendPaymentDeclineWhatsAppForCustomer(
+  customerId: string,
+  actorUserId?: string | null,
+): Promise<ResendPaymentDeclineWhatsAppResult> {
+  const followUp = await getLatestPaymentDeclineFollowUpForCustomer(customerId, 7);
+  if (!followUp) {
+    return { ok: false, error: "No recent payment decline on file for this customer." };
+  }
+  if (!followUp.payUrl || followUp.payUrl.includes("/admin/")) {
+    return { ok: false, error: "No customer pay link is available for this decline." };
+  }
+  if (!isTwilioWhatsAppConfigured()) {
+    return { ok: false, error: "Twilio WhatsApp is not configured." };
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { id: true, phone: true, company: true, firstName: true, lastName: true },
+  });
+  if (!customer || !toWhatsAppAddress(customer.phone)) {
+    return { ok: false, error: "Customer has no valid phone on file for WhatsApp." };
+  }
+
+  // Reuse the original decline's redirect token, or mint one on the source event for legacy records.
+  let payLinkToken = followUp.payLinkToken;
+  if (!payLinkToken) {
+    payLinkToken = newPayLinkToken();
+    const existingEvent = await prisma.operationalEvent.findUnique({
+      where: { id: followUp.eventId },
+      select: { payload: true },
+    });
+    const existingPayload =
+      existingEvent?.payload && typeof existingEvent.payload === "object" && !Array.isArray(existingEvent.payload)
+        ? (existingEvent.payload as Record<string, unknown>)
+        : {};
+    await prisma.operationalEvent.update({
+      where: { id: followUp.eventId },
+      data: { payload: { ...existingPayload, payLinkToken } },
+    });
+  }
+
+  const amountLabel = formatMoney(followUp.amount, followUp.currency);
+  const { bodyLabel } = customerFacingDeclinePaymentLabel({
+    kind: followUp.kind,
+    invoiceNumber: followUp.invoiceNumber,
+  });
+
+  const result = await sendPaymentDeclineWhatsApp({
+    customer,
+    reasonPhrase: declineCodeShortReason(followUp.declineCode),
+    paymentLabel: bodyLabel,
+    amountLabel,
+    payLinkToken,
+    externalRef: followUp.eventId,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  const eventForUpdate = await prisma.operationalEvent.findUnique({
+    where: { id: followUp.eventId },
+    select: { payload: true },
+  });
+  const payloadForUpdate =
+    eventForUpdate?.payload && typeof eventForUpdate.payload === "object" && !Array.isArray(eventForUpdate.payload)
+      ? (eventForUpdate.payload as Record<string, unknown>)
+      : {};
+
+  await prisma.operationalEvent.update({
+    where: { id: followUp.eventId },
+    data: {
+      payload: {
+        ...payloadForUpdate,
+        whatsAppSent: true,
+        whatsAppError: null,
+        whatsAppResentAt: new Date().toISOString(),
+        whatsAppResentBy: actorUserId ?? null,
+      },
+    },
+  });
+
+  await recordOperationalEvent({
+    category: "billing.payment_decline_whatsapp_resent",
+    customerId,
+    actorUserId: actorUserId ?? undefined,
+    summary: `Decline WhatsApp resent to ${customer.phone ?? "customer"}`,
+    payload: {
+      sourceEventId: followUp.eventId,
+      amount: followUp.amount,
+      currency: followUp.currency,
+      declineCode: followUp.declineCode,
+      invoiceNumber: followUp.invoiceNumber,
+      payUrl: followUp.payUrl,
+    },
+  });
+
+  return { ok: true, phone: customer.phone ?? "" };
 }
