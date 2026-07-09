@@ -57,6 +57,30 @@ If you have questions, reply to this email.
   return { text, html, subject };
 }
 
+export type PaymentDeclineEmailPreview = {
+  subject: string;
+  text: string;
+};
+
+/** Plain-text preview for staff UI (same copy as automatic / resend decline email). */
+export function buildPaymentDeclineEmailPreview(input: {
+  greetingName: string;
+  amountLabel: string;
+  invoiceLabel: string | null;
+  payUrl: string | null;
+  declineCode: string | null;
+}): PaymentDeclineEmailPreview | null {
+  if (!input.payUrl?.trim() || input.payUrl.includes("/admin/")) return null;
+  const body = paymentFailureEmailBody({
+    greetingName: input.greetingName,
+    amountLabel: input.amountLabel,
+    invoiceLabel: input.invoiceLabel,
+    payUrl: input.payUrl,
+    declineCode: input.declineCode,
+  });
+  return { subject: body.subject, text: body.text };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

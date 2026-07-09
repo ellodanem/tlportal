@@ -10,6 +10,8 @@ import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
+import { formatMoney } from "@/lib/domain/native-billing";
+import { buildPaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-messaging";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -52,6 +54,15 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
   const title = customerDisplayName(customer);
   const isManual = customer.billingMode === "manual_legacy";
   const stripeBanner = stripeBannerFromQuery(stripeQuery);
+  const declineEmailPreview = paymentDeclineFollowUp
+    ? buildPaymentDeclineEmailPreview({
+        greetingName: title,
+        amountLabel: formatMoney(paymentDeclineFollowUp.amount, paymentDeclineFollowUp.currency),
+        invoiceLabel: paymentDeclineFollowUp.invoiceNumber,
+        payUrl: paymentDeclineFollowUp.payUrl,
+        declineCode: paymentDeclineFollowUp.declineCode,
+      })
+    : null;
 
   const renewalPanel = (
     <CustomerRenewalOpsPanel
@@ -109,7 +120,11 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
       />
 
       {paymentDeclineFollowUp ? (
-        <CustomerPaymentDeclineFollowUpCard followUp={paymentDeclineFollowUp} customerId={customer.id} />
+        <CustomerPaymentDeclineFollowUpCard
+          followUp={paymentDeclineFollowUp}
+          customerId={customer.id}
+          emailPreview={declineEmailPreview}
+        />
       ) : null}
 
       {isManual ? (

@@ -1,6 +1,8 @@
 import { formatMoney } from "@/lib/domain/native-billing";
+import { PaymentDeclineEmailPreviewToggle } from "@/components/admin/payment-decline-email-preview";
 import { PaymentDeclineResendForm } from "@/components/admin/payment-decline-resend-form";
 import type { CustomerPaymentDeclineFollowUp } from "@/lib/stripe/payment-failure-recovery";
+import type { PaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-messaging";
 
 function formatWhen(d: Date): string {
   return d.toLocaleString(undefined, {
@@ -15,9 +17,11 @@ function formatWhen(d: Date): string {
 export function CustomerPaymentDeclineFollowUpCard({
   followUp,
   customerId,
+  emailPreview,
 }: {
   followUp: CustomerPaymentDeclineFollowUp;
   customerId: string;
+  emailPreview: PaymentDeclineEmailPreview | null;
 }) {
   const amountLabel = formatMoney(followUp.amount, followUp.currency);
   const declinePart = followUp.declineCode ? ` (${followUp.declineCode})` : "";
@@ -108,6 +112,8 @@ export function CustomerPaymentDeclineFollowUpCard({
           </a>
         </p>
       ) : null}
+
+      {emailPreview ? <PaymentDeclineEmailPreviewToggle preview={emailPreview} /> : null}
 
       <PaymentDeclineResendForm
         customerId={customerId}
