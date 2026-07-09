@@ -12,7 +12,7 @@ import { sendTwilioAdminSms } from "@/lib/twilio/admin-sms";
 
 import { getAppBaseUrl } from "./app-url";
 import { getStripeClient } from "./config";
-import { declineCodeGuidance, paymentFailureEmailBody } from "./payment-failure-messaging";
+import { declineCodeGuidance, paymentFailureEmailBody, type PaymentFailureDeclineKind } from "./payment-failure-messaging";
 import { resolveTlCustomerIdFromStripeInvoice } from "./invoice-sync";
 
 const RECENT_FAILURE_HOURS = 48;
@@ -193,7 +193,8 @@ export async function handleStripePaymentFailure(input: {
       const body = paymentFailureEmailBody({
         greetingName: customerDisplayName(customer),
         amountLabel,
-        invoiceLabel: failure.invoiceNumber,
+        kind: failure.kind,
+        invoiceNumber: failure.invoiceNumber,
         payUrl: failure.payUrl,
         declineCode: failure.declineCode,
       });
@@ -442,6 +443,7 @@ export type CustomerPaymentDeclineFollowUp = {
   currency: string;
   declineCode: string | null;
   invoiceNumber: string | null;
+  kind: PaymentFailureDeclineKind | null;
   last4: string | null;
   emailSent: boolean;
   emailError: string | null;
@@ -472,6 +474,7 @@ export async function getLatestPaymentDeclineFollowUpForCustomer(
     currency?: string;
     declineCode?: string | null;
     invoiceNumber?: string | null;
+    kind?: PaymentFailureDeclineKind | null;
     last4?: string | null;
     emailSent?: boolean;
     emailError?: string | null;
@@ -491,6 +494,7 @@ export async function getLatestPaymentDeclineFollowUpForCustomer(
     currency: payload?.currency ?? "XCD",
     declineCode: payload?.declineCode ?? null,
     invoiceNumber: payload?.invoiceNumber ?? null,
+    kind: payload?.kind ?? null,
     last4: payload?.last4 ?? null,
     emailSent: payload?.emailSent === true,
     emailError: payload?.emailError ?? null,
@@ -530,7 +534,8 @@ export async function resendPaymentDeclineEmailForCustomer(
   const body = paymentFailureEmailBody({
     greetingName: customerDisplayName(customer),
     amountLabel,
-    invoiceLabel: followUp.invoiceNumber,
+    kind: followUp.kind,
+    invoiceNumber: followUp.invoiceNumber,
     payUrl: followUp.payUrl,
     declineCode: followUp.declineCode,
   });

@@ -58,7 +58,8 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     ? buildPaymentDeclineEmailPreview({
         greetingName: title,
         amountLabel: formatMoney(paymentDeclineFollowUp.amount, paymentDeclineFollowUp.currency),
-        invoiceLabel: paymentDeclineFollowUp.invoiceNumber,
+        kind: paymentDeclineFollowUp.kind,
+        invoiceNumber: paymentDeclineFollowUp.invoiceNumber,
         payUrl: paymentDeclineFollowUp.payUrl,
         declineCode: paymentDeclineFollowUp.declineCode,
       })

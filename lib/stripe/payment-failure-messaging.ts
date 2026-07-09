@@ -1,5 +1,27 @@
 /** Customer-facing copy for declined card payments. */
 
+export const TRACK_LUCIA_SUBSCRIPTION_LABEL = "your Track Lucia Subscription";
+
+export type PaymentFailureDeclineKind = "native_invoice" | "subscription" | "unknown";
+
+/** Subject lines read cleaner without a leading "your". */
+function declinePaymentSubjectLabel(bodyLabel: string): string {
+  return bodyLabel.replace(/^your /, "");
+}
+
+/** Customer-facing payment description — avoids opaque Stripe invoice ids in email copy. */
+export function customerFacingDeclinePaymentLabel(input: {
+  kind?: PaymentFailureDeclineKind | null;
+  invoiceNumber?: string | null;
+}): string {
+  const invoiceNumber = input.invoiceNumber?.trim();
+  if (input.kind === "native_invoice" || invoiceNumber?.startsWith("TL-INV")) {
+    if (invoiceNumber?.startsWith("TL-INV")) return invoiceNumber;
+    return "your Track Lucia invoice";
+  }
+  return TRACK_LUCIA_SUBSCRIPTION_LABEL;
+}
+
 export function declineCodeGuidance(declineCode: string | null | undefined): string {
   switch (declineCode) {
     case "do_not_honor":
@@ -24,15 +46,18 @@ export function declineCodeGuidance(declineCode: string | null | undefined): str
 export function paymentFailureEmailBody(input: {
   greetingName: string;
   amountLabel: string;
-  invoiceLabel: string | null;
   payUrl: string;
   declineCode: string | null;
+  kind?: PaymentFailureDeclineKind | null;
+  invoiceNumber?: string | null;
 }): { text: string; html: string; subject: string } {
   const guidance = declineCodeGuidance(input.declineCode);
-  const invoiceLine = input.invoiceLabel ? ` for ${input.invoiceLabel}` : "";
-  const subject = input.invoiceLabel
-    ? `Payment declined — ${input.invoiceLabel}`
-    : "Payment declined — Track Lucia";
+  const invoiceLabel = customerFacingDeclinePaymentLabel({
+    kind: input.kind,
+    invoiceNumber: input.invoiceNumber,
+  });
+  const invoiceLine = ` for ${invoiceLabel}`;
+  const subject = `Payment declined — ${declinePaymentSubjectLabel(invoiceLabel)}`;
 
   const text = `Hello ${input.greetingName},
 
@@ -66,15 +91,17 @@ export type PaymentDeclineEmailPreview = {
 export function buildPaymentDeclineEmailPreview(input: {
   greetingName: string;
   amountLabel: string;
-  invoiceLabel: string | null;
   payUrl: string | null;
   declineCode: string | null;
+  kind?: PaymentFailureDeclineKind | null;
+  invoiceNumber?: string | null;
 }): PaymentDeclineEmailPreview | null {
   if (!input.payUrl?.trim() || input.payUrl.includes("/admin/")) return null;
   const body = paymentFailureEmailBody({
     greetingName: input.greetingName,
     amountLabel: input.amountLabel,
-    invoiceLabel: input.invoiceLabel,
+    kind: input.kind,
+    invoiceNumber: input.invoiceNumber,
     payUrl: input.payUrl,
     declineCode: input.declineCode,
   });
