@@ -4,8 +4,15 @@ import {
   type MessageTemplateCatalogEntry,
   type MessageTemplateChannel,
 } from "@/lib/communications/message-template-catalog";
+import {
+  QUICK_WHATSAPP_TEMPLATES,
+  type QuickWhatsAppTemplateDef,
+} from "@/lib/communications/quick-send-whatsapp-templates";
 import { prisma } from "@/lib/db";
-import { QuickEmailComposer, type QuickEmailCustomer } from "@/components/admin/quick-email-composer";
+import { canSendTwilioAdminSms } from "@/lib/twilio/admin-sms";
+import { getTwilioContentSid, isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
+import { QuickSendPanel } from "@/components/admin/quick-send-panel";
+import type { QuickSendCustomer } from "@/components/admin/quick-customer-picker";
 
 const CHANNEL_LABEL: Record<MessageTemplateChannel, string> = {
   email: "Email",
@@ -91,38 +98,57 @@ function TemplateCard({ entry }: { entry: MessageTemplateCatalogEntry }) {
   );
 }
 
+function listAvailableWhatsAppTemplates(): QuickWhatsAppTemplateDef[] {
+  return QUICK_WHATSAPP_TEMPLATES.filter((t) => Boolean(getTwilioContentSid(t.kind)));
+}
+
 export default async function MessageTemplatesPage() {
   const [catalog, customerRows] = await Promise.all([
     buildMessageTemplateCatalog(),
     prisma.customer.findMany({
-      where: { email: { not: null } },
-      select: { id: true, email: true, company: true, firstName: true, lastName: true },
+      where: {
+        OR: [{ email: { not: null } }, { phone: { not: null } }],
+      },
+      select: { id: true, email: true, phone: true, company: true, firstName: true, lastName: true },
       orderBy: [{ company: "asc" }, { firstName: "asc" }, { lastName: "asc" }],
       take: 2000,
     }),
   ]);
 
-  const customers: QuickEmailCustomer[] = customerRows
-    .filter((c) => c.email?.trim())
-    .map((c) => ({ id: c.id, name: customerDisplayName(c), email: c.email!.trim() }));
+  const customers: QuickSendCustomer[] = customerRows.map((c) => ({
+    id: c.id,
+    name: customerDisplayName(c),
+    firstName: c.firstName?.trim() || c.company?.trim() || "there",
+    email: c.email?.trim() || null,
+    phone: c.phone?.trim() || null,
+  }));
 
   const smtpReady = catalog.some((e) => e.channel === "email" && e.config.ok);
+  const whatsappReady = isTwilioWhatsAppConfigured();
+  const smsReady = canSendTwilioAdminSms();
+  const whatsappTemplates = listAvailableWhatsAppTemplates();
 
   return (
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Message templates</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Reference for every automated message the portal sends, plus a quick way to email an individual customer.
+          Reference for every automated message the portal sends, plus a quick way to message an individual customer.
         </p>
       </div>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Quick email</h2>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Quick send</h2>
         <p className="mt-1 mb-4 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Send a one-off email to a single customer. WhatsApp one-offs use approved templates only and are coming next.
+          Email and SMS are free-form. WhatsApp uses Meta-approved templates only (required outside the 24-hour window).
         </p>
-        <QuickEmailComposer customers={customers} smtpReady={smtpReady} />
+        <QuickSendPanel
+          customers={customers}
+          whatsappTemplates={whatsappTemplates}
+          smtpReady={smtpReady}
+          whatsappReady={whatsappReady}
+          smsReady={smsReady}
+        />
       </section>
 
       <section className="flex flex-col gap-4">
