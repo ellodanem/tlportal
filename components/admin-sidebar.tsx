@@ -88,7 +88,10 @@ function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyU
     {
       id: "communications",
       label: "Communications",
-      links: [{ href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast }],
+      links: [
+        { href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast },
+        { href: "/admin/message-templates", label: "Message templates", Icon: IconNavInbox },
+      ],
     },
   ];
 }

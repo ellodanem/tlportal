@@ -17,6 +17,7 @@ export const OPERATIONAL_EVENT_CATEGORIES = [
   "staff.note",
   "broadcast.sent",
   "broadcast.completed",
+  "communication.message_sent",
   "customer.archived",
   "customer.unarchived",
 ] as const;
