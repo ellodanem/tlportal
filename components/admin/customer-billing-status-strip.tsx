@@ -1,5 +1,6 @@
 import type { BillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
-import type { CustomerBillingMode } from "@prisma/client";
+import type { CustomerBillingMode, PaymentRemindersPreference } from "@prisma/client";
+import { paymentRemindersStatusLabel } from "@/lib/domain/payment-reminders";
 
 type SubscriptionStrip = {
   statusLabel: string;
@@ -51,18 +52,21 @@ function ProviderChip({
 
 export function CustomerBillingStatusStrip({
   billingMode,
+  paymentReminders,
   billingSetup,
   subscription,
   stripeConfigured,
   invoilessConfigured,
 }: {
   billingMode: CustomerBillingMode;
+  paymentReminders: PaymentRemindersPreference;
   billingSetup: BillingSetupStatus | null;
   subscription: SubscriptionStrip | null;
   stripeConfigured: boolean;
   invoilessConfigured: boolean;
 }) {
   const isStripe = billingMode === "stripe_subscription";
+  const remindersLabel = paymentRemindersStatusLabel({ billingMode, paymentReminders });
 
   let stripeChip: "linked" | "missing" | "off" | "na" = "off";
   if (!stripeConfigured) {
@@ -102,6 +106,9 @@ export function CustomerBillingStatusStrip({
         </span>
         {stripeConfigured ? <ProviderChip label="Stripe" state={stripeChip} /> : null}
         {invoilessConfigured ? <ProviderChip label="Invoiless" state={invoilessChip} /> : null}
+        <span className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          {remindersLabel}
+        </span>
       </div>
 
       {isStripe ? (

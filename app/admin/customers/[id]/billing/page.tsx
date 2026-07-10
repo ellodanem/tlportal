@@ -7,6 +7,7 @@ import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-
 import { CustomerPaymentDeclineFollowUpCard } from "@/components/admin/customer-payment-decline-follow-up";
 import { CustomerRenewalOpsPanel } from "@/components/admin/customer-renewal-ops-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
+import { PaymentRemindersPreferenceForm } from "@/components/admin/payment-reminders-preference-form";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
@@ -115,10 +116,17 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
 
       <CustomerBillingStatusStrip
         billingMode={customer.billingMode}
+        paymentReminders={customer.paymentReminders}
         billingSetup={billingSetup}
         subscription={subscriptionSummary}
         stripeConfigured={stripeConfigured}
         invoilessConfigured={invoilessConfigured}
+      />
+
+      <PaymentRemindersPreferenceForm
+        customerId={customer.id}
+        billingMode={customer.billingMode}
+        paymentReminders={customer.paymentReminders}
       />
 
       {paymentDeclineFollowUp ? (

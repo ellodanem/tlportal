@@ -17,6 +17,7 @@ import {
   generateAndStorePaidInvoicePdf,
 } from "@/lib/services/billing-paid-pdf-service";
 import { sendPaidInvoiceReceiptEmail } from "@/lib/services/billing-paid-receipt-email-service";
+import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import {
   findRecentCheckoutLinkSentAt,
   recordCheckoutLinkSentToCustomer,
@@ -43,7 +44,7 @@ import {
   parseMonthlyRateXcd,
   parseVehicleCount,
 } from "@/lib/stripe/checkout-pricing";
-import type { CustomerBillingMode } from "@prisma/client";
+import type { CustomerBillingMode, PaymentRemindersPreference } from "@prisma/client";
 
 export type BillingActionState = {
   error: string | null;
@@ -193,6 +194,42 @@ export async function setBillingModeAction(
   revalidatePath(`/admin/customers/${customerId}/edit`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
+  return { error: null };
+}
+
+export async function setPaymentRemindersAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  const raw = String(formData.get("paymentReminders") ?? "").trim();
+  if (!customerId) {
+    return { error: "Missing customer id." };
+  }
+
+  const preference: PaymentRemindersPreference =
+    raw === "on" || raw === "off" || raw === "auto" ? raw : "auto";
+
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { paymentReminders: preference },
+  });
+
+  await recordOperationalEvent({
+    category: "billing.mode_changed",
+    customerId,
+    actorUserId: session.sub,
+    summary: `Payment reminders set to ${preference}`,
+    payload: { paymentReminders: preference },
+  });
+
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/customers/${customerId}`);
   return { error: null };
 }
 

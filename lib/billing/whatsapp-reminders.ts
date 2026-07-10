@@ -1,13 +1,12 @@
 import "server-only";
 
-import type { Customer, CustomerSubscription, ServiceAssignment } from "@prisma/client";
+import type { Customer, ServiceAssignment } from "@prisma/client";
 import { formatInTimeZone } from "date-fns-tz";
 
 import { getBroadcastSupportEmail } from "@/lib/broadcast/support-contact";
 import { prisma } from "@/lib/db";
+import { customerReceivesPaymentReminders } from "@/lib/domain/payment-reminders";
 import { getPortalTimezone } from "@/lib/portal/timezone-settings";
-import { opsUrgencyFromNextDueDate } from "@/lib/admin/assignment-ops-urgency";
-import { isSubscriptionAttentionStatus } from "@/lib/services/customer-subscription-service";
 import { formatXcd } from "@/lib/subscription-options/display";
 import {
   allowWhatsAppWithoutPayLink,
@@ -88,27 +87,15 @@ async function resolveAmountDueLabel(
 }
 
 function shouldSendPreDue(
-  customer: Pick<Customer, "billingMode">,
-  sub: CustomerSubscription | null,
+  customer: Pick<Customer, "billingMode" | "paymentReminders">,
 ): boolean {
-  if (customer.billingMode === "manual_legacy") return true;
-  if (!sub) return true;
-  if (sub.status === "pending_payment") return true;
-  if (isSubscriptionAttentionStatus(sub.status)) return true;
-  if (sub.status === "active") {
-    return false;
-  }
-  return true;
+  return customerReceivesPaymentReminders(customer);
 }
 
 function shouldSendOverdue(
-  customer: Pick<Customer, "billingMode">,
-  sub: CustomerSubscription | null,
-  assignments: ServiceAssignment[],
+  customer: Pick<Customer, "billingMode" | "paymentReminders">,
 ): boolean {
-  if (customer.billingMode === "manual_legacy") return true;
-  if (sub && isSubscriptionAttentionStatus(sub.status)) return true;
-  return assignments.some((a) => opsUrgencyFromNextDueDate(a.nextDueDate) === "overdue");
+  return customerReceivesPaymentReminders(customer);
 }
 
 function pickAnchorDueDate(assignments: ServiceAssignment[], targetDiff: number, tz: string, now: Date): Date | null {
@@ -175,6 +162,7 @@ export async function processBillingWhatsAppReminders(
           company: true,
           phone: true,
           billingMode: true,
+          paymentReminders: true,
           stripeMonthlyRateXcd: true,
         },
       },
@@ -202,24 +190,25 @@ export async function processBillingWhatsAppReminders(
   let adminAlertsSent = 0;
 
   for (const [customerId, group] of byCustomer) {
-    const sub = await prisma.customerSubscription.findFirst({
-      where: { customerId },
-      orderBy: { updatedAt: "desc" },
-    });
+    if (!customerReceivesPaymentReminders(group.customer)) {
+      skipped += 1;
+      details.push({ customerId, kind: "due_5d", status: "skipped_reminders_off" });
+      continue;
+    }
 
     for (const kind of Object.keys(BILLING_WHATSAPP_REMINDER_OFFSETS) as BillingWhatsAppReminderKind[]) {
       const targetDiff = BILLING_WHATSAPP_REMINDER_OFFSETS[kind];
       const isOverdue = targetDiff < 0;
 
       if (isOverdue) {
-        if (!shouldSendOverdue(group.customer, sub, group.assignments)) {
+        if (!shouldSendOverdue(group.customer)) {
           skipped += 1;
-          details.push({ customerId, kind, status: "skipped_not_overdue" });
+          details.push({ customerId, kind, status: "skipped_reminders_off" });
           continue;
         }
-      } else if (!shouldSendPreDue(group.customer, sub)) {
+      } else if (!shouldSendPreDue(group.customer)) {
         skipped += 1;
-        details.push({ customerId, kind, status: "skipped_stripe_current" });
+        details.push({ customerId, kind, status: "skipped_reminders_off" });
         continue;
       }
 

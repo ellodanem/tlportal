@@ -18,8 +18,11 @@ Cron: `GET /api/cron/billing-whatsapp-reminders` daily **04:15 UTC** (`vercel.js
 
 - Active `ServiceAssignment` with `nextDueDate` matching the offset.
 - `Customer.phone` set (sent as `whatsapp:+…`).
-- **Pre-due (5/3/0):** manual/Invoiless customers; Stripe customers with `pending_payment`, `past_due`, `unpaid`, or non-active sub. **Skipped** when Stripe sub is `active` (auto-bill expected).
-- **Overdue (+3/+5):** manual customers; Stripe attention statuses; or any assignment with ops urgency `overdue`.
+- **`Customer.paymentReminders` preference** (all reminder channels):
+  - **`auto` (default):** manual/cash customers **on**; Stripe customers **off** (card failures use the payment-declined series instead).
+  - **`on`:** always eligible (staff override).
+  - **`off`:** never.
+- Staff can change this on **Customer → Billing → Payment reminders**. The billing status strip shows the effective state.
 
 ## Pay link (`{{4}}`) resolution order
 

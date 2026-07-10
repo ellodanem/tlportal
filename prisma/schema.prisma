@@ -110,6 +110,14 @@ enum CustomerBillingMode {
   stripe_subscription
 }
 
+/// Whether the customer receives scheduled payment due/overdue reminders (all channels).
+/// `auto`: manual payers on, Stripe off (decline follow-up covers card failures).
+enum PaymentRemindersPreference {
+  auto
+  on
+  off
+}
+
 enum BillingProvider {
   invoiless
   stripe
@@ -318,6 +326,8 @@ model Customer {
   invoiceBcc           String?
   /// Preferred billing path for new workflows (legacy rows default manual_legacy).
   billingMode          CustomerBillingMode @default(manual_legacy)
+  /// Scheduled payment reminders (WhatsApp ladder today; all channels later). Default auto.
+  paymentReminders     PaymentRemindersPreference @default(auto)
   /// Custom Stripe subscription monthly rate (XCD). Null = default catalog / env Price ids.
   stripeMonthlyRateXcd Decimal?            @db.Decimal(10, 2)
   /// @deprecated Prefer BillingAccount — kept for backward compatibility during Phase 1.
