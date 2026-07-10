@@ -7,6 +7,7 @@ import {
   sendQuickEmailAction,
   sendQuickSmsAction,
   sendQuickWhatsAppAction,
+  sendQuickWhatsAppFreeformAction,
   type QuickSendState,
 } from "@/app/admin/message-templates/actions";
 import { QuickCustomerPicker, type QuickSendCustomer } from "@/components/admin/quick-customer-picker";
@@ -108,16 +109,21 @@ function WhatsAppForm({
   customers,
   templates,
   ready,
+  sessionOpenByCustomerId,
 }: {
   customers: QuickSendCustomer[];
   templates: QuickWhatsAppTemplateDef[];
   ready: boolean;
+  sessionOpenByCustomerId: Record<string, boolean>;
 }) {
-  const [state, action] = useActionState(sendQuickWhatsAppAction, initial);
+  const [templateState, templateAction] = useActionState(sendQuickWhatsAppAction, initial);
+  const [freeformState, freeformAction] = useActionState(sendQuickWhatsAppFreeformAction, initial);
   const [selected, setSelected] = useState<QuickSendCustomer | null>(null);
   const [kind, setKind] = useState<QuickWhatsAppTemplateKind | "">(templates[0]?.kind ?? "");
+  const [mode, setMode] = useState<"template" | "freeform">("template");
   const template = kind ? getQuickWhatsAppTemplate(kind) : null;
   const phoneCustomers = useMemo(() => customers.filter((c) => c.phone), [customers]);
+  const sessionOpen = selected ? Boolean(sessionOpenByCustomerId[selected.id]) : false;
 
   const [vars, setVars] = useState<Record<string, string>>({});
 
@@ -134,20 +140,12 @@ function WhatsAppForm({
     setVars(next);
   }, [kind, selected?.id, selected?.firstName]);
 
-  if (templates.length === 0) {
-    return (
-      <p className="text-sm text-amber-800 dark:text-amber-200">
-        No WhatsApp Content SIDs are configured. Set the <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TWILIO_WA_TEMPLATE_*</code>{" "}
-        env vars, then redeploy.
-      </p>
-    );
-  }
+  useEffect(() => {
+    if (!sessionOpen && mode === "freeform") setMode("template");
+  }, [sessionOpen, mode]);
 
   return (
-    <form action={action} className="flex flex-col gap-4">
-      <input type="hidden" name="customerId" value={selected?.id ?? ""} />
-      <input type="hidden" name="templateKind" value={kind} />
-
+    <div className="flex flex-col gap-4">
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">To (customer)</label>
         <QuickCustomerPicker
@@ -157,54 +155,129 @@ function WhatsAppForm({
           searchHint="Search by name or phone…"
           emptyHint="No customers with a phone match."
         />
+        {selected ? (
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {sessionOpen
+              ? "24-hour window is open — free-form replies are allowed."
+              : "24-hour window is closed — approved templates only."}
+          </p>
+        ) : null}
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">Template</label>
-        <select
-          value={kind}
-          onChange={(e) => setKind(e.target.value as QuickWhatsAppTemplateKind)}
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-emerald-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-        >
-          {templates.map((t) => (
-            <option key={t.kind} value={t.kind}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        {template ? <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{template.description}</p> : null}
-      </div>
-
-      {template
-        ? template.fields.map((field) => (
-            <div key={field.key}>
-              <label className="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                {field.label} <code className="text-xs text-zinc-500">{`{{${field.key}}}`}</code>
-              </label>
-              <input
-                type="text"
-                name={`var_${field.key}`}
-                value={vars[field.key] ?? ""}
-                onChange={(e) => setVars((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                placeholder={field.placeholder}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-emerald-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-              />
-            </div>
-          ))
-        : null}
-
-      {!ready ? (
-        <p className="text-sm text-amber-800 dark:text-amber-200">Twilio WhatsApp is not configured.</p>
+      {sessionOpen ? (
+        <div className="flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-950/50">
+          <button
+            type="button"
+            onClick={() => setMode("template")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              mode === "template"
+                ? "bg-white shadow-sm dark:bg-zinc-800"
+                : "text-zinc-600 dark:text-zinc-400"
+            }`}
+          >
+            Template
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("freeform")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              mode === "freeform"
+                ? "bg-white shadow-sm dark:bg-zinc-800"
+                : "text-zinc-600 dark:text-zinc-400"
+            }`}
+          >
+            Free-form
+          </button>
+        </div>
       ) : null}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Free-form WhatsApp is not available outside the 24-hour window. This sends an approved Meta template only.
-      </p>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <SendButton label="Send WhatsApp" disabled={!ready || !selected?.phone || !template} />
-        <StatusLine state={state} />
-      </div>
-    </form>
+      {mode === "freeform" && sessionOpen ? (
+        <form action={freeformAction} className="flex flex-col gap-4">
+          <input type="hidden" name="customerId" value={selected?.id ?? ""} />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">Message</label>
+            <textarea
+              name="body"
+              rows={5}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-relaxed dark:border-zinc-600 dark:bg-zinc-950"
+            />
+          </div>
+          {!ready ? (
+            <p className="text-sm text-amber-800 dark:text-amber-200">Twilio WhatsApp is not configured.</p>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <SendButton label="Send WhatsApp" disabled={!ready || !selected?.phone} />
+            <StatusLine state={freeformState} />
+          </div>
+        </form>
+      ) : (
+        <form action={templateAction} className="flex flex-col gap-4">
+          <input type="hidden" name="customerId" value={selected?.id ?? ""} />
+          <input type="hidden" name="templateKind" value={kind} />
+
+          {templates.length === 0 ? (
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              No WhatsApp Content SIDs are configured. Set the{" "}
+              <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TWILIO_WA_TEMPLATE_*</code> env vars, then
+              redeploy.
+            </p>
+          ) : (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">Template</label>
+                <select
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as QuickWhatsAppTemplateKind)}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                >
+                  {templates.map((t) => (
+                    <option key={t.kind} value={t.kind}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                {template ? (
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{template.description}</p>
+                ) : null}
+              </div>
+
+              {template
+                ? template.fields.map((field) => (
+                    <div key={field.key}>
+                      <label className="mb-1 block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                        {field.label} <code className="text-xs text-zinc-500">{`{{${field.key}}}`}</code>
+                      </label>
+                      <input
+                        type="text"
+                        name={`var_${field.key}`}
+                        value={vars[field.key] ?? ""}
+                        onChange={(e) => setVars((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                      />
+                    </div>
+                  ))
+                : null}
+            </>
+          )}
+
+          {!ready ? (
+            <p className="text-sm text-amber-800 dark:text-amber-200">Twilio WhatsApp is not configured.</p>
+          ) : null}
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Outside the 24-hour window, only Meta-approved templates can be sent.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <SendButton
+              label="Send WhatsApp"
+              disabled={!ready || !selected?.phone || !template || templates.length === 0}
+            />
+            <StatusLine state={templateState} />
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -260,12 +333,14 @@ export function QuickSendPanel({
   smtpReady,
   whatsappReady,
   smsReady,
+  sessionOpenByCustomerId,
 }: {
   customers: QuickSendCustomer[];
   whatsappTemplates: QuickWhatsAppTemplateDef[];
   smtpReady: boolean;
   whatsappReady: boolean;
   smsReady: boolean;
+  sessionOpenByCustomerId: Record<string, boolean>;
 }) {
   const [channel, setChannel] = useState<Channel>("email");
 
@@ -296,7 +371,12 @@ export function QuickSendPanel({
 
       {channel === "email" ? <EmailForm customers={customers} ready={smtpReady} /> : null}
       {channel === "whatsapp" ? (
-        <WhatsAppForm customers={customers} templates={whatsappTemplates} ready={whatsappReady} />
+        <WhatsAppForm
+          customers={customers}
+          templates={whatsappTemplates}
+          ready={whatsappReady}
+          sessionOpenByCustomerId={sessionOpenByCustomerId}
+        />
       ) : null}
       {channel === "sms" ? <SmsForm customers={customers} ready={smsReady} /> : null}
     </div>

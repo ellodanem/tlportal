@@ -10,13 +10,17 @@ import {
   getQuickWhatsAppTemplate,
   isQuickWhatsAppTemplateKind,
 } from "@/lib/communications/quick-send-whatsapp-templates";
+import {
+  getCustomerWhatsAppSession,
+  recordOutboundWhatsAppMessage,
+} from "@/lib/communications/whatsapp-conversation-service";
 import { prisma } from "@/lib/db";
 import { sendAppEmail } from "@/lib/email/send-mail";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { canSendTwilioAdminSms, sendTwilioAdminSms } from "@/lib/twilio/admin-sms";
 import { getTwilioContentSid, isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { toSmsAddress, toWhatsAppAddress } from "@/lib/twilio/phone";
-import { sendTwilioWhatsAppContent } from "@/lib/twilio/whatsapp-send";
+import { sendTwilioWhatsAppContent, sendTwilioWhatsAppFreeform } from "@/lib/twilio/whatsapp-send";
 
 export type QuickSendState = {
   error: string | null;
@@ -126,6 +130,17 @@ export async function sendQuickWhatsAppAction(
     return { error: result.error };
   }
 
+  const phoneE164 = toSmsAddress(customer.phone);
+  if (phoneE164) {
+    await recordOutboundWhatsAppMessage({
+      phoneE164,
+      body: `[template:${kindRaw}] ${Object.values(variables).join(" · ")}`,
+      messageSid: result.messageSid,
+      actorUserId: session.sub,
+      kind: "template",
+    });
+  }
+
   await recordOperationalEvent({
     category: "communication.message_sent",
     customerId: customer.id,
@@ -141,6 +156,75 @@ export async function sendQuickWhatsAppAction(
   });
 
   revalidatePath(`/admin/customers/${customer.id}`);
+  revalidatePath(`/admin/customers/${customer.id}/messages`);
+  revalidatePath("/admin/message-templates");
+  return {
+    error: null,
+    ok: true,
+    message: `WhatsApp sent to ${customerDisplayName(customer)} (${customer.phone}).`,
+  };
+}
+
+export async function sendQuickWhatsAppFreeformAction(
+  _prev: QuickSendState,
+  formData: FormData,
+): Promise<QuickSendState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  if (!isTwilioWhatsAppConfigured()) {
+    return { error: "Twilio WhatsApp is not configured." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!customerId) return { error: "Choose a customer." };
+  if (!body) return { error: "Enter a message." };
+
+  const sessionInfo = await getCustomerWhatsAppSession(customerId);
+  if (!sessionInfo.open) {
+    return {
+      error: "The 24-hour WhatsApp window is closed for this customer. Use an approved template instead.",
+    };
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { id: true, phone: true, company: true, firstName: true, lastName: true },
+  });
+  const to = customer ? toWhatsAppAddress(customer.phone) : null;
+  if (!customer || !to) {
+    return { error: "That customer has no valid phone for WhatsApp." };
+  }
+
+  const result = await sendTwilioWhatsAppFreeform(to, body);
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  const phoneE164 = toSmsAddress(customer.phone) ?? sessionInfo.phoneE164;
+  if (phoneE164) {
+    await recordOutboundWhatsAppMessage({
+      phoneE164,
+      body,
+      messageSid: result.messageSid,
+      actorUserId: session.sub,
+      kind: "freeform",
+    });
+  }
+
+  await recordOperationalEvent({
+    category: "communication.message_sent",
+    customerId: customer.id,
+    actorUserId: session.sub,
+    summary: `WhatsApp free-form sent to ${customer.phone}`,
+    payload: { channel: "whatsapp", kind: "freeform", to: customer.phone, messageSid: result.messageSid },
+  });
+
+  revalidatePath(`/admin/customers/${customer.id}`);
+  revalidatePath(`/admin/customers/${customer.id}/messages`);
   revalidatePath("/admin/message-templates");
   return {
     error: null,

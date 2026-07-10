@@ -64,3 +64,34 @@ export async function sendBillingWhatsAppTemplate(
     "4": vars.payLink,
   });
 }
+
+/** Free-form WhatsApp body — only valid inside the customer’s 24-hour session window. */
+export async function sendTwilioWhatsAppFreeform(
+  toWhatsApp: string,
+  body: string,
+): Promise<SendBillingWhatsAppResult> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+  const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+  if (!accountSid || !authToken) {
+    return { ok: false, error: "TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN is not set." };
+  }
+
+  const text = body.trim();
+  if (!text) {
+    return { ok: false, error: "Message body is required." };
+  }
+
+  const client = twilio(accountSid, authToken);
+
+  try {
+    const message = await client.messages.create({
+      from: getTwilioWhatsAppFrom(),
+      to: toWhatsApp,
+      body: text.slice(0, 4096),
+    });
+    return { ok: true, messageSid: message.sid };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}

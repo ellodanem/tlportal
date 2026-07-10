@@ -343,6 +343,7 @@ model Customer {
   billingWhatsAppReminders   BillingWhatsAppReminder[]
   billingPayLinkAdminAlerts  BillingPayLinkAdminAlert[]
   customerWhatsAppDeliveries CustomerWhatsAppDelivery[]
+  whatsappConversations      WhatsAppConversation[]
   customerSubscriptions      CustomerSubscription[]
   operationalEvents          OperationalEvent[]
   broadcastDeliveries        BroadcastDelivery[]
@@ -720,6 +721,43 @@ model CustomerWhatsAppDelivery {
 
   @@unique([kind, externalRef])
   @@index([customerId, sentAt(sort: Desc)])
+}
+
+/// WhatsApp thread keyed by customer phone (E.164). Unmatched inbound keeps customerId null.
+model WhatsAppConversation {
+  id            String            @id @default(uuid())
+  /// Digits with leading +, no whatsapp: prefix.
+  phoneE164     String            @unique
+  customerId    String?
+  customer      Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lastMessageAt DateTime          @default(now())
+  lastInboundAt DateTime?
+  unreadCount   Int               @default(0)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  messages      WhatsAppMessage[]
+
+  @@index([customerId, lastMessageAt(sort: Desc)])
+  @@index([lastMessageAt(sort: Desc)])
+}
+
+model WhatsAppMessage {
+  id               String               @id @default(uuid())
+  conversationId   String
+  conversation     WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// inbound | outbound
+  direction        String
+  body             String?              @db.Text
+  twilioMessageSid String?              @unique
+  status           String?
+  /// Staff user id for outbound replies.
+  actorUserId      String?
+  /// template | freeform | inbound
+  kind             String               @default("inbound")
+  occurredAt       DateTime             @default(now())
+  rawPayload       Json?
+
+  @@index([conversationId, occurredAt])
 }
 
 /// Staff SMS sent when a customer reminder was skipped (no pay link).

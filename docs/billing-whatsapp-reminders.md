@@ -71,6 +71,15 @@ Tap below to complete your payment securely. Need help? Just reply to this messa
 
 **`/pay/go/{token}` redirect:** WhatsApp URL buttons require a fixed base domain, so the pay link is a stable `/pay/go/{token}` on our domain that 302-redirects to the real destination (native pay page or Stripe hosted invoice). The token is stored as `payLinkToken` on the `billing.payment_failed` operational event.
 
+## Inbound WhatsApp (conversations)
+
+Webhook: `POST /api/webhooks/twilio/whatsapp` — configure in Twilio as the WhatsApp sender’s “When a message comes in” URL.
+
+- Stores inbound messages in `WhatsAppConversation` / `WhatsAppMessage`, matched to a customer by phone.
+- Customer → **Messages** shows the thread; free-form reply is allowed while `lastInboundAt` is within 24 hours.
+- Outside the window, use Message templates (approved Content templates only).
+- Optional env: `TWILIO_WHATSAPP_WEBHOOK_URL` for exact signature validation URL.
+
 ## Env (Vercel)
 
 See `.env.example` — `TWILIO_*`, template SIDs, `CRON_SECRET`, optional `BILLING_REMINDER_TIMEZONE` (default `America/Barbados`).

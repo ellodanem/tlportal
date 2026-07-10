@@ -13,6 +13,7 @@ import { canSendTwilioAdminSms } from "@/lib/twilio/admin-sms";
 import { getTwilioContentSid, isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { QuickSendPanel } from "@/components/admin/quick-send-panel";
 import type { QuickSendCustomer } from "@/components/admin/quick-customer-picker";
+import { isWhatsAppSessionOpen } from "@/lib/communications/whatsapp-conversation-service";
 
 const CHANNEL_LABEL: Record<MessageTemplateChannel, string> = {
   email: "Email",
@@ -103,7 +104,7 @@ function listAvailableWhatsAppTemplates(): QuickWhatsAppTemplateDef[] {
 }
 
 export default async function MessageTemplatesPage() {
-  const [catalog, customerRows] = await Promise.all([
+  const [catalog, customerRows, openSessions] = await Promise.all([
     buildMessageTemplateCatalog(),
     prisma.customer.findMany({
       where: {
@@ -112,6 +113,10 @@ export default async function MessageTemplatesPage() {
       select: { id: true, email: true, phone: true, company: true, firstName: true, lastName: true },
       orderBy: [{ company: "asc" }, { firstName: "asc" }, { lastName: "asc" }],
       take: 2000,
+    }),
+    prisma.whatsAppConversation.findMany({
+      where: { customerId: { not: null }, lastInboundAt: { not: null } },
+      select: { customerId: true, lastInboundAt: true },
     }),
   ]);
 
@@ -122,6 +127,13 @@ export default async function MessageTemplatesPage() {
     email: c.email?.trim() || null,
     phone: c.phone?.trim() || null,
   }));
+
+  const sessionOpenByCustomerId: Record<string, boolean> = {};
+  for (const row of openSessions) {
+    if (row.customerId && isWhatsAppSessionOpen(row.lastInboundAt)) {
+      sessionOpenByCustomerId[row.customerId] = true;
+    }
+  }
 
   const smtpReady = catalog.some((e) => e.channel === "email" && e.config.ok);
   const whatsappReady = isTwilioWhatsAppConfigured();
@@ -140,7 +152,8 @@ export default async function MessageTemplatesPage() {
       <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Quick send</h2>
         <p className="mt-1 mb-4 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Email and SMS are free-form. WhatsApp uses Meta-approved templates only (required outside the 24-hour window).
+          Email and SMS are free-form. WhatsApp uses Meta-approved templates outside the 24-hour window; free-form is
+          available when the customer has messaged recently.
         </p>
         <QuickSendPanel
           customers={customers}
@@ -148,6 +161,7 @@ export default async function MessageTemplatesPage() {
           smtpReady={smtpReady}
           whatsappReady={whatsappReady}
           smsReady={smsReady}
+          sessionOpenByCustomerId={sessionOpenByCustomerId}
         />
       </section>
 
