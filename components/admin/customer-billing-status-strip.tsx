@@ -115,27 +115,48 @@ export function CustomerBillingStatusStrip({
         <div className="mt-3">
           {subscription ? (
             <>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Subscription</span>
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(subscription.status)}`}
-                >
-                  {subscription.statusLabel}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                {subscription.planTermLabel}
-                {" · "}
-                {subscription.monthlyRateLabel}/mo per vehicle
-                {" · "}
-                {subscription.vehicleCount} vehicle{subscription.vehicleCount === 1 ? "" : "s"}
-                {subscription.periodEndLabel ? (
-                  <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Subscription</span>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(subscription.status)}`}
+                    >
+                      {subscription.statusLabel}
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 bg-zinc-50 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"
+                      title="Stripe sync comparison and push will land in a follow-up change."
+                    >
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                      Stripe sync — placeholder
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    {subscription.planTermLabel}
                     {" · "}
-                    Period ends {subscription.periodEndLabel}
-                  </>
-                ) : null}
-              </p>
+                    {subscription.monthlyRateLabel}/mo per vehicle
+                    {" · "}
+                    {subscription.vehicleCount} vehicle{subscription.vehicleCount === 1 ? "" : "s"}
+                    {subscription.periodEndLabel ? (
+                      <>
+                        {" · "}
+                        Period ends {subscription.periodEndLabel}
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex cursor-not-allowed items-center justify-center rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
+                  >
+                    Update Stripe
+                  </button>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Coming next — compare &amp; push</p>
+                </div>
+              </div>
             </>
           ) : (
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
