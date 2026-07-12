@@ -85,15 +85,22 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
       invoilessConfigured={invoilessConfigured}
       stripeConfigured={stripeConfigured}
       hasInvoilessId={Boolean(invoilessId)}
-      stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
-      planOptions={planOptions}
-      defaultMonthlyRateXcd={defaultMonthlyRate}
-      stripeMonthlyRateXcd={savedMonthlyRate}
-      defaultVehicleCount={defaultVehicleCount}
-      catalogConfigured={catalogConfigured}
       billingSetup={billingSetup}
     />
   );
+
+  const manageTiles =
+    !isManual && stripeConfigured ? (
+      <ManageSubscriptionTiles
+        customerId={customer.id}
+        planOptions={planOptions}
+        defaultMonthlyRateXcd={defaultMonthlyRate}
+        stripeMonthlyRateXcd={savedMonthlyRate}
+        defaultVehicleCount={defaultVehicleCount}
+        catalogConfigured={catalogConfigured}
+        stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
+      />
+    ) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -134,7 +141,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         />
       ) : null}
 
-      {!isManual && subscriptionSummary ? <ManageSubscriptionTiles /> : null}
+      {manageTiles}
 
       <PaymentRemindersPreferenceForm
         customerId={customer.id}
@@ -156,15 +163,11 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
           <div id="renewal-ops" className="scroll-mt-24">
             {renewalPanel}
           </div>
-          <div id="payment-link" className="scroll-mt-24">
-            {billingPanel}
-          </div>
+          {billingPanel}
         </>
       ) : (
         <>
-          <div id="payment-link" className="scroll-mt-24">
-            {billingPanel}
-          </div>
+          {billingPanel}
           <div id="renewal-ops" className="scroll-mt-24">
             {renewalPanel}
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -11,21 +11,6 @@ export default function LoginPage() {
   async function signIn() {
     setError(null);
     setPending(true);
-    // #region agent log
-    fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
-      body: JSON.stringify({
-        sessionId: "79eeac",
-        location: "app/login/page.tsx:signIn",
-        message: "submit_start",
-        data: { hasEmail: Boolean(email?.trim()), hasPassword: Boolean(password?.length) },
-        timestamp: Date.now(),
-        hypothesisId: "H1",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -33,65 +18,20 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
         credentials: "same-origin",
       });
-      // #region agent log
-      fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
-        body: JSON.stringify({
-          sessionId: "79eeac",
-          location: "app/login/page.tsx:afterFetch",
-          message: "login_response",
-          data: { status: res.status, ok: res.ok },
-          timestamp: Date.now(),
-          hypothesisId: "H1",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setError(data.error ?? `Login failed (${res.status})`);
         return;
       }
-      // #region agent log
-      fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
-        body: JSON.stringify({
-          sessionId: "79eeac",
-          location: "app/login/page.tsx:beforeNav",
-          message: "will_navigate_admin",
-          data: { method: "location.assign" },
-          timestamp: Date.now(),
-          hypothesisId: "H5",
-          runId: "post-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
       window.location.assign("/admin");
     } catch {
-      // #region agent log
-      fetch("http://127.0.0.1:7737/ingest/ec438a6c-7ff8-4ec8-81eb-94e4c82e0396", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "79eeac" },
-        body: JSON.stringify({
-          sessionId: "79eeac",
-          location: "app/login/page.tsx:catch",
-          message: "fetch_or_json_failed",
-          data: {},
-          timestamp: Date.now(),
-          hypothesisId: "H1",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
       setError("Network error — check your connection and try again.");
     } finally {
       setPending(false);
     }
   }
 
-  function onFormSubmit(e: React.FormEvent) {
+  function onFormSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     void signIn();
   }
@@ -107,7 +47,7 @@ export default function LoginPage() {
         </h1>
         <p className="mt-1 text-center text-sm text-zinc-500">Admin sign in</p>
 
-        {/* No method/action: never navigate to /login via GET (?email=) or POST /login — only fetch /api/auth/login */}
+        {/* No method/action: never navigate to /login via GET (?email=) — only fetch /api/auth/login */}
         <form className="mt-6 space-y-4" onSubmit={onFormSubmit}>
           <div>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="email">
@@ -145,9 +85,8 @@ export default function LoginPage() {
             </p>
           ) : null}
           <button
-            type="button"
+            type="submit"
             disabled={pending}
-            onClick={() => void signIn()}
             className="flex w-full justify-center rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white shadow hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
           >
             {pending ? "Signing in…" : "Sign in"}
