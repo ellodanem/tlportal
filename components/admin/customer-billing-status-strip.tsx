@@ -92,71 +92,70 @@ export function CustomerBillingStatusStrip({
     invoilessChip = "missing";
   }
 
+  const showSyncChip = isStripe && Boolean(subscription);
+
   return (
     <section
       className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
       aria-label="Billing status"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          Billing
-        </span>
-        <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-          {isStripe ? "Card (Stripe)" : "Manual / cash"}
-        </span>
-        {stripeConfigured ? <ProviderChip label="Stripe" state={stripeChip} /> : null}
-        {invoilessConfigured ? <ProviderChip label="Invoiless" state={invoilessChip} /> : null}
-        <span className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-          {remindersLabel}
-        </span>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            <CreditCardIcon className="h-3.5 w-3.5" />
+            Billing
+          </span>
+          <span className="inline-flex rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 text-xs font-medium text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+            {isStripe ? "Card (Stripe)" : "Manual / cash"}
+          </span>
+          {stripeConfigured ? <ProviderChip label="Stripe" state={stripeChip} /> : null}
+          {invoilessConfigured ? <ProviderChip label="Invoiless" state={invoilessChip} /> : null}
+          <span className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            {remindersLabel}
+          </span>
+        </div>
+
+        {showSyncChip ? (
+          <div className="flex flex-col items-end gap-0.5 text-right">
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+              title="Stripe sync comparison is a placeholder — compare & push ships next."
+            >
+              <CheckCircleIcon className="h-3.5 w-3.5" />
+              In sync with Stripe
+            </span>
+            <span className="max-w-[15rem] text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">
+              TL and Stripe agree on quantity, rate, and next invoice
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {isStripe ? (
         <div className="mt-3">
           {subscription ? (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Subscription</span>
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(subscription.status)}`}
-                    >
-                      {subscription.statusLabel}
-                    </span>
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 bg-zinc-50 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"
-                      title="Stripe sync comparison and push will land in a follow-up change."
-                    >
-                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                      Stripe sync — placeholder
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    {subscription.planTermLabel}
-                    {" · "}
-                    {subscription.monthlyRateLabel}/mo per vehicle
-                    {" · "}
-                    {subscription.vehicleCount} vehicle{subscription.vehicleCount === 1 ? "" : "s"}
-                    {subscription.periodEndLabel ? (
-                      <>
-                        {" · "}
-                        Period ends {subscription.periodEndLabel}
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
-                  <button
-                    type="button"
-                    disabled
-                    className="inline-flex cursor-not-allowed items-center justify-center rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
-                  >
-                    Update Stripe
-                  </button>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Coming next — compare &amp; push</p>
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Subscription</span>
+                <span
+                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(subscription.status)}`}
+                >
+                  {subscription.statusLabel}
+                </span>
               </div>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                {subscription.planTermLabel}
+                {" · "}
+                {subscription.monthlyRateLabel}/mo per vehicle
+                {" · "}
+                {subscription.vehicleCount} vehicle{subscription.vehicleCount === 1 ? "" : "s"}
+                {subscription.periodEndLabel ? (
+                  <>
+                    {" · "}
+                    Period ends {subscription.periodEndLabel}
+                  </>
+                ) : null}
+              </p>
             </>
           ) : (
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -171,5 +170,26 @@ export function CustomerBillingStatusStrip({
         </p>
       )}
     </section>
+  );
+}
+
+function CreditCardIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} className={className} aria-hidden>
+      <rect x="2.5" y="4.5" width="15" height="11" rx="2" />
+      <path d="M2.5 8h15" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden>
+      <path
+        fillRule="evenodd"
+        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z"
+        clipRule="evenodd"
+      />
+    </svg>
   );
 }

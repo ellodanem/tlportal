@@ -7,8 +7,10 @@ import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-
 import { CustomerPaymentDeclineFollowUpCard } from "@/components/admin/customer-payment-decline-follow-up";
 import { CustomerRenewalOpsPanel } from "@/components/admin/customer-renewal-ops-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
+import { ManageSubscriptionTiles } from "@/components/admin/manage-subscription-tiles";
 import { PaymentRemindersPreferenceForm } from "@/components/admin/payment-reminders-preference-form";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
+import { StripeSyncDriftPreview } from "@/components/admin/stripe-sync-drift-preview";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
 import { formatMoney } from "@/lib/domain/native-billing";
@@ -17,7 +19,7 @@ import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ stripe?: string; setup?: string; warn?: string }>;
+  searchParams: Promise<{ stripe?: string; setup?: string; warn?: string; syncPreview?: string }>;
 };
 
 function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | null {
@@ -28,8 +30,9 @@ function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | 
 
 export default async function CustomerBillingPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { stripe: stripeQuery, setup: setupQuery, warn: warnQuery } = await searchParams;
+  const { stripe: stripeQuery, setup: setupQuery, warn: warnQuery, syncPreview: syncPreviewQuery } = await searchParams;
   const setupWarning = warnQuery ? decodeURIComponent(warnQuery) : null;
+  const showSyncPreview = syncPreviewQuery === "1";
   const data = await loadCustomerBillingPageData(id);
   if (!data) {
     notFound();
@@ -123,6 +126,16 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         invoilessConfigured={invoilessConfigured}
       />
 
+      {!isManual && subscriptionSummary && showSyncPreview ? (
+        <StripeSyncDriftPreview
+          vehicleCount={subscriptionSummary.vehicleCount}
+          monthlyRateLabel={subscriptionSummary.monthlyRateLabel}
+          periodEndLabel={subscriptionSummary.periodEndLabel}
+        />
+      ) : null}
+
+      {!isManual && subscriptionSummary ? <ManageSubscriptionTiles /> : null}
+
       <PaymentRemindersPreferenceForm
         customerId={customer.id}
         billingMode={customer.billingMode}
@@ -140,13 +153,21 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
 
       {isManual ? (
         <>
-          {renewalPanel}
-          {billingPanel}
+          <div id="renewal-ops" className="scroll-mt-24">
+            {renewalPanel}
+          </div>
+          <div id="payment-link" className="scroll-mt-24">
+            {billingPanel}
+          </div>
         </>
       ) : (
         <>
-          {billingPanel}
-          {renewalPanel}
+          <div id="payment-link" className="scroll-mt-24">
+            {billingPanel}
+          </div>
+          <div id="renewal-ops" className="scroll-mt-24">
+            {renewalPanel}
+          </div>
         </>
       )}
 

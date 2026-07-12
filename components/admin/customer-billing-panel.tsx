@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useRef, useState, useTransition } from "react";
 import {
   enableBillingSetupAction,
@@ -292,7 +293,7 @@ export function CustomerBillingPanel({
         </section>
       ) : null}
 
-      <details className="group rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <details id="billing-settings" className="group scroll-mt-24 rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-zinc-900 marker:content-none dark:text-zinc-50 [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             Billing settings
@@ -379,9 +380,9 @@ export function CustomerBillingPanel({
           ) : (
             <p className="text-sm text-zinc-500">
               Native billing is primary — create invoices under{" "}
-              <a href="/admin/tl-invoices" className="font-medium text-emerald-700 underline dark:text-emerald-400">
+              <Link href="/admin/tl-invoices" className="font-medium text-emerald-700 underline dark:text-emerald-400">
                 Invoices
-              </a>
+              </Link>
               .
             </p>
           )}

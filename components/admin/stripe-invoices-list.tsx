@@ -147,11 +147,12 @@ export function StripeInvoicesList({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
         <thead className="bg-zinc-50 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
           <tr>
-            <th className="px-4 py-3 text-left">Invoice</th>
+            <th className="px-4 py-3 text-left">Invoice ID</th>
             <th className="px-4 py-3 text-left">Status</th>
             <th className="px-4 py-3 text-left">Amount</th>
             <th className="px-4 py-3 text-left">Period</th>
@@ -218,6 +219,23 @@ export function StripeInvoicesList({
           ))}
         </tbody>
       </table>
+      </div>
+      <div className="flex items-center justify-between border-t border-zinc-200 px-4 py-2.5 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+        <span>
+          Showing {invoices.length} of {invoices.length}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="flex h-6 w-6 items-center justify-center rounded border border-zinc-200 text-zinc-300 dark:border-zinc-700 dark:text-zinc-600">
+            ‹
+          </span>
+          <span className="flex h-6 min-w-6 items-center justify-center rounded border border-zinc-300 px-1.5 font-medium text-zinc-700 dark:border-zinc-600 dark:text-zinc-200">
+            1
+          </span>
+          <span className="flex h-6 w-6 items-center justify-center rounded border border-zinc-200 text-zinc-300 dark:border-zinc-700 dark:text-zinc-600">
+            ›
+          </span>
+        </span>
+      </div>
     </div>
   );
 }
