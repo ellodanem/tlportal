@@ -4,17 +4,26 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { openStripePortalAction } from "@/app/admin/customers/billing-actions";
+import { BillingSettingsModal } from "@/components/admin/billing-settings-modal";
 import { PaymentPlanModal } from "@/components/admin/payment-plan-modal";
+import type { BillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
+import type { CustomerBillingMode } from "@prisma/client";
 
 type PlanOption = { durationMonths: number; label: string };
 
 /**
  * Manage subscription — two real intents:
- * - Payment & plan (modal: tier/term/vehicles + send/link/save)
- * - Adjust renewal (scroll to device renewal ops)
+ * - Payment & plan (modal)
+ * - Adjust renewal (scroll for now; modal next step)
+ * Secondary: billing portal + Billing settings (modal)
  */
 export function ManageSubscriptionTiles({
   customerId,
+  billingMode,
+  invoilessConfigured,
+  stripeConfigured,
+  hasInvoilessId,
+  billingSetup,
   planOptions,
   defaultMonthlyRateXcd,
   stripeMonthlyRateXcd,
@@ -23,6 +32,11 @@ export function ManageSubscriptionTiles({
   stripeCustomerId,
 }: {
   customerId: string;
+  billingMode: CustomerBillingMode;
+  invoilessConfigured: boolean;
+  stripeConfigured: boolean;
+  hasInvoilessId: boolean;
+  billingSetup: BillingSetupStatus | null;
   planOptions: PlanOption[];
   defaultMonthlyRateXcd: number;
   stripeMonthlyRateXcd: number | null;
@@ -31,6 +45,7 @@ export function ManageSubscriptionTiles({
   stripeCustomerId: string | null;
 }) {
   const [planOpen, setPlanOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [portalPending, startPortal] = useTransition();
   const [portalError, setPortalError] = useState<string | null>(null);
 
@@ -76,13 +91,14 @@ export function ManageSubscriptionTiles({
             <ExternalIcon className="h-4 w-4" />
             {portalPending ? "Opening portal…" : "Open customer billing portal"}
           </button>
-          <Link
-            href="#billing-settings"
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-700 hover:text-emerald-700 dark:text-zinc-300 dark:hover:text-emerald-400"
           >
             <GearIcon className="h-4 w-4" />
             Billing settings
-          </Link>
+          </button>
         </div>
         {portalError ? <p className="mt-2 text-sm text-red-600">{portalError}</p> : null}
       </section>
@@ -96,6 +112,17 @@ export function ManageSubscriptionTiles({
         stripeMonthlyRateXcd={stripeMonthlyRateXcd}
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
+      />
+
+      <BillingSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        customerId={customerId}
+        billingMode={billingMode}
+        invoilessConfigured={invoilessConfigured}
+        stripeConfigured={stripeConfigured}
+        hasInvoilessId={hasInvoilessId}
+        billingSetup={billingSetup}
       />
     </>
   );

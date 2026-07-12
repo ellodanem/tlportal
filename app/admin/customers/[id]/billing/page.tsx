@@ -93,6 +93,11 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     !isManual && stripeConfigured ? (
       <ManageSubscriptionTiles
         customerId={customer.id}
+        billingMode={customer.billingMode}
+        invoilessConfigured={invoilessConfigured}
+        stripeConfigured={stripeConfigured}
+        hasInvoilessId={Boolean(invoilessId)}
+        billingSetup={billingSetup}
         planOptions={planOptions}
         defaultMonthlyRateXcd={defaultMonthlyRate}
         stripeMonthlyRateXcd={savedMonthlyRate}
@@ -166,12 +171,9 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
           {billingPanel}
         </>
       ) : (
-        <>
-          {billingPanel}
-          <div id="renewal-ops" className="scroll-mt-24">
-            {renewalPanel}
-          </div>
-        </>
+        <div id="renewal-ops" className="scroll-mt-24">
+          {renewalPanel}
+        </div>
       )}
 
       {customer.billingMode === "stripe_subscription" || stripeInvoices.length > 0 ? (
