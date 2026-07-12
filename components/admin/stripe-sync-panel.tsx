@@ -1,45 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
+
+import {
+  pushStripeSubscriptionQuantityAction,
+  type BillingActionState,
+} from "@/app/admin/customers/billing-actions";
+import type { StripeSubscriptionSyncView } from "@/lib/services/stripe-subscription-sync-service";
+
+const initial: BillingActionState = { error: null };
 
 /**
- * Design preview of the "TL and Stripe differ" reconciliation card + Review
- * modal. The real comparison and push-to-Stripe logic ships in a follow-up;
- * this renders illustrative sample values so staff can preview the flow. All
- * write actions are disabled placeholders.
+ * Live TL vs Stripe quantity drift + Review → push (proration none).
+ * Only renders when compare state is "differs".
  */
-export function StripeSyncDriftPreview({
-  vehicleCount,
-  monthlyRateLabel,
-  periodEndLabel,
+export function StripeSyncPanel({
+  customerId,
+  sync,
 }: {
-  vehicleCount: number;
-  monthlyRateLabel: string;
-  periodEndLabel: string | null;
+  customerId: string;
+  sync: StripeSubscriptionSyncView;
 }) {
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [pushState, pushAction, pushPending] = useActionState(
+    pushStripeSubscriptionQuantityAction,
+    initial,
+  );
 
-  const stripeVehicles = Math.max(2, vehicleCount);
-  const tlVehicles = Math.max(1, stripeVehicles - 1);
-  const currencyPrefix = (monthlyRateLabel.match(/^[^\d]*/)?.[0] ?? "").trim();
-  const rate = Number(monthlyRateLabel.replace(/[^\d.]/g, "")) || 25;
-  const money = (n: number) => `${currencyPrefix}${Number.isInteger(n) ? n : n.toFixed(2)}`;
-  const nextInvoiceLabel = periodEndLabel ?? "next cycle";
+  if (sync.state !== "differs" || sync.stripeQuantity == null) {
+    return null;
+  }
+
+  const tl = sync.tlVehicleCount;
+  const stripe = sync.stripeQuantity;
+  const nextInvoiceLabel = sync.periodEndLabel ?? "next cycle";
 
   return (
     <section
       className="rounded-lg border border-amber-300 bg-amber-50/70 p-4 dark:border-amber-900 dark:bg-amber-950/30"
-      aria-label="Stripe sync differences (preview)"
+      aria-label="Stripe sync differences"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
-          <WarningIcon className="h-4 w-4" />
-          TL and Stripe differ
-        </p>
-        <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-          Design preview — sync ships next
-        </span>
-      </div>
+      <p className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
+        <WarningIcon className="h-4 w-4" />
+        TL and Stripe differ
+      </p>
+      {sync.reason ? (
+        <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">{sync.reason}</p>
+      ) : null}
 
       <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <dl className="flex flex-wrap gap-x-8 gap-y-3">
@@ -47,61 +54,56 @@ export function StripeSyncDriftPreview({
             <span className="inline-flex items-center gap-1.5">
               <span className="text-zinc-500">TL</span>
               <span className="rounded bg-amber-200 px-1.5 py-0.5 font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
-                {tlVehicles}
+                {tl}
               </span>
               <ArrowIcon className="h-3.5 w-3.5 text-zinc-400" />
               <span className="text-zinc-500">Stripe</span>
               <span className="rounded bg-amber-200 px-1.5 py-0.5 font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
-                {stripeVehicles}
+                {stripe}
               </span>
             </span>
           </DiffField>
           <DiffField label="Next invoice">
-            <span className="text-zinc-700 dark:text-zinc-200">
-              {nextInvoiceLabel} <span className="text-emerald-700 dark:text-emerald-300">(match)</span>
-            </span>
+            <span className="text-zinc-700 dark:text-zinc-200">{nextInvoiceLabel}</span>
           </DiffField>
-          <DiffField label="Rate">
-            <span className="text-zinc-700 dark:text-zinc-200">
-              {money(rate)} <span className="text-emerald-700 dark:text-emerald-300">(match)</span>
-            </span>
-          </DiffField>
+          {sync.tlNextChargeLabel && sync.stripeNextChargeLabel ? (
+            <DiffField label="Next charge">
+              <span className="inline-flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200">
+                <span>{sync.stripeNextChargeLabel}</span>
+                <ArrowIcon className="h-3.5 w-3.5 text-zinc-400" />
+                <span className="font-medium">{sync.tlNextChargeLabel}</span>
+              </span>
+            </DiffField>
+          ) : null}
         </dl>
 
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled
-            title="Push ships next — this is a design preview."
-            className="cursor-not-allowed rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white opacity-70 dark:bg-emerald-600"
-          >
-            Update Stripe to match TL
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Push ships next — this is a design preview."
-            className="cursor-not-allowed rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 opacity-80 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            Keep Stripe, update TL
-          </button>
-          <button
-            type="button"
+            disabled={!sync.canPush || pushPending}
             onClick={() => setReviewOpen(true)}
-            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+            className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600"
           >
-            Review
+            Review &amp; update Stripe
           </button>
         </div>
       </div>
 
+      {pushState.error ? <p className="mt-3 text-sm text-red-600">{pushState.error}</p> : null}
+      {pushState.message && !pushState.error ? (
+        <p className="mt-3 text-sm text-emerald-800 dark:text-emerald-200">{pushState.message}</p>
+      ) : null}
+
       {reviewOpen ? (
         <ReviewChangeModal
-          tlVehicles={tlVehicles}
-          stripeVehicles={stripeVehicles}
-          stripeCharge={money(rate * stripeVehicles)}
-          tlCharge={money(rate * tlVehicles)}
+          customerId={customerId}
+          tlVehicles={tl}
+          stripeVehicles={stripe}
+          tlCharge={sync.tlNextChargeLabel}
+          stripeCharge={sync.stripeNextChargeLabel}
           nextInvoiceLabel={nextInvoiceLabel}
+          pending={pushPending}
+          formAction={pushAction}
           onClose={() => setReviewOpen(false)}
         />
       ) : null}
@@ -119,38 +121,41 @@ function DiffField({ label, children }: { label: string; children: React.ReactNo
 }
 
 function ReviewChangeModal({
+  customerId,
   tlVehicles,
   stripeVehicles,
-  stripeCharge,
   tlCharge,
+  stripeCharge,
   nextInvoiceLabel,
+  pending,
+  formAction,
   onClose,
 }: {
+  customerId: string;
   tlVehicles: number;
   stripeVehicles: number;
-  stripeCharge: string;
-  tlCharge: string;
+  tlCharge: string | null;
+  stripeCharge: string | null;
   nextInvoiceLabel: string;
+  pending: boolean;
+  formAction: (payload: FormData) => void;
   onClose: () => void;
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/40 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Review change (preview)"
-      onClick={onClose}
+      aria-label="Review Stripe quantity update"
     >
-      <div
-        className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Review change</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+            disabled={pending}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-800"
             aria-label="Close"
           >
             <CloseIcon className="h-4 w-4" />
@@ -167,15 +172,17 @@ function ReviewChangeModal({
               </span>
             </span>
           </ReviewRow>
-          <ReviewRow label="Next charge">
-            <span className="inline-flex items-center gap-2">
-              <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium dark:bg-zinc-800">{stripeCharge}</span>
-              <ArrowIcon className="h-3.5 w-3.5 text-zinc-400" />
-              <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
-                {tlCharge}
+          {stripeCharge && tlCharge ? (
+            <ReviewRow label="Next charge">
+              <span className="inline-flex items-center gap-2">
+                <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium dark:bg-zinc-800">{stripeCharge}</span>
+                <ArrowIcon className="h-3.5 w-3.5 text-zinc-400" />
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                  {tlCharge}
+                </span>
               </span>
-            </span>
-          </ReviewRow>
+            </ReviewRow>
+          ) : null}
           <ReviewRow label="When">
             <span className="text-zinc-700 dark:text-zinc-200">
               Next invoice ({nextInvoiceLabel}) — no charge today
@@ -186,24 +193,24 @@ function ReviewChangeModal({
           </ReviewRow>
         </dl>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <form action={formAction} className="mt-5 flex justify-end gap-2">
+          <input type="hidden" name="customerId" value={customerId} />
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900"
+            disabled={pending}
+            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900"
           >
             Cancel
           </button>
           <button
-            type="button"
-            disabled
-            title="Push ships next — this is a design preview."
-            className="cursor-not-allowed rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white opacity-70 dark:bg-emerald-600"
+            type="submit"
+            disabled={pending}
+            className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600"
           >
-            Update Stripe
+            {pending ? "Updating…" : "Update Stripe"}
           </button>
-        </div>
-        <p className="mt-2 text-right text-[11px] text-zinc-400">Preview only — no changes are sent to Stripe.</p>
+        </form>
       </div>
     </div>
   );
@@ -211,7 +218,7 @@ function ReviewChangeModal({
 
 function ReviewRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-2.5">
+    <div className="flex items-center justify-between gap-3 py-2.5">
       <dt className="text-zinc-500 dark:text-zinc-400">{label}</dt>
       <dd>{children}</dd>
     </div>

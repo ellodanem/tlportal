@@ -632,6 +632,40 @@ export async function openStripePortalAction(customerId: string): Promise<Billin
   return { error: null, url: result.url };
 }
 
+/** Push TL active-assignment vehicle count to Stripe subscription quantity (no proration). */
+export async function pushStripeSubscriptionQuantityAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) {
+    return { error: "Missing customer id." };
+  }
+
+  const { pushTlVehicleCountToStripe } = await import(
+    "@/lib/services/stripe-subscription-sync-service"
+  );
+  const result = await pushTlVehicleCountToStripe({
+    customerId,
+    actorUserId: session.sub,
+  });
+
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  revalidateCustomerBillingPaths(customerId);
+  return {
+    error: null,
+    message: `Stripe quantity updated ${result.previousQuantity} → ${result.newQuantity}. Applies on the next invoice (no charge today).`,
+  };
+}
+
 export async function syncInvoilessBillingAction(customerId: string) {
   const session = await getSession();
   const result = await syncCustomerToInvoilessBilling(customerId, session?.sub ?? null);

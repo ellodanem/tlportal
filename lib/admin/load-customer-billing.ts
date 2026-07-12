@@ -23,6 +23,8 @@ import {
   monthlyRateFromCustomer,
 } from "@/lib/stripe/checkout-pricing";
 import { parseStripeBillingMetadata } from "@/lib/stripe/metadata";
+import { compareTlStripeSubscription } from "@/lib/services/stripe-subscription-sync-service";
+import { billableAssignmentWhere } from "@/lib/domain/service-assignment-queries";
 
 export async function loadCustomerBillingPageData(customerId: string) {
   const customer = await prisma.customer.findUnique({ where: { id: customerId } });
@@ -43,7 +45,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     effectiveMonthlyRateForCheckout(ratePresetForPlans, savedMonthlyRate, defaultMonthlyRate);
 
   const activeAssignmentCount = await prisma.serviceAssignment.count({
-    where: { customerId: customer.id, status: "active", endDate: null },
+    where: { customerId: customer.id, ...billableAssignmentWhere },
   });
   const defaultVehicleCount = Math.max(1, activeAssignmentCount);
 
@@ -113,6 +115,11 @@ export async function loadCustomerBillingPageData(customerId: string) {
 
   const catalogConfigured = planOptions.some((p) => p.usesCatalogPrice);
 
+  const stripeSync =
+    customer.billingMode === "stripe_subscription" && stripeConfigured
+      ? await compareTlStripeSubscription(customer.id)
+      : null;
+
   return {
     customer,
     invoilessConfigured,
@@ -128,6 +135,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     stripePeriodEnd,
     stripeInvoices: stripeInvoices.map(toBillingInvoiceClientRow),
     subscriptionSummary,
+    stripeSync,
     paymentDeclineFollowUp,
     renewalAssignments: renewalAssignments.map((a) => ({
       id: a.id,

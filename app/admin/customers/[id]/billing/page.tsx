@@ -10,7 +10,7 @@ import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { ManageSubscriptionTiles } from "@/components/admin/manage-subscription-tiles";
 import { PaymentRemindersPreferenceForm } from "@/components/admin/payment-reminders-preference-form";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
-import { StripeSyncDriftPreview } from "@/components/admin/stripe-sync-drift-preview";
+import { StripeSyncPanel } from "@/components/admin/stripe-sync-panel";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
 import { formatMoney } from "@/lib/domain/native-billing";
@@ -19,7 +19,7 @@ import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ stripe?: string; setup?: string; warn?: string; syncPreview?: string }>;
+  searchParams: Promise<{ stripe?: string; setup?: string; warn?: string }>;
 };
 
 function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | null {
@@ -30,9 +30,8 @@ function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | 
 
 export default async function CustomerBillingPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { stripe: stripeQuery, setup: setupQuery, warn: warnQuery, syncPreview: syncPreviewQuery } = await searchParams;
+  const { stripe: stripeQuery, setup: setupQuery, warn: warnQuery } = await searchParams;
   const setupWarning = warnQuery ? decodeURIComponent(warnQuery) : null;
-  const showSyncPreview = syncPreviewQuery === "1";
   const data = await loadCustomerBillingPageData(id);
   if (!data) {
     notFound();
@@ -52,6 +51,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     billingSetup,
     stripeInvoices,
     subscriptionSummary,
+    stripeSync,
     renewalAssignments,
     paymentDeclineFollowUp,
   } = data;
@@ -137,14 +137,11 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         subscription={subscriptionSummary}
         stripeConfigured={stripeConfigured}
         invoilessConfigured={invoilessConfigured}
+        stripeSync={stripeSync}
       />
 
-      {!isManual && subscriptionSummary && showSyncPreview ? (
-        <StripeSyncDriftPreview
-          vehicleCount={subscriptionSummary.vehicleCount}
-          monthlyRateLabel={subscriptionSummary.monthlyRateLabel}
-          periodEndLabel={subscriptionSummary.periodEndLabel}
-        />
+      {stripeSync?.state === "differs" ? (
+        <StripeSyncPanel customerId={customer.id} sync={stripeSync} />
       ) : null}
 
       {manageTiles}

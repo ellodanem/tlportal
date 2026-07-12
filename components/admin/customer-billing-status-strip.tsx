@@ -1,4 +1,5 @@
 import type { BillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
+import type { StripeSubscriptionSyncView } from "@/lib/services/stripe-subscription-sync-service";
 import type { CustomerBillingMode, PaymentRemindersPreference } from "@prisma/client";
 import { paymentRemindersStatusLabel } from "@/lib/domain/payment-reminders";
 
@@ -50,6 +51,49 @@ function ProviderChip({
   );
 }
 
+function SyncChip({ sync }: { sync: StripeSubscriptionSyncView }) {
+  if (sync.state === "in_sync") {
+    return (
+      <div className="flex flex-col items-end gap-0.5 text-right">
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <CheckCircleIcon className="h-3.5 w-3.5" />
+          In sync with Stripe
+        </span>
+        <span className="max-w-[15rem] text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">
+          TL and Stripe agree on vehicle quantity
+        </span>
+      </div>
+    );
+  }
+
+  if (sync.state === "differs") {
+    return (
+      <div className="flex flex-col items-end gap-0.5 text-right">
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          Differs from Stripe
+        </span>
+        <span className="max-w-[15rem] text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">
+          TL {sync.tlVehicleCount} · Stripe {sync.stripeQuantity ?? "—"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-0.5 text-right">
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"
+        title={sync.reason ?? undefined}
+      >
+        Stripe sync unavailable
+      </span>
+      {sync.reason ? (
+        <span className="max-w-[15rem] text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">{sync.reason}</span>
+      ) : null}
+    </div>
+  );
+}
+
 export function CustomerBillingStatusStrip({
   billingMode,
   paymentReminders,
@@ -57,6 +101,7 @@ export function CustomerBillingStatusStrip({
   subscription,
   stripeConfigured,
   invoilessConfigured,
+  stripeSync,
 }: {
   billingMode: CustomerBillingMode;
   paymentReminders: PaymentRemindersPreference;
@@ -64,6 +109,7 @@ export function CustomerBillingStatusStrip({
   subscription: SubscriptionStrip | null;
   stripeConfigured: boolean;
   invoilessConfigured: boolean;
+  stripeSync?: StripeSubscriptionSyncView | null;
 }) {
   const isStripe = billingMode === "stripe_subscription";
   const remindersLabel = paymentRemindersStatusLabel({ billingMode, paymentReminders });
@@ -92,7 +138,7 @@ export function CustomerBillingStatusStrip({
     invoilessChip = "missing";
   }
 
-  const showSyncChip = isStripe && Boolean(subscription);
+  const showSyncChip = isStripe && Boolean(stripeSync);
 
   return (
     <section
@@ -115,20 +161,7 @@ export function CustomerBillingStatusStrip({
           </span>
         </div>
 
-        {showSyncChip ? (
-          <div className="flex flex-col items-end gap-0.5 text-right">
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
-              title="Stripe sync comparison is a placeholder — compare & push ships next."
-            >
-              <CheckCircleIcon className="h-3.5 w-3.5" />
-              In sync with Stripe
-            </span>
-            <span className="max-w-[15rem] text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">
-              TL and Stripe agree on quantity, rate, and next invoice
-            </span>
-          </div>
-        ) : null}
+        {showSyncChip && stripeSync ? <SyncChip sync={stripeSync} /> : null}
       </div>
 
       {isStripe ? (
@@ -159,8 +192,8 @@ export function CustomerBillingStatusStrip({
             </>
           ) : (
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              No subscription yet — use <strong className="font-medium text-zinc-800 dark:text-zinc-200">Create payment link</strong>{" "}
-              below after accounts are linked.
+              No subscription yet — use <strong className="font-medium text-zinc-800 dark:text-zinc-200">Payment &amp; plan</strong>{" "}
+              above after accounts are linked.
             </p>
           )}
         </div>
