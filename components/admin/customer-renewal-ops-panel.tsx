@@ -309,10 +309,13 @@ function RenewalOpsBody({
   customerId,
   billingMode,
   rows,
+  alwaysExpandDevices = false,
 }: {
   customerId: string;
   billingMode: CustomerBillingMode;
   rows: RenewalRow[];
+  /** When true (e.g. inside a modal), skip the All devices collapse. */
+  alwaysExpandDevices?: boolean;
 }) {
   const [bulkState, bulkAction] = useActionState(
     markAllCustomerAssignmentsPaidAction,
@@ -334,6 +337,117 @@ function RenewalOpsBody({
   const sorted = sortRenewalRowsByUrgency(rows);
   const showPriority = priority.length > 0;
   const allDevicesDefaultOpen = priority.length === 0 || sorted.length <= priority.length;
+
+  const allDevicesInner = (
+    <>
+      {rows.length > 1 && billableRows.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+          <form
+            action={bulkTermAction}
+            className="flex flex-col gap-2 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              const form = e.currentTarget;
+              const termRaw = (form.elements.namedItem("intervalMonths") as HTMLSelectElement | null)?.value ?? "";
+              const termLabel = termRaw ? formatPlanTerm(Number.parseInt(termRaw, 10)) : "not set";
+              const confirmMsg = termRaw
+                ? `Set billing term to ${termLabel} for all ${billableRows.length} active devices?`
+                : `Clear billing term on all ${billableRows.length} active devices?`;
+              if (!window.confirm(confirmMsg)) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="customerId" value={customerId} />
+            <label className="block flex-1 text-xs">
+              <span className="font-medium text-zinc-600 dark:text-zinc-400">Billing term for all devices</span>
+              <div className="mt-0.5">
+                <BillingTermSelect name="intervalMonths" defaultValue={null} />
+              </div>
+            </label>
+            <SecondarySaveSubmit label={`Apply to all ${billableRows.length}`} />
+            {bulkTermState.error ? (
+              <p className="w-full text-sm text-red-600 sm:order-last">{bulkTermState.error}</p>
+            ) : null}
+            {bulkTermState.message ? (
+              <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkTermState.message}</p>
+            ) : null}
+          </form>
+
+          <form
+            action={bulkDueAction}
+            className="flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              const form = e.currentTarget;
+              const nextDue = (form.elements.namedItem("nextDueDate") as HTMLInputElement | null)?.value?.trim();
+              const confirmMsg = nextDue
+                ? `Set next due to ${nextDue} for all ${billableRows.length} active devices?`
+                : `Clear next due on all ${billableRows.length} active devices?`;
+              if (!window.confirm(confirmMsg)) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="customerId" value={customerId} />
+            <label className="block flex-1 text-xs">
+              <span className="font-medium text-zinc-600 dark:text-zinc-400">Next due for all devices</span>
+              <input
+                name="nextDueDate"
+                type="date"
+                className={`mt-0.5 block w-full ${renewalFieldClass}`}
+              />
+            </label>
+            <SecondarySaveSubmit label={`Apply to all ${billableRows.length}`} />
+            {bulkDueState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkDueState.error}</p> : null}
+            {bulkDueState.message ? (
+              <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkDueState.message}</p>
+            ) : null}
+          </form>
+
+          <form
+            action={bulkAction}
+            className="flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              if (
+                !window.confirm(
+                  `Mark the current period paid for all ${billableRows.length} active devices and advance each next due date?`,
+                )
+              ) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="customerId" value={customerId} />
+            <label className="block flex-1 text-xs">
+              <span className="font-medium text-zinc-600 dark:text-zinc-400">
+                Invoice ref for all devices (optional)
+              </span>
+              <input
+                name="invoiceRef"
+                type="text"
+                placeholder="e.g. Invoiless invoice id"
+                className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              />
+            </label>
+            <MarkPaidSubmit label={`Mark all ${billableRows.length} paid`} />
+            {bulkState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkState.error}</p> : null}
+            {bulkState.message ? (
+              <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkState.message}</p>
+            ) : null}
+          </form>
+        </div>
+      ) : null}
+
+      <ul className="mt-3 flex flex-col gap-3">
+        {sorted.map((row) => {
+          const inPriority = showPriority && priority.some((p) => p.id === row.id);
+          if (inPriority) {
+            return null;
+          }
+          return <MarkOneForm key={row.id} row={row} customerId={customerId} billingMode={billingMode} />;
+        })}
+      </ul>
+    </>
+  );
 
   return (
     <>
@@ -372,118 +486,19 @@ function RenewalOpsBody({
         </div>
       ) : null}
 
-      <details className="mt-4" open={allDevicesDefaultOpen}>
-        <summary className="cursor-pointer text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          All devices ({rows.length})
-        </summary>
-
-        {rows.length > 1 && billableRows.length > 0 ? (
-          <div className="mt-3 flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
-            <form
-              action={bulkTermAction}
-              className="flex flex-col gap-2 sm:flex-row sm:items-end"
-              onSubmit={(e) => {
-                const form = e.currentTarget;
-                const termRaw = (form.elements.namedItem("intervalMonths") as HTMLSelectElement | null)?.value ?? "";
-                const termLabel = termRaw ? formatPlanTerm(Number.parseInt(termRaw, 10)) : "not set";
-                const confirmMsg = termRaw
-                  ? `Set billing term to ${termLabel} for all ${billableRows.length} active devices?`
-                  : `Clear billing term on all ${billableRows.length} active devices?`;
-                if (!window.confirm(confirmMsg)) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              <input type="hidden" name="customerId" value={customerId} />
-              <label className="block flex-1 text-xs">
-                <span className="font-medium text-zinc-600 dark:text-zinc-400">Billing term for all devices</span>
-                <div className="mt-0.5">
-                  <BillingTermSelect name="intervalMonths" defaultValue={null} />
-                </div>
-              </label>
-              <SecondarySaveSubmit label={`Apply to all ${billableRows.length}`} />
-              {bulkTermState.error ? (
-                <p className="w-full text-sm text-red-600 sm:order-last">{bulkTermState.error}</p>
-              ) : null}
-              {bulkTermState.message ? (
-                <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkTermState.message}</p>
-              ) : null}
-            </form>
-
-            <form
-              action={bulkDueAction}
-              className="flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:flex-row sm:items-end"
-              onSubmit={(e) => {
-                const form = e.currentTarget;
-                const nextDue = (form.elements.namedItem("nextDueDate") as HTMLInputElement | null)?.value?.trim();
-                const confirmMsg = nextDue
-                  ? `Set next due to ${nextDue} for all ${billableRows.length} active devices?`
-                  : `Clear next due on all ${billableRows.length} active devices?`;
-                if (!window.confirm(confirmMsg)) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              <input type="hidden" name="customerId" value={customerId} />
-              <label className="block flex-1 text-xs">
-                <span className="font-medium text-zinc-600 dark:text-zinc-400">Next due for all devices</span>
-                <input
-                  name="nextDueDate"
-                  type="date"
-                  className={`mt-0.5 block w-full ${renewalFieldClass}`}
-                />
-              </label>
-              <SecondarySaveSubmit label={`Apply to all ${billableRows.length}`} />
-              {bulkDueState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkDueState.error}</p> : null}
-              {bulkDueState.message ? (
-                <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkDueState.message}</p>
-              ) : null}
-            </form>
-
-            <form
-              action={bulkAction}
-              className="flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 sm:flex-row sm:items-end"
-              onSubmit={(e) => {
-                if (
-                  !window.confirm(
-                    `Mark the current period paid for all ${billableRows.length} active devices and advance each next due date?`,
-                  )
-                ) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              <input type="hidden" name="customerId" value={customerId} />
-              <label className="block flex-1 text-xs">
-                <span className="font-medium text-zinc-600 dark:text-zinc-400">
-                  Invoice ref for all devices (optional)
-                </span>
-                <input
-                  name="invoiceRef"
-                  type="text"
-                  placeholder="e.g. Invoiless invoice id"
-                  className="mt-0.5 block w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                />
-              </label>
-              <MarkPaidSubmit label={`Mark all ${billableRows.length} paid`} />
-              {bulkState.error ? <p className="w-full text-sm text-red-600 sm:order-last">{bulkState.error}</p> : null}
-              {bulkState.message ? (
-                <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">{bulkState.message}</p>
-              ) : null}
-            </form>
-          </div>
-        ) : null}
-
-        <ul className="mt-3 flex flex-col gap-3">
-          {sorted.map((row) => {
-            const inPriority = showPriority && priority.some((p) => p.id === row.id);
-            if (inPriority) {
-              return null;
-            }
-            return <MarkOneForm key={row.id} row={row} customerId={customerId} billingMode={billingMode} />;
-          })}
-        </ul>
-      </details>
+      {alwaysExpandDevices ? (
+        <div className="mt-4">
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">All devices ({rows.length})</p>
+          {allDevicesInner}
+        </div>
+      ) : (
+        <details className="mt-4" open={allDevicesDefaultOpen}>
+          <summary className="cursor-pointer text-sm font-medium text-zinc-800 dark:text-zinc-200">
+            All devices ({rows.length})
+          </summary>
+          {allDevicesInner}
+        </details>
+      )}
     </>
   );
 }
@@ -492,10 +507,12 @@ export function CustomerRenewalOpsContent({
   customerId,
   billingMode,
   rows,
+  alwaysExpandDevices = false,
 }: {
   customerId: string;
   billingMode: CustomerBillingMode;
   rows: RenewalRow[];
+  alwaysExpandDevices?: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -505,7 +522,14 @@ export function CustomerRenewalOpsContent({
     );
   }
 
-  return <RenewalOpsBody customerId={customerId} billingMode={billingMode} rows={rows} />;
+  return (
+    <RenewalOpsBody
+      customerId={customerId}
+      billingMode={billingMode}
+      rows={rows}
+      alwaysExpandDevices={alwaysExpandDevices}
+    />
+  );
 }
 
 export function CustomerRenewalOpsPanel({

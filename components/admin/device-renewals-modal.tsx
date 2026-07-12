@@ -56,7 +56,12 @@ export function DeviceRenewalsModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          <CustomerRenewalOpsContent customerId={customerId} billingMode={billingMode} rows={rows} />
+          <CustomerRenewalOpsContent
+            customerId={customerId}
+            billingMode={billingMode}
+            rows={rows}
+            alwaysExpandDevices
+          />
         </div>
 
         <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
