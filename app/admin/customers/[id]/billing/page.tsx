@@ -104,6 +104,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
         stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
+        renewalRows={renewalAssignments}
       />
     ) : null;
 
@@ -170,11 +171,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
           </div>
           {billingPanel}
         </>
-      ) : (
-        <div id="renewal-ops" className="scroll-mt-24">
-          {renewalPanel}
-        </div>
-      )}
+      ) : null}
 
       {customer.billingMode === "stripe_subscription" || stripeInvoices.length > 0 ? (
         <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { openStripePortalAction } from "@/app/admin/customers/billing-actions";
 import { BillingSettingsModal } from "@/components/admin/billing-settings-modal";
+import type { CustomerRenewalOpsRow } from "@/components/admin/customer-renewal-ops-panel";
+import { DeviceRenewalsModal } from "@/components/admin/device-renewals-modal";
 import { PaymentPlanModal } from "@/components/admin/payment-plan-modal";
 import type { BillingSetupStatus } from "@/lib/services/billing-lifecycle-service";
 import type { CustomerBillingMode } from "@prisma/client";
@@ -14,7 +15,7 @@ type PlanOption = { durationMonths: number; label: string };
 /**
  * Manage subscription — two real intents:
  * - Payment & plan (modal)
- * - Adjust renewal (scroll for now; modal next step)
+ * - Device renewals (modal)
  * Secondary: billing portal + Billing settings (modal)
  */
 export function ManageSubscriptionTiles({
@@ -30,6 +31,7 @@ export function ManageSubscriptionTiles({
   defaultVehicleCount,
   catalogConfigured,
   stripeCustomerId,
+  renewalRows,
 }: {
   customerId: string;
   billingMode: CustomerBillingMode;
@@ -43,8 +45,10 @@ export function ManageSubscriptionTiles({
   defaultVehicleCount: number;
   catalogConfigured: boolean;
   stripeCustomerId: string | null;
+  renewalRows: CustomerRenewalOpsRow[];
 }) {
   const [planOpen, setPlanOpen] = useState(false);
+  const [renewalsOpen, setRenewalsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [portalPending, startPortal] = useTransition();
   const [portalError, setPortalError] = useState<string | null>(null);
@@ -73,11 +77,11 @@ export function ManageSubscriptionTiles({
             icon={<DocIcon />}
             onClick={() => setPlanOpen(true)}
           />
-          <TileLink
-            href="#renewal-ops"
-            title="Adjust renewal"
-            subtitle="Next due dates · TL ops"
+          <TileButton
+            title="Device renewals"
+            subtitle="Next due dates · mark paid · pause"
             icon={<CalendarIcon />}
+            onClick={() => setRenewalsOpen(true)}
           />
         </div>
 
@@ -112,6 +116,14 @@ export function ManageSubscriptionTiles({
         stripeMonthlyRateXcd={stripeMonthlyRateXcd}
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
+      />
+
+      <DeviceRenewalsModal
+        open={renewalsOpen}
+        onClose={() => setRenewalsOpen(false)}
+        customerId={customerId}
+        billingMode={billingMode}
+        rows={renewalRows}
       />
 
       <BillingSettingsModal
@@ -154,34 +166,6 @@ function TileButton({
       </span>
       <ChevronIcon className="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:text-emerald-500 dark:text-zinc-600" />
     </button>
-  );
-}
-
-function TileLink({
-  href,
-  title,
-  subtitle,
-  icon,
-}: {
-  href: string;
-  title: string;
-  subtitle: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-3.5 transition hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/20"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-50">{title}</span>
-        <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</span>
-      </span>
-      <ChevronIcon className="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:text-emerald-500 dark:text-zinc-600" />
-    </Link>
   );
 }
 

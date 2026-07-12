@@ -31,7 +31,7 @@ import { dateInputValueFromDate } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm, SUBSCRIPTION_PLAN_MONTHS } from "@/lib/subscription-options/display";
 import type { CustomerBillingMode, DeviceObjectType, ServiceAssignmentStatus } from "@prisma/client";
 
-type RenewalRow = {
+export type CustomerRenewalOpsRow = {
   id: string;
   intervalMonths: number | null;
   nextDueDate: string | null;
@@ -49,6 +49,8 @@ type RenewalRow = {
     objectType: DeviceObjectType | null;
   };
 };
+
+type RenewalRow = CustomerRenewalOpsRow;
 
 function statusPill(status: ServiceAssignmentStatus | "due_soon" | "overdue") {
   const classes: Record<string, string> = {
@@ -328,7 +330,6 @@ function RenewalOpsBody({
   const missingTerm = rows.some((r) => r.status !== "suspended" && r.intervalMonths == null);
   const isManual = billingMode === "manual_legacy";
   const billableRows = rows.filter((r) => r.status !== "suspended");
-  const counts = countRenewalOps(rows);
   const priority = priorityRenewalRows(rows);
   const sorted = sortRenewalRowsByUrgency(rows);
   const showPriority = priority.length > 0;
@@ -487,6 +488,26 @@ function RenewalOpsBody({
   );
 }
 
+export function CustomerRenewalOpsContent({
+  customerId,
+  billingMode,
+  rows,
+}: {
+  customerId: string;
+  billingMode: CustomerBillingMode;
+  rows: RenewalRow[];
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        No active device assignments. Assign devices from the customer overview or Devices admin.
+      </p>
+    );
+  }
+
+  return <RenewalOpsBody customerId={customerId} billingMode={billingMode} rows={rows} />;
+}
+
 export function CustomerRenewalOpsPanel({
   customerId,
   billingMode,
@@ -513,7 +534,7 @@ export function CustomerRenewalOpsPanel({
   const hasUrgent = counts.overdue > 0 || counts.dueSoon > 0;
   const collapseForStripe = !isManual && !hasUrgent;
 
-  const inner = <RenewalOpsBody customerId={customerId} billingMode={billingMode} rows={rows} />;
+  const inner = <CustomerRenewalOpsContent customerId={customerId} billingMode={billingMode} rows={rows} />;
 
   if (collapseForStripe) {
     return (
