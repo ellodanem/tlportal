@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -204,9 +204,69 @@ function EditPortalUserForm({
   );
 }
 
+function IconButton({
+  title,
+  onClick,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="inline-flex shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white p-1 text-zinc-500 shadow-sm transition hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+    >
+      {children}
+    </button>
+  );
+}
+
+function CopyLoginButton({ username, password }: { username: string; password: string }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  const value = `${username}\n${password}`;
+  const title =
+    status === "copied"
+      ? "Username and password copied"
+      : status === "error"
+        ? "Could not copy login"
+        : "Copy username and password";
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void (async () => {
+          try {
+            await navigator.clipboard.writeText(value);
+            setStatus("copied");
+            window.setTimeout(() => setStatus("idle"), 2000);
+          } catch {
+            setStatus("error");
+            window.setTimeout(() => setStatus("idle"), 2000);
+          }
+        })();
+      }}
+      title={title}
+      aria-label={title}
+      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+    >
+      {status === "copied" ? "Copied login" : "Copy login"}
+    </button>
+  );
+}
+
 function PortalUserCard({ customerId, user }: { customerId: string; user: PortalUserRow }) {
   const [editing, setEditing] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const title = user.name?.trim() || user.traqcareUsername?.trim() || user.email?.trim() || "Portal user";
+  const username = user.traqcareUsername?.trim() ?? "";
+  const password = user.traqcarePassword ?? "";
+  const canCopyLogin = Boolean(username && user.hasPassword && password);
 
   if (editing) {
     return (
@@ -239,19 +299,47 @@ function PortalUserCard({ customerId, user }: { customerId: string; user: Portal
             <div>
               <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Username</dt>
               <dd className="mt-0.5 flex items-center gap-1 text-zinc-800 dark:text-zinc-200">
-                <span className="truncate">{user.traqcareUsername?.trim() || "—"}</span>
-                {user.traqcareUsername?.trim() ? (
-                  <CopyValueButton value={user.traqcareUsername.trim()} kind="username" />
-                ) : null}
+                <span className="min-w-0 truncate">{username || "—"}</span>
+                {username ? <CopyValueButton value={username} kind="username" /> : null}
               </dd>
             </div>
             <div>
               <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Password</dt>
-              <dd className="mt-0.5 flex items-center gap-1 text-zinc-800 dark:text-zinc-200">
-                <span>{user.hasPassword ? "Saved" : "—"}</span>
-                {user.hasPassword && user.traqcarePassword ? (
-                  <CopyValueButton value={user.traqcarePassword} kind="password" />
-                ) : null}
+              <dd className="mt-0.5 flex min-w-0 items-center gap-1 text-zinc-800 dark:text-zinc-200">
+                {user.hasPassword && password ? (
+                  <>
+                    <span className="min-w-0 truncate font-mono text-xs">
+                      {showPassword ? password : "••••••••"}
+                    </span>
+                    <IconButton
+                      title={showPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden className="stroke-current">
+                          <path
+                            d="M3 3l18 18M10.6 10.6a2 2 0 102.8 2.8M9.9 5.1A10.5 10.5 0 0121 12c-.6 1.1-1.4 2.1-2.4 3M6.1 6.1A10.4 10.4 0 003 12c1.7 3.4 5.1 6 9 6 1.3 0 2.5-.3 3.6-.7"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden className="stroke-current">
+                          <path
+                            d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"
+                            strokeWidth="2"
+                            strokeLinejoin="round"
+                          />
+                          <circle cx="12" cy="12" r="3" strokeWidth="2" />
+                        </svg>
+                      )}
+                    </IconButton>
+                    <CopyValueButton value={password} kind="password" />
+                  </>
+                ) : (
+                  <span>—</span>
+                )}
               </dd>
             </div>
           </dl>
@@ -260,6 +348,7 @@ function PortalUserCard({ customerId, user }: { customerId: string; user: Portal
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
+          {canCopyLogin ? <CopyLoginButton username={username} password={password} /> : null}
           <button
             type="button"
             onClick={() => setEditing(true)}
