@@ -52,6 +52,37 @@ export function ObjectTypeIcon({ type, className = "h-5 w-5 shrink-0", title }: 
           <path d="M6 7l1-2h10l1 2" />
         </IconSvg>
       );
+    case "pickup":
+      return (
+        <IconSvg className={className} title={label}>
+          <path d="M3 11h10l1.5-4H5.5L3 11z" />
+          <path d="M13 11h8v5h-3v-2H6v2H3v-5" />
+          <circle cx="7" cy="16" r="1.25" />
+          <circle cx="16.5" cy="16" r="1.25" />
+          <path d="M5.5 7l1-2h6l1 2" />
+        </IconSvg>
+      );
+    case "suv":
+      return (
+        <IconSvg className={className} title={label}>
+          <path d="M3 10h18l-1-3.5H4L3 10z" />
+          <path d="M4 10v5h3v-1.5h10V15h3v-5" />
+          <circle cx="7.5" cy="15" r="1.25" />
+          <circle cx="16.5" cy="15" r="1.25" />
+          <path d="M5 6.5l1-2h12l1 2" />
+          <path d="M7 10v-2.5M17 10v-2.5" />
+        </IconSvg>
+      );
+    case "truck":
+      return (
+        <IconSvg className={className} title={label}>
+          <path d="M3 11h11v6H3v-6z" />
+          <path d="M14 13l3-4h4v8h-3" />
+          <path d="M5 11V8h7v3" />
+          <circle cx="7" cy="17" r="1.25" />
+          <circle cx="16" cy="17" r="1.25" />
+        </IconSvg>
+      );
     case "bike":
       return (
         <IconSvg className={className} title={label}>

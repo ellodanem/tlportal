@@ -3,6 +3,9 @@ import type { DeviceObjectType } from "@prisma/client";
 /** Display order in selects (add new enum values here when extending the schema). */
 export const DEVICE_OBJECT_TYPE_ORDER: DeviceObjectType[] = [
   "car",
+  "pickup",
+  "suv",
+  "truck",
   "bike",
   "ambulance",
   "fire_truck",
@@ -17,6 +20,9 @@ export const DEVICE_OBJECT_TYPE_ORDER: DeviceObjectType[] = [
 
 export const DEVICE_OBJECT_TYPE_LABEL: Record<DeviceObjectType, string> = {
   car: "Car",
+  pickup: "Pickup",
+  suv: "SUV",
+  truck: "Truck",
   bike: "Bike",
   ambulance: "Ambulance",
   fire_truck: "Fire truck",
