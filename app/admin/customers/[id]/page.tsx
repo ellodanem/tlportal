@@ -20,8 +20,8 @@ import {
   reviewReasonLabel,
   type FleetHealthBucket,
 } from "@/lib/admin/fleet-health";
-import { CopyValueButton } from "@/components/admin/copy-value-button";
 import { CustomerActivityEvent, CustomerActivityEventTime } from "@/components/admin/customer-activity-event";
+import { CustomerPortalUsersPanel } from "@/components/admin/customer-portal-users-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { UnarchiveCustomerButton } from "@/components/archive-customer-button";
 import {
@@ -91,6 +91,9 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   const customer = await prisma.customer.findUnique({
     where: { id },
     include: {
+      portalUsers: {
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+      },
       serviceAssignments: {
         orderBy: { startDate: "desc" },
         include: {
@@ -399,24 +402,6 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
               {customer.traqcareClientId?.trim() || "—"}
             </dd>
           </div>
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Username</dt>
-            <dd className="mt-0.5 flex items-center gap-1 text-zinc-800 dark:text-zinc-200">
-              <span>{customer.traqcareUsername?.trim() || "—"}</span>
-              {customer.traqcareUsername?.trim() ? (
-                <CopyValueButton value={customer.traqcareUsername.trim()} kind="username" />
-              ) : null}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Password</dt>
-            <dd className="mt-0.5 flex items-center gap-1 text-zinc-800 dark:text-zinc-200">
-              <span>{customer.traqcarePassword ? "Saved (edit customer to change)" : "—"}</span>
-              {customer.traqcarePassword ? (
-                <CopyValueButton value={customer.traqcarePassword} kind="password" />
-              ) : null}
-            </dd>
-          </div>
           <div className="sm:col-span-2">
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Portal URL</dt>
             <dd className="mt-0.5">
@@ -436,11 +421,24 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
           </div>
         </dl>
         {!customer.traqcareClientId?.trim() &&
-        !customer.traqcareUsername?.trim() &&
-        !customer.traqcarePassword &&
-        !customer.traqcarePortalUrl?.trim() && (
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No Traqcare settings on file.</p>
-        )}
+          !customer.traqcarePortalUrl?.trim() &&
+          customer.portalUsers.length === 0 && (
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No Traqcare settings on file.</p>
+          )}
+        <CustomerPortalUsersPanel
+          customerId={customer.id}
+          users={customer.portalUsers.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            traqcareUsername: u.traqcareUsername,
+            hasPassword: Boolean(u.traqcarePassword),
+            traqcarePassword: u.traqcarePassword,
+            role: u.role,
+            notes: u.notes,
+          }))}
+        />
       </section>
 
       <section>

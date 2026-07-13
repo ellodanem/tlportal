@@ -335,9 +335,9 @@ model Customer {
   stripeMonthlyRateXcd Decimal?            @db.Decimal(10, 2)
   /// @deprecated Prefer BillingAccount — kept for backward compatibility during Phase 1.
   invoilessCustomerId  String?             @unique
-  /// @deprecated Prefer ProviderDeviceLink on Device — kept during Phase 1 migration.
+  /// @deprecated Prefer CustomerPortalUser — kept for migration backfill / read fallback.
   traqcareUsername     String?
-  /// Stored in DB as plain text — restrict DB access; prefer env/secret store for production.
+  /// @deprecated Prefer CustomerPortalUser — stored as plain text; restrict DB access.
   traqcarePassword     String?
   /// Traqcare / white-label portal base URL if not the default (e.g. https://…).
   traqcarePortalUrl    String?
@@ -360,6 +360,7 @@ model Customer {
   customerSubscriptions      CustomerSubscription[]
   operationalEvents          OperationalEvent[]
   broadcastDeliveries        BroadcastDelivery[]
+  portalUsers                CustomerPortalUser[]
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
   createdFromRegistration  RegistrationRequest?  @relation("RegistrationCreatedCustomer")
@@ -372,6 +373,27 @@ model Customer {
   recurringInvoiceSchedules RecurringInvoiceSchedule[]
   expenses                Expense[]
   @@index([archivedAt])
+}
+
+/// Traqcare / GPS portal login for a customer (multiple people per fleet).
+model CustomerPortalUser {
+  id               String   @id @default(uuid())
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Display name of the person who uses this login.
+  name             String?
+  email            String?
+  phone            String?
+  traqcareUsername String?
+  /// Stored in DB as plain text — restrict DB access; prefer env/secret store for production.
+  traqcarePassword String?
+  /// e.g. owner, dispatcher, driver — free text for now.
+  role             String?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([customerId])
 }
 
 /// Public registration form — four fixed terms (1 / 3 / 6 / 12 month); staff edit price only.

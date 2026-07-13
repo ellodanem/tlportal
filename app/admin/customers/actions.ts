@@ -40,20 +40,11 @@ function readCustomerFields(formData: FormData) {
     legalInfo: String(formData.get("legalInfo") ?? "").trim() || null,
     invoiceCc: String(formData.get("invoiceCc") ?? "").trim() || null,
     invoiceBcc: String(formData.get("invoiceBcc") ?? "").trim() || null,
-    traqcareUsername: String(formData.get("traqcareUsername") ?? "").trim() || null,
     traqcarePortalUrl: String(formData.get("traqcarePortalUrl") ?? "").trim() || null,
     traqcareClientId: String(formData.get("traqcareClientId") ?? "").trim() || null,
     notes: String(formData.get("notes") ?? "").trim() || null,
     tags: parseTags(String(formData.get("tags") ?? "")),
   };
-}
-
-function readTraqcarePassword(formData: FormData): { clear: boolean; next: string | null } {
-  const clearRaw = formData.get("traqcarePasswordClear");
-  const clear = clearRaw === "on" || clearRaw === "true" || clearRaw === "1";
-  const raw = String(formData.get("traqcarePassword") ?? "");
-  const trimmed = raw.trim();
-  return { clear, next: trimmed.length ? trimmed : null };
 }
 
 function validateNameOrCompany(fields: ReturnType<typeof readCustomerFields>): string | null {
@@ -75,8 +66,6 @@ export async function createCustomer(
     return { error: v };
   }
 
-  const traqcarePwd = readTraqcarePassword(formData);
-
   const session = await getSession();
   const setupBilling = String(formData.get("setupBilling") ?? "") === "1";
 
@@ -97,10 +86,8 @@ export async function createCustomer(
         legalInfo: fields.legalInfo,
         invoiceCc: fields.invoiceCc,
         invoiceBcc: fields.invoiceBcc,
-        traqcareUsername: fields.traqcareUsername,
         traqcarePortalUrl: fields.traqcarePortalUrl,
         traqcareClientId: fields.traqcareClientId,
-        traqcarePassword: traqcarePwd.clear ? null : traqcarePwd.next,
         notes: fields.notes,
         tags: fields.tags,
       },
@@ -155,7 +142,6 @@ export async function updateCustomer(
   }
 
   const fields = readCustomerFields(formData);
-  const traqcarePwd = readTraqcarePassword(formData);
   const v = validateNameOrCompany(fields);
   if (v) {
     return { error: v };
@@ -176,17 +162,11 @@ export async function updateCustomer(
       legalInfo: fields.legalInfo,
       invoiceCc: fields.invoiceCc,
       invoiceBcc: fields.invoiceBcc,
-      traqcareUsername: fields.traqcareUsername,
       traqcarePortalUrl: fields.traqcarePortalUrl,
       traqcareClientId: fields.traqcareClientId,
       notes: fields.notes,
       tags: fields.tags,
     };
-    if (traqcarePwd.clear) {
-      data.traqcarePassword = null;
-    } else if (traqcarePwd.next) {
-      data.traqcarePassword = traqcarePwd.next;
-    }
 
     await prisma.customer.update({
       where: { id },

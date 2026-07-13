@@ -27,7 +27,6 @@ function toFormDefaults(customer: Customer) {
     legalInfo: customer.legalInfo,
     invoiceCc: customer.invoiceCc,
     invoiceBcc: customer.invoiceBcc,
-    traqcareUsername: customer.traqcareUsername,
     traqcarePortalUrl: customer.traqcarePortalUrl,
     traqcareClientId: customer.traqcareClientId,
     notes: customer.notes,
@@ -67,7 +66,6 @@ export function CustomerEditForm({ customer }: { customer: Customer }) {
       state={state}
       defaults={d}
       customerId={customer.id}
-      hasStoredTraqcarePassword={Boolean(customer.traqcarePassword)}
     />
   );
 }
@@ -88,7 +86,6 @@ type FormDefaults = Partial<
     | "legalInfo"
     | "invoiceCc"
     | "invoiceBcc"
-    | "traqcareUsername"
     | "traqcarePortalUrl"
     | "traqcareClientId"
     | "notes"
@@ -100,7 +97,6 @@ function CustomerFormInner({
   state,
   defaults,
   customerId,
-  hasStoredTraqcarePassword = false,
   showBillingSetupOnCreate = false,
   stripeBillingEnabled = false,
   invoilessConfigured = false,
@@ -109,8 +105,6 @@ function CustomerFormInner({
   state: CustomerFormActionState;
   defaults: FormDefaults;
   customerId?: string;
-  /** Edit only: whether a password is already saved (never shown in the form). */
-  hasStoredTraqcarePassword?: boolean;
   showBillingSetupOnCreate?: boolean;
   stripeBillingEnabled?: boolean;
   invoilessConfigured?: boolean;
@@ -294,9 +288,15 @@ function CustomerFormInner({
       <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
         <h2 className={sectionTitleClass}>Traqcare (GPS)</h2>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Set the fleet client ID once per customer; per-device GPS settings only need object-specific ids (see Manage
-          device → GPS provider). Legacy username/password below. Passwords are stored as plain text — limit who can
-          access this admin app.
+          Fleet-level settings only. Add people and Traqcare logins under Portal users on the customer page
+          {customerId ? (
+            <>
+              {" "}
+              (or below after you save).
+            </>
+          ) : (
+            <> after creating the customer.</>
+          )}
         </p>
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="traqcareClientId">
@@ -315,34 +315,6 @@ function CustomerFormInner({
           </p>
         </div>
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="traqcareUsername">
-            Username
-          </label>
-          <input
-            id="traqcareUsername"
-            name="traqcareUsername"
-            autoComplete="off"
-            defaultValue={defaults.traqcareUsername ?? ""}
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="traqcarePassword">
-            Password
-          </label>
-          <input
-            id="traqcarePassword"
-            name="traqcarePassword"
-            type="password"
-            autoComplete="new-password"
-            className={inputClass}
-            placeholder={hasStoredTraqcarePassword ? "Leave blank to keep current password" : "Optional"}
-          />
-          {hasStoredTraqcarePassword ? (
-            <p className="mt-1 text-xs text-zinc-500">A password is already saved for this customer.</p>
-          ) : null}
-        </div>
-        <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="traqcarePortalUrl">
             Portal URL
           </label>
@@ -357,10 +329,6 @@ function CustomerFormInner({
           />
           <p className="mt-1 text-xs text-zinc-500">Use if this customer uses a non-default or white-label Traqcare URL.</p>
         </div>
-        <label className="flex cursor-pointer items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-          <input type="checkbox" name="traqcarePasswordClear" value="1" className="mt-1 rounded border-zinc-300" />
-          <span>Remove stored Traqcare password</span>
-        </label>
       </div>
 
       {showBillingSetupOnCreate ? (

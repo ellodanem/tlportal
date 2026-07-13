@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CustomerEditForm } from "@/components/customer-form";
+import { CustomerPortalUsersPanel } from "@/components/admin/customer-portal-users-panel";
 import { ArchiveCustomerButton, UnarchiveCustomerButton } from "@/components/archive-customer-button";
 import { DeleteCustomerButton } from "@/components/delete-customer-button";
 import { customerDisplayName } from "@/lib/admin/customer-display";
@@ -18,6 +19,9 @@ export default async function EditCustomerPage({ params, searchParams }: Props) 
   const customer = await prisma.customer.findUnique({
     where: { id },
     include: {
+      portalUsers: {
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+      },
       serviceAssignments: {
         where: { endDate: null, status: { not: "cancelled" } },
         select: { id: true },
@@ -66,6 +70,24 @@ export default async function EditCustomerPage({ params, searchParams }: Props) 
       </p>
 
       <CustomerEditForm customer={customer} />
+
+      <section className="max-w-xl rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <CustomerPortalUsersPanel
+          customerId={customer.id}
+          showTopBorder={false}
+          users={customer.portalUsers.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            traqcareUsername: u.traqcareUsername,
+            hasPassword: Boolean(u.traqcarePassword),
+            traqcarePassword: u.traqcarePassword,
+            role: u.role,
+            notes: u.notes,
+          }))}
+        />
+      </section>
 
       <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
         <div>
