@@ -57,6 +57,20 @@ export default async function AdminPage() {
   const totalDevices = FLEET_SEGMENT_ORDER.reduce((sum, k) => sum + s.fleetSegments[k], 0);
   const upcomingBillingCount = s.upcomingBillItems.length;
   const upcomingBillingHref = "/admin/customers";
+  const paymentIssueCount = s.paymentIssueCount;
+  const paymentIssueBadges: StatBadge[] = [];
+  if (s.pastDueCount > 0) {
+    paymentIssueBadges.push({
+      label: `Past due · ${s.pastDueCount}`,
+      variant: "rose",
+    });
+  }
+  if (s.failedPaymentCount > 0) {
+    paymentIssueBadges.push({
+      label: `Failed · ${s.failedPaymentCount}`,
+      variant: "amber",
+    });
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -115,7 +129,7 @@ export default async function AdminPage() {
       </div>
 
       {/* KPI strip */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Customers"
           value={s.customerCount}
@@ -161,6 +175,19 @@ export default async function AdminPage() {
           accent={upcomingBillingCount > 0 ? "amber" : "zinc"}
           icon={<IconAlert className="h-5 w-5" />}
           hint="Services with next due dates to review"
+        />
+        <StatCard
+          label="Payment issues"
+          value={paymentIssueCount}
+          href="/admin/billing-health"
+          accent={paymentIssueCount > 0 ? "rose" : "zinc"}
+          icon={<IconAlert className="h-5 w-5" />}
+          badges={paymentIssueBadges.length > 0 ? paymentIssueBadges : undefined}
+          hint={
+            paymentIssueCount > 0
+              ? "Past due billing and recent card declines"
+              : "No past due or failed payments"
+          }
         />
       </section>
 

@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 import {
   listRecentPaymentFailureAttentionItems,
+  listRecentPaymentFailureCustomerIds,
   paymentFailureEmailFollowUpLabel,
   paymentFailureWhatsAppFollowUpLabel,
 } from "@/lib/stripe/payment-failure-recovery";
@@ -18,6 +19,9 @@ const unlinkedInvoilessWhere = {
   invoilessCustomerId: null,
   billingAccounts: { none: { provider: "invoiless" as const } },
 } as const;
+
+const PAST_DUE_SUB_STATUSES = ["past_due", "unpaid"] as const;
+const OPEN_AR_STATUSES = ["open", "partially_paid", "overdue"] as const;
 
 export type DashboardAttentionItem = {
   id: string;
@@ -65,6 +69,10 @@ export async function getDashboardStats() {
     simCardCount,
     stripeBillingIssues,
     recentPaymentFailures,
+    pastDueSubscriptionCount,
+    overdueInvoiceCount,
+    stripeBillingIssueCount,
+    paymentFailureCustomerIds,
   ] = await Promise.all([
     getGlobalFleetHealth(),
     prisma.device.count({
@@ -150,6 +158,28 @@ export async function getDashboardStats() {
         })
       : Promise.resolve([]),
     stripeConfigured ? listRecentPaymentFailureAttentionItems(6) : Promise.resolve([]),
+    prisma.customerSubscription.count({
+      where: {
+        status: { in: [...PAST_DUE_SUB_STATUSES] },
+        customer: activeCustomerWhere,
+      },
+    }),
+    prisma.invoice.count({
+      where: {
+        status: { in: [...OPEN_AR_STATUSES] },
+        amountDue: { gt: 0 },
+        dueDate: { lt: new Date() },
+      },
+    }),
+    stripeConfigured
+      ? prisma.billingAccount.count({
+          where: {
+            provider: "stripe",
+            status: { in: [...STRIPE_ATTENTION_STATUSES] },
+          },
+        })
+      : Promise.resolve(0),
+    stripeConfigured ? listRecentPaymentFailureCustomerIds(7) : Promise.resolve(new Set<string>()),
   ]);
 
   type DueAssignment = (typeof openAssignmentsWithDue)[number];
@@ -176,15 +206,17 @@ export async function getDashboardStats() {
     return dx;
   });
 
-  const stripeBillingIssueCount = stripeBillingIssues.length;
-  const paymentFailureCount = recentPaymentFailures.length;
+  const failedPaymentCount = paymentFailureCustomerIds.size;
+  const pastDueCount =
+    pastDueSubscriptionCount + overdueInvoiceCount + stripeBillingIssueCount;
+  const paymentIssueCount = pastDueCount + failedPaymentCount;
 
   const attentionCount =
     overdueAssignmentCount +
     dueSoonAssignmentCount +
     (invoilessConfigured ? unlinkedInvoilessCount : 0) +
     stripeBillingIssueCount +
-    paymentFailureCount;
+    failedPaymentCount;
 
   const displayName = (c: {
     company: string | null;
@@ -373,6 +405,9 @@ export async function getDashboardStats() {
     invoilessConfigured,
     stripeConfigured,
     stripeBillingIssueCount,
+    pastDueCount,
+    failedPaymentCount,
+    paymentIssueCount,
     fleetSegments,
     customerCount,
     assignedDeviceCount,
