@@ -139,9 +139,10 @@ export function StripeInvoicesList({
     return (
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         No Stripe invoices mirrored yet. They appear after Checkout and subscription renewals (webhooks:
-        invoice.paid, invoice.finalized). Paid invoices receive a TL-branded PDF (
-        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code>) when Blob storage is
-        configured; paid receipts are emailed automatically when SMTP and Settings allow.
+        invoice.paid, invoice.finalized). Paid invoices receive a TL-branded PDF and{" "}
+        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code> number when Blob
+        storage is configured; paid receipts are emailed automatically when SMTP and Settings allow.
+        Open or failed renewals stay mirrored for ops but do not get a TL invoice number or receipt.
       </p>
     );
   }

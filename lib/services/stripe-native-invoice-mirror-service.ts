@@ -143,10 +143,16 @@ export async function syncBillingInvoiceToNativeMirror(billingInvoiceId: string)
   });
   if (!billing || billing.provider !== "stripe") return null;
 
+  const stripeStatus = billing.status.toLowerCase();
+  // Do not create native AR rows for open / failed Stripe invoices (declined cards).
+  // Still update if a mirror already exists (e.g. void after a prior paid sync mistake).
+  if (stripeStatus !== "paid" && !billing.nativeMirror) {
+    return null;
+  }
+
   const billToLines = customerBillToLines(billing.customer);
   const billToName = billToLines[0] ?? null;
   const total = round2(Number(billing.amountXcd));
-  const stripeStatus = billing.status.toLowerCase();
   const amountPaid = stripeStatus === "paid" ? total : 0;
   const amountDue = round2(total - amountPaid);
   const status = mapStripeBillingStatusToNative(stripeStatus, total, amountPaid);

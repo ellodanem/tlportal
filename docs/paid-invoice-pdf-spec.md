@@ -34,7 +34,7 @@ Payment still happens in Stripe first; the PDF is generated **after** payment (r
 |------|------------|
 | **Duplicate numbers** | `@@unique` on display field; allocate inside DB transaction |
 | **Race on concurrent webhooks** | Single counter row (`AppSettings` or `InvoiceSequence`) with `UPDATE … RETURNING` |
-| **Gaps in sequence** | Allocate on **`invoice.finalized`** (or first `invoice.paid`), not on draft; optional admin “void” does not reuse numbers |
+| **Gaps in sequence** | Allocate on **`invoice.paid`** only (not open / failed); optional admin “void” does not reuse numbers |
 | **Webhook never arrives** | Billing UI: “Sync from Stripe” / resend webhook; backfill job by `externalInvoiceId` |
 | **Two numbers confuse staff** | PDF + UI: **large TL-INV**; Stripe # and `in_…` in footer / secondary column only |
 | **Starting mid-stream from Zoho** | Seed counter (e.g. next = 100900) once before go-live |
@@ -56,7 +56,7 @@ Use **TL serial as the customer-facing invoice number** on PDFs and in the Billi
 TL-INV-100837
 ```
 
-- **Allocate** when the invoice is first mirrored at **`invoice.finalized`** (preferred) or on **`invoice.paid`** if finalized was missed.
+- **Allocate** when the mirrored Stripe invoice becomes **`paid`** (so declined / open renewals do not burn a TL-INV or look like a customer invoice). PDF generation still calls allocate if `invoice.paid` arrives first.
 - **Store separately:**
   - `displayNumber` — `TL-INV-{n}` (unique globally)
   - `providerInvoiceNumber` — Stripe `invoice.number` (nullable)

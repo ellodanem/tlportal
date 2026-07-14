@@ -58,7 +58,13 @@ export async function syncStripeInvoiceToDatabase(
   }
 
   const currency = (invoice.currency ?? "xcd").toLowerCase();
-  const amountPaid = invoice.amount_paid ?? invoice.total ?? 0;
+  const status = (invoice.status ?? "unknown").toLowerCase();
+  // Unpaid invoices have amount_paid = 0 after a declined card; store the billed
+  // total so the Billing tab does not show EC$0 for open / failed renewals.
+  const amountMinor =
+    status === "paid"
+      ? (invoice.amount_paid ?? invoice.total ?? 0)
+      : (invoice.total ?? invoice.amount_due ?? 0);
   const subRef = invoice.subscription;
   const stripeSubscriptionId =
     typeof subRef === "string" ? subRef : subRef?.id ?? null;
@@ -72,7 +78,7 @@ export async function syncStripeInvoiceToDatabase(
   const paidAt =
     invoice.status_transitions?.paid_at != null
       ? new Date(invoice.status_transitions.paid_at * 1000)
-      : invoice.status === "paid"
+      : status === "paid"
         ? new Date()
         : null;
 
@@ -89,7 +95,7 @@ export async function syncStripeInvoiceToDatabase(
       externalInvoiceId: invoice.id,
       kind,
       status: invoice.status ?? "unknown",
-      amountXcd: amountFromStripeMinor(amountPaid, currency),
+      amountXcd: amountFromStripeMinor(amountMinor, currency),
       currency,
       providerInvoiceNumber: invoice.number ?? null,
       periodStart,
@@ -101,7 +107,7 @@ export async function syncStripeInvoiceToDatabase(
     },
     update: {
       status: invoice.status ?? "unknown",
-      amountXcd: amountFromStripeMinor(amountPaid, currency),
+      amountXcd: amountFromStripeMinor(amountMinor, currency),
       currency,
       providerInvoiceNumber: invoice.number ?? null,
       periodStart,
@@ -113,11 +119,13 @@ export async function syncStripeInvoiceToDatabase(
     },
   });
 
-  if (invoice.status === "open" || invoice.status === "paid") {
+  // TL-INV is allocated only after payment (see invoice-display-number).
+  if (status === "paid") {
     await ensureBillingInvoiceDisplayNumber(row.id);
   }
 
   try {
+    // Native AR mirror creates only on paid (or updates an existing mirror).
     await syncBillingInvoiceToNativeMirror(row.id);
   } catch (e) {
     console.error("[stripe invoice-sync] native AR mirror failed", e);

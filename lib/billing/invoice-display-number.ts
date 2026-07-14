@@ -4,10 +4,11 @@ import { prisma } from "@/lib/db";
 
 import { allocateInvoiceSequenceValue, formatDisplayNumber } from "./invoice-sequence";
 
-const ALLOCATE_STATUSES = new Set(["open", "paid"]);
+/** Only paid Stripe invoices get a customer-facing TL-INV number (not open / failed). */
+const ALLOCATE_STATUSES = new Set(["paid"]);
 
 /**
- * Assign `TL-INV-{n}` when Stripe invoice is finalized or paid (idempotent).
+ * Assign `TL-INV-{n}` when a Stripe invoice is paid (idempotent).
  */
 export async function ensureBillingInvoiceDisplayNumber(billingInvoiceId: string): Promise<string | null> {
   const row = await prisma.billingInvoice.findUnique({
