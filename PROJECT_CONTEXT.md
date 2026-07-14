@@ -2857,3 +2857,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - feat(admin): add Payment issues KPI on operations overview
 
+
+### 2026-07-14 09:43 UTC — commit `fe2375e`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-07-14 09:43 UTC — pre-push (`main` → origin) @ `fe2375e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
