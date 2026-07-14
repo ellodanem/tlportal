@@ -2507,3 +2507,353 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-06-30 23:35 UTC — commit `2eec817`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-06-30 23:35 UTC — pre-push (`main` → origin) @ `2eec817`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:36 UTC — commit `f551aeb`
+
+- feat(admin): add copy button on invoice customer pay link
+
+
+### 2026-06-30 23:36 UTC — pre-push (`main` → origin) @ `f551aeb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:40 UTC — commit `86c77bd`
+
+- feat(billing): notify on Stripe payment declines
+
+
+### 2026-06-30 23:40 UTC — pre-push (`main` → origin) @ `86c77bd`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:46 UTC — commit `90bf7a8`
+
+- fix(admin): prioritize payment declines in dashboard attention
+
+
+### 2026-06-30 23:46 UTC — pre-push (`main` → origin) @ `90bf7a8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:51 UTC — commit `65e0690`
+
+- fix(admin): stop duplicate draft invoices on save changes
+
+
+### 2026-06-30 23:52 UTC — pre-push (`main` → origin) @ `65e0690`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:53 UTC — commit `041a105`
+
+- feat(settings): add portal timezone and location settings
+
+
+### 2026-06-30 23:53 UTC — pre-push (`main` → origin) @ `041a105`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 00:00 UTC — commit `8621f25`
+
+- feat(billing): schedule native invoice emails for a later date
+
+
+### 2026-07-01 00:00 UTC — pre-push (`main` → origin) @ `8621f25`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 00:34 UTC — commit `f8c4d10`
+
+- fix(ops): show Paused status and pause controls on customer views
+
+
+### 2026-07-01 00:34 UTC — pre-push (`main` → origin) @ `f8c4d10`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 01:39 UTC — commit `b13c2b8`
+
+- fix(pay): stack invoice line items on mobile pay page
+
+
+### 2026-07-01 01:39 UTC — pre-push (`main` → origin) @ `b13c2b8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 11:56 UTC — commit `0e22e4c`
+
+- feat(billing): show decline follow-up status on customer billing
+
+
+### 2026-07-01 11:56 UTC — pre-push (`main` → origin) @ `0e22e4c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 11:59 UTC — commit `5c8221a`
+
+- feat(admin): show email status on payment decline dashboard rows
+
+
+### 2026-07-01 11:59 UTC — pre-push (`main` → origin) @ `5c8221a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 12:00 UTC — commit `f064381`
+
+- feat(admin): show decline follow-up on TL invoice detail
+
+
+### 2026-07-01 12:00 UTC — pre-push (`main` → origin) @ `f064381`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 12:06 UTC — commit `6a98eca`
+
+- feat(admin): rich activity log for payment declines
+
+
+### 2026-07-01 12:06 UTC — pre-push (`main` → origin) @ `6a98eca`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 15:07 UTC — commit `106537e`
+
+- feat(billing): add resend decline follow-up email on billing
+
+
+### 2026-07-01 15:07 UTC — pre-push (`main` → origin) @ `106537e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-01 15:19 UTC — commit `e9af99d`
+
+- feat(admin): color-code invoice status badges
+
+
+### 2026-07-01 15:19 UTC — pre-push (`main` → origin) @ `e9af99d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-03 00:07 UTC — commit `15f3f8b`
+
+- feat(billing): add flat document-level discount on TL invoices
+
+
+### 2026-07-03 00:08 UTC — pre-push (`main` → origin) @ `15f3f8b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-09 10:45 UTC — commit `00c4cd6`
+
+- feat(billing): add decline follow-up email preview on customer billing
+
+
+### 2026-07-09 10:45 UTC — pre-push (`main` → origin) @ `00c4cd6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-09 11:03 UTC — pre-push (`main` → origin) @ `00c4cd6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-09 11:04 UTC — commit `70085fb`
+
+- fix(billing): use friendly decline email labels for subscriptions
+
+
+### 2026-07-09 11:04 UTC — pre-push (`main` → origin) @ `70085fb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-09 12:58 UTC — commit `685eb8e`
+
+- feat(billing): send payment-decline notices over WhatsApp
+
+
+### 2026-07-09 12:58 UTC — pre-push (`main` → origin) @ `685eb8e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-10 11:21 UTC — commit `3fbbba6`
+
+- feat(admin): add Message templates catalog and quick email send
+
+
+### 2026-07-10 11:22 UTC — pre-push (`main` → origin) @ `3fbbba6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-10 11:24 UTC — commit `8c58de9`
+
+- feat(admin): add WhatsApp template and SMS quick-send on Message templates
+
+
+### 2026-07-10 11:25 UTC — pre-push (`main` → origin) @ `8c58de9`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-10 11:31 UTC — commit `9271970`
+
+- feat(comms): inbound WhatsApp threads and free-form replies in 24h window
+
+
+### 2026-07-10 11:31 UTC — pre-push (`main` → origin) @ `9271970`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-10 11:43 UTC — commit `1188722`
+
+- feat(billing): per-customer payment reminders preference (manual on, Stripe off)
+
+
+### 2026-07-10 11:43 UTC — pre-push (`main` → origin) @ `1188722`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-12 13:01 UTC — commit `b55e2bc`
+
+- feat(billing): add Stripe sync placeholder on customer status strip
+
+
+### 2026-07-12 13:01 UTC — pre-push (`main` → origin) @ `b55e2bc`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-12 13:38 UTC — commit `ce61d5b`
+
+- feat(billing): redesign customer Billing tab to match sync UX mockup
+
+
+### 2026-07-12 13:38 UTC — pre-push (`main` → origin) @ `ce61d5b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-12 14:10 UTC — commit `fc59fe8`
+
+- feat(billing): unify Payment & plan modal; fix login submit
+
+
+### 2026-07-12 14:10 UTC — pre-push (`main` → origin) @ `fc59fe8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-12 14:21 UTC — commit `f778e5d`
+
+- feat(billing): open Billing settings in a hard-dismiss modal
+
+
+### 2026-07-12 14:21 UTC — pre-push (`main` → origin) @ `f778e5d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-12 14:31 UTC — commit `363a8f8`
+
+- feat(billing): open Device renewals in a hard-dismiss modal
+
+
+### 2026-07-12 14:31 UTC — pre-push (`main` → origin) @ `363a8f8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-12 14:44 UTC — commit `6fbc1c3`
+
+- feat(billing): sync TL vehicle count to Stripe quantity with explicit review
+
+
+### 2026-07-12 14:44 UTC — pre-push (`main` → origin) @ `6fbc1c3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-12 14:45 UTC — commit `c3aca2b`
+
+- fix(billing): keep All devices expanded in Device renewals modal
+
+
+### 2026-07-12 14:45 UTC — pre-push (`main` → origin) @ `c3aca2b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-13 15:26 UTC — commit `cf40d7e`
+
+- feat(devices): add Pickup, SUV, and Truck object types
+
+
+### 2026-07-13 15:26 UTC — pre-push (`main` → origin) @ `cf40d7e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-13 15:45 UTC — commit `3b30d13`
+
+- feat(customers): support multiple Traqcare portal users per customer
+
+
+### 2026-07-13 15:45 UTC — pre-push (`main` → origin) @ `3b30d13`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-13 16:13 UTC — commit `08eb327`
+
+- feat(customers): add portal password reveal and copy-login
+
+
+### 2026-07-13 16:14 UTC — pre-push (`main` → origin) @ `08eb327`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-14 09:34 UTC — commit `8fd7974`
+
+- fix(billing): stop treating failed Stripe renewals as TL invoices
+
+
+### 2026-07-14 09:34 UTC — pre-push (`main` → origin) @ `8fd7974`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-14 09:43 UTC — commit `5babc19`
+
+- feat(admin): add Payment issues KPI on operations overview
+
