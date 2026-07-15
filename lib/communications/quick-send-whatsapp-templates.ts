@@ -47,6 +47,7 @@ export const QUICK_WHATSAPP_TEMPLATES: QuickWhatsAppTemplateDef[] = [
       { key: "2", label: "Amount / term", placeholder: "EC$25 · 1 month · 1 vehicle" },
       { key: "3", label: "Pay link", placeholder: "https://…" },
       { key: "4", label: "Validity", placeholder: "24 hours" },
+      { key: "5", label: "Billing term", placeholder: "3 months" },
     ],
   },
   {
@@ -58,6 +59,7 @@ export const QUICK_WHATSAPP_TEMPLATES: QuickWhatsAppTemplateDef[] = [
       { key: "2", label: "Amount / term", placeholder: "EC$25 · 1 month · 1 vehicle" },
       { key: "3", label: "Pay link", placeholder: "https://…" },
       { key: "4", label: "Validity", placeholder: "24 hours" },
+      { key: "5", label: "Billing term", placeholder: "3 months" },
     ],
   },
   {

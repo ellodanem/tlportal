@@ -55,6 +55,14 @@ Invoiless email reminders remain authoritative for invoice copy; WhatsApp is a s
 | New Invoiless invoice | Admin → Invoices → create (status not Draft) | `TWILIO_WA_TEMPLATE_INVOICE_NEW` |
 | Payment declined | Auto on Stripe decline; resend on Customer → Billing → **Resend WhatsApp** | `TWILIO_WA_TEMPLATE_PAYMENT_DECLINED` |
 
+Stripe payment-link templates should include an auto-charge line after the pay URL:
+
+```
+Once this payment link is paid, your card will *automatically* be charged every *{{5}}* from the payment date.
+```
+
+Variables: `{{1}}` first name · `{{2}}` amount/term/vehicles · `{{3}}` pay link · `{{4}}` validity (e.g. `24 hours`) · `{{5}}` billing term (`1 month` / `3 months` / …).
+
 ## Payment declined (Utility template)
 
 On a Stripe card decline, `handleStripePaymentFailure` notifies the customer over **both** email and WhatsApp (independently), and alerts staff by SMS. Idempotent per Stripe PaymentIntent.

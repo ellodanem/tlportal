@@ -5,6 +5,25 @@ import { useState } from "react";
 import type { CheckoutSendPreview } from "@/app/admin/customers/billing-actions";
 import { CHECKOUT_LINK_VALID_HOURS } from "@/lib/stripe/checkout-messaging";
 
+/** Render WhatsApp *bold* markers for staff preview. */
+function WhatsAppPreviewBody({ text }: { text: string }) {
+  const parts = text.split(/(\*[^*]+\*)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+          return (
+            <strong key={i} className="font-semibold text-zinc-900 dark:text-zinc-100">
+              {part.slice(1, -1)}
+            </strong>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 export function CheckoutSendConfirmDialog({
   open,
   preview,
@@ -151,9 +170,10 @@ export function CheckoutSendConfirmDialog({
                     <span className="text-xs text-zinc-500">{showEmailPreview ? "Hide" : "Show"}</span>
                   </button>
                   {showEmailPreview ? (
-                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap border-t border-zinc-200 px-3 py-2 font-sans text-xs leading-relaxed text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
-                      {preview.emailPreviewText}
-                    </pre>
+                    <div
+                      className="max-h-40 overflow-auto border-t border-zinc-200 px-3 py-2 text-xs leading-relaxed text-zinc-700 dark:border-zinc-700 dark:text-zinc-300 [&_a]:text-emerald-700 [&_a]:underline dark:[&_a]:text-emerald-400 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-zinc-900 dark:[&_strong]:text-zinc-100"
+                      dangerouslySetInnerHTML={{ __html: preview.emailPreviewHtml }}
+                    />
                   ) : null}
                 </div>
               ) : null}
@@ -169,13 +189,14 @@ export function CheckoutSendConfirmDialog({
                   </button>
                   {showWhatsAppPreview ? (
                     <pre className="max-h-48 overflow-auto whitespace-pre-wrap border-t border-zinc-200 px-3 py-2 font-sans text-xs leading-relaxed text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
-                      {preview.whatsAppPreviewText}
+                      <WhatsAppPreviewBody text={preview.whatsAppPreviewText} />
                     </pre>
                   ) : null}
                 </div>
               ) : null}
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                The real payment URL is inserted when you send. Wording matches your Twilio templates.
+                The real payment URL is inserted when you send. WhatsApp wording must match your Twilio templates
+                (auto-charge line uses {"{{5}}"} for the billing term).
               </p>
             </div>
           </>

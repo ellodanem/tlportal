@@ -85,6 +85,7 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
   const checkoutEmail = checkoutInitialEmailBody({
     greetingName: SAMPLE.firstName,
     paymentUrl: SAMPLE.payUrl,
+    durationMonths: 1,
   });
   const checkoutRecovery = checkoutRecoveryEmailBody({
     greetingName: SAMPLE.firstName,
@@ -132,8 +133,9 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
       variables: [
         { token: "Name", meaning: "Customer greeting name" },
         { token: "Pay link", meaning: "Stripe Checkout link" },
+        { token: "Billing term", meaning: "1 month / 3 months / … (auto-charge line)" },
       ],
-      preview: { subject: "Start your Track Lucia subscription", body: checkoutEmail.text },
+      preview: { subject: "Complete your Track Lucia subscription payment", body: checkoutEmail.text },
       config: emailConfig,
     },
     {
@@ -180,10 +182,12 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
         { token: "{{2}}", meaning: "Amount / term / vehicles" },
         { token: "{{3}}", meaning: "Pay link" },
         { token: "{{4}}", meaning: "Validity window" },
+        { token: "{{5}}", meaning: "Billing term (e.g. 3 months) for the auto-charge line" },
       ],
       preview: null,
       config: whatsAppConfig("stripe_payment_link"),
-      manageNote: "Meta-approved Twilio Content template; edit in Twilio.",
+      manageNote:
+        "Meta-approved Twilio Content template; edit in Twilio. Include: Once this payment link is paid, your card will *automatically* be charged every *{{5}}* from the payment date.",
       envVar: "TWILIO_WA_TEMPLATE_STRIPE_PAYMENT_LINK",
     },
     {

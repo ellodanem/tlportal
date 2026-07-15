@@ -75,6 +75,7 @@ export type CheckoutSendPreview = {
   recentSentAt: string | null;
   whatsAppConfigured: boolean;
   emailPreviewText: string;
+  emailPreviewHtml: string;
   whatsAppPreviewText: string;
 };
 
@@ -282,6 +283,10 @@ export async function getStripeCheckoutSendPreview(
     durationMonths: parsed.months,
     vehicleCount: parsed.vehicleCount,
   });
+  const emailPreview = buildStripeCheckoutEmailPreview({
+    greetingName,
+    durationMonths: parsed.months,
+  });
 
   return {
     customerName,
@@ -292,10 +297,12 @@ export async function getStripeCheckoutSendPreview(
     hasRecentLink: Boolean(recent),
     recentSentAt: recent ? recent.toISOString() : null,
     whatsAppConfigured: isTwilioWhatsAppConfigured(),
-    emailPreviewText: buildStripeCheckoutEmailPreview(greetingName),
+    emailPreviewText: emailPreview.text,
+    emailPreviewHtml: emailPreview.html,
     whatsAppPreviewText: buildStripeCheckoutWhatsAppPreview({
       firstName: customer.firstName?.trim() || greetingName,
       amountLine,
+      durationMonths: parsed.months,
       isResend: Boolean(recent),
     }),
   };
@@ -408,6 +415,7 @@ export async function sendStripeCheckoutToCustomerAction(
       const emailBody = checkoutInitialEmailBody({
         greetingName,
         paymentUrl: checkout.url,
+        durationMonths: parsed.months,
       });
       const sent = await sendAppEmail({
         to: emailTo,
@@ -442,6 +450,7 @@ export async function sendStripeCheckoutToCustomerAction(
         paymentUrl: checkout.url,
         checkoutSessionId: checkout.sessionId,
         amountLine,
+        durationMonths: parsed.months,
         isResend: Boolean(recent),
       });
       if (wa.ok) {
@@ -637,6 +646,7 @@ export async function emailStripeCheckoutLinkAction(
     const emailBody = checkoutInitialEmailBody({
       greetingName: name,
       paymentUrl: checkout.url,
+      durationMonths: parsed.months,
     });
 
     const sent = await sendAppEmail({

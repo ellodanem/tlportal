@@ -5,10 +5,10 @@ import type { Customer } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
 import { formatPlanTerm, formatXcd } from "@/lib/subscription-options/display";
+import { checkoutAutoChargeNotice, CHECKOUT_LINK_VALID_HOURS } from "@/lib/stripe/checkout-messaging";
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { toWhatsAppAddress } from "@/lib/twilio/phone";
 import { sendTwilioWhatsAppContent, type SendBillingWhatsAppResult } from "@/lib/twilio/whatsapp-send";
-import { CHECKOUT_LINK_VALID_HOURS } from "@/lib/stripe/checkout-messaging";
 
 export type CustomerWhatsAppDeliveryKind =
   | "stripe_checkout"
@@ -64,6 +64,7 @@ export async function sendStripePaymentLinkWhatsApp(input: {
   paymentUrl: string;
   checkoutSessionId: string;
   amountLine: string;
+  durationMonths: number;
   isResend: boolean;
 }): Promise<SendBillingWhatsAppResult> {
   if (!isTwilioWhatsAppConfigured()) {
@@ -81,6 +82,7 @@ export async function sendStripePaymentLinkWhatsApp(input: {
     "2": input.amountLine,
     "3": input.paymentUrl,
     "4": `${CHECKOUT_LINK_VALID_HOURS} hours`,
+    "5": checkoutAutoChargeNotice(input.durationMonths).termLabel,
   });
 
   if (result.ok) {
