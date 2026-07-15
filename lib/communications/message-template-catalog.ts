@@ -187,7 +187,7 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
       preview: null,
       config: whatsAppConfig("stripe_payment_link"),
       manageNote:
-        "Meta-approved Twilio Content template; edit in Twilio. Include: Once this payment link is paid, your card will *automatically* be charged every *{{5}}* from the payment date.",
+        "Meta-approved Twilio templates tl_stripe_payment_link_2 / _resend_2. Env SIDs: HXa01e85… (initial), HX0d1829… (resend). Body includes auto-charge line with *automatically* and *{{5}}*.",
       envVar: "TWILIO_WA_TEMPLATE_STRIPE_PAYMENT_LINK",
     },
     {

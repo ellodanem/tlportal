@@ -7,7 +7,10 @@ import {
 
 const PAY_LINK_PLACEHOLDER = "https://… (Stripe Checkout link — created when you send)";
 
-/** Plain-text preview matching Twilio `tl_stripe_payment_link` / `_resend` templates. */
+/**
+ * Plain-text preview matching Twilio Content templates:
+ * `tl_stripe_payment_link_2` / `tl_stripe_payment_link_resend_2`.
+ */
 export function buildStripeCheckoutWhatsAppPreview(input: {
   firstName: string;
   amountLine: string;
@@ -18,11 +21,13 @@ export function buildStripeCheckoutWhatsAppPreview(input: {
     ? "This is an automated follow-up from Track Lucia. Your subscription payment is still pending."
     : "This is an automated message from Track Lucia. Use the link below to complete your subscription payment.";
 
+  const expiryPaidClause = input.isResend
+    ? "If you have already paid, you can ignore this message."
+    : "If you already paid, you can ignore this message.";
+
   const autoCharge = checkoutAutoChargeNotice(input.durationMonths).whatsapp;
 
   return [
-    "AUTOMATED MESSAGE — PLEASE DO NOT REPLY",
-    "",
     `Hello ${input.firstName},`,
     "",
     intro,
@@ -33,10 +38,11 @@ export function buildStripeCheckoutWhatsAppPreview(input: {
     "",
     autoCharge,
     "",
-    `This link expires in about ${CHECKOUT_LINK_VALID_HOURS} hours. If you have already paid, you can ignore this message.`,
+    `This link expires in about ${CHECKOUT_LINK_VALID_HOURS} hours. ${expiryPaidClause}`,
     "",
     "— Track Lucia",
-    "Billed by Ellodane Enterprises",
+    "",
+    "AUTOMATED MESSAGE — PLEASE DO NOT REPLY",
   ].join("\n");
 }
 
