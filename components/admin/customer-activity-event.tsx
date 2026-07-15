@@ -134,6 +134,70 @@ function PaymentDeclineWhatsAppResentActivity({ event }: { event: ActivityEventR
   );
 }
 
+function PaymentLinkSentActivity({ event }: { event: ActivityEventRow }) {
+  const payload = event.payload as {
+    channels?: { email?: boolean; whatsapp?: boolean };
+    emailTo?: string | null;
+    whatsappTo?: string | null;
+    emailError?: string | null;
+    whatsappError?: string | null;
+  } | null;
+
+  const emailSent = payload?.channels?.email === true;
+  const whatsAppSent = payload?.channels?.whatsapp === true;
+  const emailTone: ChipTone = emailSent ? "emerald" : payload?.emailError ? "amber" : "zinc";
+  const whatsAppTone: ChipTone = whatsAppSent ? "emerald" : payload?.whatsappError ? "amber" : "zinc";
+
+  return (
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Payment link sent to customer</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <ActivityChip
+          label={emailSent ? "Email accepted" : payload?.emailError ? "Email failed" : "Email not sent"}
+          tone={emailTone}
+        />
+        <ActivityChip
+          label={whatsAppSent ? "WhatsApp accepted" : payload?.whatsappError ? "WhatsApp failed" : "WhatsApp not sent"}
+          tone={whatsAppTone}
+        />
+        {payload?.emailTo ? <ActivityChip label={payload.emailTo} /> : null}
+        {payload?.whatsappTo ? <ActivityChip label={payload.whatsappTo} /> : null}
+      </div>
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">billing · payment link sent</p>
+    </div>
+  );
+}
+
+function CommunicationMessageSentActivity({ event }: { event: ActivityEventRow }) {
+  const payload = event.payload as {
+    channel?: string;
+    to?: string | null;
+    kind?: string | null;
+    templateKind?: string | null;
+    messageSid?: string | null;
+  } | null;
+
+  const channel = payload?.channel === "email" ? "Email" : payload?.channel === "whatsapp" ? "WhatsApp" : "Message";
+  const kindLabel =
+    payload?.kind === "stripe_checkout"
+      ? "Checkout payment link"
+      : payload?.templateKind
+        ? payload.templateKind
+        : null;
+
+  return (
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{event.summary}</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <ActivityChip label={`${channel} accepted`} tone="emerald" />
+        {kindLabel ? <ActivityChip label={kindLabel} /> : null}
+        {payload?.to ? <ActivityChip label={payload.to} /> : null}
+      </div>
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">communication · message sent</p>
+    </div>
+  );
+}
+
 export function CustomerActivityEvent({ event }: { event: ActivityEventRow }) {
   if (event.category === "billing.payment_failed") {
     return <PaymentFailedActivity event={event} />;
@@ -143,6 +207,12 @@ export function CustomerActivityEvent({ event }: { event: ActivityEventRow }) {
   }
   if (event.category === "billing.payment_decline_whatsapp_resent") {
     return <PaymentDeclineWhatsAppResentActivity event={event} />;
+  }
+  if (event.category === "communication.message_sent") {
+    return <CommunicationMessageSentActivity event={event} />;
+  }
+  if (event.category === "billing" && event.summary === "Payment link sent to customer") {
+    return <PaymentLinkSentActivity event={event} />;
   }
 
   return (

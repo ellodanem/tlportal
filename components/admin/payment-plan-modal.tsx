@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import {
   getStripeCheckoutSendPreview,
   sendStripeCheckoutToCustomerAction,
@@ -12,6 +12,7 @@ import {
 import { CheckoutSendConfirmDialog } from "@/components/admin/checkout-send-confirm-dialog";
 import { checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import { formatXcd } from "@/lib/subscription-options/display";
+
 
 const initial: BillingActionState = { error: null };
 
@@ -96,6 +97,7 @@ function PaymentPlanModalBody({
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [sendPreview, setSendPreview] = useState<CheckoutSendPreview | null>(null);
   const [previewPending, startPreview] = useTransition();
+  const sendWasPendingRef = useRef(false);
   const paymentUrl = checkoutState.url ?? sendState.url;
   const paymentMessage = checkoutState.message ?? sendState.message;
   const paymentEmailSent = checkoutState.emailSent ?? sendState.emailSent;
@@ -108,6 +110,17 @@ function PaymentPlanModalBody({
   const checkoutError = checkoutState.error ?? sendState.error;
   const busy = checkoutPending || sendPending || pricingPending || previewPending;
   const closeLabel = paymentUrl ? "Done" : "Back to billing";
+
+  useEffect(() => {
+    if (sendPending) {
+      sendWasPendingRef.current = true;
+      return;
+    }
+    if (sendWasPendingRef.current && sendDialogOpen) {
+      sendWasPendingRef.current = false;
+      setSendDialogOpen(false);
+    }
+  }, [sendPending, sendDialogOpen]);
 
   function openSendDialog() {
     const form = formRef.current;
@@ -137,7 +150,6 @@ function PaymentPlanModalBody({
     if (opts.sendEmail) fd.set("sendEmail", "on");
     if (opts.sendWhatsApp) fd.set("sendWhatsApp", "on");
     if (opts.forceResend) fd.set("forceResend", "on");
-    setSendDialogOpen(false);
     sendFormAction(fd);
   }
 
@@ -153,7 +165,8 @@ function PaymentPlanModalBody({
           <button
             type="button"
             onClick={onClose}
-            className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            disabled={sendPending}
+            className="text-sm font-medium text-emerald-700 hover:underline disabled:opacity-60 dark:text-emerald-400"
           >
             ← {closeLabel}
           </button>
@@ -290,8 +303,14 @@ function PaymentPlanModalBody({
             <CheckoutPaymentLink
               url={paymentUrl}
               message={paymentMessage}
+              emailAttempted={sendState.emailAttempted}
+              whatsappAttempted={sendState.whatsappAttempted}
               emailSent={paymentEmailSent}
               whatsappSent={paymentWhatsAppSent}
+              emailError={sendState.emailError}
+              whatsappError={sendState.whatsappError}
+              emailTo={sendState.emailTo}
+              whatsappTo={sendState.whatsappTo}
             />
           ) : null}
         </div>
@@ -300,7 +319,8 @@ function PaymentPlanModalBody({
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900"
+            disabled={sendPending}
+            className="w-full rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900"
           >
             {closeLabel}
           </button>
@@ -318,18 +338,76 @@ function PaymentPlanModalBody({
   );
 }
 
+function ChannelStatusRow({
+  label,
+  attempted,
+  sent,
+  error,
+  to,
+  successDetail,
+}: {
+  label: string;
+  attempted?: boolean;
+  sent?: boolean;
+  error?: string | null;
+  to?: string | null;
+  successDetail: string;
+}) {
+  if (!attempted && !sent && !error) return null;
+
+  const tone =
+    sent === true
+      ? "text-emerald-800 dark:text-emerald-200"
+      : error
+        ? "text-amber-900 dark:text-amber-100"
+        : "text-zinc-600 dark:text-zinc-400";
+  const badge =
+    sent === true
+      ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100"
+      : error
+        ? "bg-amber-100 text-amber-950 dark:bg-amber-950/50 dark:text-amber-100"
+        : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+  const status = sent === true ? "Accepted" : error ? "Failed" : "Not sent";
+
+  return (
+    <div className={`mt-2 rounded-md border border-emerald-200/80 bg-white/70 px-2.5 py-2 dark:border-emerald-900/60 dark:bg-zinc-950/40 ${tone}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${badge}`}>{status}</span>
+      </div>
+      {to ? <p className="mt-0.5 text-xs opacity-90">To: {to}</p> : null}
+      {sent ? <p className="mt-0.5 text-xs opacity-90">{successDetail}</p> : null}
+      {error ? <p className="mt-0.5 text-xs opacity-90">{error}</p> : null}
+    </div>
+  );
+}
+
 function CheckoutPaymentLink({
   url,
   message,
+  emailAttempted,
+  whatsappAttempted,
   emailSent,
   whatsappSent,
+  emailError,
+  whatsappError,
+  emailTo,
+  whatsappTo,
 }: {
   url: string;
   message?: string;
+  emailAttempted?: boolean;
+  whatsappAttempted?: boolean;
   emailSent?: boolean;
   whatsappSent?: boolean;
+  emailError?: string | null;
+  whatsappError?: string | null;
+  emailTo?: string | null;
+  whatsappTo?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
+  const showSendResults =
+    emailAttempted || whatsappAttempted || emailSent || whatsappSent || emailError || whatsappError;
 
   async function copyLink() {
     try {
@@ -345,12 +423,31 @@ function CheckoutPaymentLink({
     <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
       <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Payment link ready</p>
       {message ? <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">{message}</p> : null}
-      {emailSent ? (
-        <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">Email sent via your SMTP settings.</p>
+
+      {showSendResults ? (
+        <div className="mt-2">
+          <ChannelStatusRow
+            label="Email"
+            attempted={emailAttempted}
+            sent={emailSent}
+            error={emailError}
+            to={emailTo}
+            successDetail="Accepted by your SMTP settings (not an inbox delivery receipt)."
+          />
+          <ChannelStatusRow
+            label="WhatsApp"
+            attempted={whatsappAttempted}
+            sent={whatsappSent}
+            error={whatsappError}
+            to={whatsappTo}
+            successDetail="Accepted by Twilio and logged under Customer → Messages."
+          />
+          <p className="mt-2 text-xs text-emerald-800/90 dark:text-emerald-200/90">
+            Sends are also recorded in customer activity (Communications).
+          </p>
+        </div>
       ) : null}
-      {whatsappSent ? (
-        <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">WhatsApp sent via Twilio.</p>
-      ) : null}
+
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="text"

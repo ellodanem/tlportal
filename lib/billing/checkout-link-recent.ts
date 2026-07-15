@@ -26,6 +26,11 @@ export async function recordCheckoutLinkSentToCustomer(input: {
   checkoutSessionId: string;
   channels: { email: boolean; whatsapp: boolean };
   paymentUrl: string;
+  emailTo?: string | null;
+  whatsappTo?: string | null;
+  emailError?: string | null;
+  whatsappError?: string | null;
+  whatsappMessageSid?: string | null;
 }): Promise<void> {
   const { recordOperationalEvent } = await import("@/lib/services/operational-event-service");
   await recordOperationalEvent({
@@ -37,6 +42,11 @@ export async function recordCheckoutLinkSentToCustomer(input: {
       checkoutSessionId: input.checkoutSessionId,
       channels: input.channels,
       paymentUrl: input.paymentUrl,
+      emailTo: input.emailTo ?? null,
+      whatsappTo: input.whatsappTo ?? null,
+      emailError: input.emailError ?? null,
+      whatsappError: input.whatsappError ?? null,
+      whatsappMessageSid: input.whatsappMessageSid ?? null,
     },
   });
 }

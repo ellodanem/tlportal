@@ -31,8 +31,9 @@ import {
   buildStripeCheckoutAmountLine,
   sendStripePaymentLinkWhatsApp,
 } from "@/lib/billing/customer-whatsapp";
+import { recordOutboundWhatsAppMessage } from "@/lib/communications/whatsapp-conversation-service";
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
-import { toWhatsAppAddress } from "@/lib/twilio/phone";
+import { toSmsAddress, toWhatsAppAddress } from "@/lib/twilio/phone";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import {
   resendPaymentDeclineEmailForCustomer,
@@ -51,6 +52,12 @@ export type BillingActionState = {
   url?: string;
   emailSent?: boolean;
   whatsappSent?: boolean;
+  emailError?: string | null;
+  whatsappError?: string | null;
+  emailTo?: string | null;
+  whatsappTo?: string | null;
+  emailAttempted?: boolean;
+  whatsappAttempted?: boolean;
   message?: string;
 };
 
@@ -165,6 +172,7 @@ function revalidateCustomerBillingPaths(customerId: string) {
   revalidatePath(`/admin/customers/${customerId}/edit`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/customers/${customerId}/messages`);
 }
 
 export async function setBillingModeAction(
@@ -380,29 +388,51 @@ export async function sendStripeCheckoutToCustomerAction(
       vehicleCount: parsed.vehicleCount,
     });
 
+    const emailAttempted = Boolean(flags.sendEmail && customer.email?.trim());
+    const whatsappAttempted = Boolean(flags.sendWhatsApp);
+    const emailTo = emailAttempted ? customer.email!.trim() : null;
+    const whatsappTo = whatsappAttempted ? toSmsAddress(customer.phone) : null;
+
     let emailSent = false;
     let whatsappSent = false;
+    let emailError: string | null = null;
+    let whatsappError: string | null = null;
+    let whatsappMessageSid: string | null = null;
     const partialErrors: string[] = [];
 
-    if (flags.sendEmail && customer.email?.trim()) {
+    if (emailAttempted && emailTo) {
       const emailBody = checkoutInitialEmailBody({
         greetingName,
         paymentUrl: checkout.url,
       });
       const sent = await sendAppEmail({
-        to: customer.email.trim(),
+        to: emailTo,
         subject: "Complete your Track Lucia subscription payment",
         text: emailBody.text,
         html: emailBody.html,
       });
       if (sent.ok) {
         emailSent = true;
+        await recordOperationalEvent({
+          category: "communication.message_sent",
+          customerId: parsed.customerId,
+          actorUserId: session.sub,
+          summary: `Checkout payment link emailed to ${emailTo}`,
+          payload: {
+            channel: "email",
+            kind: "stripe_checkout",
+            to: emailTo,
+            checkoutSessionId: checkout.sessionId,
+            paymentUrl: checkout.url,
+          },
+        });
       } else {
+        emailError = sent.error;
         partialErrors.push(`Email: ${sent.error}`);
       }
     }
 
-    if (flags.sendWhatsApp) {
+    if (whatsappAttempted) {
       const wa = await sendStripePaymentLinkWhatsApp({
         customer,
         paymentUrl: checkout.url,
@@ -412,7 +442,35 @@ export async function sendStripeCheckoutToCustomerAction(
       });
       if (wa.ok) {
         whatsappSent = true;
+        whatsappMessageSid = wa.messageSid;
+        const templateKind = recent ? "stripe_payment_link_resend" : "stripe_payment_link";
+        if (whatsappTo) {
+          await recordOutboundWhatsAppMessage({
+            phoneE164: whatsappTo,
+            body: `[template:${templateKind}] ${amountLine} · ${checkout.url}`,
+            messageSid: wa.messageSid,
+            actorUserId: session.sub,
+            kind: "template",
+          });
+        }
+        await recordOperationalEvent({
+          category: "communication.message_sent",
+          customerId: parsed.customerId,
+          actorUserId: session.sub,
+          summary: `Checkout payment link WhatsApp sent to ${customer.phone ?? whatsappTo ?? "customer"}`,
+          payload: {
+            channel: "whatsapp",
+            kind: "stripe_checkout",
+            to: customer.phone ?? whatsappTo,
+            templateKind,
+            messageSid: wa.messageSid,
+            checkoutSessionId: checkout.sessionId,
+            paymentUrl: checkout.url,
+            amountLine,
+          },
+        });
       } else {
+        whatsappError = wa.error;
         partialErrors.push(`WhatsApp: ${wa.error}`);
       }
     }
@@ -424,13 +482,30 @@ export async function sendStripeCheckoutToCustomerAction(
         checkoutSessionId: checkout.sessionId,
         channels: { email: emailSent, whatsapp: whatsappSent },
         paymentUrl: checkout.url,
+        emailTo,
+        whatsappTo: customer.phone ?? whatsappTo,
+        emailError,
+        whatsappError,
+        whatsappMessageSid,
       });
     }
+
+    const channelResult = {
+      emailAttempted,
+      whatsappAttempted,
+      emailSent,
+      whatsappSent,
+      emailError,
+      whatsappError,
+      emailTo,
+      whatsappTo: customer.phone ?? whatsappTo,
+    };
 
     if (!emailSent && !whatsappSent) {
       return {
         error: partialErrors.join(" ") || "Could not send payment link.",
         url: checkout.url,
+        ...channelResult,
       };
     }
 
@@ -446,8 +521,7 @@ export async function sendStripeCheckoutToCustomerAction(
     return {
       error: partialErrors.length > 0 ? partialErrors.join(" ") : null,
       url: checkout.url,
-      emailSent,
-      whatsappSent,
+      ...channelResult,
       message: `Payment link sent via ${channelParts.join(" and ")}. ${checkoutInitialLinkNotice()} ${pricingNote}`,
     };
   } catch (e) {
