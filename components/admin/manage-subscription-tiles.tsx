@@ -28,6 +28,7 @@ export function ManageSubscriptionTiles({
   planOptions,
   defaultMonthlyRateXcd,
   stripeMonthlyRateXcd,
+  savedPlanTermMonths,
   defaultVehicleCount,
   catalogConfigured,
   stripeCustomerId,
@@ -42,6 +43,7 @@ export function ManageSubscriptionTiles({
   planOptions: PlanOption[];
   defaultMonthlyRateXcd: number;
   stripeMonthlyRateXcd: number | null;
+  savedPlanTermMonths: number | null;
   defaultVehicleCount: number;
   catalogConfigured: boolean;
   stripeCustomerId: string | null;
@@ -114,6 +116,7 @@ export function ManageSubscriptionTiles({
         planOptions={planOptions}
         defaultMonthlyRateXcd={defaultMonthlyRateXcd}
         stripeMonthlyRateXcd={stripeMonthlyRateXcd}
+        savedPlanTermMonths={savedPlanTermMonths}
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
       />

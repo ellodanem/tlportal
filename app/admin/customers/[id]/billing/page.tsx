@@ -46,6 +46,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     planOptions,
     defaultMonthlyRate,
     savedMonthlyRate,
+    savedPlanTermMonths,
     defaultVehicleCount,
     catalogConfigured,
     billingSetup,
@@ -101,6 +102,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         planOptions={planOptions}
         defaultMonthlyRateXcd={defaultMonthlyRate}
         stripeMonthlyRateXcd={savedMonthlyRate}
+        savedPlanTermMonths={savedPlanTermMonths}
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
         stripeCustomerId={stripeAccount?.externalCustomerId ?? null}

@@ -11,7 +11,7 @@ import {
 } from "@/app/admin/customers/billing-actions";
 import { CheckoutSendConfirmDialog } from "@/components/admin/checkout-send-confirm-dialog";
 import { checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
-import { formatXcd } from "@/lib/subscription-options/display";
+import { formatPlanTerm, formatXcd } from "@/lib/subscription-options/display";
 
 
 const initial: BillingActionState = { error: null };
@@ -34,6 +34,19 @@ function ratePresetFromSaved(
   return { preset: "custom", custom: String(stripeMonthlyRateXcd) };
 }
 
+function resolveInitialPlanTerm(
+  planOptions: PlanOption[],
+  savedPlanTermMonths: number | null,
+): number {
+  if (
+    savedPlanTermMonths != null &&
+    planOptions.some((p) => p.durationMonths === savedPlanTermMonths)
+  ) {
+    return savedPlanTermMonths;
+  }
+  return planOptions[0]?.durationMonths ?? 1;
+}
+
 /**
  * Hard-dismiss modal: only Back / Done close it (no backdrop click, no Esc).
  * One surface for tier, term, vehicles + Send / Create link / Save pricing.
@@ -45,6 +58,7 @@ export function PaymentPlanModal({
   planOptions,
   defaultMonthlyRateXcd,
   stripeMonthlyRateXcd,
+  savedPlanTermMonths,
   defaultVehicleCount,
   catalogConfigured,
 }: {
@@ -54,6 +68,7 @@ export function PaymentPlanModal({
   planOptions: PlanOption[];
   defaultMonthlyRateXcd: number;
   stripeMonthlyRateXcd: number | null;
+  savedPlanTermMonths: number | null;
   defaultVehicleCount: number;
   catalogConfigured: boolean;
 }) {
@@ -61,12 +76,13 @@ export function PaymentPlanModal({
 
   return (
     <PaymentPlanModalBody
-      key={`${customerId}-${stripeMonthlyRateXcd ?? "default"}`}
+      key={`${customerId}-${stripeMonthlyRateXcd ?? "default"}-${savedPlanTermMonths ?? "none"}-${defaultVehicleCount}`}
       onClose={onClose}
       customerId={customerId}
       planOptions={planOptions}
       defaultMonthlyRateXcd={defaultMonthlyRateXcd}
       stripeMonthlyRateXcd={stripeMonthlyRateXcd}
+      savedPlanTermMonths={savedPlanTermMonths}
       defaultVehicleCount={defaultVehicleCount}
       catalogConfigured={catalogConfigured}
     />
@@ -79,6 +95,7 @@ function PaymentPlanModalBody({
   planOptions,
   defaultMonthlyRateXcd,
   stripeMonthlyRateXcd,
+  savedPlanTermMonths,
   defaultVehicleCount,
   catalogConfigured,
 }: {
@@ -87,6 +104,7 @@ function PaymentPlanModalBody({
   planOptions: PlanOption[];
   defaultMonthlyRateXcd: number;
   stripeMonthlyRateXcd: number | null;
+  savedPlanTermMonths: number | null;
   defaultVehicleCount: number;
   catalogConfigured: boolean;
 }) {
@@ -103,6 +121,9 @@ function PaymentPlanModalBody({
   const paymentEmailSent = checkoutState.emailSent ?? sendState.emailSent;
   const paymentWhatsAppSent = sendState.whatsappSent;
   const saved = ratePresetFromSaved(stripeMonthlyRateXcd, defaultMonthlyRateXcd);
+  const initialPlanTerm = resolveInitialPlanTerm(planOptions, savedPlanTermMonths);
+  const savedRateLabel = formatXcd(stripeMonthlyRateXcd ?? defaultMonthlyRateXcd);
+  const hasSavedPricing = savedPlanTermMonths != null || stripeMonthlyRateXcd != null;
   const [ratePreset, setRatePreset] = useState(saved.preset);
   const [customRate, setCustomRate] = useState(saved.custom);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -181,6 +202,16 @@ function PaymentPlanModalBody({
             Set tier, term, and vehicles — then send a Checkout link, create a link only, or save pricing without
             sending.
           </p>
+          {hasSavedPricing ? (
+            <p className="mt-2 rounded-md border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+              <span className="font-medium">Currently saved: </span>
+              {savedPlanTermMonths != null ? formatPlanTerm(savedPlanTermMonths) : "term unset"}
+              {" · "}
+              {savedRateLabel}/mo per vehicle
+              {" · "}
+              {defaultVehicleCount} vehicle{defaultVehicleCount === 1 ? "" : "s"}
+            </p>
+          ) : null}
           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
             {ratePreset === "custom"
               ? "Custom tiers use dynamic per-vehicle pricing."
@@ -235,7 +266,7 @@ function PaymentPlanModalBody({
                   <select
                     name="durationMonths"
                     className="mt-1 block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                    defaultValue={String(planOptions[0]?.durationMonths ?? 1)}
+                    defaultValue={String(initialPlanTerm)}
                   >
                     {planOptions.map((p) => (
                       <option key={p.durationMonths} value={p.durationMonths}>

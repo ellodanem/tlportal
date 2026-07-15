@@ -129,6 +129,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     planOptions,
     defaultMonthlyRate,
     savedMonthlyRate,
+    savedPlanTermMonths: customerSubscription?.planTermMonths ?? null,
     defaultVehicleCount,
     catalogConfigured,
     billingSetup,

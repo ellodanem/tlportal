@@ -17,6 +17,10 @@ import {
   generateAndStorePaidInvoicePdf,
 } from "@/lib/services/billing-paid-pdf-service";
 import { sendPaidInvoiceReceiptEmail } from "@/lib/services/billing-paid-receipt-email-service";
+import {
+  createPendingCustomerSubscription,
+  getCurrentCustomerSubscription,
+} from "@/lib/services/customer-subscription-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import {
   findRecentCheckoutLinkSentAt,
@@ -45,7 +49,7 @@ import {
   parseMonthlyRateXcd,
   parseVehicleCount,
 } from "@/lib/stripe/checkout-pricing";
-import type { CustomerBillingMode, PaymentRemindersPreference } from "@prisma/client";
+import { Prisma, type CustomerBillingMode, type PaymentRemindersPreference } from "@prisma/client";
 
 export type BillingActionState = {
   error: string | null;
@@ -674,17 +678,60 @@ export async function setStripeMonthlyRateAction(
     return { error: "Missing customer id." };
   }
 
+  const months = Number(String(formData.get("durationMonths") ?? ""));
+  if (![1, 3, 6, 12].includes(months)) {
+    return { error: "Choose a valid plan term (1, 3, 6, or 12 months)." };
+  }
+  const vehicleCount = parseVehicleCount(String(formData.get("vehicleCount") ?? "")) ?? 1;
+
   try {
     const saved = await persistStripeMonthlyRateFromForm(customerId, formData, session.sub);
     if ("error" in saved) {
       return { error: saved.error };
     }
+
+    const rateRaw = String(formData.get("monthlyRateXcd") ?? "").trim();
+    const defaultMonthly = await getDefaultMonthlyRateXcd();
+    let customMonthly: number | null = null;
+    if (rateRaw === "custom") {
+      customMonthly = parseMonthlyRateXcd(String(formData.get("customMonthlyRateXcd") ?? ""));
+    }
+    const { monthlyRateXcd } = effectiveMonthlyRateForCheckout(rateRaw, customMonthly, defaultMonthly);
+
+    const current = await getCurrentCustomerSubscription(customerId);
+    const canWritePending =
+      !current ||
+      current.status === "canceled" ||
+      (current.status === "pending_payment" && !current.stripeSubscriptionId);
+
+    if (canWritePending) {
+      if (current?.status === "pending_payment" && !current.stripeSubscriptionId) {
+        await prisma.customerSubscription.update({
+          where: { id: current.id },
+          data: {
+            planTermMonths: months,
+            monthlyRateXcd:
+              monthlyRateXcd != null && monthlyRateXcd > 0
+                ? new Prisma.Decimal(monthlyRateXcd)
+                : null,
+            vehicleCount,
+          },
+        });
+      } else {
+        await createPendingCustomerSubscription({
+          customerId,
+          planTermMonths: months,
+          monthlyRateXcd,
+          vehicleCount,
+        });
+      }
+    }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Could not save monthly rate." };
+    return { error: e instanceof Error ? e.message : "Could not save pricing." };
   }
 
   revalidateCustomerBillingPaths(customerId);
-  return { error: null, message: "Monthly rate saved." };
+  return { error: null, message: "Pricing saved." };
 }
 
 export async function openStripePortalAction(customerId: string): Promise<BillingActionState> {
