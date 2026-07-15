@@ -2947,3 +2947,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-07-15 10:35 UTC — commit `19ac172`
+
+- docs: record push entry in project context log
+
+
+### 2026-07-15 10:35 UTC — pre-push (`main` → origin) @ `19ac172`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-15 10:59 UTC — commit `960ea3c`
+
+- Align WhatsApp checkout preview with approved Twilio payment-link templates.
+
+
+### 2026-07-15 10:59 UTC — pre-push (`main` → origin) @ `960ea3c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
