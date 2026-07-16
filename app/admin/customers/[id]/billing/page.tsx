@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
 import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-status-strip";
+import { OutstandingInvoiceReminderPanel } from "@/components/admin/outstanding-invoice-reminder-panel";
 import { CustomerPaymentDeclineFollowUpCard } from "@/components/admin/customer-payment-decline-follow-up";
 import { CustomerRenewalOpsPanel } from "@/components/admin/customer-renewal-ops-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
@@ -55,6 +56,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     stripeSync,
     renewalAssignments,
     paymentDeclineFollowUp,
+    outstandingReminderCandidates,
   } = data;
 
   const title = customerDisplayName(customer);
@@ -152,6 +154,16 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         customerId={customer.id}
         billingMode={customer.billingMode}
         paymentReminders={customer.paymentReminders}
+      />
+
+      <OutstandingInvoiceReminderPanel
+        customerId={customer.id}
+        customerName={title}
+        greetingName={customer.firstName?.trim() || customer.company?.trim() || title}
+        customerEmail={customer.email}
+        customerPhone={customer.phone}
+        whatsAppConfigured={isTwilioWhatsAppConfigured()}
+        candidates={outstandingReminderCandidates}
       />
 
       {paymentDeclineFollowUp ? (

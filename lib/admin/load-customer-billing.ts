@@ -1,6 +1,7 @@
 import "server-only";
 
 import { toBillingInvoiceClientRow } from "@/lib/admin/billing-invoice-client";
+import { listOutstandingInvoiceReminderCandidates } from "@/lib/billing/outstanding-invoice-reminder-service";
 import { prisma } from "@/lib/db";
 import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
 import { isCatalogRateTier } from "@/lib/domain/billing-catalog";
@@ -58,6 +59,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     billingSetup,
     renewalAssignments,
     paymentDeclineFollowUp,
+    outstandingReminderCandidates,
   ] = await Promise.all([
       getInvoilessExternalCustomerId(customer.id),
       getStripeBillingAccount(customer.id),
@@ -71,6 +73,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
       getBillingSetupStatus(customer.id),
       listActiveAssignmentsForRenewal(customer.id),
       getLatestPaymentDeclineFollowUpForCustomer(customer.id),
+      listOutstandingInvoiceReminderCandidates(customer.id),
     ]);
 
   const stripeMeta = stripeAccount ? parseStripeBillingMetadata(stripeAccount.metadata) : null;
@@ -138,6 +141,7 @@ export async function loadCustomerBillingPageData(customerId: string) {
     subscriptionSummary,
     stripeSync,
     paymentDeclineFollowUp,
+    outstandingReminderCandidates,
     renewalAssignments: renewalAssignments.map((a) => ({
       id: a.id,
       intervalMonths: a.intervalMonths,

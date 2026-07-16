@@ -3,6 +3,7 @@ export type QuickWhatsAppTemplateKind =
   | "stripe_payment_link"
   | "stripe_payment_link_resend"
   | "invoice_new"
+  | "outstanding_invoices"
   | "due_5d"
   | "due_3d"
   | "due_0d"
@@ -72,6 +73,19 @@ export const QUICK_WHATSAPP_TEMPLATES: QuickWhatsAppTemplateDef[] = [
       { key: "3", label: "Amount due", placeholder: "EC$25.00" },
       { key: "4", label: "Due date", placeholder: "15 July 2026" },
       { key: "5", label: "Pay link", placeholder: "https://…" },
+    ],
+  },
+  {
+    kind: "outstanding_invoices",
+    name: "Outstanding invoices",
+    description: "Reminder covering multiple outstanding invoices and payment links.",
+    fields: [
+      { key: "1", label: "Greeting name", fromFirstName: true },
+      {
+        key: "2",
+        label: "Invoice lines",
+        placeholder: "• Hardware invoice - Payment link: https://...\n• Subscription invoice - Payment link: https://...",
+      },
     ],
   },
   {

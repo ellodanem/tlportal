@@ -209,6 +209,21 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
       envVar: "TWILIO_WA_TEMPLATE_INVOICE_NEW",
     },
     {
+      id: "whatsapp.outstanding_invoices",
+      name: "Outstanding invoices (WhatsApp)",
+      channel: "whatsapp",
+      audience: "customer",
+      trigger: "Staff sends one reminder covering multiple unpaid invoices from Customer → Billing.",
+      variables: [
+        { token: "{{1}}", meaning: "Greeting name" },
+        { token: "{{2}}", meaning: "Prebuilt invoice list with payment links" },
+      ],
+      preview: null,
+      config: whatsAppConfig("outstanding_invoices"),
+      manageNote: "Meta-approved Twilio Content template; TL Portal builds the invoice list for {{2}}.",
+      envVar: "TWILIO_WA_TEMPLATE_OUTSTANDING_INVOICES",
+    },
+    {
       id: "whatsapp.reminders",
       name: "Payment reminders (WhatsApp)",
       channel: "whatsapp",

@@ -13,7 +13,8 @@ export type TwilioWhatsAppCustomerTemplateKey =
   | "stripe_payment_link"
   | "stripe_payment_link_resend"
   | "invoice_new"
-  | "payment_declined";
+  | "payment_declined"
+  | "outstanding_invoices";
 
 export type TwilioWhatsAppTemplateKey =
   | TwilioWhatsAppReminderTemplateKey
@@ -29,6 +30,7 @@ const TEMPLATE_ENV: Record<TwilioWhatsAppTemplateKey, string> = {
   stripe_payment_link_resend: "TWILIO_WA_TEMPLATE_STRIPE_PAYMENT_LINK_RESEND",
   invoice_new: "TWILIO_WA_TEMPLATE_INVOICE_NEW",
   payment_declined: "TWILIO_WA_TEMPLATE_PAYMENT_DECLINED",
+  outstanding_invoices: "TWILIO_WA_TEMPLATE_OUTSTANDING_INVOICES",
 };
 
 export function isTwilioWhatsAppConfigured(): boolean {
