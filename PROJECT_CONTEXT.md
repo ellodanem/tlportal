@@ -3026,3 +3026,28 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - git push `main` → `origin` succeeded.
 
+
+### 2026-07-16 09:39 UTC — commit `8286d76`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-07-16 09:39 UTC — pre-push (`main` → origin) @ `8286d76`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-16 09:51 UTC — commit `66e30b2`
+
+- Combine payment reminders into one section with modals.
+
+
+### 2026-07-16 09:51 UTC — pre-push (`main` → origin) @ `66e30b2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-16 — push (`main` → origin) @ `66e30b2`
+
+- git push `main` → `origin` succeeded.
+
