@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { sendAppEmail } from "@/lib/email/send-mail";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 
+import { getCheckoutEmailBcc } from "./checkout-email-recipients";
 import { checkoutRecoveryEmailBody } from "./checkout-messaging";
 
 export async function hasCheckoutRecoveryBeenSent(
@@ -105,6 +106,7 @@ export async function handleCheckoutSessionExpired(
     const body = checkoutRecoveryEmailBody({ greetingName, recoveryUrl });
     const sent = await sendAppEmail({
       to: email,
+      bcc: getCheckoutEmailBcc(),
       subject: "Your Track Lucia payment link expired — complete subscription",
       text: body.text,
       html: body.html,

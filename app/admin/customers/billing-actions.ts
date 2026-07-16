@@ -23,6 +23,16 @@ import {
 } from "@/lib/services/customer-subscription-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import {
+  buildOutstandingInvoiceReminderEmailHtml,
+  buildOutstandingInvoiceReminderEmailSubject,
+  buildOutstandingInvoiceReminderEmailText,
+  buildOutstandingInvoiceReminderWhatsAppLines,
+  buildOutstandingInvoiceReminderWhatsAppText,
+} from "@/lib/billing/outstanding-invoice-reminder";
+import {
+  listOutstandingInvoiceReminderCandidates,
+} from "@/lib/billing/outstanding-invoice-reminder-service";
+import {
   findRecentCheckoutLinkSentAt,
   recordCheckoutLinkSentToCustomer,
 } from "@/lib/billing/checkout-link-recent";
@@ -38,13 +48,15 @@ import {
   recordCheckoutPayLinkDestination,
 } from "@/lib/stripe/checkout-payment-link";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
+import { getCheckoutEmailBcc } from "@/lib/stripe/checkout-email-recipients";
 import {
   buildStripeCheckoutAmountLine,
   sendStripePaymentLinkWhatsApp,
 } from "@/lib/billing/customer-whatsapp";
 import { recordOutboundWhatsAppMessage } from "@/lib/communications/whatsapp-conversation-service";
-import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
+import { getTwilioContentSid, isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { toSmsAddress, toWhatsAppAddress } from "@/lib/twilio/phone";
+import { sendTwilioWhatsAppContent } from "@/lib/twilio/whatsapp-send";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import {
   resendPaymentDeclineEmailForCustomer,
@@ -465,6 +477,7 @@ export async function sendStripeCheckoutToCustomerAction(
       });
       const sent = await sendAppEmail({
         to: emailTo,
+        bcc: getCheckoutEmailBcc(),
         subject: "Complete your Track Lucia subscription payment",
         text: emailBody.text,
         html: emailBody.html,
@@ -733,6 +746,7 @@ export async function emailStripeCheckoutLinkAction(
 
     const sent = await sendAppEmail({
       to: customer.email.trim(),
+      bcc: getCheckoutEmailBcc(),
       subject: "Complete your Track Lucia subscription payment",
       text: emailBody.text,
       html: emailBody.html,
@@ -1014,6 +1028,169 @@ export type ResendPaymentDeclineEmailState = {
   ok?: boolean;
   message?: string;
 };
+
+export type OutstandingInvoiceReminderState = {
+  error: string | null;
+  ok?: boolean;
+  message?: string;
+};
+
+export async function sendOutstandingInvoiceReminderAction(
+  _prev: OutstandingInvoiceReminderState,
+  formData: FormData,
+): Promise<OutstandingInvoiceReminderState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) {
+    return { error: "Missing customer id." };
+  }
+
+  const sendEmail = formData.get("sendEmail") === "on" || formData.get("sendEmail") === "true";
+  const sendWhatsApp = formData.get("sendWhatsApp") === "on" || formData.get("sendWhatsApp") === "true";
+  if (!sendEmail && !sendWhatsApp) {
+    return { error: "Choose email and/or WhatsApp." };
+  }
+
+  const selectedKeys = formData
+    .getAll("selection")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  if (selectedKeys.length === 0) {
+    return { error: "Choose at least one invoice." };
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { id: true, email: true, phone: true, company: true, firstName: true, lastName: true },
+  });
+  if (!customer) {
+    return { error: "Customer not found." };
+  }
+
+  const availableItems = await listOutstandingInvoiceReminderCandidates(customerId);
+  const selectedItems = availableItems.filter((item) => selectedKeys.includes(item.selectionKey));
+  if (selectedItems.length === 0) {
+    return { error: "Those invoices are no longer available for reminders." };
+  }
+  if (selectedItems.length !== selectedKeys.length) {
+    return { error: "Some selected invoices are no longer outstanding or no longer have payment links." };
+  }
+
+  const greetingName =
+    customer.firstName?.trim() ||
+    customer.company?.trim() ||
+    [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
+    "there";
+
+  const emailSubject = buildOutstandingInvoiceReminderEmailSubject(selectedItems.length);
+  const emailText = buildOutstandingInvoiceReminderEmailText({ greetingName, items: selectedItems });
+  const emailHtml = buildOutstandingInvoiceReminderEmailHtml({ greetingName, items: selectedItems });
+  const whatsAppBody = buildOutstandingInvoiceReminderWhatsAppText({ greetingName, items: selectedItems });
+  const whatsAppList = buildOutstandingInvoiceReminderWhatsAppLines(selectedItems);
+
+  const successes: string[] = [];
+  const failures: string[] = [];
+
+  if (sendEmail) {
+    const email = customer.email?.trim();
+    if (!email) {
+      failures.push("Email: customer has no email on file.");
+    } else {
+      const sent = await sendAppEmail({
+        to: email,
+        subject: emailSubject,
+        text: emailText,
+        html: emailHtml,
+      });
+      if (!sent.ok) {
+        failures.push(`Email: ${sent.error}`);
+      } else {
+        successes.push(`email to ${email}`);
+        await recordOperationalEvent({
+          category: "communication.message_sent",
+          customerId,
+          actorUserId: session.sub,
+          summary: `Outstanding invoice reminder emailed to ${email}`,
+          payload: {
+            channel: "email",
+            kind: "outstanding_invoice_reminder",
+            to: email,
+            selections: selectedItems.map((item) => item.selectionKey),
+          },
+        });
+      }
+    }
+  }
+
+  if (sendWhatsApp) {
+    if (!isTwilioWhatsAppConfigured()) {
+      failures.push("WhatsApp: Twilio WhatsApp is not configured.");
+    } else if (!getTwilioContentSid("outstanding_invoices")) {
+      failures.push("WhatsApp: no Content SID is configured for the outstanding invoices template.");
+    } else {
+      const to = toWhatsAppAddress(customer.phone);
+      if (!to) {
+        failures.push("WhatsApp: customer has no valid phone number.");
+      } else {
+        const result = await sendTwilioWhatsAppContent(to, "outstanding_invoices", {
+          "1": greetingName,
+          "2": whatsAppList,
+        });
+        if (!result.ok) {
+          failures.push(`WhatsApp: ${result.error}`);
+        } else {
+          const phoneE164 = toSmsAddress(customer.phone);
+          if (phoneE164) {
+            await recordOutboundWhatsAppMessage({
+              phoneE164,
+              body: whatsAppBody,
+              messageSid: result.messageSid,
+              actorUserId: session.sub,
+              kind: "template",
+            });
+          }
+          successes.push(`WhatsApp to ${customer.phone?.trim() || to}`);
+          await recordOperationalEvent({
+            category: "communication.message_sent",
+            customerId,
+            actorUserId: session.sub,
+            summary: `Outstanding invoice reminder WhatsApp sent to ${customer.phone ?? to}`,
+            payload: {
+              channel: "whatsapp",
+              kind: "outstanding_invoice_reminder",
+              to: customer.phone ?? to,
+              templateKind: "outstanding_invoices",
+              messageSid: result.messageSid,
+              selections: selectedItems.map((item) => item.selectionKey),
+            },
+          });
+        }
+      }
+    }
+  }
+
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/messages`);
+  revalidatePath("/admin/message-templates");
+
+  if (successes.length === 0) {
+    return { error: failures.join(" ") || "Could not send the reminder." };
+  }
+
+  return {
+    error: null,
+    ok: true,
+    message:
+      failures.length > 0
+        ? `Sent via ${successes.join(" and ")}. ${failures.join(" ")}`
+        : `Outstanding invoice reminder sent via ${successes.join(" and ")}.`,
+  };
+}
 
 export async function resendPaymentDeclineEmailAction(
   _prev: ResendPaymentDeclineEmailState,

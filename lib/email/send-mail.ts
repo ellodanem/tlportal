@@ -18,6 +18,7 @@ export async function sendAppEmailWithConfig(
   config: SmtpSendConfig,
   input: {
     to: string;
+    bcc?: string | string[];
     subject: string;
     text: string;
     html?: string;
@@ -38,6 +39,7 @@ export async function sendAppEmailWithConfig(
     await transporter.sendMail({
       from: from.name ? `"${from.name}" <${from.address}>` : from.address,
       to,
+      bcc: Array.isArray(input.bcc) ? input.bcc : input.bcc?.trim() || undefined,
       subject: input.subject,
       text: input.text,
       html: input.html ?? input.text.replace(/\n/g, "<br>"),
@@ -50,6 +52,7 @@ export async function sendAppEmailWithConfig(
 
 export async function sendAppEmail(input: {
   to: string;
+  bcc?: string | string[];
   subject: string;
   text: string;
   html?: string;
