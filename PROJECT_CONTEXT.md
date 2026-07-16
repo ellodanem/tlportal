@@ -2991,3 +2991,38 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - git push `main` → `origin` succeeded.
 
+
+### 2026-07-16 09:11 UTC — commit `7f84c40`
+
+- docs: record stable checkout push in project context log
+
+
+### 2026-07-16 09:11 UTC — pre-push (`main` → origin) @ `7f84c40`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-16 09:30 UTC — commit `c2bf243`
+
+- billing: bcc checkout emails to provider
+
+
+### 2026-07-16 09:30 UTC — pre-push (`main` → origin) @ `c2bf243`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-16 09:37 UTC — commit `9e16c91`
+
+- Add multi-invoice outstanding reminder on customer billing.
+
+
+### 2026-07-16 09:38 UTC — pre-push (`main` → origin) @ `9e16c91`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-16 — push (`main` → origin) @ `9e16c91`
+
+- git push `main` → `origin` succeeded.
+
