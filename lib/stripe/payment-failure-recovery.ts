@@ -39,7 +39,7 @@ export async function resolvePayLinkTokenDestination(token: string): Promise<str
   if (!clean) return null;
   const event = await prisma.operationalEvent.findFirst({
     where: {
-      category: "billing.payment_failed",
+      category: { in: ["billing.payment_failed", "billing.checkout_payment_link"] },
       payload: { path: ["payLinkToken"], equals: clean },
     },
     orderBy: { occurredAt: "desc" },

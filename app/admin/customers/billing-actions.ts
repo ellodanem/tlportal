@@ -32,6 +32,13 @@ import {
   buildStripeCheckoutWhatsAppPreview,
 } from "@/lib/billing/checkout-message-preview";
 import {
+  checkoutPaymentPlanKey,
+  findLatestCheckoutPayLinkTokenForPlan,
+  newCheckoutPayLinkToken,
+  recordCheckoutPayLinkDestination,
+} from "@/lib/stripe/checkout-payment-link";
+import { getAppBaseUrl } from "@/lib/stripe/app-url";
+import {
   buildStripeCheckoutAmountLine,
   sendStripePaymentLinkWhatsApp,
 } from "@/lib/billing/customer-whatsapp";
@@ -154,6 +161,27 @@ async function persistStripeMonthlyRateFromForm(
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save monthly rate." };
   }
+}
+
+async function resolveCheckoutPayLinkTokenForPlan(input: {
+  customerId: string;
+  months: number;
+  monthlyRateXcd: number | null;
+  vehicleCount: number;
+  useCustomPricing: boolean;
+}): Promise<{ planKey: string; payLinkToken: string }> {
+  const planKey = checkoutPaymentPlanKey({
+    durationMonths: input.months,
+    vehicleCount: input.vehicleCount,
+    monthlyRateXcd: input.monthlyRateXcd,
+    useCustomPricing: input.useCustomPricing,
+  });
+  const existing = await findLatestCheckoutPayLinkTokenForPlan({
+    customerId: input.customerId,
+    planKey,
+  });
+  if (existing) return { planKey, payLinkToken: existing.payLinkToken };
+  return { planKey, payLinkToken: newCheckoutPayLinkToken() };
 }
 
 async function assertCustomerReadyForStripeCheckout(
@@ -377,6 +405,15 @@ export async function sendStripeCheckoutToCustomerAction(
       return { error: saved.error };
     }
 
+    const { planKey, payLinkToken } = await resolveCheckoutPayLinkTokenForPlan({
+      customerId: parsed.customerId,
+      months: parsed.months,
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      vehicleCount: parsed.vehicleCount,
+      useCustomPricing: parsed.useCustomPricing,
+    });
+    const stableUrl = `${getAppBaseUrl()}/pay/go/${encodeURIComponent(payLinkToken)}`;
+
     const checkout = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
@@ -385,6 +422,15 @@ export async function sendStripeCheckoutToCustomerAction(
     if (!checkout.ok) {
       return { error: checkout.error };
     }
+
+    await recordCheckoutPayLinkDestination({
+      customerId: parsed.customerId,
+      actorUserId: session.sub,
+      planKey,
+      payLinkToken,
+      checkoutSessionId: checkout.sessionId,
+      payUrl: checkout.url,
+    });
 
     revalidateCustomerBillingPaths(parsed.customerId);
 
@@ -414,7 +460,7 @@ export async function sendStripeCheckoutToCustomerAction(
     if (emailAttempted && emailTo) {
       const emailBody = checkoutInitialEmailBody({
         greetingName,
-        paymentUrl: checkout.url,
+        paymentUrl: stableUrl,
         durationMonths: parsed.months,
       });
       const sent = await sendAppEmail({
@@ -435,7 +481,7 @@ export async function sendStripeCheckoutToCustomerAction(
             kind: "stripe_checkout",
             to: emailTo,
             checkoutSessionId: checkout.sessionId,
-            paymentUrl: checkout.url,
+            paymentUrl: stableUrl,
           },
         });
       } else {
@@ -447,7 +493,7 @@ export async function sendStripeCheckoutToCustomerAction(
     if (whatsappAttempted) {
       const wa = await sendStripePaymentLinkWhatsApp({
         customer,
-        paymentUrl: checkout.url,
+        paymentUrl: stableUrl,
         checkoutSessionId: checkout.sessionId,
         amountLine,
         durationMonths: parsed.months,
@@ -460,7 +506,7 @@ export async function sendStripeCheckoutToCustomerAction(
         if (whatsappTo) {
           await recordOutboundWhatsAppMessage({
             phoneE164: whatsappTo,
-            body: `[template:${templateKind}] ${amountLine} · ${checkout.url}`,
+            body: `[template:${templateKind}] ${amountLine} · ${stableUrl}`,
             messageSid: wa.messageSid,
             actorUserId: session.sub,
             kind: "template",
@@ -478,7 +524,7 @@ export async function sendStripeCheckoutToCustomerAction(
             templateKind,
             messageSid: wa.messageSid,
             checkoutSessionId: checkout.sessionId,
-            paymentUrl: checkout.url,
+            paymentUrl: stableUrl,
             amountLine,
           },
         });
@@ -494,7 +540,7 @@ export async function sendStripeCheckoutToCustomerAction(
         actorUserId: session.sub,
         checkoutSessionId: checkout.sessionId,
         channels: { email: emailSent, whatsapp: whatsappSent },
-        paymentUrl: checkout.url,
+        paymentUrl: stableUrl,
         emailTo,
         whatsappTo: customer.phone ?? whatsappTo,
         emailError,
@@ -517,7 +563,7 @@ export async function sendStripeCheckoutToCustomerAction(
     if (!emailSent && !whatsappSent) {
       return {
         error: partialErrors.join(" ") || "Could not send payment link.",
-        url: checkout.url,
+        url: stableUrl,
         ...channelResult,
       };
     }
@@ -533,7 +579,7 @@ export async function sendStripeCheckoutToCustomerAction(
 
     return {
       error: partialErrors.length > 0 ? partialErrors.join(" ") : null,
-      url: checkout.url,
+      url: stableUrl,
       ...channelResult,
       message: `Payment link sent via ${channelParts.join(" and ")}. ${checkoutInitialLinkNotice()} ${pricingNote}`,
     };
@@ -570,6 +616,14 @@ export async function startStripeCheckoutAction(
       return { error: saved.error };
     }
 
+    const { planKey, payLinkToken } = await resolveCheckoutPayLinkTokenForPlan({
+      customerId: parsed.customerId,
+      months: parsed.months,
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      vehicleCount: parsed.vehicleCount,
+      useCustomPricing: parsed.useCustomPricing,
+    });
+
     const result = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
@@ -579,6 +633,15 @@ export async function startStripeCheckoutAction(
       return { error: result.error };
     }
 
+    await recordCheckoutPayLinkDestination({
+      customerId: parsed.customerId,
+      actorUserId: session.sub,
+      planKey,
+      payLinkToken,
+      checkoutSessionId: result.sessionId,
+      payUrl: result.url,
+    });
+
     revalidateCustomerBillingPaths(parsed.customerId);
 
     const pricingNote =
@@ -586,9 +649,10 @@ export async function startStripeCheckoutAction(
         ? "Using Stripe catalog price × vehicle count."
         : "Using dynamic pricing (custom or missing catalog Price).";
 
+    const stableUrl = `${getAppBaseUrl()}/pay/go/${encodeURIComponent(payLinkToken)}`;
     return {
       error: null,
-      url: result.url,
+      url: stableUrl,
       message: `Copy the link below and send it to your customer. ${checkoutInitialLinkNotice()} ${pricingNote}`,
     };
   } catch (e) {
@@ -627,6 +691,15 @@ export async function emailStripeCheckoutLinkAction(
       return { error: saved.error };
     }
 
+    const { planKey, payLinkToken } = await resolveCheckoutPayLinkTokenForPlan({
+      customerId: parsed.customerId,
+      months: parsed.months,
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      vehicleCount: parsed.vehicleCount,
+      useCustomPricing: parsed.useCustomPricing,
+    });
+    const stableUrl = `${getAppBaseUrl()}/pay/go/${encodeURIComponent(payLinkToken)}`;
+
     const checkout = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
@@ -635,6 +708,15 @@ export async function emailStripeCheckoutLinkAction(
     if (!checkout.ok) {
       return { error: checkout.error };
     }
+
+    await recordCheckoutPayLinkDestination({
+      customerId: parsed.customerId,
+      actorUserId: session.sub,
+      planKey,
+      payLinkToken,
+      checkoutSessionId: checkout.sessionId,
+      payUrl: checkout.url,
+    });
 
     revalidateCustomerBillingPaths(parsed.customerId);
 
@@ -645,7 +727,7 @@ export async function emailStripeCheckoutLinkAction(
 
     const emailBody = checkoutInitialEmailBody({
       greetingName: name,
-      paymentUrl: checkout.url,
+      paymentUrl: stableUrl,
       durationMonths: parsed.months,
     });
 
@@ -657,12 +739,12 @@ export async function emailStripeCheckoutLinkAction(
     });
 
     if (!sent.ok) {
-      return { error: sent.error, url: checkout.url };
+      return { error: sent.error, url: stableUrl };
     }
 
     return {
       error: null,
-      url: checkout.url,
+      url: stableUrl,
       emailSent: true,
       message: `Payment link emailed to ${customer.email.trim()}. ${checkoutInitialLinkNotice()} You can also copy the link below.`,
     };

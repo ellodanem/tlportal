@@ -1,5 +1,6 @@
 import "server-only";
 
+import { applyFinalInvoiceNumberToEmailContent } from "@/lib/billing/invoice-email-body";
 import { sendNativeInvoiceEmail } from "@/lib/billing/send-native-invoice-email";
 import { formatScheduledSendLabel, parseScheduledSendDateInput } from "@/lib/billing/atlantic-date";
 import { prisma } from "@/lib/db";
@@ -74,13 +75,23 @@ export async function processDueScheduledInvoiceEmails(): Promise<{
   let failed = 0;
 
   for (const row of dueRows) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: row.invoiceId },
+      select: { number: true },
+    });
+    const invoiceNumber = invoice?.number?.trim();
+    const emailContent =
+      invoiceNumber != null
+        ? applyFinalInvoiceNumberToEmailContent(row.subject, row.bodyText, invoiceNumber)
+        : { subject: row.subject, bodyText: row.bodyText };
+
     const result = await sendNativeInvoiceEmail({
       invoiceId: row.invoiceId,
       to: row.to,
       cc: row.cc.length ? row.cc : undefined,
       bcc: row.bcc.length ? row.bcc : undefined,
-      subject: row.subject,
-      bodyText: row.bodyText,
+      subject: emailContent.subject,
+      bodyText: emailContent.bodyText,
     });
 
     if ("ok" in result && result.ok) {

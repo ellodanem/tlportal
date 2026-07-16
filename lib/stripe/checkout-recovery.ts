@@ -49,6 +49,41 @@ export async function handleCheckoutSessionExpired(
     return;
   }
 
+  // If we minted a stable `/pay/go/{token}` redirect for this checkout session,
+  // repoint it to the Stripe recovery URL so old WhatsApp buttons still work.
+  try {
+    const linkRow = await prisma.operationalEvent.findFirst({
+      where: {
+        customerId: tlCustomerId,
+        category: "billing.checkout_payment_link",
+        payload: { path: ["checkoutSessionId"], equals: session.id },
+      },
+      orderBy: { occurredAt: "desc" },
+      select: { payload: true },
+    });
+    const payload = linkRow?.payload as
+      | { payLinkToken?: unknown; planKey?: unknown }
+      | null
+      | undefined;
+    const payLinkToken = payload?.payLinkToken;
+    const planKey = payload?.planKey;
+    if (typeof payLinkToken === "string" && payLinkToken.trim() && typeof planKey === "string" && planKey.trim()) {
+      await recordOperationalEvent({
+        category: "billing.checkout_payment_link",
+        summary: "Checkout pay link destination set to recovery",
+        customerId: tlCustomerId,
+        payload: {
+          planKey,
+          payLinkToken,
+          checkoutSessionId: session.id,
+          payUrl: recoveryUrl,
+        },
+      });
+    }
+  } catch {
+    // Non-fatal: if we can't repoint the stable token, the webhook email still goes out.
+  }
+
   if (await hasCheckoutRecoveryBeenSent(tlCustomerId, session.id)) {
     return;
   }

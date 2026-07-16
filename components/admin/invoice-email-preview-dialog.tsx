@@ -67,8 +67,8 @@ export function InvoiceEmailPreviewDialog({
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold">Email invoice preview</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Sending or scheduling finalizes invoice <strong>{invoiceNumber}</strong> and attaches the PDF when the
-          email goes out.
+          Sending or scheduling finalizes the invoice, assigns a <strong>TL-INV</strong> number, and attaches the PDF
+          when the email goes out. Preview shows <strong>TL-INV-…</strong> until then.
         </p>
         <form action={sendAction} className="mt-5 flex flex-col gap-4">
           <input type="hidden" name="invoiceId" value={invoiceId} />
