@@ -4,12 +4,11 @@ import { notFound } from "next/navigation";
 import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
 import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-status-strip";
-import { OutstandingInvoiceReminderPanel } from "@/components/admin/outstanding-invoice-reminder-panel";
+import { PaymentRemindersSection } from "@/components/admin/payment-reminders-section";
 import { CustomerPaymentDeclineFollowUpCard } from "@/components/admin/customer-payment-decline-follow-up";
 import { CustomerRenewalOpsPanel } from "@/components/admin/customer-renewal-ops-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { ManageSubscriptionTiles } from "@/components/admin/manage-subscription-tiles";
-import { PaymentRemindersPreferenceForm } from "@/components/admin/payment-reminders-preference-form";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
 import { StripeSyncPanel } from "@/components/admin/stripe-sync-panel";
 import { customerDisplayName } from "@/lib/admin/customer-display";
@@ -150,16 +149,12 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
 
       {manageTiles}
 
-      <PaymentRemindersPreferenceForm
-        customerId={customer.id}
-        billingMode={customer.billingMode}
-        paymentReminders={customer.paymentReminders}
-      />
-
-      <OutstandingInvoiceReminderPanel
+      <PaymentRemindersSection
         customerId={customer.id}
         customerName={title}
         greetingName={customer.firstName?.trim() || customer.company?.trim() || title}
+        billingMode={customer.billingMode}
+        paymentReminders={customer.paymentReminders}
         customerEmail={customer.email}
         customerPhone={customer.phone}
         whatsAppConfigured={isTwilioWhatsAppConfigured()}

@@ -38,6 +38,7 @@ export function OutstandingInvoiceReminderPanel({
   customerPhone,
   whatsAppConfigured,
   candidates,
+  onSent,
 }: {
   customerId: string;
   customerName: string;
@@ -46,6 +47,7 @@ export function OutstandingInvoiceReminderPanel({
   customerPhone: string | null;
   whatsAppConfigured: boolean;
   candidates: OutstandingInvoiceReminderCandidate[];
+  onSent?: () => void;
 }) {
   const router = useRouter();
   const [state, action] = useActionState(sendOutstandingInvoiceReminderAction, initialState);
@@ -54,8 +56,11 @@ export function OutstandingInvoiceReminderPanel({
   const [sendWhatsApp, setSendWhatsApp] = useState(Boolean(customerPhone?.trim()) && whatsAppConfigured);
 
   useEffect(() => {
-    if (state.ok) router.refresh();
-  }, [router, state.ok]);
+    if (state.ok) {
+      router.refresh();
+      onSent?.();
+    }
+  }, [router, state.ok, onSent]);
 
   const selectedItems = useMemo(
     () => candidates.filter((item) => selectedKeys.includes(item.selectionKey)),
@@ -82,20 +87,17 @@ export function OutstandingInvoiceReminderPanel({
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Outstanding invoice reminder</h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Send one reminder covering multiple unpaid invoices with payment links for {customerName}.
-        </p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Send one reminder covering multiple unpaid invoices with payment links for {customerName}.
+      </p>
 
       {candidates.length === 0 ? (
-        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
           No outstanding invoices with payment links are available for this customer right now.
         </p>
       ) : (
-        <form action={action} className="mt-4 flex flex-col gap-4">
+        <form action={action} className="flex flex-col gap-4">
           <input type="hidden" name="customerId" value={customerId} />
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700">
             <div className="border-b border-zinc-200 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
@@ -214,6 +216,6 @@ export function OutstandingInvoiceReminderPanel({
           </div>
         </form>
       )}
-    </section>
+    </div>
   );
 }

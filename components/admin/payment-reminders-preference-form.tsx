@@ -39,17 +39,13 @@ export function PaymentRemindersPreferenceForm({
   const effective = customerReceivesPaymentReminders({ billingMode, paymentReminders });
 
   return (
-    <section
-      className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-      aria-label="Payment reminders"
-    >
-      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payment reminders</h2>
-      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Scheduled due/overdue nudges (WhatsApp today; same setting for all channels). Stripe card failures use the
         decline follow-up series instead — Auto keeps reminders off for Stripe customers.
       </p>
 
-      <form action={action} className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <form action={action} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <input type="hidden" name="customerId" value={customerId} />
         <div className="min-w-[12rem] flex-1">
           <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300" htmlFor="paymentReminders">
@@ -84,6 +80,6 @@ export function PaymentRemindersPreferenceForm({
           {state.error}
         </p>
       ) : null}
-    </section>
+    </div>
   );
 }
