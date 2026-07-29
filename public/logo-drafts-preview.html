@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Traq Portal — optimized logo</title>
+    <style>
+      :root {
+        --green: #4caf50;
+        --bg: #0f1114;
+        --card: #1a1d22;
+        --border: #2a3038;
+        --text: #e8eaed;
+        --muted: #9aa3ad;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 3rem;
+      }
+      h1 {
+        margin: 0 0 0.25rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 0.92rem;
+        margin: 0 0 2rem;
+      }
+      .sub code {
+        background: #252930;
+        padding: 0.12em 0.35em;
+        border-radius: 4px;
+        font-size: 0.88em;
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 0 0 0.75rem;
+      }
+      section {
+        margin-bottom: 2rem;
+      }
+      .compare {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--card);
+      }
+      .card h3 {
+        margin: 0;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        background: #15181c;
+      }
+      .pad {
+        padding: 1.75rem 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+      }
+      .dark {
+        background: #000;
+      }
+      .light {
+        background: #f4f5f7;
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+      .blend {
+        mix-blend-mode: screen;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.5rem 0.65rem;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+      }
+      td code {
+        font-size: 0.82em;
+      }
+      .sizes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+      }
+      .sizes figure {
+        margin: 0;
+        text-align: center;
+      }
+      .sizes figcaption {
+        font-size: 0.7rem;
+        color: var(--muted);
+        margin-top: 0.35rem;
+      }
+      .icon-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+      }
+      .icon-row img {
+        border-radius: 22%;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      }
+      .note {
+        font-size: 0.85rem;
+        color: var(--muted);
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #15181c;
+      }
+      .note strong {
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Traq Portal — optimized draft</h1>
+      <p class="sub">
+        Same artwork as your draft; canvas trimmed and files compressed. Regenerate with
+        <code>npm run logo:optimize</code>. Preview: <code>/logo-drafts-preview.html</code>
+      </p>
+
+      <section>
+        <h2>Wordmark (trimmed 482×270)</h2>
+        <div class="compare">
+          <div class="card">
+            <h3>Before — 1024×1024 draft (~29 KB)</h3>
+            <div class="pad dark">
+              <img src="/logo-drafts/traq-portal-draft1.png" alt="Original draft" width="280" />
+            </div>
+          </div>
+          <div class="card">
+            <h3>After — optimized WebP (~14 KB)</h3>
+            <div class="pad dark">
+              <picture>
+                <source srcset="/logo-drafts/optimized/traq-portal-logo.webp" type="image/webp" />
+                <img src="/logo-drafts/optimized/traq-portal-logo.jpg" alt="Optimized Traq Portal" width="320" />
+              </picture>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Responsive sizes</h2>
+        <div class="sizes">
+          <figure>
+            <div class="pad dark" style="padding: 1rem; min-height: auto">
+              <img src="/logo-drafts/optimized/traq-portal-logo-160.webp" alt="" width="160" />
+            </div>
+            <figcaption>160w · 3.7 KB</figcaption>
+          </figure>
+          <figure>
+            <div class="pad dark" style="padding: 1rem; min-height: auto">
+              <img src="/logo-drafts/optimized/traq-portal-logo-320.webp" alt="" width="320" />
+            </div>
+            <figcaption>320w · 7.5 KB</figcaption>
+          </figure>
+          <figure>
+            <div class="pad dark" style="padding: 1rem; min-height: auto">
+              <img src="/logo-drafts/optimized/traq-portal-logo.webp" alt="" width="482" />
+            </div>
+            <figcaption>482w full · 13.5 KB</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section>
+        <h2>App icons (square, black field)</h2>
+        <div class="icon-row">
+          <img src="/logo-drafts/optimized/icon/icon-1024.png" alt="" width="96" height="96" />
+          <img src="/logo-drafts/optimized/icon/icon-512.png" alt="" width="64" height="64" />
+          <img src="/logo-drafts/optimized/icon/icon-192.png" alt="" width="48" height="48" />
+          <img src="/logo-drafts/optimized/icon/icon-32.png" alt="" width="32" height="32" />
+        </div>
+      </section>
+
+      <section>
+        <h2>Light header (screen blend on white)</h2>
+        <div class="card">
+          <div class="pad light">
+            <img
+              class="blend"
+              src="/logo-drafts/optimized/traq-portal-logo.webp"
+              alt="On light background"
+              width="280"
+            />
+          </div>
+        </div>
+        <p class="note" style="margin-top: 0.75rem">
+          <strong>Tip:</strong> For production light mode, export a dedicated light lockup from your design file when
+          ready. Screen-blend is fine for previews only.
+        </p>
+      </section>
+
+      <section>
+        <h2>File guide</h2>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Use</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>optimized/traq-portal-logo.webp</code></td>
+                <td>Web / splash (dark BG) — smallest</td>
+              </tr>
+              <tr>
+                <td><code>optimized/traq-portal-logo.jpg</code></td>
+                <td>Email, PDF, legacy clients</td>
+              </tr>
+              <tr>
+                <td><code>optimized/traq-portal-logo.png</code></td>
+                <td>Lossless-ish (palette); design handoff</td>
+              </tr>
+              <tr>
+                <td><code>optimized/icon/icon-1024.png</code></td>
+                <td>iOS App Store, Play Store high-res</td>
+              </tr>
+              <tr>
+                <td><code>optimized/icon/icon-512.png</code></td>
+                <td>PWA, Android adaptive source</td>
+              </tr>
+              <tr>
+                <td><code>optimized/icon/icon-192.png</code></td>
+                <td>Android / PWA manifest</td>
+              </tr>
+              <tr>
+                <td><code>optimized/icon/icon-32.png</code></td>
+                <td>Favicon base</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="note">
+        Source kept at <code>logo-drafts/traq-portal-draft1.png</code>. Delete
+        <code>logo-drafts-preview.html</code> and <code>logo-drafts/</code> when you move assets into your design repo or
+        app bundles.
+      </p>
+    </div>
+  </body>
+</html>
