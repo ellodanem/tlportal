@@ -1,0 +1,13 @@
+{
+  "source": "public/logo-drafts/traq-portal-draft1.png",
+  "trimmed": {
+    "width": 482,
+    "height": 270
+  },
+  "preferredWeb": "traq-portal-logo.webp",
+  "preferredDarkUi": "traq-portal-logo.jpg",
+  "brandGreen": "#4CAF50",
+  "background": "#000000",
+  "iconPadding": 0.14,
+  "generatedAt": "2026-05-24T14:15:51.127Z"
+}

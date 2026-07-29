@@ -3051,3 +3051,113 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - git push `main` → `origin` succeeded.
 
+
+### 2026-07-16 09:51 UTC — commit `3930594`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-07-16 09:51 UTC — pre-push (`main` → origin) @ `3930594`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-07-29 — recovery from previous PC (stash `wip-unrelated`)
+
+- Restored uncommitted logo assets, mockups, and scripts from `stash@{0}` untracked tree.
+- Appended missing June 30 context-log entries that were stashed and never committed (gap after `b363f56`). Chronological originals below for the append-only log.
+
+### 2026-06-30 10:16 UTC — commit `abbc016`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-06-30 10:16 UTC — pre-push (`main` → origin) @ `abbc016`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 10:20 UTC — commit `4c7da80`
+
+- feat(admin): group sidebar nav into Sales, Billing, Fleet sections
+
+
+### 2026-06-30 10:20 UTC — pre-push (`main` → origin) @ `4c7da80`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 10:29 UTC — commit `a9c53a0`
+
+- feat(billing): native billing Phase 7 Invoiless cutover
+
+
+### 2026-06-30 10:29 UTC — pre-push (`main` → origin) @ `a9c53a0`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 10:40 UTC — commit `8571f4f`
+
+- feat(billing): add subscription health dashboard with effective MRR
+
+
+### 2026-06-30 10:40 UTC — pre-push (`main` → origin) @ `8571f4f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 15:28 UTC — commit `b25f8ad`
+
+- fix(billing): compress header logos before PDF embed to avoid 100MB+ quote files
+
+
+### 2026-06-30 15:28 UTC — pre-push (`main` → origin) @ `b25f8ad`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 15:38 UTC — commit `2c89427`
+
+- feat(admin): add Mark as sent for quotes without emailing
+
+
+### 2026-06-30 15:38 UTC — pre-push (`main` → origin) @ `2c89427`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:21 UTC — commit `24f25ce`
+
+- feat(admin): add Mark as sent for invoices without emailing
+
+
+### 2026-06-30 23:21 UTC — pre-push (`main` → origin) @ `24f25ce`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:32 UTC — commit `36bf8a8`
+
+- feat(ops): add service pause and resume for offline devices
+
+
+### 2026-06-30 23:32 UTC — pre-push (`main` → origin) @ `36bf8a8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:32 UTC — commit `2aeba0e`
+
+- feat(ops): add service pause and resume for offline devices
+
+
+### 2026-06-30 23:33 UTC — pre-push (`main` → origin) @ `2aeba0e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-06-30 23:33 UTC — commit `95b3d01`
+
+- feat(billing): optional online card pay on native invoice pay links
+
