@@ -14,6 +14,7 @@ import {
   cancelPendingScheduledInvoiceEmail,
   scheduleInvoiceEmail,
 } from "@/lib/services/scheduled-invoice-email-service";
+import { parseAssignmentDateInput } from "@/lib/domain/assignment-renewal";
 import {
   createDraftInvoice,
   finalizeAndSendInvoice,
@@ -304,9 +305,12 @@ export async function recordPaymentAction(
   const method = String(formData.get("method") ?? "cash").trim();
   const reference = String(formData.get("reference") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const receivedAtRaw = String(formData.get("receivedAt") ?? "").trim();
+  const receivedAt = receivedAtRaw ? parseAssignmentDateInput(receivedAtRaw) : new Date();
 
   if (!invoiceId) return { error: "Invoice id is missing." };
   if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter a valid payment amount." };
+  if (receivedAtRaw && !receivedAt) return { error: "Enter a valid payment date." };
 
   const allowed = new Set(["cash", "bank_transfer", "cheque", "card_manual", "other"]);
   if (!allowed.has(method)) return { error: "Invalid payment method." };
@@ -318,6 +322,7 @@ export async function recordPaymentAction(
       method: method as "cash" | "bank_transfer" | "cheque" | "card_manual" | "other",
       reference,
       notes,
+      receivedAt: receivedAt ?? undefined,
       recordedById: session.sub,
     });
     revalidatePath("/admin/tl-invoices");

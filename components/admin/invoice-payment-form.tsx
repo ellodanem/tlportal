@@ -10,6 +10,15 @@ import type { PaymentMethod } from "@prisma/client";
 
 const initialPayment: RecordPaymentState = {};
 
+/** Default for `<input type="date">` (local calendar day). */
+function todayDateInputValue(): string {
+  const n = new Date();
+  const y = n.getFullYear();
+  const m = String(n.getMonth() + 1).padStart(2, "0");
+  const d = String(n.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function PayButton() {
   const { pending } = useFormStatus();
   return (
@@ -70,7 +79,17 @@ export function InvoicePaymentForm({
             ))}
           </select>
         </div>
-        <div className="sm:col-span-2">
+        <div>
+          <label className="block text-xs font-medium text-zinc-600">Payment date</label>
+          <input
+            name="receivedAt"
+            type="date"
+            defaultValue={todayDateInputValue()}
+            required
+            className="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+          />
+        </div>
+        <div>
           <label className="block text-xs font-medium text-zinc-600">Reference (cheque #, bank ref)</label>
           <input name="reference" type="text" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950" />
         </div>
