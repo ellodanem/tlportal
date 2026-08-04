@@ -3211,3 +3211,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-08-04 23:33 UTC — commit `b007461`
+
+- Add payment date field when recording invoice payments.
+
+
+### 2026-08-04 23:34 UTC — pre-push (`main` → origin) @ `b007461`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
