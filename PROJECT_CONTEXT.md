@@ -3236,3 +3236,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Scope Stripe sync and renewals to matching plan terms.
 
+
+### 2026-08-10 11:03 UTC — commit `c7dced3`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-08-10 11:03 UTC — pre-push (`main` → origin) @ `c7dced3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
