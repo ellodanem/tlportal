@@ -187,10 +187,12 @@ function MarkOneForm({
   row,
   customerId,
   billingMode,
+  stripePlanTermMonths,
 }: {
   row: RenewalRow;
   customerId: string;
   billingMode: CustomerBillingMode;
+  stripePlanTermMonths: number | null;
 }) {
   const [oneState, oneAction] = useActionState(markAssignmentPeriodPaidAction, renewalActionInitialState);
 
@@ -198,6 +200,11 @@ function MarkOneForm({
   const displayStatus = displayAssignmentOpsStatus(row.status, nextDue);
   const deviceLabel = row.device.label?.trim() || row.device.imei;
   const isPaused = row.status === "suspended";
+  const offStripeTrack =
+    billingMode === "stripe_subscription" &&
+    stripePlanTermMonths != null &&
+    row.status !== "suspended" &&
+    (row.intervalMonths == null || row.intervalMonths !== stripePlanTermMonths);
 
   return (
     <li className="rounded-lg border border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
@@ -212,8 +219,19 @@ function MarkOneForm({
               {deviceLabel}
             </Link>
             {statusPill(displayStatus)}
-          </div>
-          {isPaused ? (
+            {offStripeTrack ? (
+              <span
+                className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                title={
+                  row.intervalMonths == null
+                    ? "Set a billing term that matches the Stripe plan to include this device in card billing sync."
+                    : "This device’s term does not match the Stripe subscription — renew via mark paid, not Stripe quantity."
+                }
+              >
+                Off Stripe track
+              </span>
+            ) : null}
+          </div>          {isPaused ? (
             <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
               {pauseReasonLabel(row.pauseReason) ? (
                 <p>
@@ -310,12 +328,14 @@ function RenewalOpsBody({
   billingMode,
   rows,
   alwaysExpandDevices = false,
+  stripePlanTermMonths = null,
 }: {
   customerId: string;
   billingMode: CustomerBillingMode;
   rows: RenewalRow[];
   /** When true (e.g. inside a modal), skip the All devices collapse. */
   alwaysExpandDevices?: boolean;
+  stripePlanTermMonths?: number | null;
 }) {
   const [bulkState, bulkAction] = useActionState(
     markAllCustomerAssignmentsPaidAction,
@@ -443,7 +463,15 @@ function RenewalOpsBody({
           if (inPriority) {
             return null;
           }
-          return <MarkOneForm key={row.id} row={row} customerId={customerId} billingMode={billingMode} />;
+          return (
+            <MarkOneForm
+              key={row.id}
+              row={row}
+              customerId={customerId}
+              billingMode={billingMode}
+              stripePlanTermMonths={stripePlanTermMonths}
+            />
+          );
         })}
       </ul>
     </>
@@ -461,8 +489,9 @@ function RenewalOpsBody({
           </>
         ) : (
           <>
-            Stripe <strong>invoice.paid</strong> can auto-advance next due on all active devices. Mark paid manually for
-            cash or corrections, or set billing term and next due for all devices at once below.
+            Stripe <strong>invoice.paid</strong> auto-advances devices whose billing term matches the Stripe plan.
+            Other-term devices stay on <strong>mark paid</strong> here. Set billing term and next due per device, or apply
+            to all below.
           </>
         )}
       </p>
@@ -480,7 +509,13 @@ function RenewalOpsBody({
           </p>
           <ul className="mt-2 flex flex-col gap-3">
             {priority.map((row) => (
-              <MarkOneForm key={row.id} row={row} customerId={customerId} billingMode={billingMode} />
+              <MarkOneForm
+                key={row.id}
+                row={row}
+                customerId={customerId}
+                billingMode={billingMode}
+                stripePlanTermMonths={stripePlanTermMonths}
+              />
             ))}
           </ul>
         </div>
@@ -508,11 +543,13 @@ export function CustomerRenewalOpsContent({
   billingMode,
   rows,
   alwaysExpandDevices = false,
+  stripePlanTermMonths = null,
 }: {
   customerId: string;
   billingMode: CustomerBillingMode;
   rows: RenewalRow[];
   alwaysExpandDevices?: boolean;
+  stripePlanTermMonths?: number | null;
 }) {
   if (rows.length === 0) {
     return (
@@ -528,6 +565,7 @@ export function CustomerRenewalOpsContent({
       billingMode={billingMode}
       rows={rows}
       alwaysExpandDevices={alwaysExpandDevices}
+      stripePlanTermMonths={stripePlanTermMonths}
     />
   );
 }
@@ -536,10 +574,12 @@ export function CustomerRenewalOpsPanel({
   customerId,
   billingMode,
   rows,
+  stripePlanTermMonths = null,
 }: {
   customerId: string;
   billingMode: CustomerBillingMode;
   rows: RenewalRow[];
+  stripePlanTermMonths?: number | null;
 }) {
   if (rows.length === 0) {
     return (
@@ -558,7 +598,14 @@ export function CustomerRenewalOpsPanel({
   const hasUrgent = counts.overdue > 0 || counts.dueSoon > 0;
   const collapseForStripe = !isManual && !hasUrgent;
 
-  const inner = <CustomerRenewalOpsContent customerId={customerId} billingMode={billingMode} rows={rows} />;
+  const inner = (
+    <CustomerRenewalOpsContent
+      customerId={customerId}
+      billingMode={billingMode}
+      rows={rows}
+      stripePlanTermMonths={stripePlanTermMonths}
+    />
+  );
 
   if (collapseForStripe) {
     return (
@@ -566,7 +613,7 @@ export function CustomerRenewalOpsPanel({
         <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-zinc-900 marker:content-none dark:text-zinc-50 [&::-webkit-details-marker]:hidden">
           <span className="font-semibold">Device renewals</span>
           <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
-            {summary} · renewals via Stripe when configured
+            {summary} · Stripe-track renewals auto-advance when configured; other terms use mark paid
           </span>
         </summary>
         <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">{inner}</div>

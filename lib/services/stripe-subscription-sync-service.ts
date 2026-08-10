@@ -3,8 +3,11 @@ import "server-only";
 import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
-import { billableAssignmentWhere } from "@/lib/domain/service-assignment-queries";
-import { formatXcd } from "@/lib/subscription-options/display";
+import {
+  billableAssignmentWhere,
+  stripeTrackAssignmentWhere,
+} from "@/lib/domain/service-assignment-queries";
+import { formatXcd, formatPlanTerm } from "@/lib/subscription-options/display";
 import { periodTotalPerVehicleXcd } from "@/lib/domain/subscription-mrr";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { getStripeClient, isStripeBillingEnabled } from "@/lib/stripe/config";
@@ -18,12 +21,17 @@ export type StripeSubscriptionSyncView = {
   state: StripeSubscriptionSyncState;
   reason: string | null;
   canPush: boolean;
+  /** Active assignments on the Stripe plan term only. */
   tlVehicleCount: number;
+  /** Active assignments on a different term (or unset). */
+  otherTermVehicleCount: number;
+  /** Stripe subscription plan term in months (when known). */
+  planTermMonths: number | null;
   stripeQuantity: number | null;
   stripeSubscriptionId: string | null;
   stripeStatus: string | null;
   periodEndLabel: string | null;
-  /** Expected next period charge at TL vehicle count (from TL rate × term). */
+  /** Expected next period charge at TL Stripe-track vehicle count (from TL rate × term). */
   tlNextChargeLabel: string | null;
   /** Expected next period charge at current Stripe quantity. */
   stripeNextChargeLabel: string | null;
@@ -47,11 +55,32 @@ function chargeLabel(monthlyRateXcd: number | null, planTermMonths: number, vehi
   return formatXcd(total);
 }
 
-async function countActiveAssignments(customerId: string): Promise<number> {
-  const n = await prisma.serviceAssignment.count({
-    where: { customerId, ...billableAssignmentWhere },
+async function countStripeTrackAssignments(
+  customerId: string,
+  planTermMonths: number,
+): Promise<number> {
+  return prisma.serviceAssignment.count({
+    where: { customerId, ...stripeTrackAssignmentWhere(planTermMonths) },
   });
-  return Math.max(1, n);
+}
+
+async function countOtherTermAssignments(
+  customerId: string,
+  planTermMonths: number,
+): Promise<number> {
+  const term = Math.max(1, Math.trunc(planTermMonths));
+  return prisma.serviceAssignment.count({
+    where: {
+      customerId,
+      ...billableAssignmentWhere,
+      OR: [{ intervalMonths: null }, { intervalMonths: { not: term } }],
+    },
+  });
+}
+
+function otherTermNote(otherTermVehicleCount: number): string | null {
+  if (otherTermVehicleCount < 1) return null;
+  return `${otherTermVehicleCount} device${otherTermVehicleCount === 1 ? "" : "s"} on another term (Device renewals).`;
 }
 
 async function resolveLinkedStripeSubscriptionId(customerId: string): Promise<string | null> {
@@ -82,7 +111,9 @@ function unavailable(
   return {
     state: "unavailable",
     canPush: false,
-    tlVehicleCount: partial.tlVehicleCount ?? 1,
+    tlVehicleCount: partial.tlVehicleCount ?? 0,
+    otherTermVehicleCount: partial.otherTermVehicleCount ?? 0,
+    planTermMonths: partial.planTermMonths ?? null,
     stripeQuantity: partial.stripeQuantity ?? null,
     stripeSubscriptionId: partial.stripeSubscriptionId ?? null,
     stripeStatus: partial.stripeStatus ?? null,
@@ -94,8 +125,8 @@ function unavailable(
 }
 
 /**
- * Compare TL fleet vehicle count (active assignments) to Stripe subscription quantity.
- * Rate / next charge are read-only context for the UI.
+ * Compare TL Stripe-track vehicle count (active assignments matching plan term)
+ * to Stripe subscription quantity. Rate / next charge are read-only context for the UI.
  */
 export async function compareTlStripeSubscription(
   customerId: string,
@@ -117,11 +148,9 @@ export async function compareTlStripeSubscription(
     return unavailable({ reason: "Stripe billing is not configured." });
   }
 
-  const tlVehicleCount = await countActiveAssignments(customerId);
   const stripeSubscriptionId = await resolveLinkedStripeSubscriptionId(customerId);
   if (!stripeSubscriptionId) {
     return unavailable({
-      tlVehicleCount,
       reason: "No Stripe subscription linked yet. Send a payment link first.",
     });
   }
@@ -146,6 +175,11 @@ export async function compareTlStripeSubscription(
   const planTermMonths = tlSub?.planTermMonths ?? 1;
   const periodEndLabel = formatPeriodEnd(tlSub?.currentPeriodEnd);
 
+  const [tlVehicleCount, otherTermVehicleCount] = await Promise.all([
+    countStripeTrackAssignments(customerId, planTermMonths),
+    countOtherTermAssignments(customerId, planTermMonths),
+  ]);
+
   let sub: Stripe.Subscription;
   try {
     const stripe = getStripeClient();
@@ -153,6 +187,8 @@ export async function compareTlStripeSubscription(
   } catch (e) {
     return unavailable({
       tlVehicleCount,
+      otherTermVehicleCount,
+      planTermMonths,
       stripeSubscriptionId,
       periodEndLabel,
       reason: e instanceof Error ? e.message : "Could not load Stripe subscription.",
@@ -162,6 +198,8 @@ export async function compareTlStripeSubscription(
   if (sub.items.data.length === 0) {
     return unavailable({
       tlVehicleCount,
+      otherTermVehicleCount,
+      planTermMonths,
       stripeSubscriptionId,
       stripeStatus: sub.status,
       periodEndLabel: formatPeriodEnd(
@@ -173,6 +211,8 @@ export async function compareTlStripeSubscription(
   if (sub.items.data.length > 1) {
     return unavailable({
       tlVehicleCount,
+      otherTermVehicleCount,
+      planTermMonths,
       stripeSubscriptionId,
       stripeStatus: sub.status,
       periodEndLabel: formatPeriodEnd(
@@ -192,9 +232,32 @@ export async function compareTlStripeSubscription(
   const tlNextChargeLabel = chargeLabel(monthlyRate, planTermMonths, tlVehicleCount);
   const stripeNextChargeLabel = chargeLabel(monthlyRate, planTermMonths, Math.max(1, stripeQuantity));
 
+  const offTrack = otherTermNote(otherTermVehicleCount);
+
+  if (tlVehicleCount < 1) {
+    const unsetHint =
+      otherTermVehicleCount > 0
+        ? ` No devices match the Stripe plan term (${formatPlanTerm(planTermMonths)}). Set billing terms on Device renewals, or use mark paid for other-term devices.`
+        : " Assign devices and set billing terms that match the Stripe plan before syncing quantity.";
+    return unavailable({
+      tlVehicleCount: 0,
+      otherTermVehicleCount,
+      planTermMonths,
+      stripeQuantity,
+      stripeSubscriptionId,
+      stripeStatus: sub.status,
+      periodEndLabel: resolvedPeriodLabel,
+      tlNextChargeLabel: null,
+      stripeNextChargeLabel,
+      reason: `No Stripe-track vehicles.${unsetHint}`,
+    });
+  }
+
   if (!PUSHABLE_STATUSES.has(sub.status)) {
     return unavailable({
       tlVehicleCount,
+      otherTermVehicleCount,
+      planTermMonths,
       stripeQuantity,
       stripeSubscriptionId,
       stripeStatus: sub.status,
@@ -208,14 +271,21 @@ export async function compareTlStripeSubscription(
   const state: StripeSubscriptionSyncState =
     stripeQuantity === tlVehicleCount ? "in_sync" : "differs";
 
+  let reason: string | null = null;
+  if (state === "differs") {
+    reason = `Stripe track: TL ${tlVehicleCount} · Stripe ${stripeQuantity} (${formatPlanTerm(planTermMonths)}).`;
+    if (offTrack) reason = `${reason} ${offTrack}`;
+  } else if (offTrack) {
+    reason = `Stripe track in sync (${formatPlanTerm(planTermMonths)}). ${offTrack}`;
+  }
+
   return {
     state,
-    reason:
-      state === "differs"
-        ? `TL has ${tlVehicleCount} active vehicle${tlVehicleCount === 1 ? "" : "s"}; Stripe bills ${stripeQuantity}.`
-        : null,
+    reason,
     canPush: state === "differs",
     tlVehicleCount,
+    otherTermVehicleCount,
+    planTermMonths,
     stripeQuantity,
     stripeSubscriptionId,
     stripeStatus: sub.status,
@@ -226,7 +296,7 @@ export async function compareTlStripeSubscription(
 }
 
 /**
- * Push TL active-assignment vehicle count to Stripe subscription quantity.
+ * Push TL Stripe-track vehicle count to Stripe subscription quantity.
  * Uses proration_behavior: none (applies on next invoice). Updates metadata.tl_vehicle_count
  * so Stripe→TL webhooks do not overwrite with a stale count.
  */
@@ -243,6 +313,9 @@ export async function pushTlVehicleCountToStripe(input: {
       ok: false,
       error: compare.reason ?? "Nothing to push to Stripe.",
     };
+  }
+  if (compare.tlVehicleCount < 1) {
+    return { ok: false, error: "No Stripe-track vehicles to push." };
   }
 
   const stripe = getStripeClient();
@@ -303,6 +376,8 @@ export async function pushTlVehicleCountToStripe(input: {
       previousQuantity,
       newQuantity,
       prorationBehavior: "none",
+      planTermMonths: compare.planTermMonths,
+      otherTermVehicleCount: compare.otherTermVehicleCount,
     },
   });
 

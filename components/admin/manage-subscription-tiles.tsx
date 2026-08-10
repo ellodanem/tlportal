@@ -33,6 +33,7 @@ export function ManageSubscriptionTiles({
   catalogConfigured,
   stripeCustomerId,
   renewalRows,
+  stripePlanTermMonths = null,
 }: {
   customerId: string;
   billingMode: CustomerBillingMode;
@@ -48,6 +49,7 @@ export function ManageSubscriptionTiles({
   catalogConfigured: boolean;
   stripeCustomerId: string | null;
   renewalRows: CustomerRenewalOpsRow[];
+  stripePlanTermMonths?: number | null;
 }) {
   const [planOpen, setPlanOpen] = useState(false);
   const [renewalsOpen, setRenewalsOpen] = useState(false);
@@ -127,6 +129,7 @@ export function ManageSubscriptionTiles({
         customerId={customerId}
         billingMode={billingMode}
         rows={renewalRows}
+        stripePlanTermMonths={stripePlanTermMonths}
       />
 
       <BillingSettingsModal

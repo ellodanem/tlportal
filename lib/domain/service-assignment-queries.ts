@@ -11,3 +11,17 @@ export const billableAssignmentWhere = {
   endDate: null,
   status: "active" as const,
 } satisfies Prisma.ServiceAssignmentWhereInput;
+
+/**
+ * Active assignments billed on the customer's Stripe subscription track:
+ * term must match `CustomerSubscription.planTermMonths` (or Stripe price interval).
+ * Other-term / unset-term devices stay on Device renewals only.
+ */
+export function stripeTrackAssignmentWhere(
+  planTermMonths: number,
+): Prisma.ServiceAssignmentWhereInput {
+  return {
+    ...billableAssignmentWhere,
+    intervalMonths: Math.max(1, Math.trunc(planTermMonths)),
+  };
+}

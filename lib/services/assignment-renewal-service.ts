@@ -3,7 +3,11 @@ import "server-only";
 import type { ServiceAssignment } from "@prisma/client";
 
 import { addCalendarMonths, formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
-import { billableAssignmentWhere, openAssignmentWhere } from "@/lib/domain/service-assignment-queries";
+import {
+  billableAssignmentWhere,
+  openAssignmentWhere,
+  stripeTrackAssignmentWhere,
+} from "@/lib/domain/service-assignment-queries";
 import { prisma } from "@/lib/db";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
@@ -178,7 +182,37 @@ export function isStripeRenewalAutoAdvanceEnabled(): boolean {
 }
 
 /**
- * After Stripe `invoice.paid`, advance next due on all active assignments for the customer (idempotent per assignment via lastInvoiceId).
+ * Resolve the Stripe plan term for auto-advance from the linked CustomerSubscription.
+ */
+async function resolveStripePlanTermMonths(customerId: string): Promise<number | null> {
+  const withStripeId = await prisma.customerSubscription.findFirst({
+    where: {
+      customerId,
+      stripeSubscriptionId: { not: null },
+      status: { in: ["active", "trialing", "past_due", "unpaid", "pending_payment"] },
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { planTermMonths: true },
+  });
+  if (withStripeId?.planTermMonths != null && withStripeId.planTermMonths > 0) {
+    return withStripeId.planTermMonths;
+  }
+
+  const anySub = await prisma.customerSubscription.findFirst({
+    where: { customerId },
+    orderBy: { updatedAt: "desc" },
+    select: { planTermMonths: true },
+  });
+  if (anySub?.planTermMonths != null && anySub.planTermMonths > 0) {
+    return anySub.planTermMonths;
+  }
+  return null;
+}
+
+/**
+ * After Stripe `invoice.paid`, advance next due on Stripe-track assignments only
+ * (intervalMonths matches the Stripe plan term). Other-term devices stay on Device renewals.
+ * Idempotent per assignment via lastInvoiceId.
  */
 export async function advanceAssignmentsOnStripeInvoicePaid(
   customerId: string,
@@ -188,10 +222,15 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
     return { advanced: 0, skipped: 0 };
   }
 
+  const planTermMonths = await resolveStripePlanTermMonths(customerId);
+  if (planTermMonths == null) {
+    return { advanced: 0, skipped: 0 };
+  }
+
   const assignments = await prisma.serviceAssignment.findMany({
     where: {
       customerId,
-      ...billableAssignmentWhere,
+      ...stripeTrackAssignmentWhere(planTermMonths),
     },
     select: { id: true },
   });

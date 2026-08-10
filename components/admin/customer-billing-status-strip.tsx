@@ -60,7 +60,9 @@ function SyncChip({ sync }: { sync: StripeSubscriptionSyncView }) {
           In sync with Stripe
         </span>
         <span className="max-w-[15rem] text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">
-          TL and Stripe agree on vehicle quantity
+          {sync.otherTermVehicleCount > 0
+            ? `Stripe track ${sync.tlVehicleCount} · ${sync.otherTermVehicleCount} on another term`
+            : "TL and Stripe agree on vehicle quantity"}
         </span>
       </div>
     );
@@ -73,7 +75,7 @@ function SyncChip({ sync }: { sync: StripeSubscriptionSyncView }) {
           Differs from Stripe
         </span>
         <span className="max-w-[15rem] text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">
-          TL {sync.tlVehicleCount} · Stripe {sync.stripeQuantity ?? "—"}
+          Stripe track TL {sync.tlVehicleCount} · Stripe {sync.stripeQuantity ?? "—"}
         </span>
       </div>
     );

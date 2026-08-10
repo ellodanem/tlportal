@@ -77,6 +77,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
       customerId={customer.id}
       billingMode={customer.billingMode}
       rows={renewalAssignments}
+      stripePlanTermMonths={savedPlanTermMonths}
     />
   );
 
@@ -108,6 +109,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         catalogConfigured={catalogConfigured}
         stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
         renewalRows={renewalAssignments}
+        stripePlanTermMonths={savedPlanTermMonths}
       />
     ) : null;
 

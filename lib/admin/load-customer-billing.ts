@@ -25,7 +25,10 @@ import {
 } from "@/lib/stripe/checkout-pricing";
 import { parseStripeBillingMetadata } from "@/lib/stripe/metadata";
 import { compareTlStripeSubscription } from "@/lib/services/stripe-subscription-sync-service";
-import { billableAssignmentWhere } from "@/lib/domain/service-assignment-queries";
+import {
+  billableAssignmentWhere,
+  stripeTrackAssignmentWhere,
+} from "@/lib/domain/service-assignment-queries";
 
 export async function loadCustomerBillingPageData(customerId: string) {
   const customer = await prisma.customer.findUnique({ where: { id: customerId } });
@@ -45,8 +48,13 @@ export async function loadCustomerBillingPageData(customerId: string) {
   const { monthlyRateXcd: planMonthlyRate, useCustomPricing: planUseCustom } =
     effectiveMonthlyRateForCheckout(ratePresetForPlans, savedMonthlyRate, defaultMonthlyRate);
 
+  const customerSubscriptionEarly = await getCurrentCustomerSubscription(customer.id);
+  const planTermForCount = customerSubscriptionEarly?.planTermMonths ?? null;
   const activeAssignmentCount = await prisma.serviceAssignment.count({
-    where: { customerId: customer.id, ...billableAssignmentWhere },
+    where:
+      customer.billingMode === "stripe_subscription" && planTermForCount != null
+        ? { customerId: customer.id, ...stripeTrackAssignmentWhere(planTermForCount) }
+        : { customerId: customer.id, ...billableAssignmentWhere },
   });
   const defaultVehicleCount = Math.max(1, activeAssignmentCount);
 
@@ -55,7 +63,6 @@ export async function loadCustomerBillingPageData(customerId: string) {
     stripeAccount,
     planOptions,
     stripeInvoices,
-    customerSubscription,
     billingSetup,
     renewalAssignments,
     paymentDeclineFollowUp,
@@ -69,13 +76,13 @@ export async function loadCustomerBillingPageData(customerId: string) {
         useCustomPricing: planUseCustom,
       }),
       listBillingInvoicesForCustomer(customer.id),
-      getCurrentCustomerSubscription(customer.id),
       getBillingSetupStatus(customer.id),
       listActiveAssignmentsForRenewal(customer.id),
       getLatestPaymentDeclineFollowUpForCustomer(customer.id),
       listOutstandingInvoiceReminderCandidates(customer.id),
     ]);
 
+  const customerSubscription = customerSubscriptionEarly;
   const stripeMeta = stripeAccount ? parseStripeBillingMetadata(stripeAccount.metadata) : null;
   const stripePeriodEnd = stripeMeta?.currentPeriodEnd
     ? new Date(stripeMeta.currentPeriodEnd).toLocaleDateString(undefined, {

@@ -53,7 +53,20 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 - Staff marks a period as paid on **Customer → Billing → Renewal ops** or **Manage device → Mark period paid**.
 - Updates: advance **`nextDueDate`** by **`intervalMonths`** from current next due (or start/today if unset), set **`lastPaymentStatus`**, optional **`lastInvoiceId`** ref.
 - **Mark all** active devices on one customer when one payment covers the fleet.
-- Stripe **`invoice.paid`** can auto-advance all active assignments (idempotent via **`lastInvoiceId`** = Stripe `in_…`); disable with `STRIPE_RENEWAL_AUTO_ADVANCE=false`.
+- Stripe **`invoice.paid`** auto-advances **Stripe-track** assignments only — those whose `intervalMonths` matches `CustomerSubscription.planTermMonths` (idempotent via **`lastInvoiceId`** = Stripe `in_…`); disable with `STRIPE_RENEWAL_AUTO_ADVANCE=false`. Other-term devices use **mark paid**.
+
+### Mixed terms + Stripe (implemented)
+
+Still **one Stripe subscription per customer**. When devices on the same customer use different billing terms:
+
+| Track | Who | Money | Due dates |
+|-------|-----|-------|-----------|
+| **Stripe track** | Active assignments with `intervalMonths === planTermMonths` | Stripe quantity + Checkout | Auto-advance on `invoice.paid` |
+| **Other-term track** | Different or unset `intervalMonths` | Invoiless / bank / mark paid — **not** Stripe qty | Device renewals only |
+
+- TL ↔ Stripe quantity compare / **Review & update Stripe** uses **Stripe-track count only** (`stripeTrackAssignmentWhere` in `lib/domain/service-assignment-queries.ts`).
+- Unset term devices are excluded from Stripe count and auto-advance; set term on Device renewals before syncing.
+- Ops: leave Stripe qty at the monthly (or matching-term) count; renew annual (or other-term) devices via mark paid. Do **not** push quantity to include other-term devices.
 
 ### Automatic paid _(TBD — placeholder only)_
 
@@ -64,7 +77,7 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 ## Invoice <-> multiple devices linking _(TBD — placeholder only)_
 
 - **Idea:** explicitly associate a generated invoice (or line items) with **one or more** `ServiceAssignment` rows so one payment can renew several devices with correct per-device intervals.
-- **Edge cases to design later:** partial pay, bundled vs per-line invoices, refunds, wrong line count, same customer / mixed terms.
+- **Edge cases still open:** partial pay, bundled vs per-line invoices, refunds, wrong line count. Mixed terms for **Stripe quantity / auto-advance** are handled via the Stripe-track rule above (no invoice line linking required).
 - **Status:** _not implemented — linking is optional future work; no schema/UI commitment in this doc beyond the concept._
 
 ## Relationship to dashboard
@@ -86,6 +99,8 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 | Dashboard | `lib/admin/dashboard-stats.ts`, `app/admin/page.tsx` |
 | Customer rollup | `lib/admin/customer-list.ts`, `app/admin/customers/*` |
 | Interval parse / labels | `lib/subscription-options/display.ts` |
+| Stripe-track where + sync | `lib/domain/service-assignment-queries.ts`, `lib/services/stripe-subscription-sync-service.ts` |
+| Stripe invoice.paid advance | `lib/services/assignment-renewal-service.ts` — `advanceAssignmentsOnStripeInvoicePaid` |
 
 ## Changelog (manual)
 
@@ -95,3 +110,4 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 | 2026-04-15 | Billing term (`intervalMonths`) editable on Manage device; also on assign/register flows; SIM detail shows term + link. |
 | 2026-04-16 | Invoiless webhook receiver `POST /api/webhooks/invoiless` + signature helper; GET inspect last payload (dev / debug token). |
 | 2026-05-21 | Phase 6: manual mark paid + bulk; Stripe `invoice.paid` auto-advance (`assignment-renewal-service`, billing tab Renewal ops). |
+| 2026-08-10 | Mixed terms: Stripe-track = assignments matching plan term; compare/push/auto-advance scoped; other-term via Device renewals. |

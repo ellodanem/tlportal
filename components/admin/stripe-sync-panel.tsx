@@ -34,6 +34,7 @@ export function StripeSyncPanel({
   const tl = sync.tlVehicleCount;
   const stripe = sync.stripeQuantity;
   const nextInvoiceLabel = sync.periodEndLabel ?? "next cycle";
+  const otherTerm = sync.otherTermVehicleCount;
 
   return (
     <section
@@ -47,10 +48,15 @@ export function StripeSyncPanel({
       {sync.reason ? (
         <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">{sync.reason}</p>
       ) : null}
+      {otherTerm > 0 ? (
+        <p className="mt-1 text-xs text-amber-900/70 dark:text-amber-100/70">
+          Updating Stripe changes the card subscription quantity only — not other-term devices.
+        </p>
+      ) : null}
 
       <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <dl className="flex flex-wrap gap-x-8 gap-y-3">
-          <DiffField label="Vehicles">
+          <DiffField label="Stripe-track vehicles">
             <span className="inline-flex items-center gap-1.5">
               <span className="text-zinc-500">TL</span>
               <span className="rounded bg-amber-200 px-1.5 py-0.5 font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
@@ -63,6 +69,13 @@ export function StripeSyncPanel({
               </span>
             </span>
           </DiffField>
+          {otherTerm > 0 ? (
+            <DiffField label="Other term">
+              <span className="text-zinc-700 dark:text-zinc-200">
+                {otherTerm} device{otherTerm === 1 ? "" : "s"} (Device renewals)
+              </span>
+            </DiffField>
+          ) : null}
           <DiffField label="Next invoice">
             <span className="text-zinc-700 dark:text-zinc-200">{nextInvoiceLabel}</span>
           </DiffField>
@@ -76,7 +89,6 @@ export function StripeSyncPanel({
             </DiffField>
           ) : null}
         </dl>
-
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

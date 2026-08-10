@@ -17,12 +17,14 @@ export function DeviceRenewalsModal({
   customerId,
   billingMode,
   rows,
+  stripePlanTermMonths = null,
 }: {
   open: boolean;
   onClose: () => void;
   customerId: string;
   billingMode: CustomerBillingMode;
   rows: CustomerRenewalOpsRow[];
+  stripePlanTermMonths?: number | null;
 }) {
   if (!open) return null;
 
@@ -61,9 +63,9 @@ export function DeviceRenewalsModal({
             billingMode={billingMode}
             rows={rows}
             alwaysExpandDevices
+            stripePlanTermMonths={stripePlanTermMonths}
           />
         </div>
-
         <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
           <button
             type="button"
