@@ -3231,3 +3231,8 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-08-10 11:03 UTC — commit `d79dee4`
+
+- Scope Stripe sync and renewals to matching plan terms.
+
