@@ -1,5 +1,6 @@
 import "server-only";
 
+import { activeInvoiceWhere } from "@/lib/admin/active-invoice-filter";
 import { displayInvoiceNumber } from "@/lib/domain/native-billing-cutover";
 import { prisma } from "@/lib/db";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
@@ -52,6 +53,7 @@ export async function listOutstandingInvoiceReminderCandidates(
     prisma.invoice.findMany({
       where: {
         customerId,
+        ...activeInvoiceWhere,
         status: { in: [...NATIVE_STATUSES] },
         amountDue: { gt: 0 },
         allowOnlinePayment: true,

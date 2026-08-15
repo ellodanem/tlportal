@@ -23,6 +23,7 @@ export async function createNativeInvoiceCheckoutSession(publicToken: string): P
       id: true,
       number: true,
       status: true,
+      archivedAt: true,
       currency: true,
       amountDue: true,
       allowOnlinePayment: true,
@@ -36,6 +37,9 @@ export async function createNativeInvoiceCheckoutSession(publicToken: string): P
   }
   if (!invoice.allowOnlinePayment) {
     return { ok: false, error: "This invoice does not accept online card payment." };
+  }
+  if (invoice.archivedAt) {
+    return { ok: false, error: "This invoice is no longer open for payment." };
   }
   if (!PAYABLE_STATUSES.has(invoice.status)) {
     return { ok: false, error: "This invoice is not open for payment." };

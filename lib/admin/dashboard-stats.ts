@@ -2,6 +2,7 @@ import "server-only";
 
 import type { FleetSegmentKey } from "@/lib/admin/fleet-segments";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
+import { activeInvoiceWhere } from "@/lib/admin/active-invoice-filter";
 import { opsUrgencyFromNextDueDate, opsUrgencyRank } from "@/lib/admin/assignment-ops-urgency";
 import { getGlobalFleetHealth } from "@/lib/admin/fleet-health";
 import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
@@ -166,6 +167,7 @@ export async function getDashboardStats() {
     }),
     prisma.invoice.count({
       where: {
+        ...activeInvoiceWhere,
         status: { in: [...OPEN_AR_STATUSES] },
         amountDue: { gt: 0 },
         dueDate: { lt: new Date() },

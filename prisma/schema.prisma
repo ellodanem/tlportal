@@ -1065,6 +1065,8 @@ model Invoice {
   sentAt      DateTime?
   paidAt      DateTime?
   voidedAt    DateTime?
+  /// Set when staff hides a churned / uncollectable invoice from active lists and AR.
+  archivedAt  DateTime?
 
   pdfStoragePath String?
   pdfGeneratedAt DateTime?
@@ -1102,6 +1104,7 @@ model Invoice {
   @@index([dueDate])
   @@index([updatedAt])
   @@index([recurringScheduleId])
+  @@index([archivedAt])
 }
 
 /// Staff-scheduled native invoice email (processed by daily cron).

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { InvoiceStatus, PaymentMethod } from "@prisma/client";
 
+import { activeInvoiceWhere } from "@/lib/admin/active-invoice-filter";
 import type { ArAgingBucket } from "@/lib/domain/billing-reports";
 import { monthRangeUtc } from "@/lib/domain/expenses";
 import { round2 } from "@/lib/domain/native-billing";
@@ -52,6 +53,7 @@ export type ArAgingReport = {
 export async function getArAgingReport(asOf = new Date()): Promise<ArAgingReport> {
   const invoices = await prisma.invoice.findMany({
     where: {
+      ...activeInvoiceWhere,
       status: { in: OPEN_AR_STATUSES },
       amountDue: { gt: 0 },
     },

@@ -28,7 +28,7 @@ export default async function PublicInvoicePayPage({
   const billTo =
     invoice.billToLines.length > 0 ? invoice.billToLines : [invoice.billToName ?? "Customer"];
   const isPaid = invoice.status === "paid";
-  const isVoid = invoice.status === "void" || invoice.status === "written_off";
+  const isVoid = invoice.status === "void" || invoice.status === "written_off" || Boolean(invoice.archivedAt);
   const recentPaymentFailure =
     !isPaid && !isVoid ? await getRecentNativeInvoicePaymentFailure(invoice.id) : null;
   const showPaymentFailedBanner =

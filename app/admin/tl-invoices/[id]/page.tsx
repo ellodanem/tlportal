@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ArchiveInvoiceButton, UnarchiveInvoiceButton } from "@/components/admin/archive-invoice-button";
 import { InvoiceDeclineFollowUpBanner } from "@/components/admin/invoice-decline-follow-up-banner";
 import { StripeSubscriptionInvoicePanel } from "@/components/admin/stripe-subscription-invoice-panel";
 import { InvoiceScheduledEmailBanner } from "@/components/admin/invoice-scheduled-email-banner";
@@ -106,6 +107,10 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
   };
 
   const isStripeMirror = invoice.kind === "subscription_mirror";
+  const isArchived = Boolean(invoice.archivedAt);
+  const displayNumber = displayInvoiceNumber(invoice);
+  const heading =
+    displayNumber === "—" && invoice.status === "draft" ? "Draft invoice" : displayNumber;
   const readOnly = invoice.status !== "draft" || isStripeMirror;
   const publicPayUrl =
     !isStripeMirror && invoice.publicToken && invoice.status !== "draft"
@@ -113,30 +118,49 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
       : null;
 
   const canRecordPayment =
+    !isArchived &&
     !isStripeMirror &&
     (invoice.status === "open" || invoice.status === "partially_paid" || invoice.status === "overdue");
   const canVoid =
+    !isArchived &&
     !isStripeMirror &&
     (invoice.status === "draft" || invoice.status === "open" || invoice.status === "partially_paid");
 
   return (
     <div className="flex flex-col gap-8">
+      {isArchived ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              <strong>Archived</strong>
+              {invoice.archivedAt
+                ? ` since ${invoice.archivedAt.toLocaleDateString(undefined, { dateStyle: "medium" })}`
+                : ""}{" "}
+              — hidden from the invoice list, AR aging, and billing reminders.
+            </p>
+            <UnarchiveInvoiceButton invoiceId={invoice.id} displayNumber={heading} />
+          </div>
+        </div>
+      ) : null}
       <div>
         <Link
-          href="/admin/tl-invoices"
+          href={isArchived ? "/admin/tl-invoices?view=archived" : "/admin/tl-invoices"}
           className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
         >
-          ← TL invoices
+          {isArchived ? "← Archived invoices" : "← TL invoices"}
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            {displayInvoiceNumber(invoice) === "—" && invoice.status === "draft"
-              ? "Draft invoice"
-              : displayInvoiceNumber(invoice)}
+            {heading}
           </h1>
           <span className={invoiceStatusBadgeClass(invoice.status)}>
             {INVOICE_STATUS_LABELS[invoice.status]}
           </span>
+          {isArchived ? (
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+              Archived
+            </span>
+          ) : null}
           <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
             {INVOICE_KIND_LABELS[invoice.kind]}
           </span>
@@ -160,7 +184,11 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         />
       ) : null}
 
-      {declineFollowUp && invoice.status !== "paid" && invoice.status !== "void" && invoice.status !== "written_off" ? (
+      {declineFollowUp &&
+      !isArchived &&
+      invoice.status !== "paid" &&
+      invoice.status !== "void" &&
+      invoice.status !== "written_off" ? (
         <InvoiceDeclineFollowUpBanner followUp={declineFollowUp} />
       ) : null}
 
@@ -228,6 +256,25 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
       ) : null}
 
       {canVoid ? <InvoiceVoidForm invoiceId={invoice.id} /> : null}
+
+      {!isArchived ? (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+          <p className="font-medium text-zinc-900 dark:text-zinc-100">Hide from lists</p>
+          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+            Archive this invoice if the customer churned or you no longer need it in AR. You can restore it later.
+            {isStripeMirror
+              ? " This does not void or write off the invoice in Stripe."
+              : ""}
+          </p>
+          <div className="mt-3">
+            <ArchiveInvoiceButton
+              invoiceId={invoice.id}
+              displayNumber={heading}
+              isStripeMirror={isStripeMirror}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {!isStripeMirror ? (
         <InvoiceGeneratorForm

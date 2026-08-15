@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Customer, CustomerSubscription } from "@prisma/client";
 
+import { activeInvoiceWhere } from "@/lib/admin/active-invoice-filter";
 import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
 import { prisma } from "@/lib/db";
 import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
@@ -44,6 +45,7 @@ async function nativeInvoicePayUrl(customerId: string): Promise<string | null> {
   const inv = await prisma.invoice.findFirst({
     where: {
       customerId,
+      ...activeInvoiceWhere,
       status: { in: ["open", "partially_paid", "overdue"] },
       amountDue: { gt: 0 },
       publicToken: { not: null },

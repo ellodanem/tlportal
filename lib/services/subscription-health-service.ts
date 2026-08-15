@@ -3,6 +3,7 @@ import "server-only";
 import type { CustomerSubscriptionStatus, InvoiceStatus } from "@prisma/client";
 
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
+import { activeInvoiceWhere } from "@/lib/admin/active-invoice-filter";
 import { opsUrgencyFromNextDueDate } from "@/lib/admin/assignment-ops-urgency";
 import { getGlobalFleetHealth } from "@/lib/admin/fleet-health";
 import {
@@ -181,6 +182,7 @@ export async function getSubscriptionHealthReport() {
     }),
     prisma.invoice.findMany({
       where: {
+        ...activeInvoiceWhere,
         status: { in: OPEN_AR_STATUSES },
         amountDue: { gt: 0 },
         dueDate: { lt: now },
