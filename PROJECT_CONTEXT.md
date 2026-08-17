@@ -3267,3 +3267,9 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-08-17 10:23 UTC — commit `1fc2c21`
+
+- Advance device due dates when Stripe invoices are paid.
+- Agent notes: Basil-aware Stripe invoice subscription id; resolve TL customer via subscription/billing account; auto-advance device next-due before PDF/Invoiless; retry webhooks after handler failure; catch-up on `customer.subscription.updated` when devices are still overdue; Device renewals **Apply latest Stripe payment**.
+
