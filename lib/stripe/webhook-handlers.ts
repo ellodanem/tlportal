@@ -12,10 +12,12 @@ import { recordNativeInvoiceStripeCheckout } from "@/lib/services/native-invoice
 import { generateAndStorePaidInvoicePdf } from "@/lib/services/billing-paid-pdf-service";
 import { autoEmailPaidInvoiceReceiptAfterPayment } from "@/lib/services/billing-paid-receipt-email-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import { catchUpOverdueRenewalsFromLatestPaidInvoice } from "@/lib/services/stripe-renewal-catchup-service";
 
 import { getStripeClient } from "./config";
 import { handleCheckoutSessionExpired } from "./checkout-recovery";
 import { syncStripeInvoiceToDatabase } from "./invoice-sync";
+import { stripeInvoiceSubscriptionId } from "./invoice-subscription";
 import { handleStripePaymentFailure, loadPaymentIntentForFailure } from "./payment-failure-recovery";
 import { markStripeSubscriptionCanceled, syncStripeSubscriptionToDatabase } from "./subscription-sync";
 
@@ -97,6 +99,21 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           customerId,
           payload: { subscriptionId: sub.id, status: sub.status },
         });
+        if (sub.status === "active" || sub.status === "trialing") {
+          try {
+            const catchUp = await catchUpOverdueRenewalsFromLatestPaidInvoice(customerId);
+            if (catchUp && catchUp.advanced > 0) {
+              await recordOperationalEvent({
+                category: "renewal.paid",
+                summary: `Renewal ladder catch-up (${catchUp.advanced} device${catchUp.advanced === 1 ? "" : "s"})`,
+                customerId,
+                payload: { subscriptionId: sub.id, ...catchUp, source: "subscription.updated" },
+              });
+            }
+          } catch (e) {
+            console.error("[stripe webhook] renewal catch-up failed", e);
+          }
+        }
       }
       break;
     }
@@ -129,10 +146,7 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     case "invoice.voided": {
       const invoice = event.data.object as Stripe.Invoice;
       const { customerId, invoiceId: tlBillingInvoiceId } = await syncStripeInvoiceToDatabase(invoice);
-      const subId =
-        typeof invoice.subscription === "string"
-          ? invoice.subscription
-          : invoice.subscription?.id;
+      const subId = stripeInvoiceSubscriptionId(invoice);
       if (subId) {
         const sub = await loadSubscription(subId);
         await syncStripeSubscriptionToDatabase(sub);
@@ -148,7 +162,40 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           }
         }
       }
+      if (event.type === "invoice.paid" && !customerId) {
+        console.error("[stripe webhook] invoice.paid: could not resolve TL customer", invoice.id);
+      }
       if (customerId && event.type === "invoice.paid") {
+        let advanced = 0;
+        let skipped = 0;
+        let advanceReason: string | undefined;
+        // Advance due dates before slow side effects (Invoiless, PDF, email) so a
+        // function timeout cannot skip the ops-visible Overdue rollup.
+        if (subId) {
+          try {
+            const result = await advanceAssignmentsOnStripeInvoicePaid(customerId, invoice.id);
+            advanced = result.advanced;
+            skipped = result.skipped;
+            advanceReason = result.reason;
+            if (advanced > 0) {
+              await recordOperationalEvent({
+                category: "renewal.paid",
+                summary: `Renewal ladder advanced (${advanced} device${advanced === 1 ? "" : "s"})`,
+                customerId,
+                payload: { stripeInvoiceId: invoice.id, advanced, skipped },
+              });
+            } else if (advanceReason) {
+              console.info("[stripe webhook] renewal auto-advance skipped", {
+                customerId,
+                invoiceId: invoice.id,
+                skipped,
+                reason: advanceReason,
+              });
+            }
+          } catch (e) {
+            console.error("[stripe webhook] renewal auto-advance failed", e);
+          }
+        }
         await recordOperationalEvent({
           category: "billing.synced",
           summary: `Stripe invoice paid${invoice.number ? ` — ${invoice.number}` : ""}`,
@@ -157,6 +204,9 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
             provider: "stripe",
             invoiceId: invoice.id,
             amountPaid: invoice.amount_paid,
+            advanced,
+            skipped,
+            advanceReason: advanceReason ?? null,
           },
         });
         try {
@@ -177,22 +227,6 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
               error: e instanceof Error ? e.message : "Unknown error",
             },
           });
-        }
-        try {
-          const { advanced, skipped } = await advanceAssignmentsOnStripeInvoicePaid(
-            customerId,
-            invoice.id,
-          );
-          if (advanced > 0) {
-            await recordOperationalEvent({
-              category: "renewal.paid",
-              summary: `Renewal ladder advanced (${advanced} device${advanced === 1 ? "" : "s"})`,
-              customerId,
-              payload: { stripeInvoiceId: invoice.id, advanced, skipped },
-            });
-          }
-        } catch (e) {
-          console.error("[stripe webhook] renewal auto-advance failed", e);
         }
         if (tlBillingInvoiceId) {
           try {
@@ -236,4 +270,9 @@ export async function recordStripeWebhookIfNew(event: Stripe.Event): Promise<boo
     }
     throw e;
   }
+}
+
+/** Drop the dedup row so Stripe can retry after a failed handler. */
+export async function releaseStripeWebhookEvent(eventId: string): Promise<void> {
+  await prisma.stripeWebhookEvent.deleteMany({ where: { id: eventId } });
 }

@@ -8,6 +8,7 @@ import { renewalActionInitialState } from "@/app/admin/customers/renewal-action-
 import {
   markAllCustomerAssignmentsPaidAction,
   markAssignmentPeriodPaidAction,
+  applyLatestPaidStripeInvoiceAction,
   updateAllCustomerAssignmentsBillingTermAction,
   updateAllCustomerAssignmentsNextDueAction,
   updateAssignmentBillingTermAction,
@@ -349,6 +350,10 @@ function RenewalOpsBody({
     updateAllCustomerAssignmentsBillingTermAction,
     renewalActionInitialState,
   );
+  const [applyStripeState, applyStripeAction] = useActionState(
+    applyLatestPaidStripeInvoiceAction,
+    renewalActionInitialState,
+  );
 
   const missingTerm = rows.some((r) => r.status !== "suspended" && r.intervalMonths == null);
   const isManual = billingMode === "manual_legacy";
@@ -500,6 +505,36 @@ function RenewalOpsBody({
         <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
           One or more assignments have no billing term — choose 1 / 3 / 6 / 12 months below before marking paid.
         </p>
+      ) : null}
+
+      {!isManual && billableRows.length > 0 ? (
+        <form
+          action={applyStripeAction}
+          className="mt-3 flex flex-col gap-2 rounded-lg border border-violet-200 bg-violet-50/70 p-3 dark:border-violet-900 dark:bg-violet-950/30 sm:flex-row sm:items-center sm:justify-between"
+          onSubmit={(e) => {
+            if (
+              !window.confirm(
+                "Apply the latest paid Stripe invoice to device due dates? This does not charge the card again.",
+              )
+            ) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <input type="hidden" name="customerId" value={customerId} />
+          <p className="text-sm text-violet-950 dark:text-violet-100">
+            Stripe charged but devices still look overdue? Apply the latest paid invoice to roll next due forward.
+          </p>
+          <MarkPaidSubmit label="Apply latest Stripe payment" />
+          {applyStripeState.error ? (
+            <p className="w-full text-sm text-red-600 sm:order-last">{applyStripeState.error}</p>
+          ) : null}
+          {applyStripeState.message ? (
+            <p className="w-full text-sm text-emerald-800 dark:text-emerald-200 sm:order-last">
+              {applyStripeState.message}
+            </p>
+          ) : null}
+        </form>
       ) : null}
 
       {showPriority ? (

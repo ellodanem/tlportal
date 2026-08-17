@@ -3256,3 +3256,14 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-08-15 13:01 UTC — commit `a8fee61`
+
+- Add invoice archive so churned overdue rows can be hidden from AR.
+- Agent notes: `Invoice.archivedAt` + reversible archive/restore on TL invoice detail; default list, AR aging, dashboard overdue counts, and reminders exclude archived rows. Stripe mirrors stay unchanged in Stripe.
+
+
+### 2026-08-15 13:01 UTC — pre-push (`main` → origin) @ `a8fee61`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

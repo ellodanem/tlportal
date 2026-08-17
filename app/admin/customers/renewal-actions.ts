@@ -9,6 +9,7 @@ import {
   updateAssignmentIntervalMonths,
   updateAssignmentNextDue,
 } from "@/lib/services/assignment-renewal-service";
+import { applyLatestPaidStripeInvoiceToRenewals } from "@/lib/services/stripe-renewal-catchup-service";
 import { formatAssignmentDateLabel, parseAssignmentDateInput } from "@/lib/domain/assignment-renewal";
 import { formatPlanTerm, parseSubscriptionIntervalMonths } from "@/lib/subscription-options/display";
 
@@ -317,5 +318,51 @@ export async function markAllCustomerAssignmentsPaidAction(
   return {
     error: null,
     message: `Marked ${ok} assignment${ok === 1 ? "" : "s"} paid${invoiceRef ? ` (ref ${invoiceRef})` : ""}.${errors.length ? ` ${errors.length} skipped (set billing term on device).` : ""}`,
+  };
+}
+
+export async function applyLatestPaidStripeInvoiceAction(
+  _prev: RenewalActionState,
+  formData: FormData,
+): Promise<RenewalActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) {
+    return { error: "Missing customer id." };
+  }
+
+  const result = await applyLatestPaidStripeInvoiceToRenewals(customerId);
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  revalidateRenewalPaths(customerId);
+
+  if (result.advanced > 0) {
+    return {
+      error: null,
+      message: `Applied Stripe payment to ${result.advanced} device${result.advanced === 1 ? "" : "s"}. Overdue should clear.`,
+    };
+  }
+  if (result.reason === "no_stripe_track_assignments") {
+    return {
+      error:
+        "Stripe payment found, but no devices match the Stripe plan term. Set billing term on Device renewals to match the plan, then try again.",
+    };
+  }
+  if (result.skipped > 0) {
+    return {
+      error: null,
+      message: "That Stripe invoice was already applied to these devices. Next due was not changed.",
+    };
+  }
+  return {
+    error: result.reason === "auto_advance_disabled"
+      ? "Stripe renewal auto-advance is disabled."
+      : "No devices were updated. Check billing terms on Device renewals.",
   };
 }

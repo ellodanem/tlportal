@@ -1,5 +1,9 @@
 import { getStripeClient, stripeWebhookSecret } from "@/lib/stripe/config";
-import { handleStripeWebhookEvent, recordStripeWebhookIfNew } from "@/lib/stripe/webhook-handlers";
+import {
+  handleStripeWebhookEvent,
+  recordStripeWebhookIfNew,
+  releaseStripeWebhookEvent,
+} from "@/lib/stripe/webhook-handlers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +48,7 @@ export async function POST(req: Request) {
     await handleStripeWebhookEvent(event);
   } catch (e) {
     console.error("[stripe webhook] handler error", e);
+    await releaseStripeWebhookEvent(event.id);
     return new Response("Handler error", { status: 500 });
   }
 

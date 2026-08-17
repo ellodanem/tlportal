@@ -212,28 +212,57 @@ async function resolveStripePlanTermMonths(customerId: string): Promise<number |
 /**
  * After Stripe `invoice.paid`, advance next due on Stripe-track assignments only
  * (intervalMonths matches the Stripe plan term). Other-term devices stay on Device renewals.
+ * If every live device has no term set, inherit the Stripe plan term then advance.
  * Idempotent per assignment via lastInvoiceId.
  */
 export async function advanceAssignmentsOnStripeInvoicePaid(
   customerId: string,
   stripeInvoiceId: string,
-): Promise<{ advanced: number; skipped: number }> {
+): Promise<{ advanced: number; skipped: number; reason?: string }> {
   if (!isStripeRenewalAutoAdvanceEnabled()) {
-    return { advanced: 0, skipped: 0 };
+    return { advanced: 0, skipped: 0, reason: "auto_advance_disabled" };
   }
 
   const planTermMonths = await resolveStripePlanTermMonths(customerId);
   if (planTermMonths == null) {
-    return { advanced: 0, skipped: 0 };
+    return { advanced: 0, skipped: 0, reason: "missing_plan_term" };
   }
 
-  const assignments = await prisma.serviceAssignment.findMany({
+  let assignments = await prisma.serviceAssignment.findMany({
     where: {
       customerId,
       ...stripeTrackAssignmentWhere(planTermMonths),
     },
     select: { id: true },
   });
+
+  if (assignments.length === 0) {
+    const billable = await prisma.serviceAssignment.findMany({
+      where: { customerId, ...billableAssignmentWhere },
+      select: { id: true, intervalMonths: true },
+    });
+    const unset = billable.filter((a) => a.intervalMonths == null);
+    const otherTerm = billable.filter(
+      (a) => a.intervalMonths != null && a.intervalMonths !== planTermMonths,
+    );
+    if (unset.length > 0 && otherTerm.length === 0) {
+      await prisma.serviceAssignment.updateMany({
+        where: { customerId, ...billableAssignmentWhere, intervalMonths: null },
+        data: { intervalMonths: planTermMonths },
+      });
+      assignments = unset.map((a) => ({ id: a.id }));
+    } else if (billable.length > 0) {
+      return {
+        advanced: 0,
+        skipped: billable.length,
+        reason: "no_stripe_track_assignments",
+      };
+    }
+  }
+
+  if (assignments.length === 0) {
+    return { advanced: 0, skipped: 0, reason: "no_assignments" };
+  }
 
   let advanced = 0;
   let skipped = 0;

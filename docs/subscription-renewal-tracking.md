@@ -53,7 +53,7 @@ _Implementation note:_ needs a daily job and a consistent timezone for "calendar
 - Staff marks a period as paid on **Customer → Billing → Renewal ops** or **Manage device → Mark period paid**.
 - Updates: advance **`nextDueDate`** by **`intervalMonths`** from current next due (or start/today if unset), set **`lastPaymentStatus`**, optional **`lastInvoiceId`** ref.
 - **Mark all** active devices on one customer when one payment covers the fleet.
-- Stripe **`invoice.paid`** auto-advances **Stripe-track** assignments only — those whose `intervalMonths` matches `CustomerSubscription.planTermMonths` (idempotent via **`lastInvoiceId`** = Stripe `in_…`); disable with `STRIPE_RENEWAL_AUTO_ADVANCE=false`. Other-term devices use **mark paid**.
+- Stripe **`invoice.paid`** auto-advances **Stripe-track** assignments only — those whose `intervalMonths` matches `CustomerSubscription.planTermMonths` (idempotent via **`lastInvoiceId`** = Stripe `in_…`); disable with `STRIPE_RENEWAL_AUTO_ADVANCE=false`. Other-term devices use **mark paid**. If **every** live device has no term, auto-advance inherits the Stripe plan term. Staff can **Apply latest Stripe payment** on Device renewals when a charge succeeded but next due did not move.
 
 ### Mixed terms + Stripe (implemented)
 
@@ -106,6 +106,7 @@ Still **one Stripe subscription per customer**. When devices on the same custome
 
 | Date | Note |
 |------|------|
+| 2026-08-17 | Stripe paid invoices: Basil-aware subscription id, auto-advance before PDF/Invoiless, webhook retry after handler failure, subscription.updated catch-up when devices are still overdue, Device renewals **Apply latest Stripe payment**. |
 | 2026-04-15 | Doc added: hybrid baseline + ladder, manual paid first; automatic paid and invoice linking explicitly deferred. |
 | 2026-04-15 | Billing term (`intervalMonths`) editable on Manage device; also on assign/register flows; SIM detail shows term + link. |
 | 2026-04-16 | Invoiless webhook receiver `POST /api/webhooks/invoiless` + signature helper; GET inspect last payload (dev / debug token). |

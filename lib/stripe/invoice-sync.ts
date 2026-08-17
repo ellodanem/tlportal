@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { syncBillingInvoiceToNativeMirror } from "@/lib/services/stripe-native-invoice-mirror-service";
 
 import { getStripeClient } from "./config";
+import { stripeInvoiceSubscriptionId } from "./invoice-subscription";
 
 function amountFromStripeMinor(units: number | null | undefined, currency: string): Prisma.Decimal {
   const n = units ?? 0;
@@ -22,9 +23,14 @@ export async function resolveTlCustomerIdFromStripeInvoice(
   const fromMeta = invoice.metadata?.tl_customer_id?.trim();
   if (fromMeta) return fromMeta;
 
-  const subRef = invoice.subscription;
-  const subId = typeof subRef === "string" ? subRef : subRef?.id;
+  const subId = stripeInvoiceSubscriptionId(invoice);
   if (subId) {
+    const bySub = await prisma.customerSubscription.findUnique({
+      where: { stripeSubscriptionId: subId },
+      select: { customerId: true },
+    });
+    if (bySub) return bySub.customerId;
+
     const stripe = getStripeClient();
     const sub = await stripe.subscriptions.retrieve(subId);
     const fromSub = sub.metadata?.tl_customer_id?.trim();
@@ -44,6 +50,13 @@ export async function resolveTlCustomerIdFromStripeInvoice(
       select: { customerId: true },
     });
     if (account) return account.customerId;
+
+    const byStripeCustomer = await prisma.customerSubscription.findFirst({
+      where: { stripeCustomerId },
+      orderBy: { updatedAt: "desc" },
+      select: { customerId: true },
+    });
+    if (byStripeCustomer) return byStripeCustomer.customerId;
   }
 
   return null;
@@ -65,9 +78,7 @@ export async function syncStripeInvoiceToDatabase(
     status === "paid"
       ? (invoice.amount_paid ?? invoice.total ?? 0)
       : (invoice.total ?? invoice.amount_due ?? 0);
-  const subRef = invoice.subscription;
-  const stripeSubscriptionId =
-    typeof subRef === "string" ? subRef : subRef?.id ?? null;
+  const stripeSubscriptionId = stripeInvoiceSubscriptionId(invoice);
 
   const kind: BillingInvoiceKind =
     stripeSubscriptionId != null ? "subscription" : "one_time";
