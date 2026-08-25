@@ -126,6 +126,17 @@ function formatDue(d: Date) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+export function customerListTotals(rows: CustomerTableRow[]) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.activeServices += row.activeServices;
+      acc.pausedServices += row.pausedServices;
+      return acc;
+    },
+    { activeServices: 0, pausedServices: 0 },
+  );
+}
+
 export function CustomersTable({
   rows,
   invoilessConfigured,
@@ -135,6 +146,8 @@ export function CustomersTable({
   invoilessConfigured: boolean;
   showArchived?: boolean;
 }) {
+  const totals = customerListTotals(rows);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
@@ -260,11 +273,59 @@ export function CustomersTable({
             ))
           )}
         </tbody>
+        {rows.length > 0 ? (
+          <tfoot className="border-t border-zinc-200 bg-zinc-50/90 dark:border-zinc-800 dark:bg-zinc-950/80">
+            <tr>
+              <th
+                scope="row"
+                className="px-4 py-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-300"
+              >
+                Total
+                <span className="ml-2 inline-flex flex-col font-semibold tabular-nums text-zinc-900 md:hidden dark:text-zinc-50">
+                  <span>
+                    {totals.activeServices}
+                    {totals.activeServices === 1 ? " service" : " services"}
+                  </span>
+                  {totals.pausedServices > 0 ? (
+                    <span className="font-medium text-zinc-500 dark:text-zinc-400">
+                      {totals.pausedServices === 1 ? "1 paused" : `${totals.pausedServices} paused`}
+                    </span>
+                  ) : null}
+                </span>
+              </th>
+              <td className="hidden px-4 py-3 md:table-cell">
+                <span className="block font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+                  {totals.activeServices}
+                </span>
+                {totals.pausedServices > 0 ? (
+                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                    {totals.pausedServices === 1 ? "1 paused" : `${totals.pausedServices} paused`}
+                  </span>
+                ) : null}
+              </td>
+              <td className="hidden lg:table-cell" />
+              <td className="hidden md:table-cell" />
+              <td />
+              <td />
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
     </div>
   );
 }
 
-export function customersTableTitle(count: number) {
-  return count === 0 ? "Customers" : `Customers (${count})`;
+function serviceCountLabel(activeServices: number) {
+  return activeServices === 1 ? "1 service" : `${activeServices} services`;
+}
+
+export function customersTableTitle(customerCount: number, activeServices?: number) {
+  if (customerCount === 0) return "Customers";
+  if (activeServices == null) return `Customers (${customerCount})`;
+  return `Customers (${customerCount}) · ${serviceCountLabel(activeServices)}`;
+}
+
+export function archivedCustomersTableTitle(customerCount: number, activeServices: number) {
+  if (customerCount === 0) return "Archived customers";
+  return `Archived customers (${customerCount}) · ${serviceCountLabel(activeServices)}`;
 }

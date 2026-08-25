@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-import { CustomersTable, customersTableTitle } from "@/components/admin/customers-table";
+import {
+  archivedCustomersTableTitle,
+  customerListTotals,
+  CustomersTable,
+  customersTableTitle,
+} from "@/components/admin/customers-table";
 import { buildCustomerTableRows } from "@/lib/admin/customer-table-rows";
 import { activeCustomerWhere, archivedCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { prisma } from "@/lib/db";
@@ -45,13 +50,16 @@ export default async function CustomersPage({ searchParams }: Props) {
   });
 
   const rows = buildCustomerTableRows(customers);
+  const totals = customerListTotals(rows);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            {showArchived ? `Archived customers (${rows.length})` : customersTableTitle(rows.length)}
+            {showArchived
+              ? archivedCustomersTableTitle(rows.length, totals.activeServices)
+              : customersTableTitle(rows.length, totals.activeServices)}
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             {showArchived
