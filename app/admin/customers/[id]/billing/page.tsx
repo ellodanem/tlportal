@@ -208,6 +208,13 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
 
       <p className="text-sm text-zinc-500">
         <Link
+          href={`/admin/customers/${customer.id}/statements`}
+          className="text-emerald-700 hover:underline dark:text-emerald-400"
+        >
+          Generate statement
+        </Link>
+        {" · "}
+        <Link
           href={`/admin/customers/${customer.id}/edit`}
           className="text-emerald-700 hover:underline dark:text-emerald-400"
         >

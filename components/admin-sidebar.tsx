@@ -53,6 +53,7 @@ function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyU
   const billingLinks: NavLink[] = [
     { href: "/admin/billing-health", label: "Health", Icon: IconNavHealth },
     { href: "/admin/tl-invoices", label: invoiceLabel, Icon: IconNavInvoice },
+    { href: "/admin/statements", label: "Statements", Icon: IconNavReports },
     { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
     { href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses },
   ];

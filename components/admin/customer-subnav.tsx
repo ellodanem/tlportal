@@ -3,6 +3,7 @@ import Link from "next/link";
 const tabs = [
   { segment: "", label: "Overview" },
   { segment: "billing", label: "Billing" },
+  { segment: "statements", label: "Statements" },
   { segment: "messages", label: "Messages" },
 ] as const;
 
@@ -11,7 +12,7 @@ export function CustomerSubnav({
   active,
 }: {
   customerId: string;
-  active: "overview" | "billing" | "messages";
+  active: "overview" | "billing" | "statements" | "messages";
 }) {
   return (
     <nav
