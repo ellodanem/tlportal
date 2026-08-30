@@ -10,6 +10,12 @@ import { recordOperationalEvent } from "@/lib/services/operational-event-service
 import { getCheckoutEmailBcc } from "./checkout-email-recipients";
 import { checkoutRecoveryEmailBody } from "./checkout-messaging";
 
+function parseMetaNumber(raw: string | undefined): number | null {
+  if (raw == null || !raw.trim()) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function hasCheckoutRecoveryBeenSent(
   customerId: string,
   checkoutSessionId: string,
@@ -103,7 +109,13 @@ export async function handleCheckoutSessionExpired(
   let emailError: string | null = null;
 
   if (email) {
-    const body = checkoutRecoveryEmailBody({ greetingName, recoveryUrl });
+    const body = checkoutRecoveryEmailBody({
+      greetingName,
+      recoveryUrl,
+      durationMonths: parseMetaNumber(session.metadata?.tl_duration_months) ?? undefined,
+      monthlyRateXcd: parseMetaNumber(session.metadata?.tl_monthly_rate_xcd),
+      vehicleCount: parseMetaNumber(session.metadata?.tl_vehicle_count) ?? undefined,
+    });
     const sent = await sendAppEmail({
       to: email,
       bcc: getCheckoutEmailBcc(),

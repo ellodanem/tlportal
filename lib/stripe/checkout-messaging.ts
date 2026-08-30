@@ -2,6 +2,8 @@
 
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
+import { checkoutListedVsCardSentence } from "./checkout-fee-copy";
+
 export const CHECKOUT_LINK_VALID_HOURS = 24;
 
 export const CHECKOUT_RECOVERY_VALID_DAYS = 30;
@@ -31,12 +33,21 @@ export function checkoutInitialEmailBody(input: {
   greetingName: string;
   paymentUrl: string;
   durationMonths: number;
+  monthlyRateXcd?: number | null;
+  vehicleCount?: number;
 }): { text: string; html: string } {
   const notice = checkoutInitialLinkNotice();
   const autoCharge = checkoutAutoChargeNotice(input.durationMonths);
+  const listedVsCard = checkoutListedVsCardSentence({
+    monthlyRateXcd: input.monthlyRateXcd,
+    durationMonths: input.durationMonths,
+    vehicleCount: input.vehicleCount,
+  });
   const text = `Hello ${input.greetingName},
 
 Please use the link below to enter your card and start your subscription.
+
+${listedVsCard.plain}
 
 ${input.paymentUrl}
 
@@ -50,6 +61,7 @@ If you have questions, reply to this email.
 
   const html = `<p>Hello ${escapeHtml(input.greetingName)},</p>
 <p>Please use the link below to enter your card and start your subscription.</p>
+<p>${listedVsCard.html}</p>
 <p><a href="${escapeHtml(input.paymentUrl)}">Complete subscription payment</a></p>
 <p>${autoCharge.html}</p>
 <p style="font-size:0.9em;color:#555">${escapeHtml(notice)}</p>
@@ -62,10 +74,24 @@ If you have questions, reply to this email.
 export function checkoutRecoveryEmailBody(input: {
   greetingName: string;
   recoveryUrl: string;
+  durationMonths?: number;
+  monthlyRateXcd?: number | null;
+  vehicleCount?: number;
 }): { text: string; html: string } {
+  const listedVsCard =
+    input.durationMonths != null
+      ? checkoutListedVsCardSentence({
+          monthlyRateXcd: input.monthlyRateXcd,
+          durationMonths: input.durationMonths,
+          vehicleCount: input.vehicleCount,
+        })
+      : null;
+  const listedBlock = listedVsCard ? `\n\n${listedVsCard.plain}` : "";
+  const listedHtml = listedVsCard ? `<p>${listedVsCard.html}</p>` : "";
   const text = `Hello ${input.greetingName},
 
 Your earlier Track Lucia payment link expired before checkout was completed. Use this link to finish subscribing (valid up to ${CHECKOUT_RECOVERY_VALID_DAYS} days):
+${listedBlock}
 
 ${input.recoveryUrl}
 
@@ -75,6 +101,7 @@ If you already paid or have questions, reply to this email.
 
   const html = `<p>Hello ${escapeHtml(input.greetingName)},</p>
 <p>Your earlier payment link expired. Use the link below to finish subscribing (valid up to ${CHECKOUT_RECOVERY_VALID_DAYS} days):</p>
+${listedHtml}
 <p><a href="${escapeHtml(input.recoveryUrl)}">Complete subscription payment</a></p>
 <p>If you already paid or have questions, reply to this email.</p>
 <p>— Track Lucia</p>`;

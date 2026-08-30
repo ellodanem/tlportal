@@ -11,6 +11,12 @@ import { formatXcd, formatPlanTerm } from "@/lib/subscription-options/display";
 import { periodTotalPerVehicleXcd } from "@/lib/domain/subscription-mrr";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { getStripeClient, isStripeBillingEnabled } from "@/lib/stripe/config";
+import {
+  grossUpUnitAmountCents,
+  hasFeePassthroughMetadata,
+  roundMoney,
+  stripeFeeRatesFromEnv,
+} from "@/lib/stripe/fees";
 import { syncStripeSubscriptionToDatabase } from "@/lib/stripe/subscription-sync";
 import { parseStripeBillingMetadata } from "@/lib/stripe/metadata";
 
@@ -31,9 +37,9 @@ export type StripeSubscriptionSyncView = {
   stripeSubscriptionId: string | null;
   stripeStatus: string | null;
   periodEndLabel: string | null;
-  /** Expected next period charge at TL Stripe-track vehicle count (from TL rate × term). */
+  /** Expected next Stripe charge at TL vehicle count (includes processing on new fee-passthrough subs). */
   tlNextChargeLabel: string | null;
-  /** Expected next period charge at current Stripe quantity. */
+  /** Current Stripe period total from the live subscription item. */
   stripeNextChargeLabel: string | null;
 };
 
@@ -48,11 +54,65 @@ function formatPeriodEnd(date: Date | null | undefined): string | null {
   });
 }
 
-function chargeLabel(monthlyRateXcd: number | null, planTermMonths: number, vehicles: number): string | null {
+function listedChargeLabel(monthlyRateXcd: number | null, planTermMonths: number, vehicles: number): string | null {
   if (monthlyRateXcd == null || !(monthlyRateXcd > 0) || vehicles < 1) return null;
   const perVehicle = periodTotalPerVehicleXcd(monthlyRateXcd, planTermMonths);
-  const total = Math.round(perVehicle * vehicles * 100) / 100;
-  return formatXcd(total);
+  return formatXcd(roundMoney(perVehicle * vehicles));
+}
+
+function expectedStripeChargeLabel(input: {
+  monthlyRateXcd: number | null;
+  planTermMonths: number;
+  vehicles: number;
+  feePassthrough: boolean;
+}): string | null {
+  if (!input.feePassthrough) {
+    return listedChargeLabel(input.monthlyRateXcd, input.planTermMonths, input.vehicles);
+  }
+  if (input.monthlyRateXcd == null || !(input.monthlyRateXcd > 0) || input.vehicles < 1) return null;
+  const net = roundMoney(periodTotalPerVehicleXcd(input.monthlyRateXcd, input.planTermMonths) * input.vehicles);
+  const unitCents = grossUpUnitAmountCents(net, input.vehicles, stripeFeeRatesFromEnv());
+  return formatXcd(roundMoney((unitCents * input.vehicles) / 100));
+}
+
+function stripeItemChargeLabel(item: Stripe.SubscriptionItem | undefined): string | null {
+  if (!item) return null;
+  const price = item.price;
+  const unit = price && typeof price !== "string" ? price.unit_amount : null;
+  const qty = Math.max(0, Math.trunc(item.quantity ?? 0));
+  if (unit == null || !Number.isFinite(unit) || qty < 1) return null;
+  return formatXcd(roundMoney((unit * qty) / 100));
+}
+
+function feePassthroughPriceData(input: {
+  item: Stripe.SubscriptionItem;
+  newQuantity: number;
+  monthlyRateXcd: number;
+  planTermMonths: number;
+}): Stripe.SubscriptionUpdateParams.Item | { error: string } {
+  const price = input.item.price;
+  if (!price || typeof price === "string") {
+    return { error: "Stripe price is not available; cannot recalculate processing." };
+  }
+  const productId = typeof price.product === "string" ? price.product : price.product?.id;
+  const recurring = price.recurring;
+  if (!productId || !recurring?.interval) {
+    return { error: "Stripe price is missing product or billing interval." };
+  }
+  const net = roundMoney(periodTotalPerVehicleXcd(input.monthlyRateXcd, input.planTermMonths) * input.newQuantity);
+  return {
+    id: input.item.id,
+    quantity: input.newQuantity,
+    price_data: {
+      currency: price.currency,
+      product: productId,
+      unit_amount: grossUpUnitAmountCents(net, input.newQuantity, stripeFeeRatesFromEnv()),
+      recurring: {
+        interval: recurring.interval,
+        interval_count: recurring.interval_count ?? input.planTermMonths,
+      },
+    },
+  };
 }
 
 async function countStripeTrackAssignments(
@@ -229,8 +289,16 @@ export async function compareTlStripeSubscription(
       : tlSub?.currentPeriodEnd ?? null;
   const resolvedPeriodLabel = formatPeriodEnd(resolvedPeriodEnd);
 
-  const tlNextChargeLabel = chargeLabel(monthlyRate, planTermMonths, tlVehicleCount);
-  const stripeNextChargeLabel = chargeLabel(monthlyRate, planTermMonths, Math.max(1, stripeQuantity));
+  const feePassthrough = hasFeePassthroughMetadata(sub.metadata);
+  const chargeArgs = {
+    monthlyRateXcd: monthlyRate,
+    planTermMonths,
+    feePassthrough,
+  };
+  const tlNextChargeLabel = expectedStripeChargeLabel({ ...chargeArgs, vehicles: tlVehicleCount });
+  const stripeNextChargeLabel =
+    stripeItemChargeLabel(sub.items.data[0]) ??
+    expectedStripeChargeLabel({ ...chargeArgs, vehicles: Math.max(1, stripeQuantity) });
 
   const offTrack = otherTermNote(otherTermVehicleCount);
 
@@ -344,10 +412,43 @@ export async function pushTlVehicleCountToStripe(input: {
     return { ok: false, error: "Stripe quantity already matches TL." };
   }
 
+  const itemUpdate: Stripe.SubscriptionUpdateParams.Item = { id: item.id, quantity: newQuantity };
+  if (hasFeePassthroughMetadata(sub.metadata)) {
+    const tlSub = await prisma.customerSubscription.findFirst({
+      where: { customerId: input.customerId, stripeSubscriptionId: sub.id },
+      orderBy: { updatedAt: "desc" },
+      select: { monthlyRateXcd: true, planTermMonths: true },
+    });
+    const customer = await prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: { stripeMonthlyRateXcd: true },
+    });
+    const monthlyRate =
+      tlSub?.monthlyRateXcd != null
+        ? Number(tlSub.monthlyRateXcd)
+        : customer?.stripeMonthlyRateXcd != null
+          ? Number(customer.stripeMonthlyRateXcd)
+          : null;
+    const planTermMonths = tlSub?.planTermMonths ?? compare.planTermMonths ?? 1;
+    if (monthlyRate == null || !(monthlyRate > 0)) {
+      return { ok: false, error: "Cannot recalculate card processing without a listed monthly rate." };
+    }
+    const priced = feePassthroughPriceData({
+      item,
+      newQuantity,
+      monthlyRateXcd: monthlyRate,
+      planTermMonths,
+    });
+    if ("error" in priced) {
+      return { ok: false, error: priced.error };
+    }
+    Object.assign(itemUpdate, priced);
+  }
+
   let updated: Stripe.Subscription;
   try {
     updated = await stripe.subscriptions.update(sub.id, {
-      items: [{ id: item.id, quantity: newQuantity }],
+      items: [itemUpdate],
       proration_behavior: "none",
       metadata: {
         ...sub.metadata,

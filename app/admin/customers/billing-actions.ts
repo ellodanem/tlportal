@@ -326,6 +326,8 @@ export async function getStripeCheckoutSendPreview(
   const emailPreview = buildStripeCheckoutEmailPreview({
     greetingName,
     durationMonths: parsed.months,
+    monthlyRateXcd: parsed.monthlyRateXcd,
+    vehicleCount: parsed.vehicleCount,
   });
 
   return {
@@ -474,6 +476,8 @@ export async function sendStripeCheckoutToCustomerAction(
         greetingName,
         paymentUrl: stableUrl,
         durationMonths: parsed.months,
+        monthlyRateXcd: parsed.monthlyRateXcd,
+        vehicleCount: parsed.vehicleCount,
       });
       const sent = await sendAppEmail({
         to: emailTo,
@@ -585,10 +589,7 @@ export async function sendStripeCheckoutToCustomerAction(
     if (emailSent) channelParts.push("email");
     if (whatsappSent) channelParts.push("WhatsApp");
 
-    const pricingNote =
-      checkout.pricingMode === "catalog"
-        ? "Using Stripe catalog price × vehicle count."
-        : "Using dynamic pricing.";
+    const pricingNote = "Listed rate plus card processing (new subscriptions).";
 
     return {
       error: partialErrors.length > 0 ? partialErrors.join(" ") : null,
@@ -657,10 +658,7 @@ export async function startStripeCheckoutAction(
 
     revalidateCustomerBillingPaths(parsed.customerId);
 
-    const pricingNote =
-      result.pricingMode === "catalog"
-        ? "Using Stripe catalog price × vehicle count."
-        : "Using dynamic pricing (custom or missing catalog Price).";
+    const pricingNote = "Listed rate plus card processing (new subscriptions).";
 
     const stableUrl = `${getAppBaseUrl()}/pay/go/${encodeURIComponent(payLinkToken)}`;
     return {
@@ -742,6 +740,8 @@ export async function emailStripeCheckoutLinkAction(
       greetingName: name,
       paymentUrl: stableUrl,
       durationMonths: parsed.months,
+      monthlyRateXcd: parsed.monthlyRateXcd,
+      vehicleCount: parsed.vehicleCount,
     });
 
     const sent = await sendAppEmail({

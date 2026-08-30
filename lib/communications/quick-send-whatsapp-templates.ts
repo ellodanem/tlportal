@@ -45,10 +45,14 @@ export const QUICK_WHATSAPP_TEMPLATES: QuickWhatsAppTemplateDef[] = [
     description: "Stripe Checkout subscription link.",
     fields: [
       { key: "1", label: "First name", fromFirstName: true },
-      { key: "2", label: "Amount / term", placeholder: "EC$25 · 1 month · 1 vehicle" },
+      {
+        key: "2",
+        label: "Amount / term",
+        placeholder: "EC$330 listed · card total EC$349.70 includes processing · 12 months · 1 vehicle",
+      },
       { key: "3", label: "Pay link", placeholder: "https://…" },
       { key: "4", label: "Validity", placeholder: "24 hours" },
-      { key: "5", label: "Billing term", placeholder: "3 months" },
+      { key: "5", label: "Billing term", placeholder: "12 months" },
     ],
   },
   {
@@ -57,10 +61,14 @@ export const QUICK_WHATSAPP_TEMPLATES: QuickWhatsAppTemplateDef[] = [
     description: "Resend variant of the Checkout link template.",
     fields: [
       { key: "1", label: "First name", fromFirstName: true },
-      { key: "2", label: "Amount / term", placeholder: "EC$25 · 1 month · 1 vehicle" },
+      {
+        key: "2",
+        label: "Amount / term",
+        placeholder: "EC$330 listed · card total EC$349.70 includes processing · 12 months · 1 vehicle",
+      },
       { key: "3", label: "Pay link", placeholder: "https://…" },
       { key: "4", label: "Validity", placeholder: "24 hours" },
-      { key: "5", label: "Billing term", placeholder: "3 months" },
+      { key: "5", label: "Billing term", placeholder: "12 months" },
     ],
   },
   {

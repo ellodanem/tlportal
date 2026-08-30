@@ -4,37 +4,42 @@ import type { Customer } from "@prisma/client";
 import type Stripe from "stripe";
 
 import { getAppBaseUrl } from "./app-url";
-import { getStripeClient } from "./config";
+import {
+  checkoutFeeBreakdown,
+  checkoutProductCopy,
+} from "./checkout-fee-copy";
 import {
   resolveCheckoutLineItem,
   stripeCheckoutCurrency,
-  xcdToStripeUnitAmount,
   type CheckoutLineItem,
 } from "./checkout-pricing";
+import { getStripeClient } from "./config";
 import { ensureStripeCustomerForTlCustomer } from "./customer";
 
 function lineItemFromResolved(item: CheckoutLineItem): Stripe.Checkout.SessionCreateParams.LineItem {
-  if (item.type === "price_id") {
-    return { price: item.priceId, quantity: item.quantity };
-  }
-
-  const months = item.durationMonths;
-  const vehicles = item.quantity;
-  const productName =
-    vehicles > 1
-      ? `Track Lucia — ${months === 1 ? "monthly" : `${months} months`} · ${vehicles} vehicles · ${item.monthlyRateXcd} XCD/mo each`
-      : months === 1
-        ? `Track Lucia — ${item.monthlyRateXcd} XCD / vehicle / month`
-        : `Track Lucia — ${months} months · ${item.monthlyRateXcd} XCD / vehicle / month`;
+  const breakdown = checkoutFeeBreakdown({
+    monthlyRateXcd: item.monthlyRateXcd,
+    durationMonths: item.durationMonths,
+    vehicleCount: item.quantity,
+  });
+  const product = checkoutProductCopy({
+    durationMonths: item.durationMonths,
+    vehicleCount: item.quantity,
+    listedTotalXcd: breakdown.listedTotalXcd,
+    cardTotalXcd: breakdown.cardTotalXcd,
+  });
 
   return {
     price_data: {
       currency: stripeCheckoutCurrency(),
-      product_data: { name: productName },
-      unit_amount: xcdToStripeUnitAmount(item.periodTotalPerVehicleXcd),
+      product_data: {
+        name: product.name,
+        description: product.description,
+      },
+      unit_amount: breakdown.unitAmountCents,
       recurring: {
         interval: "month",
-        interval_count: months,
+        interval_count: item.durationMonths,
       },
     },
     quantity: item.quantity,
@@ -63,9 +68,7 @@ export async function createStripeSubscriptionCheckout(input: {
     );
   }
 
-  const pricingMode = resolved.type === "price_id" ? "catalog" : "dynamic";
-  const effectiveMonthly =
-    resolved.type === "price_id" ? resolved.monthlyRateXcd : resolved.monthlyRateXcd;
+  const effectiveMonthly = resolved.monthlyRateXcd;
 
   const { stripeCustomerId } = await ensureStripeCustomerForTlCustomer(input.customer);
   const stripe = getStripeClient();
@@ -75,9 +78,10 @@ export async function createStripeSubscriptionCheckout(input: {
     tl_subscription_id: input.tlSubscriptionId,
     tl_duration_months: String(input.durationMonths),
     tl_vehicle_count: String(Math.max(1, input.vehicleCount)),
-    tl_pricing_mode: pricingMode,
+    tl_pricing_mode: "dynamic",
+    tl_fee_passthrough: "1",
+    tl_monthly_rate_xcd: String(effectiveMonthly),
   };
-  meta.tl_monthly_rate_xcd = String(effectiveMonthly);
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -101,5 +105,5 @@ export async function createStripeSubscriptionCheckout(input: {
     throw new Error("Stripe did not return a Checkout URL.");
   }
 
-  return { url: session.url, sessionId: session.id, pricingMode };
+  return { url: session.url, sessionId: session.id, pricingMode: "dynamic" };
 }

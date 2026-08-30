@@ -93,10 +93,10 @@ export default async function SubscriptionOptionsPage() {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Stripe catalog (per vehicle)</h2>
           <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">
             Map each monthly rate tier and billing term to a Stripe Price id (
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">price_…</code>). Checkout uses{" "}
-            <strong>quantity = vehicle count</strong> on that Price. Tiers:{" "}
-            {CATALOG_RATE_TIERS_XCD.map((t) => `${t} XCD`).join(", ")} per vehicle / month. Non-catalog custom rates
-            still use dynamic pricing at checkout.
+            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">price_…</code>). Existing live subscriptions
+            may still use these Prices. <strong>New Checkout links</strong> charge the listed rate plus card
+            processing (quantity stays vehicle count). Tiers:{" "}
+            {CATALOG_RATE_TIERS_XCD.map((t) => `${t} XCD`).join(", ")} per vehicle / month.
           </p>
         </div>
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

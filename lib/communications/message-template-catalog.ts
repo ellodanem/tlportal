@@ -85,11 +85,16 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
   const checkoutEmail = checkoutInitialEmailBody({
     greetingName: SAMPLE.firstName,
     paymentUrl: SAMPLE.payUrl,
-    durationMonths: 1,
+    durationMonths: 12,
+    monthlyRateXcd: 30,
+    vehicleCount: 1,
   });
   const checkoutRecovery = checkoutRecoveryEmailBody({
     greetingName: SAMPLE.firstName,
     recoveryUrl: SAMPLE.payUrl,
+    durationMonths: 12,
+    monthlyRateXcd: 30,
+    vehicleCount: 1,
   });
 
   return [
@@ -133,6 +138,7 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
       variables: [
         { token: "Name", meaning: "Customer greeting name" },
         { token: "Pay link", meaning: "Stripe Checkout link" },
+        { token: "Listed vs card total", meaning: "Listed period amount and card total including processing" },
         { token: "Billing term", meaning: "1 month / 3 months / … (auto-charge line)" },
       ],
       preview: { subject: "Complete your Track Lucia subscription payment", body: checkoutEmail.text },
@@ -179,7 +185,7 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
       trigger: "Staff sends a Stripe Checkout link over WhatsApp (initial + resend variants).",
       variables: [
         { token: "{{1}}", meaning: "First name" },
-        { token: "{{2}}", meaning: "Amount / term / vehicles" },
+        { token: "{{2}}", meaning: "Listed amount · card total includes processing · term · vehicles" },
         { token: "{{3}}", meaning: "Pay link" },
         { token: "{{4}}", meaning: "Validity window" },
         { token: "{{5}}", meaning: "Billing term (e.g. 3 months) for the auto-charge line" },

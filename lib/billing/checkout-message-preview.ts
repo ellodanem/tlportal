@@ -49,11 +49,15 @@ export function buildStripeCheckoutWhatsAppPreview(input: {
 export function buildStripeCheckoutEmailPreview(input: {
   greetingName: string;
   durationMonths: number;
+  monthlyRateXcd?: number | null;
+  vehicleCount?: number;
 }): { text: string; html: string } {
   return checkoutInitialEmailBody({
     greetingName: input.greetingName,
     paymentUrl: PAY_LINK_PLACEHOLDER,
     durationMonths: input.durationMonths,
+    monthlyRateXcd: input.monthlyRateXcd,
+    vehicleCount: input.vehicleCount,
   });
 }
 

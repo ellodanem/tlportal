@@ -4,7 +4,8 @@ import type { Customer } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
-import { formatPlanTerm, formatXcd } from "@/lib/subscription-options/display";
+import { checkoutAmountLine } from "@/lib/stripe/checkout-fee-copy";
+import { formatXcd } from "@/lib/subscription-options/display";
 import { checkoutAutoChargeNotice, CHECKOUT_LINK_VALID_HOURS } from "@/lib/stripe/checkout-messaging";
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { toWhatsAppAddress } from "@/lib/twilio/phone";
@@ -183,13 +184,7 @@ export function buildStripeCheckoutAmountLine(input: {
   durationMonths: number;
   vehicleCount: number;
 }): string {
-  const term = formatPlanTerm(input.durationMonths);
-  const vehicles = Math.max(1, input.vehicleCount);
-  if (input.monthlyRateXcd != null && input.monthlyRateXcd > 0) {
-    const perPeriod = input.monthlyRateXcd * input.durationMonths * vehicles;
-    return `${formatXcd(perPeriod)} · ${term} · ${vehicles} vehicle${vehicles === 1 ? "" : "s"}`;
-  }
-  return `${term} · ${vehicles} vehicle${vehicles === 1 ? "" : "s"}`;
+  return checkoutAmountLine(input);
 }
 
 export function sumInvoiceItemsXcd(

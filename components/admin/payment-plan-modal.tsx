@@ -213,12 +213,9 @@ function PaymentPlanModalBody({
             </p>
           ) : null}
           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-            {ratePreset === "custom"
-              ? "Custom tiers use dynamic per-vehicle pricing."
-              : catalogConfigured
-                ? "Catalog tiers use Stripe Price × vehicle count."
-                : "No catalog Price for this tier/term — dynamic pricing. Add Price ids under Subscription options."}{" "}
-            {checkoutInitialLinkNotice()}
+            New payment links charge the listed rate plus card processing. Existing card subscriptions keep their
+            current Stripe price
+            {catalogConfigured ? " (including catalog Prices already on file)" : ""}. {checkoutInitialLinkNotice()}
           </p>
 
           {planOptions.length > 0 ? (
