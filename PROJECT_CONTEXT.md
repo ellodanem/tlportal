@@ -3329,3 +3329,9 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-09-04 22:29 UTC — commit `a9be653`
+
+- Show the billed cycle on Stripe invoices, not proration span.
+- Agent notes: Ignore Stripe proration / unused-time lines when storing `BillingInvoice` period; load line items if the invoice payload omitted them.
+
