@@ -3335,3 +3335,8 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Show the billed cycle on Stripe invoices, not proration span.
 - Agent notes: Ignore Stripe proration / unused-time lines when storing `BillingInvoice` period; load line items if the invoice payload omitted them.
 
+
+### 2026-09-04 22:29 UTC — commit `4fbac5f`
+
+- docs: sync project context log from git hooks
+
