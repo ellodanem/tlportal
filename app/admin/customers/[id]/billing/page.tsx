@@ -189,11 +189,13 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
               About mirrored invoices
             </summary>
             <p className="mt-2">
-              Mirrored from Stripe webhooks. Amounts use Stripe’s billed total (not amount paid, so
-              failed cards do not appear as EC$0). Only paid rows get a{" "}
+              Mirrored from Stripe webhooks (and <strong>Sync from Stripe</strong> if a webhook was
+              missed). Amounts use Stripe’s billed total (not amount paid, so failed cards do not
+              appear as EC$0). Only paid rows get a{" "}
               <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code> number and
-              TL receipt PDF when Vercel Blob is configured. Invoiless Paid mirror runs when the customer
-              is linked there.
+              TL receipt PDF when Vercel Blob is configured. Paid receipts are emailed to the
+              customer automatically when SMTP and Settings allow. Invoiless Paid mirror runs when
+              the customer is linked there.
             </p>
           </details>
           <div className="mt-4">

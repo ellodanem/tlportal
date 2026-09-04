@@ -9,7 +9,10 @@ import {
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
 import { advanceAssignmentsOnStripeInvoicePaid } from "@/lib/services/assignment-renewal-service";
 import { getStripeClient, isStripeBillingEnabled } from "@/lib/stripe/config";
-import { syncStripeInvoiceToDatabase } from "@/lib/stripe/invoice-sync";
+import {
+  resolveStripeCustomerIdForTlCustomer,
+  syncStripeInvoiceToDatabase,
+} from "@/lib/stripe/invoice-sync";
 
 export type ApplyLatestPaidStripeInvoiceResult =
   | {
@@ -88,6 +91,25 @@ async function customerNeedsStripeRenewalCatchUp(customerId: string): Promise<bo
 }
 
 async function resolveLatestPaidStripeInvoiceId(customerId: string): Promise<string | null> {
+  const stripeCustomerId = await resolveStripeCustomerIdForTlCustomer(customerId);
+  if (stripeCustomerId) {
+    try {
+      const stripe = getStripeClient();
+      const listed = await stripe.invoices.list({
+        customer: stripeCustomerId,
+        status: "paid",
+        limit: 1,
+      });
+      const fromCustomer = listed.data[0];
+      if (fromCustomer?.id) {
+        await syncStripeInvoiceToDatabase(fromCustomer);
+        return fromCustomer.id;
+      }
+    } catch (e) {
+      console.error("[stripe renewal catch-up] list invoices by customer failed", e);
+    }
+  }
+
   const mirrored = await prisma.billingInvoice.findFirst({
     where: {
       customerId,

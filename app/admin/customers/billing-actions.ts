@@ -17,6 +17,8 @@ import {
   generateAndStorePaidInvoicePdf,
 } from "@/lib/services/billing-paid-pdf-service";
 import { sendPaidInvoiceReceiptEmail } from "@/lib/services/billing-paid-receipt-email-service";
+import { syncStripeInvoicesForCustomer } from "@/lib/services/stripe-invoice-backfill-service";
+import { applyLatestPaidStripeInvoiceToRenewals } from "@/lib/services/stripe-renewal-catchup-service";
 import {
   createPendingCustomerSubscription,
   getCurrentCustomerSubscription,
@@ -978,6 +980,61 @@ export async function regenerateBillingInvoicePdfAction(
     message: result.skipped
       ? "PDF already stored."
       : `PDF generated (${result.displayNumber}).`,
+  };
+}
+
+export async function syncStripeInvoicesFromStripeAction(
+  _prev: BillingInvoiceActionState,
+  formData: FormData,
+): Promise<BillingInvoiceActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be signed in." };
+  }
+
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) {
+    return { error: "Missing customer." };
+  }
+
+  const result = await syncStripeInvoicesForCustomer(customerId);
+
+  if (!result.ok) {
+    revalidatePath(`/admin/customers/${customerId}/billing`);
+    return { error: result.error };
+  }
+
+  if (result.listed === 0) {
+    revalidatePath(`/admin/customers/${customerId}/billing`);
+    return { error: null, message: "Stripe has no invoices for this customer yet." };
+  }
+
+  let renewalNote = "";
+  try {
+    const renewal = await applyLatestPaidStripeInvoiceToRenewals(customerId);
+    if (renewal.ok && renewal.advanced > 0) {
+      renewalNote = ` Advanced ${renewal.advanced} device due date${renewal.advanced === 1 ? "" : "s"}.`;
+    }
+  } catch {
+    // Non-fatal; invoices are already mirrored.
+  }
+
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath("/admin/customers");
+
+  const emailNote =
+    result.receipts.emailed > 0
+      ? ` Emailed ${result.receipts.emailed} paid receipt${result.receipts.emailed === 1 ? "" : "s"}.`
+      : "";
+  const failNote =
+    result.receipts.failed > 0
+      ? ` ${result.receipts.failed} receipt step(s) still pending (PDF or email).`
+      : "";
+
+  return {
+    error: null,
+    message: `Mirrored ${result.mirrored} of ${result.listed} Stripe invoice${result.listed === 1 ? "" : "s"}.${emailNote}${failNote}${renewalNote}`,
   };
 }
 

@@ -1,12 +1,14 @@
 import { getStripeClient, stripeWebhookSecret } from "@/lib/stripe/config";
 import {
   handleStripeWebhookEvent,
+  isStripePaidInvoiceReplaySafe,
   recordStripeWebhookIfNew,
   releaseStripeWebhookEvent,
 } from "@/lib/stripe/webhook-handlers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * POST — Stripe webhooks. Configure in Stripe Dashboard:
@@ -16,7 +18,8 @@ export const dynamic = "force-dynamic";
  *
  * Subscribe to: checkout.session.completed, checkout.session.expired,
  * customer.subscription.*, invoice.paid, invoice.finalized,
- * invoice.payment_failed, invoice.voided, payment_intent.payment_failed.
+ * invoice.payment_failed, invoice.voided, payment_intent.payment_failed,
+ * payment_intent.succeeded.
  */
 export async function POST(req: Request) {
   const secret = stripeWebhookSecret();
@@ -40,7 +43,7 @@ export async function POST(req: Request) {
   }
 
   const isNew = await recordStripeWebhookIfNew(event);
-  if (!isNew) {
+  if (!isNew && !isStripePaidInvoiceReplaySafe(event.type)) {
     return Response.json({ ok: true, duplicate: true });
   }
 
@@ -48,9 +51,11 @@ export async function POST(req: Request) {
     await handleStripeWebhookEvent(event);
   } catch (e) {
     console.error("[stripe webhook] handler error", e);
-    await releaseStripeWebhookEvent(event.id);
+    if (isNew) {
+      await releaseStripeWebhookEvent(event.id);
+    }
     return new Response("Handler error", { status: 500 });
   }
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, duplicate: !isNew });
 }

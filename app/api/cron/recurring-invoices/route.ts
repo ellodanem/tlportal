@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 
 import { processDueRecurringSchedules } from "@/lib/services/native-recurring-schedule-service";
 import { processDueScheduledInvoiceEmails } from "@/lib/services/scheduled-invoice-email-service";
+import { fulfillPendingPaidStripeReceipts } from "@/lib/services/billing-paid-receipt-fulfillment-service";
+import { backfillRecentPaidStripeInvoices } from "@/lib/services/stripe-invoice-backfill-service";
 import { backfillStripeNativeInvoiceMirrors } from "@/lib/services/stripe-native-invoice-mirror-service";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-/** Daily recurring invoice generation + native invoice overdue marking. Bearer CRON_SECRET. */
+/** Daily recurring invoice generation + Stripe invoice / receipt catch-up. Bearer CRON_SECRET. */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {
@@ -22,10 +24,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const [recurring, stripeMirror, scheduledEmails] = await Promise.all([
+  const [recurring, scheduledEmails, stripeCatchUp] = await Promise.all([
     processDueRecurringSchedules(),
-    backfillStripeNativeInvoiceMirrors(),
     processDueScheduledInvoiceEmails(),
+    (async () => {
+      const stripeInvoices = await backfillRecentPaidStripeInvoices();
+      const stripeMirror = await backfillStripeNativeInvoiceMirrors();
+      const paidReceipts = await fulfillPendingPaidStripeReceipts(25);
+      return { stripeInvoices, stripeMirror, paidReceipts };
+    })(),
   ]);
-  return NextResponse.json({ ...recurring, stripeMirror, scheduledEmails });
+  return NextResponse.json({
+    ...recurring,
+    scheduledEmails,
+    ...stripeCatchUp,
+  });
 }

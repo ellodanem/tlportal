@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { syncBillingInvoiceToNativeMirror } from "@/lib/services/stripe-native-invoice-mirror-service";
 
 import { getStripeClient } from "./config";
+import { stripeInvoicePeriod } from "./invoice-period";
 import { stripeInvoiceSubscriptionId } from "./invoice-subscription";
 
 function amountFromStripeMinor(units: number | null | undefined, currency: string): Prisma.Decimal {
@@ -62,6 +63,24 @@ export async function resolveTlCustomerIdFromStripeInvoice(
   return null;
 }
 
+export async function resolveStripeCustomerIdForTlCustomer(
+  customerId: string,
+): Promise<string | null> {
+  const account = await prisma.billingAccount.findUnique({
+    where: { customerId_provider: { customerId, provider: "stripe" } },
+    select: { externalCustomerId: true },
+  });
+  const fromAccount = account?.externalCustomerId?.trim();
+  if (fromAccount) return fromAccount;
+
+  const sub = await prisma.customerSubscription.findFirst({
+    where: { customerId, stripeCustomerId: { not: null } },
+    orderBy: { updatedAt: "desc" },
+    select: { stripeCustomerId: true },
+  });
+  return sub?.stripeCustomerId?.trim() || null;
+}
+
 export async function syncStripeInvoiceToDatabase(
   invoice: Stripe.Invoice,
 ): Promise<{ customerId: string | null; invoiceId: string | null }> {
@@ -83,9 +102,7 @@ export async function syncStripeInvoiceToDatabase(
   const kind: BillingInvoiceKind =
     stripeSubscriptionId != null ? "subscription" : "one_time";
 
-  const periodStart =
-    invoice.period_start != null ? new Date(invoice.period_start * 1000) : null;
-  const periodEnd = invoice.period_end != null ? new Date(invoice.period_end * 1000) : null;
+  const { start: periodStart, end: periodEnd } = stripeInvoicePeriod(invoice);
   const paidAt =
     invoice.status_transitions?.paid_at != null
       ? new Date(invoice.status_transitions.paid_at * 1000)

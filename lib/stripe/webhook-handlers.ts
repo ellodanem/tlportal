@@ -9,8 +9,7 @@ import {
   recordInvoilessMirrorEvent,
 } from "@/lib/services/invoiless-stripe-mirror-service";
 import { recordNativeInvoiceStripeCheckout } from "@/lib/services/native-invoice-stripe-payment-service";
-import { generateAndStorePaidInvoicePdf } from "@/lib/services/billing-paid-pdf-service";
-import { autoEmailPaidInvoiceReceiptAfterPayment } from "@/lib/services/billing-paid-receipt-email-service";
+import { fulfillPaidStripeInvoiceReceipt } from "@/lib/services/billing-paid-receipt-fulfillment-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { catchUpOverdueRenewalsFromLatestPaidInvoice } from "@/lib/services/stripe-renewal-catchup-service";
 
@@ -27,9 +26,124 @@ function stripeInvoicePaymentIntentId(invoice: Stripe.Invoice): string | null {
   return ref?.id ?? null;
 }
 
+function stripePaymentIntentInvoiceId(paymentIntent: Stripe.PaymentIntent): string | null {
+  const pi = paymentIntent as Stripe.PaymentIntent & {
+    invoice?: string | Stripe.Invoice | null;
+  };
+  const ref = pi.invoice;
+  if (typeof ref === "string") {
+    const id = ref.trim();
+    return id || null;
+  }
+  return ref?.id?.trim() || null;
+}
+
+/** Duplicate invoice.paid / payment_intent.succeeded should still finish PDF + email. */
+export function isStripePaidInvoiceReplaySafe(eventType: string): boolean {
+  return eventType === "invoice.paid" || eventType === "payment_intent.succeeded";
+}
+
 async function loadSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
   const stripe = getStripeClient();
   return stripe.subscriptions.retrieve(subscriptionId);
+}
+
+async function fulfillPaidInvoiceReceiptBestEffort(billingInvoiceId: string): Promise<void> {
+  try {
+    const result = await fulfillPaidStripeInvoiceReceipt(billingInvoiceId);
+    if (!result.pdfOk) {
+      console.error("[stripe webhook] paid PDF failed", result.pdfError);
+      return;
+    }
+    if (!result.emailOk) {
+      console.error("[stripe webhook] paid receipt email failed", result.emailError);
+      return;
+    }
+    if (result.emailSkipped) {
+      console.info("[stripe webhook] paid receipt email skipped", result.emailSkipped);
+    }
+  } catch (e) {
+    console.error("[stripe webhook] paid receipt fulfillment failed", e);
+  }
+}
+
+async function processPaidStripeInvoice(invoice: Stripe.Invoice): Promise<void> {
+  const { customerId, invoiceId: tlBillingInvoiceId } = await syncStripeInvoiceToDatabase(invoice);
+  const subId = stripeInvoiceSubscriptionId(invoice);
+  if (subId) {
+    const sub = await loadSubscription(subId);
+    await syncStripeSubscriptionToDatabase(sub);
+  }
+  if (!customerId) {
+    console.error("[stripe webhook] invoice.paid: could not resolve TL customer", invoice.id);
+    return;
+  }
+
+  let advanced = 0;
+  let skipped = 0;
+  let advanceReason: string | undefined;
+  // Advance due dates before slow side effects (Invoiless, PDF, email) so a
+  // function timeout cannot skip the ops-visible Overdue rollup.
+  if (subId) {
+    try {
+      const result = await advanceAssignmentsOnStripeInvoicePaid(customerId, invoice.id);
+      advanced = result.advanced;
+      skipped = result.skipped;
+      advanceReason = result.reason;
+      if (advanced > 0) {
+        await recordOperationalEvent({
+          category: "renewal.paid",
+          summary: `Renewal ladder advanced (${advanced} device${advanced === 1 ? "" : "s"})`,
+          customerId,
+          payload: { stripeInvoiceId: invoice.id, advanced, skipped },
+        });
+      } else if (advanceReason) {
+        console.info("[stripe webhook] renewal auto-advance skipped", {
+          customerId,
+          invoiceId: invoice.id,
+          skipped,
+          reason: advanceReason,
+        });
+      }
+    } catch (e) {
+      console.error("[stripe webhook] renewal auto-advance failed", e);
+    }
+  }
+  await recordOperationalEvent({
+    category: "billing.synced",
+    summary: `Stripe invoice paid${invoice.number ? ` — ${invoice.number}` : ""}`,
+    customerId,
+    payload: {
+      provider: "stripe",
+      invoiceId: invoice.id,
+      amountPaid: invoice.amount_paid,
+      advanced,
+      skipped,
+      advanceReason: advanceReason ?? null,
+    },
+  });
+  try {
+    const mirrorResult = await mirrorStripePaidInvoiceToInvoiless({
+      stripeInvoice: invoice,
+      customerId,
+      tlBillingInvoiceId,
+    });
+    await recordInvoilessMirrorEvent(customerId, invoice.id, mirrorResult);
+  } catch (e) {
+    console.error("[stripe webhook] Invoiless paid mirror failed", e);
+    await recordOperationalEvent({
+      category: "billing.synced",
+      summary: "Invoiless paid mirror error",
+      customerId,
+      payload: {
+        stripeInvoiceId: invoice.id,
+        error: e instanceof Error ? e.message : "Unknown error",
+      },
+    });
+  }
+  if (tlBillingInvoiceId) {
+    await fulfillPaidInvoiceReceiptBestEffort(tlBillingInvoiceId);
+  }
 }
 
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
@@ -140,12 +254,45 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       }
       break;
     }
-    case "invoice.paid":
+    case "payment_intent.succeeded": {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const invoiceId = stripePaymentIntentInvoiceId(paymentIntent);
+      if (!invoiceId) break;
+      try {
+        const already = await prisma.billingInvoice.findUnique({
+          where: {
+            provider_externalInvoiceId: { provider: "stripe", externalInvoiceId: invoiceId },
+          },
+          select: { pdfGeneratedAt: true, receiptEmailedAt: true, status: true },
+        });
+        if (
+          already?.status.toLowerCase() === "paid" &&
+          already.pdfGeneratedAt &&
+          already.receiptEmailedAt
+        ) {
+          break;
+        }
+        const stripe = getStripeClient();
+        const invoice = await stripe.invoices.retrieve(invoiceId);
+        if (invoice.status === "paid") {
+          await processPaidStripeInvoice(invoice);
+        } else {
+          await syncStripeInvoiceToDatabase(invoice);
+        }
+      } catch (e) {
+        console.error("[stripe webhook] payment_intent.succeeded invoice sync failed", e);
+      }
+      break;
+    }
+    case "invoice.paid": {
+      await processPaidStripeInvoice(event.data.object as Stripe.Invoice);
+      break;
+    }
     case "invoice.finalized":
     case "invoice.payment_failed":
     case "invoice.voided": {
       const invoice = event.data.object as Stripe.Invoice;
-      const { customerId, invoiceId: tlBillingInvoiceId } = await syncStripeInvoiceToDatabase(invoice);
+      await syncStripeInvoiceToDatabase(invoice);
       const subId = stripeInvoiceSubscriptionId(invoice);
       if (subId) {
         const sub = await loadSubscription(subId);
@@ -159,94 +306,6 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
             await handleStripePaymentFailure({ paymentIntent, stripeInvoice: invoice });
           } catch (e) {
             console.error("[stripe webhook] invoice payment failure recovery failed", e);
-          }
-        }
-      }
-      if (event.type === "invoice.paid" && !customerId) {
-        console.error("[stripe webhook] invoice.paid: could not resolve TL customer", invoice.id);
-      }
-      if (customerId && event.type === "invoice.paid") {
-        let advanced = 0;
-        let skipped = 0;
-        let advanceReason: string | undefined;
-        // Advance due dates before slow side effects (Invoiless, PDF, email) so a
-        // function timeout cannot skip the ops-visible Overdue rollup.
-        if (subId) {
-          try {
-            const result = await advanceAssignmentsOnStripeInvoicePaid(customerId, invoice.id);
-            advanced = result.advanced;
-            skipped = result.skipped;
-            advanceReason = result.reason;
-            if (advanced > 0) {
-              await recordOperationalEvent({
-                category: "renewal.paid",
-                summary: `Renewal ladder advanced (${advanced} device${advanced === 1 ? "" : "s"})`,
-                customerId,
-                payload: { stripeInvoiceId: invoice.id, advanced, skipped },
-              });
-            } else if (advanceReason) {
-              console.info("[stripe webhook] renewal auto-advance skipped", {
-                customerId,
-                invoiceId: invoice.id,
-                skipped,
-                reason: advanceReason,
-              });
-            }
-          } catch (e) {
-            console.error("[stripe webhook] renewal auto-advance failed", e);
-          }
-        }
-        await recordOperationalEvent({
-          category: "billing.synced",
-          summary: `Stripe invoice paid${invoice.number ? ` — ${invoice.number}` : ""}`,
-          customerId,
-          payload: {
-            provider: "stripe",
-            invoiceId: invoice.id,
-            amountPaid: invoice.amount_paid,
-            advanced,
-            skipped,
-            advanceReason: advanceReason ?? null,
-          },
-        });
-        try {
-          const mirrorResult = await mirrorStripePaidInvoiceToInvoiless({
-            stripeInvoice: invoice,
-            customerId,
-            tlBillingInvoiceId,
-          });
-          await recordInvoilessMirrorEvent(customerId, invoice.id, mirrorResult);
-        } catch (e) {
-          console.error("[stripe webhook] Invoiless paid mirror failed", e);
-          await recordOperationalEvent({
-            category: "billing.synced",
-            summary: "Invoiless paid mirror error",
-            customerId,
-            payload: {
-              stripeInvoiceId: invoice.id,
-              error: e instanceof Error ? e.message : "Unknown error",
-            },
-          });
-        }
-        if (tlBillingInvoiceId) {
-          try {
-            const pdfResult = await generateAndStorePaidInvoicePdf(tlBillingInvoiceId);
-            if (!pdfResult.ok) {
-              console.error("[stripe webhook] paid PDF failed", pdfResult.error);
-            } else {
-              try {
-                const emailResult = await autoEmailPaidInvoiceReceiptAfterPayment(tlBillingInvoiceId);
-                if (!emailResult.ok) {
-                  console.error("[stripe webhook] paid receipt email failed", emailResult.error);
-                } else if ("skipped" in emailResult && emailResult.skipped) {
-                  console.info("[stripe webhook] paid receipt email skipped", emailResult.reason);
-                }
-              } catch (e) {
-                console.error("[stripe webhook] paid receipt email failed", e);
-              }
-            }
-          } catch (e) {
-            console.error("[stripe webhook] paid PDF failed", e);
           }
         }
       }

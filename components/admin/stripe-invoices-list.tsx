@@ -6,6 +6,7 @@ import type { BillingInvoiceClientRow } from "@/lib/admin/billing-invoice-client
 import {
   emailBillingInvoicePdfAction,
   regenerateBillingInvoicePdfAction,
+  syncStripeInvoicesFromStripeAction,
   type BillingInvoiceActionState,
 } from "@/app/admin/customers/billing-actions";
 import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
@@ -135,20 +136,58 @@ export function StripeInvoicesList({
   customerId: string;
   customerEmail: string | null;
 }) {
+  const [syncState, syncAction, syncPending] = useActionState(
+    syncStripeInvoicesFromStripeAction,
+    invoiceActionInitial,
+  );
+
+  const syncForm = (
+    <form action={syncAction} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+      <input type="hidden" name="customerId" value={customerId} />
+      <button
+        type="submit"
+        disabled={syncPending}
+        className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 sm:w-auto dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+      >
+        {syncPending ? "Syncing…" : "Sync from Stripe"}
+      </button>
+    </form>
+  );
+
+  const syncFeedback =
+    syncState.error || syncState.message ? (
+      <p className={`text-sm ${syncState.error ? "text-rose-600" : "text-emerald-800 dark:text-emerald-200"}`}>
+        {syncState.error ?? syncState.message}
+      </p>
+    ) : null;
+
   if (invoices.length === 0) {
     return (
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        No Stripe invoices mirrored yet. They appear after Checkout and subscription renewals (webhooks:
-        invoice.paid, invoice.finalized). Paid invoices receive a TL-branded PDF and{" "}
-        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code> number when Blob
-        storage is configured; paid receipts are emailed automatically when SMTP and Settings allow.
-        Open or failed renewals stay mirrored for ops but do not get a TL invoice number or receipt.
-      </p>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          No Stripe invoices mirrored yet. They appear after Checkout and subscription renewals, or
+          use <strong>Sync from Stripe</strong> if a payment succeeded in Stripe but is missing here.
+          Paid invoices receive a TL-branded PDF and{" "}
+          <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code> number when Blob
+          storage is configured; paid receipts are emailed automatically when SMTP and Settings allow.
+        </p>
+        {syncForm}
+        {syncFeedback}
+      </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          If Stripe shows a payment that is missing below, sync pulls invoices and emails receipts
+          that were never sent.
+        </p>
+        {syncForm}
+      </div>
+      {syncFeedback}
+      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
       <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
         <thead className="bg-zinc-50 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
@@ -237,6 +276,7 @@ export function StripeInvoicesList({
           </span>
         </span>
       </div>
+    </div>
     </div>
   );
 }
