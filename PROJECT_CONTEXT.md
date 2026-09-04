@@ -3313,3 +3313,9 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-09-04 22:19 UTC — commit `9b91d04`
+
+- Pull missed Stripe invoices and retry paid receipt emails.
+- Agent notes: Billing **Sync from Stripe**; daily cron backfill of recent paid Stripe invoices plus pending TL PDF/receipt email; duplicate `invoice.paid` still fulfills receipts; `payment_intent.succeeded` fallback; renewal catch-up lists the latest paid invoice from Stripe instead of a stale mirrored row.
+
