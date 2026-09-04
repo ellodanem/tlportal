@@ -81,6 +81,24 @@ export async function resolveStripeCustomerIdForTlCustomer(
   return sub?.stripeCustomerId?.trim() || null;
 }
 
+async function invoiceWithLineItems(invoice: Stripe.Invoice): Promise<Stripe.Invoice> {
+  const lines = invoice.lines;
+  if (lines?.data && lines.data.length > 0 && lines.has_more !== true) {
+    return invoice;
+  }
+  const stripe = getStripeClient();
+  const listed = await stripe.invoices.listLineItems(invoice.id, { limit: 50 });
+  return {
+    ...invoice,
+    lines: {
+      object: "list",
+      data: listed.data,
+      has_more: listed.has_more,
+      url: listed.url,
+    },
+  } as Stripe.Invoice;
+}
+
 export async function syncStripeInvoiceToDatabase(
   invoice: Stripe.Invoice,
 ): Promise<{ customerId: string | null; invoiceId: string | null }> {
@@ -102,7 +120,9 @@ export async function syncStripeInvoiceToDatabase(
   const kind: BillingInvoiceKind =
     stripeSubscriptionId != null ? "subscription" : "one_time";
 
-  const { start: periodStart, end: periodEnd } = stripeInvoicePeriod(invoice);
+  const { start: periodStart, end: periodEnd } = stripeInvoicePeriod(
+    await invoiceWithLineItems(invoice),
+  );
   const paidAt =
     invoice.status_transitions?.paid_at != null
       ? new Date(invoice.status_transitions.paid_at * 1000)
