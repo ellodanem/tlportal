@@ -3,7 +3,11 @@ import "server-only";
 import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
-import { fulfillPaidStripeInvoiceReceipt } from "@/lib/services/billing-paid-receipt-fulfillment-service";
+import { generateAndStorePaidInvoicePdf } from "@/lib/services/billing-paid-pdf-service";
+import {
+  fulfillPaidStripeInvoiceReceipt,
+  pendingPaidStripeReceiptWhere,
+} from "@/lib/services/billing-paid-receipt-fulfillment-service";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
 import { getStripeClient, isStripeBillingEnabled } from "@/lib/stripe/config";
 import {
@@ -100,14 +104,25 @@ export async function syncStripeInvoicesForCustomer(
   }
 
   const receipts = { pdfOk: 0, emailed: 0, skipped: 0, failed: 0 };
-  const paidRows = await prisma.billingInvoice.findMany({
+
+  const missingPdfs = await prisma.billingInvoice.findMany({
     where: {
       customerId,
       provider: "stripe",
       status: { equals: "paid", mode: "insensitive" },
-      OR: [{ pdfGeneratedAt: null }, { receiptEmailedAt: null }],
+      pdfGeneratedAt: null,
     },
-    select: { id: true, pdfGeneratedAt: true, receiptEmailedAt: true },
+    select: { id: true },
+  });
+  for (const row of missingPdfs) {
+    const pdf = await generateAndStorePaidInvoicePdf(row.id);
+    if (pdf.ok) receipts.pdfOk += 1;
+    else receipts.failed += 1;
+  }
+
+  const paidRows = await prisma.billingInvoice.findMany({
+    where: pendingPaidStripeReceiptWhere(customerId),
+    select: { id: true },
   });
 
   for (const row of paidRows) {
@@ -134,8 +149,9 @@ export async function syncStripeInvoicesForCustomer(
 }
 
 /**
- * Daily catch-up: mirror recently paid Stripe invoices (missed webhooks), then
- * retry TL PDF + receipt email for paid rows still pending.
+ * Daily catch-up: mirror recently paid Stripe invoices (missed webhooks).
+ * Receipt emails for those rows are handled separately and only for payments
+ * in the auto-receipt window.
  */
 export async function backfillRecentPaidStripeInvoices(): Promise<{
   listed: number;

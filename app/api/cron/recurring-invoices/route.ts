@@ -9,7 +9,7 @@ import { backfillStripeNativeInvoiceMirrors } from "@/lib/services/stripe-native
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-/** Daily recurring invoice generation + Stripe invoice / receipt catch-up. Bearer CRON_SECRET. */
+/** Daily recurring invoice generation + Stripe invoice mirror. Receipt catch-up only for recent payments. Bearer CRON_SECRET. */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {

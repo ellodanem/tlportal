@@ -126,8 +126,8 @@ export async function syncStripeInvoiceToDatabase(
   const paidAt =
     invoice.status_transitions?.paid_at != null
       ? new Date(invoice.status_transitions.paid_at * 1000)
-      : status === "paid"
-        ? new Date()
+      : status === "paid" && invoice.created != null
+        ? new Date(invoice.created * 1000)
         : null;
 
   const row = await prisma.billingInvoice.upsert({
@@ -163,7 +163,7 @@ export async function syncStripeInvoiceToDatabase(
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
       invoicePdfUrl: invoice.invoice_pdf ?? null,
       stripeSubscriptionId,
-      paidAt,
+      ...(paidAt ? { paidAt } : {}),
     },
   });
 

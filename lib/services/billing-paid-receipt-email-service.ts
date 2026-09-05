@@ -3,6 +3,7 @@ import "server-only";
 import nodemailer from "nodemailer";
 
 import { isAutoEmailPaidStripeReceiptsEnabled } from "@/lib/billing/auto-receipt-email-settings";
+import { paidAtQualifiesForAutoReceiptEmail } from "@/lib/billing/auto-receipt-email-window";
 import { parseInvoiceEmailCcBccList } from "@/lib/billing/invoice-email-recipients";
 import { prisma } from "@/lib/db";
 import { getSmtpMailFrom, getSmtpTransportOptions } from "@/lib/email/smtp-settings";
@@ -94,6 +95,14 @@ export async function sendPaidInvoiceReceiptEmail(
       ok: true,
       skipped: true,
       reason: `Receipt already emailed on ${row.receiptEmailedAt.toISOString()}.`,
+    };
+  }
+
+  if (source === "webhook" && !options?.force && !paidAtQualifiesForAutoReceiptEmail(row.paidAt)) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "Payment is older than the auto-receipt window; email only from Billing if needed.",
     };
   }
 

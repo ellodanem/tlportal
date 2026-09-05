@@ -9,6 +9,7 @@ import {
   syncStripeInvoicesFromStripeAction,
   type BillingInvoiceActionState,
 } from "@/app/admin/customers/billing-actions";
+import { AUTO_RECEIPT_EMAIL_MAX_AGE_DAYS } from "@/lib/billing/auto-receipt-email-window";
 import { invoilessInvoicePreviewUrl } from "@/lib/invoiless/preview-url";
 import { formatXcd } from "@/lib/subscription-options/display";
 
@@ -169,7 +170,8 @@ export function StripeInvoicesList({
           use <strong>Sync from Stripe</strong> if a payment succeeded in Stripe but is missing here.
           Paid invoices receive a TL-branded PDF and{" "}
           <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code> number when Blob
-          storage is configured; paid receipts are emailed automatically when SMTP and Settings allow.
+          storage is configured; paid receipts are emailed automatically for recent payments when SMTP and
+          Settings allow. Older invoices are not emailed by sync — use Email on the row.
         </p>
         {syncForm}
         {syncFeedback}
@@ -181,8 +183,9 @@ export function StripeInvoicesList({
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          If Stripe shows a payment that is missing below, sync pulls invoices and emails receipts
-          that were never sent.
+          If Stripe shows a payment that is missing below, sync pulls invoices. Receipts are emailed
+          automatically only for payments in the last {AUTO_RECEIPT_EMAIL_MAX_AGE_DAYS} days; older paid
+          invoices stay here until you email them from this row.
         </p>
         {syncForm}
       </div>

@@ -7,6 +7,7 @@ import {
   type AutoReceiptEmailFormState,
   updateAutoEmailPaidStripeReceipts,
 } from "@/app/admin/settings/actions";
+import { AUTO_RECEIPT_EMAIL_MAX_AGE_DAYS } from "@/lib/billing/auto-receipt-email-window";
 
 const initialState: AutoReceiptEmailFormState = {};
 
@@ -49,7 +50,9 @@ export function AutoReceiptEmailForm({ initialEnabled }: { initialEnabled: boole
           <span>
             <span className="font-medium">Email paid receipt automatically</span>
             <span className="mt-1 block text-zinc-600 dark:text-zinc-400">
-              Applies to initial Checkout payments and subscription renewals when webhooks run.
+              Applies to Checkout and renewals when webhooks run, and to Sync from Stripe for payments in
+              the last {AUTO_RECEIPT_EMAIL_MAX_AGE_DAYS} days. Older paid invoices are not emailed
+              automatically; use Email on the Billing invoice row.
             </span>
           </span>
         </label>

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
+import { autoReceiptEmailPaidAtCutoff, paidAtQualifiesForAutoReceiptEmail } from "@/lib/billing/auto-receipt-email-window";
 import { generateAndStorePaidInvoicePdf } from "@/lib/services/billing-paid-pdf-service";
 import { autoEmailPaidInvoiceReceiptAfterPayment } from "@/lib/services/billing-paid-receipt-email-service";
 
@@ -12,6 +13,17 @@ export type FulfillPaidReceiptResult = {
   emailError?: string;
   emailSkipped?: string;
 };
+
+export function pendingPaidStripeReceiptWhere(customerId?: string) {
+  const cutoff = autoReceiptEmailPaidAtCutoff();
+  return {
+    ...(customerId ? { customerId } : {}),
+    provider: "stripe" as const,
+    status: { equals: "paid", mode: "insensitive" as const },
+    receiptEmailedAt: null,
+    paidAt: { gte: cutoff },
+  };
+}
 
 /**
  * Generate the TL paid PDF if needed, then auto-email the receipt (Settings + SMTP).
@@ -27,6 +39,19 @@ export async function fulfillPaidStripeInvoiceReceipt(
       pdfOk: false,
       emailOk: false,
       pdfError: pdfResult.error,
+    };
+  }
+
+  const paidMeta = await prisma.billingInvoice.findUnique({
+    where: { id: billingInvoiceId },
+    select: { paidAt: true },
+  });
+  if (!paidAtQualifiesForAutoReceiptEmail(paidMeta?.paidAt)) {
+    return {
+      billingInvoiceId,
+      pdfOk: true,
+      emailOk: true,
+      emailSkipped: "Payment is older than the auto-receipt window; email only from Billing if needed.",
     };
   }
 
@@ -57,11 +82,7 @@ export async function fulfillPendingPaidStripeReceipts(limit = 25): Promise<{
   errors: { billingInvoiceId: string; message: string }[];
 }> {
   const rows = await prisma.billingInvoice.findMany({
-    where: {
-      provider: "stripe",
-      status: { equals: "paid", mode: "insensitive" },
-      OR: [{ pdfGeneratedAt: null }, { receiptEmailedAt: null }],
-    },
+    where: pendingPaidStripeReceiptWhere(),
     orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
     take: Math.max(1, Math.min(limit, 50)),
     select: { id: true },
