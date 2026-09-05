@@ -61,6 +61,7 @@ export function PaymentPlanModal({
   savedPlanTermMonths,
   defaultVehicleCount,
   catalogConfigured,
+  stripeFeePassthrough = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -71,12 +72,13 @@ export function PaymentPlanModal({
   savedPlanTermMonths: number | null;
   defaultVehicleCount: number;
   catalogConfigured: boolean;
+  stripeFeePassthrough?: boolean;
 }) {
   if (!open) return null;
 
   return (
     <PaymentPlanModalBody
-      key={`${customerId}-${stripeMonthlyRateXcd ?? "default"}-${savedPlanTermMonths ?? "none"}-${defaultVehicleCount}`}
+      key={`${customerId}-${stripeMonthlyRateXcd ?? "default"}-${savedPlanTermMonths ?? "none"}-${defaultVehicleCount}-${stripeFeePassthrough ? "fee" : "absorb"}`}
       onClose={onClose}
       customerId={customerId}
       planOptions={planOptions}
@@ -85,6 +87,7 @@ export function PaymentPlanModal({
       savedPlanTermMonths={savedPlanTermMonths}
       defaultVehicleCount={defaultVehicleCount}
       catalogConfigured={catalogConfigured}
+      stripeFeePassthrough={stripeFeePassthrough}
     />
   );
 }
@@ -98,6 +101,7 @@ function PaymentPlanModalBody({
   savedPlanTermMonths,
   defaultVehicleCount,
   catalogConfigured,
+  stripeFeePassthrough,
 }: {
   onClose: () => void;
   customerId: string;
@@ -107,6 +111,7 @@ function PaymentPlanModalBody({
   savedPlanTermMonths: number | null;
   defaultVehicleCount: number;
   catalogConfigured: boolean;
+  stripeFeePassthrough: boolean;
 }) {
   const [checkoutState, checkoutAction, checkoutPending] = useActionState(startStripeCheckoutAction, initial);
   const [sendState, sendFormAction, sendPending] = useActionState(sendStripeCheckoutToCustomerAction, initial);
@@ -126,6 +131,9 @@ function PaymentPlanModalBody({
   const hasSavedPricing = savedPlanTermMonths != null || stripeMonthlyRateXcd != null;
   const [ratePreset, setRatePreset] = useState(saved.preset);
   const [customRate, setCustomRate] = useState(saved.custom);
+  const [feePayer, setFeePayer] = useState<"customer" | "track_lucia">(
+    stripeFeePassthrough ? "customer" : "track_lucia",
+  );
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const checkoutError = checkoutState.error ?? sendState.error;
@@ -199,8 +207,8 @@ function PaymentPlanModalBody({
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Set tier, term, and vehicles — then send a Checkout link, create a link only, or save pricing without
-            sending.
+            Set tier, term, vehicles, and who pays card processing — then send a Checkout link, create a link only,
+            or save pricing without sending.
           </p>
           {hasSavedPricing ? (
             <p className="mt-2 rounded-md border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
@@ -210,12 +218,14 @@ function PaymentPlanModalBody({
               {savedRateLabel}/mo per vehicle
               {" · "}
               {defaultVehicleCount} vehicle{defaultVehicleCount === 1 ? "" : "s"}
+              {" · "}
+              {stripeFeePassthrough ? "customer pays processing" : "Track Lucia absorbs processing"}
             </p>
           ) : null}
           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-            New payment links charge the listed rate plus card processing. Existing card subscriptions keep their
-            current Stripe price
-            {catalogConfigured ? " (including catalog Prices already on file)" : ""}. {checkoutInitialLinkNotice()}
+            Existing card subscriptions keep their current Stripe price
+            {catalogConfigured ? " (including catalog Prices already on file)" : ""}. This choice applies to
+            new payment links. {checkoutInitialLinkNotice()}
           </p>
 
           {planOptions.length > 0 ? (
@@ -288,6 +298,46 @@ function PaymentPlanModalBody({
                   </span>
                 </label>
               </div>
+
+              <fieldset className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <legend className="px-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Who pays card processing?
+                </legend>
+                <div className="mt-2 flex flex-col gap-2">
+                  <label className="flex min-h-11 cursor-pointer items-start gap-2 rounded-md px-1 py-2.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                    <input
+                      type="radio"
+                      name="processingFeePayer"
+                      value="customer"
+                      checked={feePayer === "customer"}
+                      onChange={() => setFeePayer("customer")}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-medium text-zinc-800 dark:text-zinc-100">Customer pays</span>
+                      <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                        Listed rate plus Stripe processing (usual for new subscriptions).
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex min-h-11 cursor-pointer items-start gap-2 rounded-md px-1 py-2.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                    <input
+                      type="radio"
+                      name="processingFeePayer"
+                      value="track_lucia"
+                      checked={feePayer === "track_lucia"}
+                      onChange={() => setFeePayer("track_lucia")}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-medium text-zinc-800 dark:text-zinc-100">Track Lucia absorbs</span>
+                      <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                        Customer pays the listed rate only. Use this for returning / grandfathered clients.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
 
               <div className="flex flex-col gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
                 <button

@@ -31,6 +31,7 @@ export function ManageSubscriptionTiles({
   savedPlanTermMonths,
   defaultVehicleCount,
   catalogConfigured,
+  stripeFeePassthrough = true,
   stripeCustomerId,
   renewalRows,
   stripePlanTermMonths = null,
@@ -47,6 +48,7 @@ export function ManageSubscriptionTiles({
   savedPlanTermMonths: number | null;
   defaultVehicleCount: number;
   catalogConfigured: boolean;
+  stripeFeePassthrough?: boolean;
   stripeCustomerId: string | null;
   renewalRows: CustomerRenewalOpsRow[];
   stripePlanTermMonths?: number | null;
@@ -77,7 +79,7 @@ export function ManageSubscriptionTiles({
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <TileButton
             title="Payment & plan"
-            subtitle="Tier, term, vehicles · send or create Checkout link"
+            subtitle="Tier, term, vehicles, processing fee · send or create Checkout link"
             icon={<DocIcon />}
             onClick={() => setPlanOpen(true)}
           />
@@ -121,6 +123,7 @@ export function ManageSubscriptionTiles({
         savedPlanTermMonths={savedPlanTermMonths}
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
+        stripeFeePassthrough={stripeFeePassthrough}
       />
 
       <DeviceRenewalsModal

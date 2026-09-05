@@ -35,6 +35,7 @@ export function checkoutInitialEmailBody(input: {
   durationMonths: number;
   monthlyRateXcd?: number | null;
   vehicleCount?: number;
+  feePassthrough?: boolean;
 }): { text: string; html: string } {
   const notice = checkoutInitialLinkNotice();
   const autoCharge = checkoutAutoChargeNotice(input.durationMonths);
@@ -42,6 +43,7 @@ export function checkoutInitialEmailBody(input: {
     monthlyRateXcd: input.monthlyRateXcd,
     durationMonths: input.durationMonths,
     vehicleCount: input.vehicleCount,
+    feePassthrough: input.feePassthrough,
   });
   const text = `Hello ${input.greetingName},
 
@@ -77,6 +79,7 @@ export function checkoutRecoveryEmailBody(input: {
   durationMonths?: number;
   monthlyRateXcd?: number | null;
   vehicleCount?: number;
+  feePassthrough?: boolean;
 }): { text: string; html: string } {
   const listedVsCard =
     input.durationMonths != null
@@ -84,6 +87,7 @@ export function checkoutRecoveryEmailBody(input: {
           monthlyRateXcd: input.monthlyRateXcd,
           durationMonths: input.durationMonths,
           vehicleCount: input.vehicleCount,
+          feePassthrough: input.feePassthrough,
         })
       : null;
   const listedBlock = listedVsCard ? `\n\n${listedVsCard.plain}` : "";

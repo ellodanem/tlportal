@@ -183,6 +183,7 @@ export function buildStripeCheckoutAmountLine(input: {
   monthlyRateXcd: number | null;
   durationMonths: number;
   vehicleCount: number;
+  feePassthrough?: boolean;
 }): string {
   return checkoutAmountLine(input);
 }

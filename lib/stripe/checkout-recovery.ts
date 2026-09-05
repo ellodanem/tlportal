@@ -9,6 +9,7 @@ import { recordOperationalEvent } from "@/lib/services/operational-event-service
 
 import { getCheckoutEmailBcc } from "./checkout-email-recipients";
 import { checkoutRecoveryEmailBody } from "./checkout-messaging";
+import { hasFeePassthroughMetadata } from "./fees";
 
 function parseMetaNumber(raw: string | undefined): number | null {
   if (raw == null || !raw.trim()) return null;
@@ -115,6 +116,7 @@ export async function handleCheckoutSessionExpired(
       durationMonths: parseMetaNumber(session.metadata?.tl_duration_months) ?? undefined,
       monthlyRateXcd: parseMetaNumber(session.metadata?.tl_monthly_rate_xcd),
       vehicleCount: parseMetaNumber(session.metadata?.tl_vehicle_count) ?? undefined,
+      feePassthrough: hasFeePassthroughMetadata(session.metadata),
     });
     const sent = await sendAppEmail({
       to: email,

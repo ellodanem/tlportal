@@ -16,17 +16,22 @@ import {
 import { getStripeClient } from "./config";
 import { ensureStripeCustomerForTlCustomer } from "./customer";
 
-function lineItemFromResolved(item: CheckoutLineItem): Stripe.Checkout.SessionCreateParams.LineItem {
+function lineItemFromResolved(
+  item: CheckoutLineItem,
+  feePassthrough: boolean,
+): Stripe.Checkout.SessionCreateParams.LineItem {
   const breakdown = checkoutFeeBreakdown({
     monthlyRateXcd: item.monthlyRateXcd,
     durationMonths: item.durationMonths,
     vehicleCount: item.quantity,
+    feePassthrough,
   });
   const product = checkoutProductCopy({
     durationMonths: item.durationMonths,
     vehicleCount: item.quantity,
     listedTotalXcd: breakdown.listedTotalXcd,
     cardTotalXcd: breakdown.cardTotalXcd,
+    feePassthrough,
   });
 
   return {
@@ -53,8 +58,11 @@ export async function createStripeSubscriptionCheckout(input: {
   monthlyRateXcd?: number | null;
   vehicleCount: number;
   useCustomPricing?: boolean;
+  /** Default: customer.stripeFeePassthrough (true = customer pays processing). */
+  feePassthrough?: boolean;
 }): Promise<{ url: string; sessionId: string; pricingMode: "catalog" | "dynamic" }> {
   const monthlyRate = input.monthlyRateXcd ?? null;
+  const feePassthrough = input.feePassthrough ?? input.customer.stripeFeePassthrough ?? true;
 
   const resolved = await resolveCheckoutLineItem({
     durationMonths: input.durationMonths,
@@ -79,14 +87,14 @@ export async function createStripeSubscriptionCheckout(input: {
     tl_duration_months: String(input.durationMonths),
     tl_vehicle_count: String(Math.max(1, input.vehicleCount)),
     tl_pricing_mode: "dynamic",
-    tl_fee_passthrough: "1",
+    tl_fee_passthrough: feePassthrough ? "1" : "0",
     tl_monthly_rate_xcd: String(effectiveMonthly),
   };
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: stripeCustomerId,
-    line_items: [lineItemFromResolved(resolved)],
+    line_items: [lineItemFromResolved(resolved, feePassthrough)],
     success_url: `${base}/pay/thanks?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${base}/pay/cancel`,
     client_reference_id: input.customer.id,

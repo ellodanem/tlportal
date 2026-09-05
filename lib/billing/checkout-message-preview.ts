@@ -51,6 +51,7 @@ export function buildStripeCheckoutEmailPreview(input: {
   durationMonths: number;
   monthlyRateXcd?: number | null;
   vehicleCount?: number;
+  feePassthrough?: boolean;
 }): { text: string; html: string } {
   return checkoutInitialEmailBody({
     greetingName: input.greetingName,
@@ -58,6 +59,7 @@ export function buildStripeCheckoutEmailPreview(input: {
     durationMonths: input.durationMonths,
     monthlyRateXcd: input.monthlyRateXcd,
     vehicleCount: input.vehicleCount,
+    feePassthrough: input.feePassthrough,
   });
 }
 
@@ -65,10 +67,12 @@ export function buildStripeCheckoutAmountLineFromCheckout(input: {
   monthlyRateXcd: number | null;
   durationMonths: number;
   vehicleCount: number;
+  feePassthrough?: boolean;
 }): string {
   return buildStripeCheckoutAmountLine({
     monthlyRateXcd: input.monthlyRateXcd,
     durationMonths: input.durationMonths,
     vehicleCount: input.vehicleCount,
+    feePassthrough: input.feePassthrough,
   });
 }

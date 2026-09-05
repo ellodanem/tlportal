@@ -12,14 +12,16 @@ export type CheckoutPaymentLinkPlanKeyInput = {
   vehicleCount: number;
   monthlyRateXcd: number | null;
   useCustomPricing: boolean;
+  feePassthrough?: boolean;
 };
 
 export function checkoutPaymentPlanKey(input: CheckoutPaymentLinkPlanKeyInput): string {
   // Stable signature for a staff-selected plan configuration.
   // monthlyRateXcd can be null for "default catalog tier".
+  const fee = input.feePassthrough === false ? 0 : 1;
   return `d=${input.durationMonths}|v=${input.vehicleCount}|m=${input.monthlyRateXcd ?? "default"}|c=${
     input.useCustomPricing ? 1 : 0
-  }`;
+  }|f=${fee}`;
 }
 
 /** Short, URL-safe token for the `/pay/go/{token}` checkout redirect. */

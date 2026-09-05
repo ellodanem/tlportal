@@ -120,6 +120,7 @@ async function stripeCheckoutPayUrl(
       monthlyRateXcd,
       vehicleCount,
       useCustomPricing: monthlyRateXcd != null,
+      feePassthrough: customer.stripeFeePassthrough,
     });
     return url;
   } catch {

@@ -8,6 +8,7 @@ import { sendAppEmail } from "@/lib/email/send-mail";
 import {
   openStripeBillingPortal,
   setCustomerBillingMode,
+  setCustomerStripeFeePassthrough,
   setCustomerStripeMonthlyRate,
   startStripeCheckout,
   syncCustomerToInvoilessBilling,
@@ -60,6 +61,8 @@ import { getTwilioContentSid, isTwilioWhatsAppConfigured } from "@/lib/twilio/co
 import { toSmsAddress, toWhatsAppAddress } from "@/lib/twilio/phone";
 import { sendTwilioWhatsAppContent } from "@/lib/twilio/whatsapp-send";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
+import { checkoutStaffPricingNote } from "@/lib/stripe/checkout-fee-copy";
+import { parseFeePassthrough } from "@/lib/stripe/fees";
 import {
   resendPaymentDeclineEmailForCustomer,
   resendPaymentDeclineWhatsAppForCustomer,
@@ -107,6 +110,7 @@ async function parseCheckoutForm(formData: FormData): Promise<
       monthlyRateXcd: number | null;
       vehicleCount: number;
       useCustomPricing: boolean;
+      feePassthrough: boolean;
     }
   | { error: string }
 > {
@@ -144,7 +148,9 @@ async function parseCheckoutForm(formData: FormData): Promise<
     }
   }
 
-  return { customerId, months, monthlyRateXcd, vehicleCount, useCustomPricing };
+  const feePassthrough = parseFeePassthrough(formData.get("processingFeePayer"));
+
+  return { customerId, months, monthlyRateXcd, vehicleCount, useCustomPricing, feePassthrough };
 }
 
 async function persistStripeMonthlyRateFromForm(
@@ -177,18 +183,47 @@ async function persistStripeMonthlyRateFromForm(
   }
 }
 
+async function persistStripeFeePassthroughFromForm(
+  customerId: string,
+  formData: FormData,
+  actorUserId: string | null,
+): Promise<{ error: string } | { ok: true }> {
+  try {
+    await setCustomerStripeFeePassthrough(
+      customerId,
+      parseFeePassthrough(formData.get("processingFeePayer")),
+      actorUserId,
+    );
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save processing fee choice." };
+  }
+}
+
+async function persistCheckoutPricingFromForm(
+  customerId: string,
+  formData: FormData,
+  actorUserId: string | null,
+): Promise<{ error: string } | { ok: true }> {
+  const saved = await persistStripeMonthlyRateFromForm(customerId, formData, actorUserId);
+  if ("error" in saved) return saved;
+  return persistStripeFeePassthroughFromForm(customerId, formData, actorUserId);
+}
+
 async function resolveCheckoutPayLinkTokenForPlan(input: {
   customerId: string;
   months: number;
   monthlyRateXcd: number | null;
   vehicleCount: number;
   useCustomPricing: boolean;
+  feePassthrough: boolean;
 }): Promise<{ planKey: string; payLinkToken: string }> {
   const planKey = checkoutPaymentPlanKey({
     durationMonths: input.months,
     vehicleCount: input.vehicleCount,
     monthlyRateXcd: input.monthlyRateXcd,
     useCustomPricing: input.useCustomPricing,
+    feePassthrough: input.feePassthrough,
   });
   const existing = await findLatestCheckoutPayLinkTokenForPlan({
     customerId: input.customerId,
@@ -324,12 +359,14 @@ export async function getStripeCheckoutSendPreview(
     monthlyRateXcd: parsed.monthlyRateXcd,
     durationMonths: parsed.months,
     vehicleCount: parsed.vehicleCount,
+    feePassthrough: parsed.feePassthrough,
   });
   const emailPreview = buildStripeCheckoutEmailPreview({
     greetingName,
     durationMonths: parsed.months,
     monthlyRateXcd: parsed.monthlyRateXcd,
     vehicleCount: parsed.vehicleCount,
+    feePassthrough: parsed.feePassthrough,
   });
 
   return {
@@ -416,7 +453,7 @@ export async function sendStripeCheckoutToCustomerAction(
       };
     }
 
-    const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+    const saved = await persistCheckoutPricingFromForm(parsed.customerId, formData, session.sub);
     if ("error" in saved) {
       return { error: saved.error };
     }
@@ -427,6 +464,7 @@ export async function sendStripeCheckoutToCustomerAction(
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
       useCustomPricing: parsed.useCustomPricing,
+      feePassthrough: parsed.feePassthrough,
     });
     const stableUrl = `${getAppBaseUrl()}/pay/go/${encodeURIComponent(payLinkToken)}`;
 
@@ -434,6 +472,7 @@ export async function sendStripeCheckoutToCustomerAction(
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
       useCustomPricing: parsed.useCustomPricing,
+      feePassthrough: parsed.feePassthrough,
     });
     if (!checkout.ok) {
       return { error: checkout.error };
@@ -459,6 +498,7 @@ export async function sendStripeCheckoutToCustomerAction(
       monthlyRateXcd: parsed.monthlyRateXcd,
       durationMonths: parsed.months,
       vehicleCount: parsed.vehicleCount,
+      feePassthrough: parsed.feePassthrough,
     });
 
     const emailAttempted = Boolean(flags.sendEmail && customer.email?.trim());
@@ -480,6 +520,7 @@ export async function sendStripeCheckoutToCustomerAction(
         durationMonths: parsed.months,
         monthlyRateXcd: parsed.monthlyRateXcd,
         vehicleCount: parsed.vehicleCount,
+        feePassthrough: parsed.feePassthrough,
       });
       const sent = await sendAppEmail({
         to: emailTo,
@@ -591,7 +632,7 @@ export async function sendStripeCheckoutToCustomerAction(
     if (emailSent) channelParts.push("email");
     if (whatsappSent) channelParts.push("WhatsApp");
 
-    const pricingNote = "Listed rate plus card processing (new subscriptions).";
+    const pricingNote = checkoutStaffPricingNote(parsed.feePassthrough);
 
     return {
       error: partialErrors.length > 0 ? partialErrors.join(" ") : null,
@@ -627,7 +668,7 @@ export async function startStripeCheckoutAction(
       return { error: ready.error };
     }
 
-    const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+    const saved = await persistCheckoutPricingFromForm(parsed.customerId, formData, session.sub);
     if ("error" in saved) {
       return { error: saved.error };
     }
@@ -638,12 +679,14 @@ export async function startStripeCheckoutAction(
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
       useCustomPricing: parsed.useCustomPricing,
+      feePassthrough: parsed.feePassthrough,
     });
 
     const result = await startStripeCheckout(parsed.customerId, parsed.months, session.sub, {
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
       useCustomPricing: parsed.useCustomPricing,
+      feePassthrough: parsed.feePassthrough,
     });
     if (!result.ok) {
       return { error: result.error };
@@ -660,7 +703,7 @@ export async function startStripeCheckoutAction(
 
     revalidateCustomerBillingPaths(parsed.customerId);
 
-    const pricingNote = "Listed rate plus card processing (new subscriptions).";
+    const pricingNote = checkoutStaffPricingNote(parsed.feePassthrough);
 
     const stableUrl = `${getAppBaseUrl()}/pay/go/${encodeURIComponent(payLinkToken)}`;
     return {
@@ -699,7 +742,7 @@ export async function emailStripeCheckoutLinkAction(
       return { error: "Customer has no email on file. Add one on the profile below, then try again." };
     }
 
-    const saved = await persistStripeMonthlyRateFromForm(parsed.customerId, formData, session.sub);
+    const saved = await persistCheckoutPricingFromForm(parsed.customerId, formData, session.sub);
     if ("error" in saved) {
       return { error: saved.error };
     }
@@ -710,6 +753,7 @@ export async function emailStripeCheckoutLinkAction(
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
       useCustomPricing: parsed.useCustomPricing,
+      feePassthrough: parsed.feePassthrough,
     });
     const stableUrl = `${getAppBaseUrl()}/pay/go/${encodeURIComponent(payLinkToken)}`;
 
@@ -717,6 +761,7 @@ export async function emailStripeCheckoutLinkAction(
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
       useCustomPricing: parsed.useCustomPricing,
+      feePassthrough: parsed.feePassthrough,
     });
     if (!checkout.ok) {
       return { error: checkout.error };
@@ -744,6 +789,7 @@ export async function emailStripeCheckoutLinkAction(
       durationMonths: parsed.months,
       monthlyRateXcd: parsed.monthlyRateXcd,
       vehicleCount: parsed.vehicleCount,
+      feePassthrough: parsed.feePassthrough,
     });
 
     const sent = await sendAppEmail({
@@ -793,7 +839,7 @@ export async function setStripeMonthlyRateAction(
   const vehicleCount = parseVehicleCount(String(formData.get("vehicleCount") ?? "")) ?? 1;
 
   try {
-    const saved = await persistStripeMonthlyRateFromForm(customerId, formData, session.sub);
+    const saved = await persistCheckoutPricingFromForm(customerId, formData, session.sub);
     if ("error" in saved) {
       return { error: saved.error };
     }
@@ -839,7 +885,8 @@ export async function setStripeMonthlyRateAction(
   }
 
   revalidateCustomerBillingPaths(customerId);
-  return { error: null, message: "Pricing saved." };
+  const feePassthrough = parseFeePassthrough(formData.get("processingFeePayer"));
+  return { error: null, message: `Pricing saved. ${checkoutStaffPricingNote(feePassthrough)}` };
 }
 
 export async function openStripePortalAction(customerId: string): Promise<BillingActionState> {

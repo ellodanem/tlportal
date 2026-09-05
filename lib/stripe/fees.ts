@@ -87,3 +87,10 @@ export type StripeMetadataLike = Record<string, string> | null | undefined;
 export function hasFeePassthroughMetadata(metadata: StripeMetadataLike): boolean {
   return metadata?.tl_fee_passthrough === "1";
 }
+
+/** Form / metadata: customer pays processing unless staff chose Track Lucia. */
+export function parseFeePassthrough(raw: unknown): boolean {
+  const t = String(raw ?? "").trim().toLowerCase();
+  if (t === "track_lucia" || t === "0" || t === "false" || t === "absorb") return false;
+  return true;
+}

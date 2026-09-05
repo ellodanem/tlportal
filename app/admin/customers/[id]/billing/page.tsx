@@ -107,6 +107,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         savedPlanTermMonths={savedPlanTermMonths}
         defaultVehicleCount={defaultVehicleCount}
         catalogConfigured={catalogConfigured}
+        stripeFeePassthrough={customer.stripeFeePassthrough}
         stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
         renewalRows={renewalAssignments}
         stripePlanTermMonths={savedPlanTermMonths}

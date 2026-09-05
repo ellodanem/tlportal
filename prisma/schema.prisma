@@ -333,6 +333,8 @@ model Customer {
   paymentReminders     PaymentRemindersPreference @default(auto)
   /// Custom Stripe subscription monthly rate (XCD). Null = default catalog / env Price ids.
   stripeMonthlyRateXcd Decimal?            @db.Decimal(10, 2)
+  /// When true (default), new Checkout links gross up so the customer pays Stripe processing. When false, Track Lucia absorbs the fee and the customer pays the listed rate.
+  stripeFeePassthrough Boolean             @default(true)
   /// @deprecated Prefer BillingAccount — kept for backward compatibility during Phase 1.
   invoilessCustomerId  String?             @unique
   /// @deprecated Prefer CustomerPortalUser — kept for migration backfill / read fallback.

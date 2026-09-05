@@ -100,6 +100,26 @@ export async function setCustomerStripeMonthlyRate(
   });
 }
 
+export async function setCustomerStripeFeePassthrough(
+  customerId: string,
+  feePassthrough: boolean,
+  actorUserId?: string | null,
+): Promise<void> {
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { stripeFeePassthrough: feePassthrough },
+  });
+  await recordOperationalEvent({
+    category: "billing.mode_changed",
+    summary: feePassthrough
+      ? "Card processing set to customer pays"
+      : "Card processing set to Track Lucia absorbs",
+    customerId,
+    actorUserId: actorUserId ?? undefined,
+    payload: { stripeFeePassthrough: feePassthrough },
+  });
+}
+
 export async function setCustomerBillingMode(
   customerId: string,
   mode: CustomerBillingMode,
@@ -203,6 +223,7 @@ export async function startStripeCheckout(
     monthlyRateXcd?: number | null;
     vehicleCount?: number;
     useCustomPricing?: boolean;
+    feePassthrough?: boolean;
   },
 ): Promise<
   { ok: true; url: string; sessionId: string; pricingMode: string } | { ok: false; error: string }
@@ -223,6 +244,7 @@ export async function startStripeCheckout(
     });
     const vehicleCount = Math.max(1, options?.vehicleCount ?? 1);
     const monthlyRateXcd = options?.monthlyRateXcd ?? null;
+    const feePassthrough = options?.feePassthrough ?? customer.stripeFeePassthrough;
     const { id: tlSubscriptionId } = await createPendingCustomerSubscription({
       customerId,
       planTermMonths: durationMonths,
@@ -236,10 +258,11 @@ export async function startStripeCheckout(
       monthlyRateXcd,
       vehicleCount,
       useCustomPricing: options?.useCustomPricing,
+      feePassthrough,
     });
     await recordOperationalEvent({
       category: "billing.synced",
-      summary: `Stripe Checkout started (${durationMonths} mo, ${vehicleCount} vehicle${vehicleCount === 1 ? "" : "s"}, ${pricingMode})`,
+      summary: `Stripe Checkout started (${durationMonths} mo, ${vehicleCount} vehicle${vehicleCount === 1 ? "" : "s"}, ${pricingMode}${feePassthrough ? "" : ", TL absorbs processing"})`,
       customerId,
       actorUserId: actorUserId ?? undefined,
       payload: {
@@ -247,6 +270,7 @@ export async function startStripeCheckout(
         monthlyRateXcd,
         vehicleCount,
         pricingMode,
+        feePassthrough,
         checkoutSessionId: sessionId,
       },
     });
