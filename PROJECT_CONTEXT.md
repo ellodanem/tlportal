@@ -3376,3 +3376,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Let staff choose who pays Stripe processing on new Checkout links.
 - Agent notes: Payment & plan **Who pays card processing?** — customer pays (default, listed + Stripe fees) or Track Lucia absorbs (listed rate only). Saved on `Customer.stripeFeePassthrough`; Checkout, email, WhatsApp, and send preview follow the choice. Migration `20260905120000_customer_stripe_fee_passthrough`.
 
+
+### 2026-09-05 18:02 UTC — commit `2e00684`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-09-05 18:02 UTC — pre-push (`main` → origin) @ `2e00684`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
