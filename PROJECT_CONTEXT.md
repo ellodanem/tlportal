@@ -3412,3 +3412,14 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-09-12 09:50 UTC — commit `e9cd8a4`
+
+- Add a public feedback form and an admin inbox for reviewing shareable quotes.
+- **Agent notes:** Public `/feedback` (Track Lucia logo, required message + 1–5 stars that fill left-to-right, optional name/contact, share checkbox). Admin `/admin/feedback` under Communications: New/Featured/Private/All, copy public link, copy quote/caption only when `sharePermission` is true. Prisma `FeedbackSubmission` + migration `20260912120000_feedback_submissions`.
+
+
+### 2026-09-12 09:50 UTC — pre-push (`main` → origin) @ `e9cd8a4`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
