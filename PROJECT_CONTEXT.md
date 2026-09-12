@@ -3402,3 +3402,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Stop auto-emailing historical paid invoices on Stripe sync.
 - Agent notes: Daily cron (~04:20 UTC) and **Sync from Stripe** were emailing any paid Stripe invoice with a blank `receiptEmailedAt` (whole history). Auto-email is now only payments in the last 7 days. Sync can still generate PDFs for older paid invoices. Manual **Email** on the row still sends. Stripe `paidAt` no longer falls back to “now”.
 
+
+### 2026-09-05 18:17 UTC — commit `361e85f`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-09-05 18:17 UTC — pre-push (`main` → origin) @ `361e85f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
