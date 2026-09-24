@@ -3458,3 +3458,19 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-09-24 21:59 UTC — commit `7a967c7`
+
+- Add copy-paste setup commands on device models so staff can provision units from Manage device.
+- **Agent notes:** `DeviceModelSetupCommand` on each model; edit/reorder on Device models → Edit; copy list on Manage device. `{imei}` / `{serial}` / `{msisdn}` fill from the unit; `{apn}` stays until replaced. Migration `20260924190000_device_model_setup_commands` seeds the H8 sequence (1nce APN plus a test-SIM placeholder).
+
+
+### 2026-09-24 22:00 UTC — pre-push (`main` → origin) @ `7a967c7`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-09-24 22:16 UTC — commit `ef39021`
+
+- Add tabs on Manage device and Settings so staff can work one section at a time.
+
