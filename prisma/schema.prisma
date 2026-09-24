@@ -528,7 +528,24 @@ model DeviceModel {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  devices Device[]
+  devices       Device[]
+  setupCommands DeviceModelSetupCommand[]
+}
+
+/// Copy-paste setup commands for a device model. Shown on Manage device.
+model DeviceModelSetupCommand {
+  id        String   @id @default(uuid())
+  sortOrder Int
+  name      String
+  body      String   @db.Text
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deviceModelId String
+  deviceModel   DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Cascade)
+
+  @@index([deviceModelId, sortOrder])
 }
 
 model Device {

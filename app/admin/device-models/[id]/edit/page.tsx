@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DeviceModelEditForm } from "@/components/admin/device-model-form";
+import { DeviceModelSetupCommands } from "@/components/admin/device-model-setup-commands";
 import { prisma } from "@/lib/db";
 
 type Props = { params: Promise<{ id: string }> };
@@ -10,6 +11,9 @@ export default async function EditDeviceModelPage({ params }: Props) {
   const { id } = await params;
   const model = await prisma.deviceModel.findUnique({
     where: { id },
+    include: {
+      setupCommands: { orderBy: { sortOrder: "asc" } },
+    },
   });
 
   if (!model) {
@@ -39,6 +43,15 @@ export default async function EditDeviceModelPage({ params }: Props) {
           costPrice: model.costPrice,
           isActive: model.isActive,
         }}
+      />
+      <DeviceModelSetupCommands
+        deviceModelId={model.id}
+        commands={model.setupCommands.map((command) => ({
+          id: command.id,
+          name: command.name,
+          body: command.body,
+          note: command.note,
+        }))}
       />
     </div>
   );

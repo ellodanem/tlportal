@@ -10,11 +10,13 @@ import { DeviceSimEditSection } from "@/components/admin/device-sim-edit-section
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-service-assignment-edit-form";
 import { MarkAssignmentPaidForm } from "@/components/admin/mark-assignment-paid-form";
+import { DeviceSetupCommands } from "@/components/admin/device-setup-commands";
 import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { fetchSimsAvailableForDeviceSwap } from "@/lib/admin/sims-available-for-device";
 import { SERVICE_PAUSE_REASON_LABEL } from "@/lib/domain/service-pause";
+import { applySetupCommandTokens } from "@/lib/admin/setup-commands";
 import { getGpsLink, resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { prisma } from "@/lib/db";
 
@@ -32,7 +34,14 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
   const [device, customerRows, openAssignment, simsForSwap, gpsLink] = await Promise.all([
     prisma.device.findUnique({
       where: { id },
-      include: { deviceModel: true, simCard: true },
+      include: {
+        deviceModel: {
+          include: {
+            setupCommands: { orderBy: { sortOrder: "asc" } },
+          },
+        },
+        simCard: true,
+      },
     }),
     prisma.customer.findMany({
       where: activeCustomerWhere,
@@ -109,6 +118,21 @@ export default async function EditDeviceCommercialPage({ params }: Props) {
           </span>
         </p>
       </div>
+
+      <DeviceSetupCommands
+        modelName={device.deviceModel.name}
+        modelId={device.deviceModel.id}
+        commands={device.deviceModel.setupCommands.map((command) => ({
+          id: command.id,
+          name: command.name,
+          note: command.note,
+          body: applySetupCommandTokens(command.body, {
+            imei: device.imei,
+            serial: device.serialNumber,
+            msisdn: device.simCard?.msisdn,
+          }),
+        }))}
+      />
 
       {openAssignment ? (
         <section
