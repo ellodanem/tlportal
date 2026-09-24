@@ -308,7 +308,7 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
                       {a.intervalMonths != null ? formatPlanTerm(a.intervalMonths) : "—"}
                       {" · "}
                       <Link
-                        href={`/admin/devices/${a.device.id}/edit#active-service`}
+                        href={`/admin/devices/${a.device.id}/edit?tab=assignment`}
                         className="font-medium text-emerald-800 hover:underline dark:text-emerald-300"
                       >
                         Billing &amp; dates

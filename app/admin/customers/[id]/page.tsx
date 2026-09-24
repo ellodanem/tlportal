@@ -495,7 +495,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
                   const assignmentOpen = a.endDate == null && a.status !== "cancelled";
                   const deviceManage =
                     assignmentOpen
-                      ? `/admin/devices/${a.device.id}/edit#active-service`
+                      ? `/admin/devices/${a.device.id}/edit?tab=assignment`
                       : `/admin/devices/${a.device.id}/edit`;
                   const classification = openClassificationById.get(a.id);
                   const primaryLink = a.device.providerDeviceLinks[0];

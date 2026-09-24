@@ -90,7 +90,7 @@ Still **one Stripe subscription per customer**. When devices on the same custome
 |------|-----------|
 | Schema | `prisma/schema.prisma` — `ServiceAssignment`, `SubscriptionOption` |
 | Assignment date + billing term | `app/admin/devices/actions.ts` — `updateServiceAssignmentDates`, `assignDeviceToCustomer`, `registerDevice` |
-| Device UI (active service) | `components/admin/device-service-assignment-edit-form.tsx` — **Manage device** `/admin/devices/[id]/edit#active-service` |
+| Device UI (active service) | `components/admin/device-service-assignment-edit-form.tsx` — **Manage device** `/admin/devices/[id]/edit?tab=assignment` |
 | Assign existing device | `components/admin/device-assign-customer-form.tsx` |
 | Register new device + optional assign | `components/admin/device-register-form.tsx` |
 | Customer service table (term column) | `app/admin/customers/[id]/page.tsx` |
