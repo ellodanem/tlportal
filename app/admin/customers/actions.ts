@@ -142,13 +142,20 @@ export async function updateCustomer(
   }
 
   const fields = readCustomerFields(formData);
-  const v = validateNameOrCompany(fields);
-  if (v) {
-    return { error: v };
-  }
+  const section = String(formData.get("section") ?? "").trim();
 
-  try {
-    const data: Prisma.CustomerUpdateInput = {
+  let data: Prisma.CustomerUpdateInput;
+  if (section === "gps") {
+    data = {
+      traqcarePortalUrl: fields.traqcarePortalUrl,
+      traqcareClientId: fields.traqcareClientId,
+    };
+  } else {
+    const v = validateNameOrCompany(fields);
+    if (v) {
+      return { error: v };
+    }
+    data = {
       firstName: fields.firstName,
       lastName: fields.lastName,
       company: fields.company,
@@ -162,11 +169,14 @@ export async function updateCustomer(
       legalInfo: fields.legalInfo,
       invoiceCc: fields.invoiceCc,
       invoiceBcc: fields.invoiceBcc,
-      traqcarePortalUrl: fields.traqcarePortalUrl,
-      traqcareClientId: fields.traqcareClientId,
       notes: fields.notes,
       tags: fields.tags,
     };
+    if (section !== "profile") {
+      data.traqcarePortalUrl = fields.traqcarePortalUrl;
+      data.traqcareClientId = fields.traqcareClientId;
+    }
+  }
 
     await prisma.customer.update({
       where: { id },
@@ -206,7 +216,9 @@ export async function archiveCustomerAction(formData: FormData): Promise<void> {
 
   const result = await archiveCustomer(id, session.sub ?? null);
   if (!result.ok) {
-    redirect(`/admin/customers/${id}/edit?archiveError=${encodeURIComponent(result.error)}`);
+    redirect(
+      `/admin/customers/${id}/edit?tab=archive&archiveError=${encodeURIComponent(result.error)}`,
+    );
   }
 
   revalidatePath("/admin");

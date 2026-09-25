@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import type { Customer } from "@prisma/client";
 
@@ -57,7 +58,13 @@ export function CustomerCreateForm({
   );
 }
 
-export function CustomerEditForm({ customer }: { customer: Customer }) {
+export function CustomerEditForm({
+  customer,
+  section = "all",
+}: {
+  customer: Customer;
+  section?: "all" | "profile" | "gps";
+}) {
   const [state, formAction] = useActionState(updateCustomer, customerFormInitialState);
   const d = toFormDefaults(customer);
   return (
@@ -66,6 +73,7 @@ export function CustomerEditForm({ customer }: { customer: Customer }) {
       state={state}
       defaults={d}
       customerId={customer.id}
+      editSection={section === "all" ? undefined : section}
     />
   );
 }
@@ -97,6 +105,7 @@ function CustomerFormInner({
   state,
   defaults,
   customerId,
+  editSection,
   showBillingSetupOnCreate = false,
   stripeBillingEnabled = false,
   invoilessConfigured = false,
@@ -105,19 +114,25 @@ function CustomerFormInner({
   state: CustomerFormActionState;
   defaults: FormDefaults;
   customerId?: string;
+  editSection?: "profile" | "gps";
   showBillingSetupOnCreate?: boolean;
   stripeBillingEnabled?: boolean;
   invoilessConfigured?: boolean;
 }) {
+  const showProfile = !editSection || editSection === "profile";
+  const showGps = !editSection || editSection === "gps";
+
   return (
     <form action={formAction} className="max-w-xl space-y-6">
       {customerId ? <input type="hidden" name="id" value={customerId} /> : null}
+      {editSection ? <input type="hidden" name="section" value={editSection} /> : null}
       {state.error ? (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
           {state.error}
         </p>
       ) : null}
 
+      {showProfile ? (
       <div className="space-y-4">
         <h2 className={sectionTitleClass}>Billing info</h2>
 
@@ -253,7 +268,9 @@ function CustomerFormInner({
           <p className="mt-1 text-xs text-zinc-500">Maps to Invoiless legal / registration (max 100 characters on sync).</p>
         </div>
       </div>
+      ) : null}
 
+      {showProfile ? (
       <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
         <h2 className={sectionTitleClass}>Invoice emails</h2>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -284,15 +301,24 @@ function CustomerFormInner({
           />
         </div>
       </div>
+      ) : null}
 
-      <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+      {showGps ? (
+      <div className={`space-y-4 ${showProfile ? "border-t border-zinc-200 pt-6 dark:border-zinc-800" : ""}`}>
         <h2 className={sectionTitleClass}>Traqcare (GPS)</h2>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Fleet-level settings only. Add people and Traqcare logins under Portal users on the customer page
+          Fleet-level settings only. Add people and Traqcare logins under Portal users
           {customerId ? (
             <>
               {" "}
-              (or below after you save).
+              on the{" "}
+              <Link
+                href={`/admin/customers/${customerId}/edit?tab=portal`}
+                className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              >
+                Portal tab
+              </Link>
+              .
             </>
           ) : (
             <> after creating the customer.</>
@@ -330,6 +356,7 @@ function CustomerFormInner({
           <p className="mt-1 text-xs text-zinc-500">Use if this customer uses a non-default or white-label Traqcare URL.</p>
         </div>
       </div>
+      ) : null}
 
       {showBillingSetupOnCreate ? (
         <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
@@ -380,6 +407,7 @@ function CustomerFormInner({
         </div>
       ) : null}
 
+      {showProfile ? (
       <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
         <h2 className={sectionTitleClass}>Tags &amp; notes</h2>
         <div>
@@ -404,6 +432,7 @@ function CustomerFormInner({
           <p className="mt-1 text-xs text-zinc-500">Private notes; synced to Invoiless when you push (max 1000 characters there).</p>
         </div>
       </div>
+      ) : null}
 
       <div className="flex gap-3 pt-2">
         <button
