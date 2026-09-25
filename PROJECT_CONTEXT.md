@@ -3499,3 +3499,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Add tabs on Edit customer so profile, GPS, portal, and archive are separate jobs.
 
+
+### 2026-09-25 10:12 UTC — commit `3f41fac`
+
+- docs: sync project context log from git hooks
+
+
+### 2026-09-25 10:12 UTC — pre-push (`main` → origin) @ `3f41fac`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
