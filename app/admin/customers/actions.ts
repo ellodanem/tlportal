@@ -178,6 +178,7 @@ export async function updateCustomer(
     }
   }
 
+  try {
     await prisma.customer.update({
       where: { id },
       data,
