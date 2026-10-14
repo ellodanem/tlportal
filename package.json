@@ -6,6 +6,7 @@
     "dev": "next dev",
     "dev:webpack": "next dev --webpack",
     "build": "node scripts/run-build.mjs",
+    "test": "node --import tsx --conditions=react-server --test --test-isolation=none \"tests/**/*.test.ts\"",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",

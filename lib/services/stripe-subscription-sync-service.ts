@@ -447,15 +447,28 @@ export async function pushTlVehicleCountToStripe(input: {
 
   let updated: Stripe.Subscription;
   try {
-    updated = await stripe.subscriptions.update(sub.id, {
-      items: [itemUpdate],
-      proration_behavior: "none",
-      metadata: {
-        ...sub.metadata,
-        tl_vehicle_count: String(newQuantity),
-        tl_customer_id: sub.metadata?.tl_customer_id || input.customerId,
+    updated = await stripe.subscriptions.update(
+      sub.id,
+      {
+        items: [itemUpdate],
+        proration_behavior: "none",
+        metadata: {
+          ...sub.metadata,
+          tl_vehicle_count: String(newQuantity),
+          tl_customer_id: sub.metadata?.tl_customer_id || input.customerId,
+        },
       },
-    });
+      {
+        idempotencyKey: [
+          "tl-sub-quantity",
+          sub.id,
+          item.id,
+          previousQuantity,
+          newQuantity,
+          sub.current_period_start,
+        ].join(":"),
+      },
+    );
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Stripe update failed." };
   }

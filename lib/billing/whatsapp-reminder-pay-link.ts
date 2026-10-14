@@ -8,7 +8,7 @@ import { prisma } from "@/lib/db";
 import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
 import { isStripeConfigured } from "@/lib/services/billing-service";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
-import { createStripeSubscriptionCheckout } from "@/lib/stripe/checkout";
+import { runStripeCheckoutOperation } from "@/lib/services/stripe-checkout-operation-service";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
 import { monthlyRateFromCustomer } from "@/lib/stripe/checkout-pricing";
 
@@ -113,16 +113,15 @@ async function stripeCheckoutPayUrl(
     : monthlyRateFromCustomer(customer.stripeMonthlyRateXcd);
 
   try {
-    const { url } = await createStripeSubscriptionCheckout({
+    const result = await runStripeCheckoutOperation({
       customer,
       durationMonths: sub.planTermMonths,
-      tlSubscriptionId: sub.id,
       monthlyRateXcd,
       vehicleCount,
       useCustomPricing: monthlyRateXcd != null,
       feePassthrough: customer.stripeFeePassthrough,
     });
-    return url;
+    return result.ok ? result.url : null;
   } catch {
     return null;
   }

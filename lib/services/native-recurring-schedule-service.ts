@@ -3,6 +3,17 @@ import "server-only";
 import type { RecurringScheduleStatus } from "@prisma/client";
 
 import { sendNativeInvoiceEmail } from "@/lib/billing/send-native-invoice-email";
+import {
+  coordinateRecurringInvoiceGeneration,
+  type RecurringInvoiceCommitResult,
+  type RecurringInvoiceGenerationResult,
+} from "@/lib/billing/recurring-invoice-coordinator";
+import {
+  addUtcDays,
+  nextRecurringScheduleDate,
+  recurringGenerationKey,
+  startOfUtcDay,
+} from "@/lib/billing/recurring-period";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { prisma } from "@/lib/db";
 import {
@@ -11,7 +22,10 @@ import {
   toQtyString,
 } from "@/lib/domain/native-billing";
 import type { NativeLineInput } from "@/lib/services/native-invoice-service";
-import { createDraftInvoice, finalizeAndSendInvoice } from "@/lib/services/native-invoice-service";
+import {
+  createDraftInvoiceInTransaction,
+  finalizeInvoiceInTransaction,
+} from "@/lib/services/native-invoice-service";
 
 export type RecurringScheduleLineInput = NativeLineInput;
 
@@ -37,6 +51,8 @@ export type CreateRecurringScheduleInput = {
 
 const ALLOWED_INTERVALS = new Set([1, 3, 6, 12]);
 const MAX_CATCHUP_PER_RUN = 12;
+const DELIVERY_RETRY_LIMIT = 25;
+const DELIVERY_CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
 
 function lineCreateData(lines: RecurringScheduleLineInput[]) {
   return lines.map((line, index) => ({
@@ -47,22 +63,6 @@ function lineCreateData(lines: RecurringScheduleLineInput[]) {
     unitPrice: toMoneyString(line.unitPrice),
     lineTotal: toMoneyString(computeLineTotal(line.quantity, line.unitPrice)),
   }));
-}
-
-function addUtcDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
-}
-
-function addUtcMonths(date: Date, months: number): Date {
-  const d = new Date(date);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d;
-}
-
-function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function validateScheduleInput(input: CreateRecurringScheduleInput): void {
@@ -158,13 +158,13 @@ export async function setRecurringScheduleStatus(
   });
 }
 
-async function resolveRecipientEmail(schedule: {
+function resolveRecipientEmail(schedule: {
   emailTo: string | null;
   billToName: string | null;
   billToLines: string[];
   customerId: string | null;
   customer: { email: string | null; company: string | null; firstName: string | null; lastName: string | null } | null;
-}): Promise<{ to: string | null; greetingName: string }> {
+}): { to: string | null; greetingName: string } {
   const to = schedule.emailTo?.trim() || schedule.customer?.email?.trim() || null;
   const greetingName = schedule.customer
     ? customerDisplayName(schedule.customer)
@@ -172,80 +172,302 @@ async function resolveRecipientEmail(schedule: {
   return { to, greetingName };
 }
 
+function deliveryClaimIsStale(claimedAt: Date | null, now: Date): boolean {
+  return claimedAt == null || claimedAt.getTime() <= now.getTime() - DELIVERY_CLAIM_TIMEOUT_MS;
+}
+
+function canClaimDelivery(input: {
+  autoEmail: boolean;
+  sentAt: Date | null;
+  status: "sending" | "sent" | "failed" | "not_requested" | null;
+  claimedAt: Date | null;
+  now: Date;
+}): boolean {
+  if (!input.autoEmail || input.sentAt || input.status === "sent" || input.status === "not_requested") {
+    return false;
+  }
+  return input.status == null
+    || input.status === "failed"
+    || input.status === "sending" && deliveryClaimIsStale(input.claimedAt, input.now);
+}
+
+async function commitRecurringInvoicePeriod(
+  scheduleId: string,
+  asOf: Date,
+  options?: { force?: boolean; skipIfNoLongerDue?: boolean },
+): Promise<RecurringInvoiceCommitResult> {
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id"
+      FROM "RecurringInvoiceSchedule"
+      WHERE "id" = ${scheduleId}
+      FOR UPDATE
+    `;
+    if (!locked.length) throw new Error("Schedule not found.");
+
+    const schedule = await tx.recurringInvoiceSchedule.findUnique({
+      where: { id: scheduleId },
+      include: {
+        lineItems: { orderBy: { sortOrder: "asc" } },
+        customer: {
+          select: { email: true, company: true, firstName: true, lastName: true },
+        },
+      },
+    });
+    if (!schedule) throw new Error("Schedule not found.");
+    if (schedule.status !== "active") throw new Error("Schedule is not active.");
+    if (!options?.force && schedule.nextIssueDate > asOf) {
+      if (options?.skipIfNoLongerDue) return { kind: "not_due" };
+      throw new Error("Schedule is not due yet.");
+    }
+
+    const issueDate = options?.force ? startOfUtcDay(asOf) : schedule.nextIssueDate;
+    const periodStart = startOfUtcDay(issueDate);
+    const periodEnd = addUtcDays(periodStart, 1);
+    const generationKey = recurringGenerationKey(schedule.id, issueDate);
+    const claimNow = new Date();
+
+    let existing = await tx.invoice.findUnique({
+      where: { recurringGenerationKey: generationKey },
+      select: {
+        id: true,
+        recurringScheduleId: true,
+        sentAt: true,
+        recurringDeliveryStatus: true,
+        recurringDeliveryClaimedAt: true,
+        recurringDeliveryAttempts: true,
+      },
+    });
+
+    // Compatibility guard for invoices generated before the period key existed.
+    existing ??= await tx.invoice.findFirst({
+      where: {
+        kind: "recurring",
+        recurringScheduleId: schedule.id,
+        issueDate: { gte: periodStart, lt: periodEnd },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        recurringScheduleId: true,
+        sentAt: true,
+        recurringDeliveryStatus: true,
+        recurringDeliveryClaimedAt: true,
+        recurringDeliveryAttempts: true,
+      },
+    });
+
+    const recipient = resolveRecipientEmail(schedule);
+    const advancedDate = nextRecurringScheduleDate(
+      schedule.nextIssueDate,
+      issueDate,
+      schedule.intervalMonths,
+    );
+
+    if (existing) {
+      if (existing.recurringScheduleId !== schedule.id) {
+        throw new Error("Recurring invoice generation key belongs to another schedule.");
+      }
+
+      const shouldDeliver = canClaimDelivery({
+        autoEmail: schedule.autoEmail,
+        sentAt: existing.sentAt,
+        status: existing.recurringDeliveryStatus,
+        claimedAt: existing.recurringDeliveryClaimedAt,
+        now: claimNow,
+      });
+
+      if (shouldDeliver) {
+        await tx.invoice.update({
+          where: { id: existing.id },
+          data: {
+            recurringDeliveryStatus: "sending",
+            recurringDeliveryAttempts: { increment: 1 },
+            recurringDeliveryClaimedAt: claimNow,
+            recurringDeliveryError: null,
+          },
+        });
+      }
+
+      await tx.recurringInvoiceSchedule.update({
+        where: { id: schedule.id },
+        data: {
+          nextIssueDate: advancedDate,
+          lastGeneratedAt: asOf,
+          lastInvoiceId: existing.id,
+        },
+      });
+
+      return {
+        kind: "invoice",
+        invoiceId: existing.id,
+        created: false,
+        shouldDeliver,
+        ...recipient,
+      };
+    }
+
+    const dueDate = addUtcDays(issueDate, schedule.dueDaysAfterIssue);
+    const taxRate = schedule.taxRatePercent != null ? Number(schedule.taxRatePercent) : null;
+    const shouldDeliver = schedule.autoEmail;
+
+    const invoiceId = await createDraftInvoiceInTransaction(tx, {
+      kind: "recurring",
+      recurringScheduleId: schedule.id,
+      recurringPeriodStart: periodStart,
+      recurringGenerationKey: generationKey,
+      recurringDeliveryStatus: shouldDeliver ? "sending" : "not_requested",
+      recurringDeliveryAttempts: shouldDeliver ? 1 : 0,
+      recurringDeliveryClaimedAt: shouldDeliver ? claimNow : null,
+      customerId: schedule.customerId,
+      billToName: schedule.billToName,
+      billToLines: schedule.billToLines,
+      currency: schedule.currency,
+      taxLabel: schedule.taxLabel,
+      taxRatePercent: taxRate,
+      issueDate,
+      dueDate,
+      notes: schedule.notes,
+      paymentInstructions: schedule.paymentInstructions,
+      serviceAssignmentId: schedule.serviceAssignmentId,
+      createdById: schedule.createdById,
+      lineItems: schedule.lineItems.map((line, index) => ({
+        description: line.description,
+        quantity: Number(line.quantity),
+        unitPrice: Number(line.unitPrice),
+        unitLabel: line.unitLabel,
+        sortOrder: line.sortOrder ?? index,
+      })),
+    });
+
+    await finalizeInvoiceInTransaction(tx, invoiceId);
+    await tx.recurringInvoiceSchedule.update({
+      where: { id: schedule.id },
+      data: {
+        nextIssueDate: advancedDate,
+        lastGeneratedAt: asOf,
+        lastInvoiceId: invoiceId,
+      },
+    });
+
+    return {
+      kind: "invoice",
+      invoiceId,
+      created: true,
+      shouldDeliver,
+      ...recipient,
+    };
+  });
+}
+
+async function markRecurringDeliverySucceeded(invoiceId: string, deliveredAt: Date): Promise<void> {
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      sentAt: deliveredAt,
+      recurringDeliveryStatus: "sent",
+      recurringDeliveryClaimedAt: null,
+      recurringDeliveryError: null,
+    },
+  });
+}
+
+async function markRecurringDeliveryFailed(invoiceId: string, error: string): Promise<void> {
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      recurringDeliveryStatus: "failed",
+      recurringDeliveryError: error.slice(0, 2000),
+    },
+  });
+}
+
 export async function generateInvoiceFromSchedule(
   scheduleId: string,
   asOf: Date,
-  options?: { force?: boolean },
-): Promise<{ invoiceId: string; emailed: boolean; emailError?: string }> {
-  const schedule = await prisma.recurringInvoiceSchedule.findUnique({
-    where: { id: scheduleId },
-    include: {
-      lineItems: { orderBy: { sortOrder: "asc" } },
-      customer: {
-        select: { email: true, company: true, firstName: true, lastName: true },
+  options?: { force?: boolean; skipIfNoLongerDue?: boolean },
+): Promise<RecurringInvoiceGenerationResult> {
+  return coordinateRecurringInvoiceGeneration({
+    commit: () => commitRecurringInvoicePeriod(scheduleId, asOf, options),
+    deliver: ({ invoiceId, to, greetingName }) =>
+      sendNativeInvoiceEmail({ invoiceId, to, greetingName }),
+    deliverySucceeded: markRecurringDeliverySucceeded,
+    deliveryFailed: markRecurringDeliveryFailed,
+  });
+}
+
+async function claimRecurringInvoiceDelivery(
+  invoiceId: string,
+  asOf: Date,
+): Promise<RecurringInvoiceCommitResult> {
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id"
+      FROM "Invoice"
+      WHERE "id" = ${invoiceId}
+      FOR UPDATE
+    `;
+    if (!locked.length) throw new Error("Invoice not found.");
+
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        recurringSchedule: {
+          include: {
+            customer: {
+              select: { email: true, company: true, firstName: true, lastName: true },
+            },
+          },
+        },
       },
-    },
-  });
-  if (!schedule) throw new Error("Schedule not found.");
-  if (schedule.status !== "active") throw new Error("Schedule is not active.");
-  if (!options?.force && schedule.nextIssueDate > asOf) throw new Error("Schedule is not due yet.");
-
-  const issueDate = options?.force ? startOfUtcDay(asOf) : schedule.nextIssueDate;
-  const dueDate = addUtcDays(issueDate, schedule.dueDaysAfterIssue);
-  const taxRate = schedule.taxRatePercent != null ? Number(schedule.taxRatePercent) : null;
-
-  const invoiceId = await createDraftInvoice({
-    kind: "recurring",
-    recurringScheduleId: schedule.id,
-    customerId: schedule.customerId,
-    billToName: schedule.billToName,
-    billToLines: schedule.billToLines,
-    currency: schedule.currency,
-    taxLabel: schedule.taxLabel,
-    taxRatePercent: taxRate,
-    issueDate,
-    dueDate,
-    notes: schedule.notes,
-    paymentInstructions: schedule.paymentInstructions,
-    serviceAssignmentId: schedule.serviceAssignmentId,
-    createdById: schedule.createdById,
-    lineItems: schedule.lineItems.map((line, index) => ({
-      description: line.description,
-      quantity: Number(line.quantity),
-      unitPrice: Number(line.unitPrice),
-      unitLabel: line.unitLabel,
-      sortOrder: line.sortOrder ?? index,
-    })),
-  });
-
-  await finalizeAndSendInvoice(invoiceId);
-
-  let emailed = false;
-  let emailError: string | undefined;
-  if (schedule.autoEmail) {
-    const { to, greetingName } = await resolveRecipientEmail(schedule);
-    if (to) {
-      const sent = await sendNativeInvoiceEmail({ invoiceId, to, greetingName });
-      if ("error" in sent) {
-        emailError = sent.error;
-      } else {
-        emailed = true;
-      }
-    } else {
-      emailError = "No recipient email on schedule or customer.";
+    });
+    if (!invoice || invoice.kind !== "recurring" || !invoice.recurringSchedule) {
+      throw new Error("Recurring invoice schedule not found.");
     }
-  }
 
-  await prisma.recurringInvoiceSchedule.update({
-    where: { id: scheduleId },
-    data: {
-      nextIssueDate: addUtcMonths(issueDate, schedule.intervalMonths),
-      lastGeneratedAt: asOf,
-      lastInvoiceId: invoiceId,
-    },
+    const schedule = invoice.recurringSchedule;
+    const shouldDeliver = canClaimDelivery({
+      autoEmail: schedule.autoEmail,
+      sentAt: invoice.sentAt,
+      status: invoice.recurringDeliveryStatus,
+      claimedAt: invoice.recurringDeliveryClaimedAt,
+      now: asOf,
+    });
+
+    if (shouldDeliver) {
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          recurringDeliveryStatus: "sending",
+          recurringDeliveryAttempts: { increment: 1 },
+          recurringDeliveryClaimedAt: asOf,
+          recurringDeliveryError: null,
+        },
+      });
+    }
+
+    return {
+      kind: "invoice",
+      invoiceId: invoice.id,
+      created: false,
+      shouldDeliver,
+      ...resolveRecipientEmail(schedule),
+    };
   });
+}
 
-  return { invoiceId, emailed, emailError };
+export async function retryRecurringInvoiceDelivery(
+  invoiceId: string,
+  asOf = new Date(),
+): Promise<RecurringInvoiceGenerationResult> {
+  return coordinateRecurringInvoiceGeneration({
+    commit: () => claimRecurringInvoiceDelivery(invoiceId, asOf),
+    deliver: ({ invoiceId: id, to, greetingName }) =>
+      sendNativeInvoiceEmail({ invoiceId: id, to, greetingName }),
+    deliverySucceeded: markRecurringDeliverySucceeded,
+    deliveryFailed: markRecurringDeliveryFailed,
+    now: () => asOf,
+  });
 }
 
 export async function markOverdueNativeInvoices(asOf: Date): Promise<number> {
@@ -264,13 +486,61 @@ export type ProcessRecurringSchedulesResult = {
   ok: true;
   schedulesChecked: number;
   invoicesGenerated: number;
+  deliveriesRetried: number;
   overdueMarked: number;
   errors: { scheduleId: string; message: string }[];
+  deliveryErrors: { invoiceId: string; message: string }[];
 };
 
 export async function processDueRecurringSchedules(asOf = new Date()): Promise<ProcessRecurringSchedulesResult> {
   const errors: { scheduleId: string; message: string }[] = [];
+  const deliveryErrors: { invoiceId: string; message: string }[] = [];
   let invoicesGenerated = 0;
+  let deliveriesRetried = 0;
+
+  const retryBefore = new Date(asOf.getTime() - DELIVERY_CLAIM_TIMEOUT_MS);
+  const retryRows = await prisma.invoice.findMany({
+    where: {
+      kind: "recurring",
+      recurringScheduleId: { not: null },
+      sentAt: null,
+      OR: [
+        {
+          recurringDeliveryStatus: "failed",
+          OR: [
+            { recurringDeliveryClaimedAt: null },
+            { recurringDeliveryClaimedAt: { lte: retryBefore } },
+          ],
+        },
+        {
+          recurringDeliveryStatus: "sending",
+          OR: [
+            { recurringDeliveryClaimedAt: null },
+            { recurringDeliveryClaimedAt: { lte: retryBefore } },
+          ],
+        },
+      ],
+    },
+    orderBy: { updatedAt: "asc" },
+    take: DELIVERY_RETRY_LIMIT,
+    select: { id: true },
+  });
+
+  for (const row of retryRows) {
+    try {
+      const result = await retryRecurringInvoiceDelivery(row.id, asOf);
+      if (result.skipped) continue;
+      if (result.emailed) deliveriesRetried += 1;
+      if (result.emailError) {
+        deliveryErrors.push({ invoiceId: row.id, message: result.emailError });
+      }
+    } catch (error) {
+      deliveryErrors.push({
+        invoiceId: row.id,
+        message: error instanceof Error ? error.message : "Delivery retry failed.",
+      });
+    }
+  }
 
   const due = await prisma.recurringInvoiceSchedule.findMany({
     where: { status: "active", nextIssueDate: { lte: asOf } },
@@ -288,8 +558,14 @@ export async function processDueRecurringSchedules(asOf = new Date()): Promise<P
       if (!current || current.status !== "active" || current.nextIssueDate > asOf) break;
 
       try {
-        await generateInvoiceFromSchedule(row.id, asOf);
-        invoicesGenerated += 1;
+        const result = await generateInvoiceFromSchedule(row.id, asOf, {
+          skipIfNoLongerDue: true,
+        });
+        if (result.skipped) break;
+        if (result.created) invoicesGenerated += 1;
+        if (result.emailError) {
+          deliveryErrors.push({ invoiceId: result.invoiceId, message: result.emailError });
+        }
         iterations += 1;
       } catch (e) {
         errors.push({
@@ -307,7 +583,9 @@ export async function processDueRecurringSchedules(asOf = new Date()): Promise<P
     ok: true,
     schedulesChecked: due.length,
     invoicesGenerated,
+    deliveriesRetried,
     overdueMarked,
     errors,
+    deliveryErrors,
   };
 }

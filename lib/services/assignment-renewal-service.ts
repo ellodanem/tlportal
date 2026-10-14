@@ -83,9 +83,108 @@ export function resolveNextDueAfterPayment(
   return { ...next, usedOverride: false };
 }
 
+async function markStripeAssignmentPeriodPaidAtomically(
+  input: MarkAssignmentPeriodPaidInput,
+  invoiceRef: string,
+): Promise<MarkAssignmentPeriodPaidResult> {
+  const committed = await prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "ServiceAssignment" WHERE "id" = ${input.assignmentId} FOR UPDATE
+    `;
+    if (!locked.length) return { result: { ok: false as const, error: "Active assignment not found." } };
+
+    const assignment = await tx.serviceAssignment.findFirst({
+      where: billableAssignmentWhereById(input.assignmentId),
+      include: {
+        device: { select: { id: true, imei: true, label: true } },
+        customer: { select: { id: true, billingMode: true } },
+      },
+    });
+    if (!assignment) return { result: { ok: false as const, error: "Active assignment not found." } };
+
+    if (assignment.lastInvoiceId === invoiceRef) {
+      const next = computeNextDueAfterPayment(assignment);
+      if ("error" in next) return { result: { ok: false as const, error: next.error } };
+      return {
+        result: {
+          ok: true as const,
+          assignmentId: assignment.id,
+          customerId: assignment.customerId,
+          deviceId: assignment.deviceId,
+          previousNextDue: assignment.nextDueDate,
+          newNextDue: next.newNextDue,
+          alreadyRecorded: true,
+          usedOverride: false,
+        },
+      };
+    }
+
+    const next = resolveNextDueAfterPayment(assignment, input.nextDueOverride);
+    if ("error" in next) return { result: { ok: false as const, error: next.error } };
+    await tx.serviceAssignment.update({
+      where: { id: assignment.id },
+      data: {
+        nextDueDate: next.newNextDue,
+        status: "active",
+        lastPaymentStatus: "paid (Stripe)",
+        lastInvoiceId: invoiceRef,
+        startDate: assignment.startDate ?? (assignment.nextDueDate ? null : next.baseDate),
+      },
+    });
+    return {
+      result: {
+        ok: true as const,
+        assignmentId: assignment.id,
+        customerId: assignment.customerId,
+        deviceId: assignment.deviceId,
+        previousNextDue: assignment.nextDueDate,
+        newNextDue: next.newNextDue,
+        alreadyRecorded: false,
+        usedOverride: next.usedOverride,
+      },
+      event: {
+        deviceLabel: assignment.device.label?.trim()
+          || assignment.device.imei
+          || assignment.device.id.slice(0, 8),
+        intervalMonths: assignment.intervalMonths,
+      },
+    };
+  });
+
+  if (committed.result.ok && !committed.result.alreadyRecorded && committed.event) {
+    await recordOperationalEvent({
+      category: "renewal.paid",
+      summary: `Renewal marked paid â€” ${committed.event.deviceLabel}`,
+      customerId: committed.result.customerId,
+      actorUserId: input.actorUserId ?? undefined,
+      payload: {
+        assignmentId: committed.result.assignmentId,
+        deviceId: committed.result.deviceId,
+        source: "stripe",
+        invoiceRef,
+        intervalMonths: committed.event.intervalMonths,
+        previousNextDue: committed.result.previousNextDue?.toISOString() ?? null,
+        newNextDue: committed.result.newNextDue.toISOString(),
+        nextDueOverride: committed.result.usedOverride,
+        previousLabel: formatAssignmentDateLabel(committed.result.previousNextDue),
+        newLabel: formatAssignmentDateLabel(committed.result.newNextDue),
+        termLabel: committed.event.intervalMonths != null
+          ? formatPlanTerm(committed.event.intervalMonths)
+          : null,
+      },
+    });
+  }
+  return committed.result;
+}
+
 export async function markAssignmentPeriodPaid(
   input: MarkAssignmentPeriodPaidInput,
 ): Promise<MarkAssignmentPeriodPaidResult> {
+  const invoiceRef = input.invoiceRef?.trim() || null;
+  if (input.source === "stripe" && invoiceRef) {
+    return markStripeAssignmentPeriodPaidAtomically(input, invoiceRef);
+  }
+
   const assignment = await prisma.serviceAssignment.findFirst({
     where: billableAssignmentWhereById(input.assignmentId),
     include: {
@@ -98,7 +197,6 @@ export async function markAssignmentPeriodPaid(
     return { ok: false, error: "Active assignment not found." };
   }
 
-  const invoiceRef = input.invoiceRef?.trim() || null;
   if (
     invoiceRef &&
     input.source === "stripe" &&
@@ -266,6 +364,7 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
 
   let advanced = 0;
   let skipped = 0;
+  const failures: string[] = [];
 
   for (const a of assignments) {
     const result = await markAssignmentPeriodPaid({
@@ -274,7 +373,7 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
       invoiceRef: stripeInvoiceId,
     });
     if (!result.ok) {
-      skipped += 1;
+      failures.push(`${a.id}: ${result.error}`);
       continue;
     }
     if (result.alreadyRecorded) {
@@ -282,6 +381,10 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
     } else {
       advanced += 1;
     }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Could not advance ${failures.length} assignment renewal(s): ${failures.join("; ")}`);
   }
 
   return { advanced, skipped };

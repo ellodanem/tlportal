@@ -7,13 +7,12 @@ import { stripeBillingAdapter } from "@/lib/adapters/billing/stripe/adapter";
 import { prisma } from "@/lib/db";
 import { isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
 import { parseStripeBillingMetadata } from "@/lib/stripe/metadata";
-import { createStripeSubscriptionCheckout } from "@/lib/stripe/checkout";
 import { createStripeBillingPortalSession } from "@/lib/stripe/portal";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 import type { BillingPort } from "@/lib/ports/billing";
 
-import { createPendingCustomerSubscription } from "./customer-subscription-service";
 import { recordOperationalEvent } from "./operational-event-service";
+import { runStripeCheckoutOperation } from "./stripe-checkout-operation-service";
 
 function billingAdapterFor(provider: BillingProvider): BillingPort {
   switch (provider) {
@@ -245,21 +244,18 @@ export async function startStripeCheckout(
     const vehicleCount = Math.max(1, options?.vehicleCount ?? 1);
     const monthlyRateXcd = options?.monthlyRateXcd ?? null;
     const feePassthrough = options?.feePassthrough ?? customer.stripeFeePassthrough;
-    const { id: tlSubscriptionId } = await createPendingCustomerSubscription({
-      customerId,
-      planTermMonths: durationMonths,
-      monthlyRateXcd,
-      vehicleCount,
-    });
-    const { url, sessionId, pricingMode } = await createStripeSubscriptionCheckout({
+    const checkout = await runStripeCheckoutOperation({
       customer,
       durationMonths,
-      tlSubscriptionId,
       monthlyRateXcd,
       vehicleCount,
       useCustomPricing: options?.useCustomPricing,
       feePassthrough,
     });
+    if (!checkout.ok) {
+      return { ok: false, error: checkout.error };
+    }
+    const pricingMode = "dynamic";
     await recordOperationalEvent({
       category: "billing.synced",
       summary: `Stripe Checkout started (${durationMonths} mo, ${vehicleCount} vehicle${vehicleCount === 1 ? "" : "s"}, ${pricingMode}${feePassthrough ? "" : ", TL absorbs processing"})`,
@@ -271,10 +267,17 @@ export async function startStripeCheckout(
         vehicleCount,
         pricingMode,
         feePassthrough,
-        checkoutSessionId: sessionId,
+        checkoutSessionId: checkout.sessionId,
+        checkoutOperationKey: checkout.operationKey,
+        reused: checkout.reused,
       },
     });
-    return { ok: true, url, sessionId, pricingMode };
+    return {
+      ok: true,
+      url: checkout.url,
+      sessionId: checkout.sessionId,
+      pricingMode,
+    };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Checkout failed." };
   }

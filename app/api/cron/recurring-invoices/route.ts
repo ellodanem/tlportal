@@ -5,6 +5,7 @@ import { processDueScheduledInvoiceEmails } from "@/lib/services/scheduled-invoi
 import { fulfillPendingPaidStripeReceipts } from "@/lib/services/billing-paid-receipt-fulfillment-service";
 import { backfillRecentPaidStripeInvoices } from "@/lib/services/stripe-invoice-backfill-service";
 import { backfillStripeNativeInvoiceMirrors } from "@/lib/services/stripe-native-invoice-mirror-service";
+import { reconcileRetryableStripeWebhooks } from "@/lib/services/stripe-webhook-reconciliation-service";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -31,7 +32,8 @@ export async function GET(request: Request) {
       const stripeInvoices = await backfillRecentPaidStripeInvoices();
       const stripeMirror = await backfillStripeNativeInvoiceMirrors();
       const paidReceipts = await fulfillPendingPaidStripeReceipts(25);
-      return { stripeInvoices, stripeMirror, paidReceipts };
+      const stripeWebhookReconciliation = await reconcileRetryableStripeWebhooks(25);
+      return { stripeInvoices, stripeMirror, paidReceipts, stripeWebhookReconciliation };
     })(),
   ]);
   return NextResponse.json({

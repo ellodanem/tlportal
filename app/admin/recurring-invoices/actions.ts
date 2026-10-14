@@ -161,13 +161,17 @@ export async function runRecurringScheduleNowAction(
     revalidatePath("/admin/recurring-invoices");
     revalidatePath(`/admin/recurring-invoices/${scheduleId}`);
     revalidatePath("/admin/tl-invoices");
+    if (result.skipped) {
+      return { error: "Schedule is no longer due." };
+    }
     revalidatePath(`/admin/tl-invoices/${result.invoiceId}`);
     const emailNote = result.emailed
       ? " Emailed to customer."
       : result.emailError
         ? ` Email not sent: ${result.emailError}`
         : "";
-    return { ok: true, message: `Invoice generated.${emailNote}` };
+    const invoiceNote = result.created ? "Invoice generated." : "Existing invoice reused.";
+    return { ok: true, message: `${invoiceNote}${emailNote}` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not generate invoice." };
   }

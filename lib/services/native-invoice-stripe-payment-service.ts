@@ -43,14 +43,19 @@ export async function recordNativeInvoiceStripeCheckout(session: Stripe.Checkout
   if (!invoice) return;
   if (invoice.status === "void" || invoice.status === "written_off" || invoice.status === "paid") return;
 
-  await recordInvoicePayment({
-    invoiceId: invoice.id,
-    amount,
-    method: "stripe",
-    reference: session.id,
-    stripePaymentIntentId: paymentIntentId,
-    notes: "Stripe Checkout",
-  });
+  try {
+    await recordInvoicePayment({
+      invoiceId: invoice.id,
+      amount,
+      method: "stripe",
+      reference: session.id,
+      stripePaymentIntentId: paymentIntentId,
+      notes: "Stripe Checkout",
+    });
+  } catch (error) {
+    if ((error as { code?: string })?.code === "P2002") return;
+    throw error;
+  }
 
   await recordOperationalEvent({
     category: "billing",

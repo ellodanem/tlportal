@@ -58,6 +58,9 @@ export async function createStripeSubscriptionCheckout(input: {
   monthlyRateXcd?: number | null;
   vehicleCount: number;
   useCustomPricing?: boolean;
+  operationKey?: string;
+  idempotencyKey?: string;
+  stripeCustomerId?: string;
   /** Default: customer.stripeFeePassthrough (true = customer pays processing). */
   feePassthrough?: boolean;
 }): Promise<{ url: string; sessionId: string; pricingMode: "catalog" | "dynamic" }> {
@@ -78,7 +81,8 @@ export async function createStripeSubscriptionCheckout(input: {
 
   const effectiveMonthly = resolved.monthlyRateXcd;
 
-  const { stripeCustomerId } = await ensureStripeCustomerForTlCustomer(input.customer);
+  const stripeCustomerId = input.stripeCustomerId
+    ?? (await ensureStripeCustomerForTlCustomer(input.customer)).stripeCustomerId;
   const stripe = getStripeClient();
   const base = getAppBaseUrl();
   const meta: Record<string, string> = {
@@ -90,24 +94,30 @@ export async function createStripeSubscriptionCheckout(input: {
     tl_fee_passthrough: feePassthrough ? "1" : "0",
     tl_monthly_rate_xcd: String(effectiveMonthly),
   };
+  if (input.operationKey) {
+    meta.tl_billing_operation_key = input.operationKey;
+  }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: stripeCustomerId,
-    line_items: [lineItemFromResolved(resolved, feePassthrough)],
-    success_url: `${base}/pay/thanks?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${base}/pay/cancel`,
-    client_reference_id: input.customer.id,
-    metadata: meta,
-    subscription_data: {
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "subscription",
+      customer: stripeCustomerId,
+      line_items: [lineItemFromResolved(resolved, feePassthrough)],
+      success_url: `${base}/pay/thanks?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${base}/pay/cancel`,
+      client_reference_id: input.customer.id,
       metadata: meta,
-    },
-    after_expiration: {
-      recovery: {
-        enabled: true,
+      subscription_data: {
+        metadata: meta,
+      },
+      after_expiration: {
+        recovery: {
+          enabled: true,
+        },
       },
     },
-  });
+    input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+  );
 
   if (!session.url) {
     throw new Error("Stripe did not return a Checkout URL.");

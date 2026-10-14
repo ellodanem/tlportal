@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 
-import type { InvoiceKind, InvoiceStatus, PaymentMethod } from "@prisma/client";
+import type { InvoiceKind, InvoiceStatus, PaymentMethod, Prisma } from "@prisma/client";
 
 import { allocateInvoiceNumber } from "@/lib/billing/native/numbering";
 import { prisma } from "@/lib/db";
@@ -30,6 +30,12 @@ export type CreateDraftInvoiceInput = {
   currency?: string;
   kind?: InvoiceKind;
   recurringScheduleId?: string | null;
+  recurringPeriodStart?: Date | null;
+  recurringGenerationKey?: string | null;
+  recurringDeliveryStatus?: Prisma.InvoiceCreateInput["recurringDeliveryStatus"];
+  recurringDeliveryAttempts?: number;
+  recurringDeliveryClaimedAt?: Date | null;
+  recurringDeliveryError?: string | null;
   taxLabel?: string | null;
   taxRatePercent?: number | null;
   discountAmount?: number | null;
@@ -61,7 +67,12 @@ function lineCreateData(lines: NativeLineInput[]) {
 /**
  * Create a draft native invoice (no number allocated yet). Returns the new invoice id.
  */
-export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promise<string> {
+type InvoiceCreateClient = Pick<Prisma.TransactionClient, "invoice">;
+
+async function createDraftInvoiceWithClient(
+  db: InvoiceCreateClient,
+  input: CreateDraftInvoiceInput,
+): Promise<string> {
   if (!input.lineItems.length) {
     throw new Error("An invoice needs at least one line item.");
   }
@@ -72,12 +83,18 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promis
     input.discountAmount ?? null,
   );
 
-  const created = await prisma.invoice.create({
+  const created = await db.invoice.create({
     data: {
       status: "draft",
       kind: input.kind ?? "one_off",
       customerId: input.customerId ?? null,
       recurringScheduleId: input.recurringScheduleId ?? null,
+      recurringPeriodStart: input.recurringPeriodStart ?? null,
+      recurringGenerationKey: input.recurringGenerationKey ?? null,
+      recurringDeliveryStatus: input.recurringDeliveryStatus ?? null,
+      recurringDeliveryAttempts: input.recurringDeliveryAttempts ?? 0,
+      recurringDeliveryClaimedAt: input.recurringDeliveryClaimedAt ?? null,
+      recurringDeliveryError: input.recurringDeliveryError ?? null,
       billToName: input.billToName ?? null,
       billToLines: input.billToLines ?? [],
       currency,
@@ -101,6 +118,18 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promis
     select: { id: true },
   });
   return created.id;
+}
+
+export async function createDraftInvoice(input: CreateDraftInvoiceInput): Promise<string> {
+  return createDraftInvoiceWithClient(prisma, input);
+}
+
+/** Create a draft as part of a larger atomic billing transaction. */
+export async function createDraftInvoiceInTransaction(
+  tx: Prisma.TransactionClient,
+  input: CreateDraftInvoiceInput,
+): Promise<string> {
+  return createDraftInvoiceWithClient(tx, input);
 }
 
 /** Replace line items and totals on a draft invoice. */
@@ -173,23 +202,29 @@ export async function finalizeAndSendInvoice(
 export async function finalizeInvoice(
   invoiceId: string,
 ): Promise<{ number: string; publicToken: string; status: InvoiceStatus }> {
-  return prisma.$transaction(async (tx) => {
-    const inv = await tx.invoice.findUnique({
-      where: { id: invoiceId },
-      select: { id: true, number: true, publicToken: true, status: true },
-    });
-    if (!inv) throw new Error("Invoice not found");
+  return prisma.$transaction((tx) => finalizeInvoiceInTransaction(tx, invoiceId));
+}
 
-    const number = inv.number ?? (await allocateInvoiceNumber(tx));
-    const publicToken = inv.publicToken ?? randomToken();
-    const status: InvoiceStatus = inv.status === "draft" ? "open" : inv.status;
-
-    await tx.invoice.update({
-      where: { id: invoiceId },
-      data: { number, publicToken, status },
-    });
-    return { number, publicToken, status };
+/** Finalize an invoice inside an existing transaction. */
+export async function finalizeInvoiceInTransaction(
+  tx: Prisma.TransactionClient,
+  invoiceId: string,
+): Promise<{ number: string; publicToken: string; status: InvoiceStatus }> {
+  const inv = await tx.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { id: true, number: true, publicToken: true, status: true },
   });
+  if (!inv) throw new Error("Invoice not found");
+
+  const number = inv.number ?? (await allocateInvoiceNumber(tx));
+  const publicToken = inv.publicToken ?? randomToken();
+  const status: InvoiceStatus = inv.status === "draft" ? "open" : inv.status;
+
+  await tx.invoice.update({
+    where: { id: invoiceId },
+    data: { number, publicToken, status },
+  });
+  return { number, publicToken, status };
 }
 
 export type RecordPaymentInput = {

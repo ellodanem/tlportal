@@ -99,7 +99,9 @@ export async function createNativeInvoiceCheckoutSession(publicToken: string): P
     params.customer_email = customerEmail;
   }
 
-  const session = await stripe.checkout.sessions.create(params);
+  const session = await stripe.checkout.sessions.create(params, {
+    idempotencyKey: `tl-native-invoice:${invoice.id}:${amountDue.toFixed(2)}`,
+  });
   if (!session.url) {
     return { ok: false, error: "Could not start card payment." };
   }

@@ -12,6 +12,10 @@ import { recordNativeInvoiceStripeCheckout } from "@/lib/services/native-invoice
 import { fulfillPaidStripeInvoiceReceipt } from "@/lib/services/billing-paid-receipt-fulfillment-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { catchUpOverdueRenewalsFromLatestPaidInvoice } from "@/lib/services/stripe-renewal-catchup-service";
+import {
+  recordStripeCheckoutCompletion,
+  recordStripeCheckoutExpired,
+} from "@/lib/services/stripe-checkout-operation-service";
 
 import { getStripeClient } from "./config";
 import { handleCheckoutSessionExpired } from "./checkout-recovery";
@@ -36,11 +40,6 @@ function stripePaymentIntentInvoiceId(paymentIntent: Stripe.PaymentIntent): stri
     return id || null;
   }
   return ref?.id?.trim() || null;
-}
-
-/** Duplicate invoice.paid / payment_intent.succeeded should still finish PDF + email. */
-export function isStripePaidInvoiceReplaySafe(eventType: string): boolean {
-  return eventType === "invoice.paid" || eventType === "payment_intent.succeeded";
 }
 
 async function loadSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
@@ -75,8 +74,7 @@ async function processPaidStripeInvoice(invoice: Stripe.Invoice): Promise<void> 
     await syncStripeSubscriptionToDatabase(sub);
   }
   if (!customerId) {
-    console.error("[stripe webhook] invoice.paid: could not resolve TL customer", invoice.id);
-    return;
+    throw new Error(`invoice.paid could not resolve a TL customer for ${invoice.id}.`);
   }
 
   let advanced = 0;
@@ -85,28 +83,24 @@ async function processPaidStripeInvoice(invoice: Stripe.Invoice): Promise<void> 
   // Advance due dates before slow side effects (Invoiless, PDF, email) so a
   // function timeout cannot skip the ops-visible Overdue rollup.
   if (subId) {
-    try {
-      const result = await advanceAssignmentsOnStripeInvoicePaid(customerId, invoice.id);
-      advanced = result.advanced;
-      skipped = result.skipped;
-      advanceReason = result.reason;
-      if (advanced > 0) {
-        await recordOperationalEvent({
-          category: "renewal.paid",
-          summary: `Renewal ladder advanced (${advanced} device${advanced === 1 ? "" : "s"})`,
-          customerId,
-          payload: { stripeInvoiceId: invoice.id, advanced, skipped },
-        });
-      } else if (advanceReason) {
-        console.info("[stripe webhook] renewal auto-advance skipped", {
-          customerId,
-          invoiceId: invoice.id,
-          skipped,
-          reason: advanceReason,
-        });
-      }
-    } catch (e) {
-      console.error("[stripe webhook] renewal auto-advance failed", e);
+    const result = await advanceAssignmentsOnStripeInvoicePaid(customerId, invoice.id);
+    advanced = result.advanced;
+    skipped = result.skipped;
+    advanceReason = result.reason;
+    if (advanced > 0) {
+      await recordOperationalEvent({
+        category: "renewal.paid",
+        summary: `Renewal ladder advanced (${advanced} device${advanced === 1 ? "" : "s"})`,
+        customerId,
+        payload: { stripeInvoiceId: invoice.id, advanced, skipped },
+      });
+    } else if (advanceReason) {
+      console.info("[stripe webhook] renewal auto-advance skipped", {
+        customerId,
+        invoiceId: invoice.id,
+        skipped,
+        reason: advanceReason,
+      });
     }
   }
   await recordOperationalEvent({
@@ -151,16 +145,13 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     case "checkout.session.expired": {
       const session = event.data.object as Stripe.Checkout.Session;
       await handleCheckoutSessionExpired(session);
+      await recordStripeCheckoutExpired(session);
       break;
     }
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.mode === "payment" && session.metadata?.tl_checkout_kind === "native_invoice") {
-        try {
-          await recordNativeInvoiceStripeCheckout(session);
-        } catch (e) {
-          console.error("[stripe webhook] native invoice payment failed", e);
-        }
+        await recordNativeInvoiceStripeCheckout(session);
         break;
       }
       const tlCustomerId = session.metadata?.tl_customer_id?.trim();
@@ -171,19 +162,19 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (subId) {
         const sub = await loadSubscription(subId);
         const { customerId } = await syncStripeSubscriptionToDatabase(sub);
-        try {
-          const stripe = getStripeClient();
-          const latestInv = await stripe.invoices.list({
-            subscription: subId,
-            limit: 1,
-          });
-          const inv = latestInv.data[0];
-          if (inv) {
-            await syncStripeInvoiceToDatabase(inv);
-          }
-        } catch {
-          // Non-fatal; invoice.paid webhook will mirror later
+        if (!customerId && tlCustomerId) {
+          throw new Error(`Checkout ${session.id} completed but its subscription could not be linked.`);
         }
+        const stripe = getStripeClient();
+        const latestInv = await stripe.invoices.list({
+          subscription: subId,
+          limit: 1,
+        });
+        const inv = latestInv.data[0];
+        if (inv) {
+          await syncStripeInvoiceToDatabase(inv);
+        }
+        await recordStripeCheckoutCompletion(session, subId, customerId ?? tlCustomerId ?? null);
         if (customerId) {
           await recordOperationalEvent({
             category: "billing.synced",
@@ -214,18 +205,14 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           payload: { subscriptionId: sub.id, status: sub.status },
         });
         if (sub.status === "active" || sub.status === "trialing") {
-          try {
-            const catchUp = await catchUpOverdueRenewalsFromLatestPaidInvoice(customerId);
-            if (catchUp && catchUp.advanced > 0) {
-              await recordOperationalEvent({
-                category: "renewal.paid",
-                summary: `Renewal ladder catch-up (${catchUp.advanced} device${catchUp.advanced === 1 ? "" : "s"})`,
-                customerId,
-                payload: { subscriptionId: sub.id, ...catchUp, source: "subscription.updated" },
-              });
-            }
-          } catch (e) {
-            console.error("[stripe webhook] renewal catch-up failed", e);
+          const catchUp = await catchUpOverdueRenewalsFromLatestPaidInvoice(customerId);
+          if (catchUp && catchUp.advanced > 0) {
+            await recordOperationalEvent({
+              category: "renewal.paid",
+              summary: `Renewal ladder catch-up (${catchUp.advanced} device${catchUp.advanced === 1 ? "" : "s"})`,
+              customerId,
+              payload: { subscriptionId: sub.id, ...catchUp, source: "subscription.updated" },
+            });
           }
         }
       }
@@ -247,19 +234,14 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     }
     case "payment_intent.payment_failed": {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
-      try {
-        await handleStripePaymentFailure({ paymentIntent });
-      } catch (e) {
-        console.error("[stripe webhook] payment failure recovery failed", e);
-      }
+      await handleStripePaymentFailure({ paymentIntent });
       break;
     }
     case "payment_intent.succeeded": {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
       const invoiceId = stripePaymentIntentInvoiceId(paymentIntent);
       if (!invoiceId) break;
-      try {
-        const already = await prisma.billingInvoice.findUnique({
+      const already = await prisma.billingInvoice.findUnique({
           where: {
             provider_externalInvoiceId: { provider: "stripe", externalInvoiceId: invoiceId },
           },
@@ -272,15 +254,12 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         ) {
           break;
         }
-        const stripe = getStripeClient();
-        const invoice = await stripe.invoices.retrieve(invoiceId);
-        if (invoice.status === "paid") {
-          await processPaidStripeInvoice(invoice);
-        } else {
-          await syncStripeInvoiceToDatabase(invoice);
-        }
-      } catch (e) {
-        console.error("[stripe webhook] payment_intent.succeeded invoice sync failed", e);
+      const stripe = getStripeClient();
+      const invoice = await stripe.invoices.retrieve(invoiceId);
+      if (invoice.status === "paid") {
+        await processPaidStripeInvoice(invoice);
+      } else {
+        await syncStripeInvoiceToDatabase(invoice);
       }
       break;
     }
@@ -301,12 +280,8 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (event.type === "invoice.payment_failed") {
         const paymentIntentId = stripeInvoicePaymentIntentId(invoice);
         if (paymentIntentId) {
-          try {
-            const paymentIntent = await loadPaymentIntentForFailure(paymentIntentId);
-            await handleStripePaymentFailure({ paymentIntent, stripeInvoice: invoice });
-          } catch (e) {
-            console.error("[stripe webhook] invoice payment failure recovery failed", e);
-          }
+          const paymentIntent = await loadPaymentIntentForFailure(paymentIntentId);
+          await handleStripePaymentFailure({ paymentIntent, stripeInvoice: invoice });
         }
       }
       break;
@@ -316,22 +291,77 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
   }
 }
 
-export async function recordStripeWebhookIfNew(event: Stripe.Event): Promise<boolean> {
+const WEBHOOK_CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
+
+export async function claimStripeWebhookEvent(
+  event: Stripe.Event,
+): Promise<{ claimed: true } | { claimed: false; reason: "completed" | "in_progress" }> {
+  const now = new Date();
   try {
     await prisma.stripeWebhookEvent.create({
-      data: { id: event.id, type: event.type },
+      data: {
+        id: event.id,
+        type: event.type,
+        status: "in_progress",
+        attemptCount: 1,
+        lastAttemptAt: now,
+        processedAt: null,
+      },
     });
-    return true;
+    return { claimed: true };
   } catch (e) {
     const code = (e as { code?: string })?.code;
     if (code === "P2002") {
-      return false;
+      const staleBefore = new Date(now.getTime() - WEBHOOK_CLAIM_TIMEOUT_MS);
+      const claimed = await prisma.stripeWebhookEvent.updateMany({
+        where: {
+          id: event.id,
+          OR: [
+            { status: { in: ["failed", "retry_required"] } },
+            { status: "in_progress", lastAttemptAt: { lte: staleBefore } },
+          ],
+        },
+        data: {
+          status: "in_progress",
+          attemptCount: { increment: 1 },
+          lastAttemptAt: now,
+          failureMessage: null,
+        },
+      });
+      if (claimed.count === 1) return { claimed: true };
+      const existing = await prisma.stripeWebhookEvent.findUnique({
+        where: { id: event.id },
+        select: { status: true },
+      });
+      return {
+        claimed: false,
+        reason: existing?.status === "completed" ? "completed" : "in_progress",
+      };
     }
     throw e;
   }
 }
 
-/** Drop the dedup row so Stripe can retry after a failed handler. */
-export async function releaseStripeWebhookEvent(eventId: string): Promise<void> {
-  await prisma.stripeWebhookEvent.deleteMany({ where: { id: eventId } });
+export async function completeStripeWebhookEvent(eventId: string): Promise<void> {
+  await prisma.stripeWebhookEvent.update({
+    where: { id: eventId },
+    data: {
+      status: "completed",
+      processedAt: new Date(),
+      failureMessage: null,
+    },
+  });
+}
+
+export async function markStripeWebhookRetryRequired(
+  eventId: string,
+  message: string,
+): Promise<void> {
+  await prisma.stripeWebhookEvent.update({
+    where: { id: eventId },
+    data: {
+      status: "retry_required",
+      failureMessage: message.slice(0, 2000),
+    },
+  });
 }

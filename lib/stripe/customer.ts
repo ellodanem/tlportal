@@ -33,14 +33,25 @@ export async function ensureStripeCustomerForTlCustomer(
     throw new Error("Customer needs an email address before starting Stripe Checkout.");
   }
 
-  const created = await stripe.customers.create({
-    email,
-    name: stripeCustomerName(customer),
-    phone: customer.phone?.trim() || undefined,
-    metadata: {
-      tl_customer_id: customer.id,
+  // Recover a provider customer when Stripe succeeded but the local upsert did
+  // not complete. Metadata is the stable reconciliation key; email alone is
+  // not sufficient because addresses can be shared or changed.
+  const candidates = await stripe.customers.list({ email, limit: 100 });
+  const recovered = candidates.data.find(
+    (candidate) => !candidate.deleted && candidate.metadata?.tl_customer_id === customer.id,
+  );
+
+  const created = recovered ?? await stripe.customers.create(
+    {
+      email,
+      name: stripeCustomerName(customer),
+      phone: customer.phone?.trim() || undefined,
+      metadata: {
+        tl_customer_id: customer.id,
+      },
     },
-  });
+    { idempotencyKey: `tl-customer:${customer.id}` },
+  );
 
   await prisma.billingAccount.upsert({
     where: {

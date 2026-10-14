@@ -172,12 +172,9 @@ export async function syncStripeInvoiceToDatabase(
     await ensureBillingInvoiceDisplayNumber(row.id);
   }
 
-  try {
-    // Native AR mirror creates only on paid (or updates an existing mirror).
-    await syncBillingInvoiceToNativeMirror(row.id);
-  } catch (e) {
-    console.error("[stripe invoice-sync] native AR mirror failed", e);
-  }
+  // Native AR mirroring is critical financial fulfillment. Its upserts are
+  // replay-safe, so let webhook processing retry when this step fails.
+  await syncBillingInvoiceToNativeMirror(row.id);
 
   return { customerId, invoiceId: row.id };
 }

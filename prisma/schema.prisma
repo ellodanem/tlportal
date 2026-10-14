@@ -139,6 +139,18 @@ enum BillingInvoiceKind {
   one_time
 }
 
+enum BillingOperationType {
+  stripe_checkout_activation
+}
+
+enum BillingOperationStatus {
+  pending
+  in_progress
+  completed
+  failed
+  retry_required
+}
+
 // --- Native billing (Phase 0): TL-owned quotes / invoices / payments ---
 
 /// Lifecycle of a native TL quote (estimate). `converted` once an Invoice is generated from it.
@@ -186,6 +198,14 @@ enum RecurringScheduleStatus {
   active
   paused
   ended
+}
+
+/// Delivery lifecycle for an automatically emailed recurring native invoice.
+enum RecurringInvoiceDeliveryStatus {
+  sending
+  sent
+  failed
+  not_requested
 }
 
 enum ScheduledInvoiceEmailStatus {
@@ -380,6 +400,7 @@ model Customer {
   customerWhatsAppDeliveries CustomerWhatsAppDelivery[]
   whatsappConversations      WhatsAppConversation[]
   customerSubscriptions      CustomerSubscription[]
+  billingOperations          BillingOperation[]
   operationalEvents          OperationalEvent[]
   broadcastDeliveries        BroadcastDelivery[]
   portalUsers                CustomerPortalUser[]
@@ -906,11 +927,49 @@ model BillingPayLinkAdminAlert {
 
 /// Idempotency for Stripe webhooks (`evt_…` primary key).
 model StripeWebhookEvent {
-  id          String   @id
-  type        String
-  processedAt DateTime @default(now())
+  id             String                 @id
+  type           String
+  status         BillingOperationStatus @default(completed)
+  attemptCount   Int                    @default(0)
+  lastAttemptAt  DateTime?
+  processedAt    DateTime?
+  failureMessage String?                @db.Text
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
 
   @@index([processedAt])
+  @@index([status, lastAttemptAt])
+}
+
+/// Durable state for provider mutations that must be safe to retry.
+model BillingOperation {
+  id                            String                 @id @default(uuid())
+  type                          BillingOperationType
+  status                        BillingOperationStatus @default(pending)
+  customerId                    String
+  customer                      Customer               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerSubscriptionId        String?
+  customerSubscription          CustomerSubscription?  @relation(fields: [customerSubscriptionId], references: [id], onDelete: SetNull)
+  /// Stable logical identifier used to derive provider idempotency keys.
+  operationKey                  String                 @unique
+  /// One unresolved Checkout activation per customer. Cleared when completed/superseded.
+  activeKey                     String?                @unique
+  requestFingerprint            String
+  providerReference             String?
+  providerSubscriptionReference String?
+  attemptCount                  Int                    @default(0)
+  lastAttemptAt                 DateTime?
+  nextRetryAt                   DateTime?
+  completedAt                   DateTime?
+  failureCode                   String?
+  failureMessage                String?                @db.Text
+  metadata                      Json?
+  createdAt                     DateTime               @default(now())
+  updatedAt                     DateTime               @updatedAt
+
+  @@index([customerId, type, createdAt(sort: Desc)])
+  @@index([status, nextRetryAt])
+  @@index([providerReference])
 }
 
 /// Customer-level subscription (TL source of truth; Stripe id when linked).
@@ -932,6 +991,7 @@ model CustomerSubscription {
   cancelAt             DateTime?
   createdAt            DateTime                   @default(now())
   updatedAt            DateTime                   @updatedAt
+  billingOperations    BillingOperation[]
 
   @@index([customerId, updatedAt(sort: Desc)])
   @@index([status])
@@ -1174,6 +1234,15 @@ model Invoice {
   /// Recurring schedule that generated this invoice (when kind = recurring).
   recurringScheduleId String?
   recurringSchedule   RecurringInvoiceSchedule? @relation("ScheduleGeneratedInvoices", fields: [recurringScheduleId], references: [id], onDelete: SetNull)
+  /// UTC billing-period day used by recurring generation idempotency.
+  recurringPeriodStart       DateTime?
+  /// Stable schedule + billing-period key. Null on historical/non-recurring invoices.
+  recurringGenerationKey     String?                         @unique
+  /// Automatic email/PDF delivery state for recurring generation only.
+  recurringDeliveryStatus    RecurringInvoiceDeliveryStatus?
+  recurringDeliveryAttempts  Int                             @default(0)
+  recurringDeliveryClaimedAt DateTime?
+  recurringDeliveryError     String?                         @db.Text
   /// Stripe `BillingInvoice` mirror row (when kind = subscription_mirror).
   billingInvoiceId String?        @unique
   billingInvoice   BillingInvoice? @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)
@@ -1327,7 +1396,7 @@ model Payment {
   method                PaymentMethod @default(cash)
   /// External or manual reference (cheque #, bank ref, Stripe PaymentIntent id).
   reference             String?
-  stripePaymentIntentId String?
+  stripePaymentIntentId String?       @unique
   receivedAt            DateTime      @default(now())
   notes                 String?
 

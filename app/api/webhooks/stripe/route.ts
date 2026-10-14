@@ -1,9 +1,10 @@
 import { getStripeClient, stripeWebhookSecret } from "@/lib/stripe/config";
+import { coordinateStripeWebhookFulfillment } from "@/lib/billing/stripe-webhook-fulfillment-coordinator";
 import {
+  claimStripeWebhookEvent,
+  completeStripeWebhookEvent,
   handleStripeWebhookEvent,
-  isStripePaidInvoiceReplaySafe,
-  recordStripeWebhookIfNew,
-  releaseStripeWebhookEvent,
+  markStripeWebhookRetryRequired,
 } from "@/lib/stripe/webhook-handlers";
 
 export const runtime = "nodejs";
@@ -42,20 +43,17 @@ export async function POST(req: Request) {
     return new Response(msg, { status: 400 });
   }
 
-  const isNew = await recordStripeWebhookIfNew(event);
-  if (!isNew && !isStripePaidInvoiceReplaySafe(event.type)) {
-    return Response.json({ ok: true, duplicate: true });
-  }
-
   try {
-    await handleStripeWebhookEvent(event);
+    const result = await coordinateStripeWebhookFulfillment(event, {
+      claim: claimStripeWebhookEvent,
+      fulfill: handleStripeWebhookEvent,
+      complete: (claimedEvent) => completeStripeWebhookEvent(claimedEvent.id),
+      retryRequired: (claimedEvent, message) =>
+        markStripeWebhookRetryRequired(claimedEvent.id, message),
+    });
+    return Response.json({ ok: true, duplicate: result.duplicate });
   } catch (e) {
     console.error("[stripe webhook] handler error", e);
-    if (isNew) {
-      await releaseStripeWebhookEvent(event.id);
-    }
     return new Response("Handler error", { status: 500 });
   }
-
-  return Response.json({ ok: true, duplicate: !isNew });
 }
