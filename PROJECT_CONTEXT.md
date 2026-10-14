@@ -3611,3 +3611,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 ### 2026-10-14 14:58 UTC — pre-push (`main` → origin) @ `f7c645e`
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-10-14 15:03 UTC — commit `81d95cd`
+
+- feat: add vendor payables foundation
+
+
+### 2026-10-14 15:03 UTC — pre-push (`main` → origin) @ `81d95cd`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
