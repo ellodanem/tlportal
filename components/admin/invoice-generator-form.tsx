@@ -82,6 +82,51 @@ function SaveDraftButton({ hasInvoiceId }: { hasInvoiceId: boolean }) {
   );
 }
 
+function InvoiceLivePreview({
+  customer,
+  clientName,
+  invoiceNumber,
+  issueDate,
+  dueDate,
+  currency,
+  lines,
+  totals,
+  notes,
+  paymentInstructions,
+}: {
+  customer: InvoiceCustomerOption | null;
+  clientName: string;
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate: string;
+  currency: string;
+  lines: LineRow[];
+  totals: { subtotal: number; discountTotal: number; total: number };
+  notes: string;
+  paymentInstructions: string;
+}) {
+  const billTo = customer?.billToLines ?? (clientName.trim() ? [clientName.trim()] : []);
+  const visibleLines = lines.filter((line) => line.description.trim());
+  const formatDate = (value: string) => value ? new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—";
+
+  return (
+    <aside className="min-w-0 lg:sticky lg:top-5 lg:self-start">
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">Live preview</p><p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-200">Customer-facing invoice</p></div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">TL</div>
+        </div>
+        <div className="p-5 sm:p-7">
+          <div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white">Invoice</h2><p className="mt-1 text-xs text-zinc-500">{invoiceNumber}</p></div><div className="text-right text-xs text-zinc-500"><p>Issued</p><p className="mt-1 font-medium text-zinc-800 dark:text-zinc-200">{formatDate(issueDate)}</p></div></div>
+          <div className="mt-7 grid gap-5 border-b border-zinc-200 pb-5 text-sm dark:border-zinc-700 sm:grid-cols-2"><div><p className="text-xs font-medium text-zinc-500">Billed to</p><p className="mt-2 font-semibold text-zinc-900 dark:text-white">{billTo[0] || "Select a customer"}</p>{billTo.slice(1).map((line, index) => <p key={`${line}-${index}`} className="text-xs text-zinc-500">{line}</p>)}{customer?.email ? <p className="mt-1 text-xs text-zinc-500">{customer.email}</p> : null}</div><div className="sm:text-right"><p className="text-xs font-medium text-zinc-500">Due date</p><p className="mt-2 font-semibold text-zinc-900 dark:text-white">{formatDate(dueDate)}</p></div></div>
+          <div className="mt-5 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700"><div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 bg-zinc-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-950"><span>Item / service</span><span>Qty</span><span>Total</span></div>{visibleLines.length ? visibleLines.map((line, index) => { const amount = (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0); return <div key={`${line.id}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-t border-zinc-100 px-3 py-3 text-sm dark:border-zinc-800"><span className="min-w-0 break-words text-zinc-800 dark:text-zinc-200">{line.description}</span><span className="text-zinc-500">{line.quantity || "0"}</span><span className="font-medium tabular-nums">{formatMoney(amount, currency)}</span></div>; }) : <p className="px-3 py-8 text-center text-sm text-zinc-500">Add line items to see them here.</p>}<div className="flex items-center justify-between border-t border-zinc-200 px-3 py-3 text-sm font-semibold dark:border-zinc-700"><span>Grand total</span><span className="tabular-nums">{formatMoney(totals.total, currency)}</span></div></div>
+          <div className="mt-7 space-y-4 text-xs text-zinc-500"><div><p className="font-semibold text-zinc-700 dark:text-zinc-300">Payment instructions</p><p className="mt-1 whitespace-pre-wrap">{paymentInstructions || "Add payment instructions in the editor."}</p></div>{notes ? <div><p className="font-semibold text-zinc-700 dark:text-zinc-300">Notes</p><p className="mt-1 whitespace-pre-wrap">{notes}</p></div> : null}</div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export function InvoiceGeneratorForm({
   customers,
   initial,
@@ -325,7 +370,13 @@ export function InvoiceGeneratorForm({
 
   return (
     <>
-      <div className="flex max-w-3xl flex-col gap-5">
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/40 sm:p-5">
+        <div className="mb-5 flex flex-col gap-3 border-b border-zinc-200 px-1 pb-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3"><Link href="/admin/tl-invoices" className="text-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" aria-label="Close invoice editor">×</Link><div className="min-w-0"><p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">{assignedNumber || "New invoice"}</p><p className="text-xs text-zinc-500">Draft invoice workspace</p></div></div>
+          <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{initial?.status ?? "Draft"}</span>{!fieldsDisabled ? <form action={submitSave}><input type="hidden" name="invoiceId" value={invoiceId} /> <SaveDraftButton hasInvoiceId={Boolean(invoiceId)} /></form> : null}{invoiceId && !fieldsDisabled ? <form action={submitMarkSent}><input type="hidden" name="invoiceId" value={invoiceId} /><button type="submit" className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">Send now</button></form> : null}</div>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.86fr)]">
+        <div className="flex min-w-0 flex-col gap-5 rounded-xl bg-white p-3 dark:bg-zinc-900 sm:p-5">
         {publicPayUrl ? (
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
             <div className="flex items-start justify-between gap-3">
@@ -421,11 +472,14 @@ export function InvoiceGeneratorForm({
 
         <fieldset disabled={fieldsDisabled} className="border-0 p-0">
           <legend className="text-sm font-medium">Line items</legend>
-          <div className="mt-3 flex flex-col gap-3">
+          <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+            <div className="grid min-w-[540px] grid-cols-[22px_minmax(180px,1fr)_72px_110px_92px_28px] gap-2 bg-zinc-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-950"><span /><span>Description</span><span>Qty</span><span>Rate</span><span className="text-right">Amount</span><span /></div>
             {lines.map((row, i) => (
-              <div key={row.id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-                <span className="text-xs font-semibold uppercase text-zinc-500">Line {i + 1}</span>
+              <div key={row.id} className="grid min-w-[540px] grid-cols-[22px_minmax(180px,1fr)_72px_110px_92px_28px] items-center gap-2 border-t border-zinc-100 px-3 py-2 dark:border-zinc-800">
+                <span className="text-zinc-400" aria-hidden="true">⋮⋮</span>
+                <label className="sr-only" htmlFor={`description-${row.id}`}>Description line {i + 1}</label>
                 <input
+                  id={`description-${row.id}`}
                   type="text"
                   value={row.description}
                   onChange={(e) =>
@@ -434,10 +488,10 @@ export function InvoiceGeneratorForm({
                     )
                   }
                   placeholder="Description"
-                  className="mt-2 w-full rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  className="w-full rounded-lg border border-zinc-200 px-2.5 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
                 />
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <input
+                <label className="sr-only" htmlFor={`quantity-${row.id}`}>Quantity line {i + 1}</label><input
+                    id={`quantity-${row.id}`}
                     type="number"
                     min={0.0001}
                     step="any"
@@ -447,9 +501,9 @@ export function InvoiceGeneratorForm({
                         prev.map((r) => (r.id === row.id ? { ...r, quantity: e.target.value } : r)),
                       )
                     }
-                    className="rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                  />
-                  <input
+                    className="w-full rounded-lg border px-2.5 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  /><label className="sr-only" htmlFor={`unit-price-${row.id}`}>Unit price line {i + 1}</label><input
+                    id={`unit-price-${row.id}`}
                     type="number"
                     min={0}
                     step="0.01"
@@ -459,9 +513,8 @@ export function InvoiceGeneratorForm({
                         prev.map((r) => (r.id === row.id ? { ...r, unitPrice: e.target.value } : r)),
                       )
                     }
-                    className="rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                  />
-                </div>
+                    className="w-full rounded-lg border px-2.5 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  /><span className="text-right text-sm font-medium tabular-nums text-zinc-700 dark:text-zinc-200">{formatMoney((Number(row.quantity) || 0) * (Number(row.unitPrice) || 0), currency)}</span><button type="button" onClick={() => setLines((p) => p.length <= 1 ? p : p.filter((r) => r.id !== row.id))} className="text-zinc-400 hover:text-rose-600" aria-label={`Remove line ${i + 1}`}>×</button>
               </div>
             ))}
           </div>
@@ -632,6 +685,9 @@ export function InvoiceGeneratorForm({
           <Link href="/admin/tl-invoices" className="text-sm font-medium text-zinc-600 hover:underline">
             All invoices
           </Link>
+        </div>
+        </div>
+        <InvoiceLivePreview customer={selectedCustomer} clientName={clientName} invoiceNumber={displayNumber} issueDate={issueDate} dueDate={dueDate} currency={currency} lines={lines} totals={previewTotals} notes={notes} paymentInstructions={paymentInstructions} />
         </div>
       </div>
 
