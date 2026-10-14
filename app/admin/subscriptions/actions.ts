@@ -6,7 +6,9 @@ import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
 import { createRecurringSchedule } from "@/lib/services/native-recurring-schedule-service";
 import { startStripeCheckout } from "@/lib/services/billing-service";
+import { openStripeBillingPortal } from "@/lib/services/billing-service";
 import { getDefaultMonthlyRateXcd, parseMonthlyRateXcd, parseVehicleCount, periodTotalPerVehicleXcd } from "@/lib/stripe/checkout-pricing";
+import { setRecurringScheduleStatus } from "@/lib/services/native-recurring-schedule-service";
 
 export type CreateSubscriptionState = {
   error?: string;
@@ -14,6 +16,26 @@ export type CreateSubscriptionState = {
   url?: string;
   message?: string;
 };
+
+export type SubscriptionLifecycleState = { error?: string; ok?: boolean; message?: string; url?: string };
+
+export async function setManualSubscriptionStatusAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) throw new Error("You must be signed in.");
+  const scheduleId = text(formData, "scheduleId");
+  const status = text(formData, "status");
+  if (!scheduleId || !["active", "paused", "ended"].includes(status)) throw new Error("Invalid subscription action.");
+  await setRecurringScheduleStatus(scheduleId, status as "active" | "paused" | "ended");
+  revalidatePath("/admin/subscriptions");
+  revalidatePath(`/admin/recurring-invoices/${scheduleId}`);
+}
+
+export async function openSubscriptionBillingPortalAction(customerId: string): Promise<SubscriptionLifecycleState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+  const result = await openStripeBillingPortal(customerId.trim());
+  return result.ok ? { ok: true, url: result.url } : { error: result.error };
+}
 
 function text(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
