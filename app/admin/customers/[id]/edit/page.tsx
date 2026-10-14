@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { CustomerEditForm } from "@/components/customer-form";
 import { CustomerPortalUsersPanel } from "@/components/admin/customer-portal-users-panel";
+import { CustomerContactsPanel } from "@/components/admin/customer-contacts-panel";
 import { ArchiveCustomerButton, UnarchiveCustomerButton } from "@/components/archive-customer-button";
 import { DeleteCustomerButton } from "@/components/delete-customer-button";
 import { SectionTabs } from "@/components/admin/section-tabs";
@@ -15,7 +16,7 @@ type Props = {
   searchParams: Promise<{ archiveError?: string; tab?: string }>;
 };
 
-const CUSTOMER_EDIT_TABS = ["profile", "gps", "portal", "archive"] as const;
+const CUSTOMER_EDIT_TABS = ["profile", "gps", "portal", "contacts", "archive"] as const;
 type CustomerEditTab = (typeof CUSTOMER_EDIT_TABS)[number];
 
 export default async function EditCustomerPage({ params, searchParams }: Props) {
@@ -26,6 +27,9 @@ export default async function EditCustomerPage({ params, searchParams }: Props) 
     where: { id },
     include: {
       portalUsers: {
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+      },
+      contacts: {
         orderBy: [{ name: "asc" }, { createdAt: "asc" }],
       },
       serviceAssignments: {
@@ -41,10 +45,12 @@ export default async function EditCustomerPage({ params, searchParams }: Props) 
   const title = customerDisplayName(customer);
   const isArchived = Boolean(customer.archivedAt);
   const portalCount = customer.portalUsers.length;
+  const contactCount = customer.contacts.length;
   const tabItems: { id: CustomerEditTab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "gps", label: "GPS" },
     { id: "portal", label: portalCount > 0 ? `Portal (${portalCount})` : "Portal" },
+    { id: "contacts", label: contactCount > 0 ? `Contacts (${contactCount})` : "Contacts" },
     { id: "archive", label: "Archive" },
   ];
 
@@ -109,6 +115,15 @@ export default async function EditCustomerPage({ params, searchParams }: Props) 
               role: u.role,
               notes: u.notes,
             }))}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "contacts" ? (
+        <section className="max-w-2xl rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <CustomerContactsPanel
+            customerId={customer.id}
+            contacts={customer.contacts}
           />
         </section>
       ) : null}

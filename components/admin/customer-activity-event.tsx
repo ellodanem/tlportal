@@ -199,6 +199,16 @@ function CommunicationMessageSentActivity({ event }: { event: ActivityEventRow }
 }
 
 export function CustomerActivityEvent({ event }: { event: ActivityEventRow }) {
+  if (event.category === "staff.note") {
+    const payload = event.payload as { note?: string } | null;
+    return (
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Internal note</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{payload?.note ?? event.summary}</p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">staff Â· private note</p>
+      </div>
+    );
+  }
   if (event.category === "billing.payment_failed") {
     return <PaymentFailedActivity event={event} />;
   }

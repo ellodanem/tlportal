@@ -5,6 +5,7 @@ const tabs = [
   { segment: "billing", label: "Billing" },
   { segment: "statements", label: "Statements" },
   { segment: "messages", label: "Messages" },
+  { segment: "activity", label: "Activity" },
 ] as const;
 
 export function CustomerSubnav({
@@ -12,7 +13,7 @@ export function CustomerSubnav({
   active,
 }: {
   customerId: string;
-  active: "overview" | "billing" | "statements" | "messages";
+  active: "overview" | "billing" | "statements" | "messages" | "activity";
 }) {
   return (
     <nav

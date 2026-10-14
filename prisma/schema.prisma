@@ -372,6 +372,7 @@ model Customer {
   operationalEvents          OperationalEvent[]
   broadcastDeliveries        BroadcastDelivery[]
   portalUsers                CustomerPortalUser[]
+  contacts                   CustomerContact[]
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
   createdFromRegistration  RegistrationRequest?  @relation("RegistrationCreatedCustomer")
@@ -406,6 +407,29 @@ model CustomerPortalUser {
   updatedAt        DateTime @updatedAt
 
   @@index([customerId])
+}
+
+/// Business contact associated with a customer account. Separate from Traqcare portal credentials.
+model CustomerContact {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  name  String?
+  email String?
+  phone String?
+  role  String?
+  notes String? @db.Text
+
+  isBillingContact     Boolean @default(false)
+  isOperationsContact  Boolean @default(false)
+  isMessageContact     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId, name])
+  @@index([customerId, isBillingContact])
 }
 
 /// Public registration form — four fixed terms (1 / 3 / 6 / 12 month); staff edit price only.
