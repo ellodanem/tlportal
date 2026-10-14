@@ -117,6 +117,7 @@ export type ExpenseListFilters = {
   categoryId?: string | null;
   search?: string | null;
   receipt?: "attached" | "missing" | null;
+  method?: ExpensePaymentMethod | null;
 };
 
 export function expenseListWhere(filters: ExpenseListFilters): Prisma.ExpenseWhereInput {
@@ -126,6 +127,7 @@ export function expenseListWhere(filters: ExpenseListFilters): Prisma.ExpenseWhe
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.receipt === "attached" ? { receiptStoragePath: { not: null } } : {}),
     ...(filters.receipt === "missing" ? { receiptStoragePath: null } : {}),
+    ...(filters.method ? { method: filters.method } : {}),
     ...(filters.search
       ? {
           OR: [

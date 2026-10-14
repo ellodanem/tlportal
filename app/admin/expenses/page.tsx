@@ -11,7 +11,7 @@ import { prisma } from "@/lib/db";
 import { expenseListWhere, expenseMonthlyTotals } from "@/lib/services/expense-service";
 import { WorkQueueToolbar } from "@/components/admin/work-queue-toolbar";
 
-type Props = { searchParams: Promise<{ ym?: string; category?: string; view?: string; q?: string }> };
+type Props = { searchParams: Promise<{ ym?: string; category?: string; method?: string; view?: string; q?: string }> };
 
 function formatYmd(d: Date): string {
   const y = d.getUTCFullYear();
@@ -26,6 +26,8 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
   const categoryFilter = (sp.category ?? "").trim() || null;
   const query = (sp.q ?? "").trim();
   const selectedView = ["all", "with-receipt", "missing-receipt"].includes(sp.view ?? "") ? sp.view ?? "all" : "all";
+  const methods = Object.keys(EXPENSE_PAYMENT_METHOD_LABELS) as Array<keyof typeof EXPENSE_PAYMENT_METHOD_LABELS>;
+  const methodFilter = methods.includes((sp.method ?? "") as (typeof methods)[number]) ? (sp.method as (typeof methods)[number]) : null;
   const ym = formatYearMonth(year, month);
 
   const [expenses, totals, categories] = await Promise.all([
@@ -36,6 +38,7 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
         categoryId: categoryFilter,
         search: query,
         receipt: selectedView === "with-receipt" ? "attached" : selectedView === "missing-receipt" ? "missing" : null,
+        method: methodFilter,
       }),
       orderBy: { expenseDate: "desc" },
       include: {
@@ -94,7 +97,7 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
         query={query}
         placeholder="Search vendor, description, or reference"
         activeView={selectedView}
-        hiddenFields={{ ym, category: categoryFilter ?? "", view: selectedView }}
+        hiddenFields={{ ym, category: categoryFilter ?? "", method: methodFilter ?? "", view: selectedView }}
         views={[
           { id: "all", label: "All expenses" },
           { id: "with-receipt", label: "With receipt" },
@@ -112,6 +115,13 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
               defaultValue={ym}
               className="mt-1 rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-600">Payment method</label>
+            <select name="method" defaultValue={methodFilter ?? ""} className="mt-1 rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950">
+              <option value="">All</option>
+              {methods.map((method) => <option key={method} value={method}>{EXPENSE_PAYMENT_METHOD_LABELS[method]}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-zinc-600">Category</label>
