@@ -56,6 +56,7 @@ function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyU
     { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
     { href: "/admin/tl-invoices", label: invoiceLabel, Icon: IconNavInvoice },
     { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
+    { href: "/admin/subscriptions", label: "Subscriptions", Icon: IconNavRecurring },
     { href: "/admin/statements", label: "Statements", Icon: IconNavReports },
     { href: "/admin/billing-health", label: "Health", Icon: IconNavHealth },
   ];
