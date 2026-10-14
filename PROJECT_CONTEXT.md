@@ -3540,6 +3540,14 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
 
+### 2026-10-14 — Payables foundation
+
+- Added vendor bills and bill payments with draft, open, partial, paid, overdue, and void lifecycle states.
+- Added bill creation/editing, payment recording, voiding, searchable bill queues, and responsive payment history.
+- Added Purchases navigation for Payables and Bills, plus AP aging buckets and vendor balance reporting.
+- Added Prisma migration `20261014190000_vendor_bills`.
+
+
 ### 2026-10-14 14:40 UTC — commit `cdb3857`
 
 - feat: improve customer workspace phase 2
@@ -3594,3 +3602,12 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-10-14 14:58 UTC — commit `f7c645e`
+
+- docs: sync project context log
+
+
+### 2026-10-14 14:58 UTC — pre-push (`main` → origin) @ `f7c645e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).

@@ -23,6 +23,12 @@ export const ADMIN_CREATE_ITEMS = [
     section: "sales",
   },
   {
+    href: "/admin/bills/new",
+    label: "Bill",
+    description: "Record a supplier invoice and track what is owed.",
+    section: "purchases",
+  },
+  {
     href: "/admin/expenses/new",
     label: "Expense",
     description: "Record a vendor payment with optional receipt.",
