@@ -1348,9 +1348,29 @@ model ExpenseCategory {
 }
 
 /// Simple ops expense — vendor, amount, date, optional receipt and cost attribution.
+model Vendor {
+  id           String   @id @default(uuid())
+  name         String
+  email        String?
+  phone        String?
+  currency     String   @default("XCD")
+  paymentTerms Int      @default(30)
+  notes        String?  @db.Text
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  expenses Expense[]
+
+  @@index([name])
+  @@index([isActive, name])
+}
+
 model Expense {
   id          String               @id @default(uuid())
   vendor      String
+  vendorId    String?
+  vendorRecord Vendor?             @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   description String?
   amount      Decimal              @db.Decimal(12, 2)
   currency    String               @default("XCD")
@@ -1380,6 +1400,7 @@ model Expense {
 
   @@index([expenseDate(sort: Desc)])
   @@index([categoryId])
+  @@index([vendorId])
   @@index([customerId])
   @@index([deviceId])
 }

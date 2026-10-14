@@ -29,6 +29,12 @@ export const ADMIN_CREATE_ITEMS = [
     section: "purchases",
   },
   {
+    href: "/admin/vendors/new",
+    label: "Vendor",
+    description: "Add a reusable supplier or service provider.",
+    section: "purchases",
+  },
+  {
     href: "/admin/proposals/new",
     label: "Proposal",
     description: "Start a sales proposal with default sections.",

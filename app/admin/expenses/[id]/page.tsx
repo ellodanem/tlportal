@@ -8,6 +8,7 @@ import {
   type ExpenseCustomerOption,
   type ExpenseDeviceOption,
   type ExpenseFormInitial,
+  type ExpenseVendorOption,
 } from "@/components/admin/expense-form";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
@@ -23,13 +24,14 @@ function formatYmd(d: Date): string {
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [expense, categories, customers, devices] = await Promise.all([
-    prisma.expense.findUnique({ where: { id } }),
+  const [expense, categories, vendors, customers, devices] = await Promise.all([
+    prisma.expense.findUnique({ where: { id }, include: { vendorRecord: { select: { id: true } } } }),
     prisma.expenseCategory.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
+    prisma.vendor.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.customer.findMany({
       where: activeCustomerWhere,
       orderBy: [{ company: "asc" }, { lastName: "asc" }],
@@ -47,6 +49,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
   const initial: ExpenseFormInitial = {
     expenseId: expense.id,
     vendor: expense.vendor,
+    vendorId: expense.vendorId ?? expense.vendorRecord?.id ?? "",
     description: expense.description ?? "",
     amount: String(expense.amount),
     currency: expense.currency,
@@ -83,6 +86,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
       <ExpenseForm
         categories={categories as ExpenseCategoryOption[]}
+        vendors={vendors as ExpenseVendorOption[]}
         customers={customerOptions}
         devices={deviceOptions}
         initial={initial}

@@ -22,6 +22,7 @@ export type CategoryFormState = { error?: string; ok?: boolean; message?: string
 function payloadToInput(payload: ExpenseRequestPayload, recordedById: string): ExpenseInput {
   return {
     vendor: payload.vendor,
+    vendorId: payload.vendorId,
     description: payload.description,
     amount: payload.amount,
     currency: payload.currency,
@@ -74,6 +75,12 @@ export async function saveExpenseAction(_prev: SaveExpenseState, formData: FormD
   }
 
   const input = payloadToInput(parsed.payload, session.sub);
+  if (input.vendorId) {
+    const vendor = await prisma.vendor.findUnique({ where: { id: input.vendorId }, select: { id: true, name: true, isActive: true } });
+    if (!vendor) return { error: "Selected vendor not found." };
+    if (!vendor.isActive) return { error: "Select an active vendor." };
+    input.vendor = vendor.name;
+  }
   if (receiptPath !== undefined) {
     input.receiptStoragePath = receiptPath;
   }

@@ -4,6 +4,7 @@ import type { ExpensePaymentMethod } from "@prisma/client";
 
 export type ExpenseRequestPayload = {
   vendor: string;
+  vendorId: string | null;
   description: string | null;
   amount: number;
   currency: string;
@@ -53,6 +54,7 @@ export function parseExpenseRequestBody(body: unknown): { payload: ExpenseReques
   if (!ALLOWED_METHODS.has(method)) return { error: "Invalid payment method." };
 
   const categoryIdRaw = String(b.categoryId ?? "").trim();
+  const vendorIdRaw = String(b.vendorId ?? "").trim();
   const customerIdRaw = String(b.customerId ?? "").trim();
   const deviceIdRaw = String(b.deviceId ?? "").trim();
   const descriptionRaw = String(b.description ?? "").trim();
@@ -63,6 +65,7 @@ export function parseExpenseRequestBody(body: unknown): { payload: ExpenseReques
   return {
     payload: {
       vendor: vendor.slice(0, 200),
+      vendorId: vendorIdRaw || null,
       description: descriptionRaw ? descriptionRaw.slice(0, 500) : null,
       amount,
       currency,

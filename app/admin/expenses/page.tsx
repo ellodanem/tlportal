@@ -40,6 +40,7 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
       orderBy: { expenseDate: "desc" },
       include: {
         category: { select: { name: true } },
+        vendorRecord: { select: { name: true } },
         customer: { select: { company: true, firstName: true, lastName: true } },
         device: { select: { label: true, imei: true } },
       },
@@ -182,7 +183,7 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
               {expenses.map((e) => (
                 <tr key={e.id}>
                   <td className="px-4 py-3 tabular-nums">{formatYmd(e.expenseDate)}</td>
-                  <td className="px-4 py-3 font-medium">{e.vendor}</td>
+                  <td className="px-4 py-3 font-medium">{e.vendorRecord?.name ?? e.vendor}</td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{e.category?.name ?? "—"}</td>
                   <td className="px-4 py-3 tabular-nums">{formatExpenseAmount(Number(e.amount), e.currency)}</td>
                   <td className="px-4 py-3">{EXPENSE_PAYMENT_METHOD_LABELS[e.method]}</td>

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 
 export type ExpenseInput = {
   vendor: string;
+  vendorId?: string | null;
   description?: string | null;
   amount: number;
   currency?: string;
@@ -26,6 +27,7 @@ export async function createExpense(input: ExpenseInput): Promise<string> {
   const created = await prisma.expense.create({
     data: {
       vendor: input.vendor,
+      vendorId: input.vendorId ?? null,
       description: input.description ?? null,
       amount: toMoneyString(input.amount),
       currency: (input.currency ?? "XCD").toUpperCase(),
@@ -49,6 +51,7 @@ export async function updateExpense(expenseId: string, input: ExpenseInput): Pro
     where: { id: expenseId },
     data: {
       vendor: input.vendor,
+      vendorId: input.vendorId ?? null,
       description: input.description ?? null,
       amount: toMoneyString(input.amount),
       currency: (input.currency ?? "XCD").toUpperCase(),
@@ -127,6 +130,7 @@ export function expenseListWhere(filters: ExpenseListFilters): Prisma.ExpenseWhe
       ? {
           OR: [
             { vendor: { contains: filters.search, mode: "insensitive" } },
+            { vendorRecord: { is: { name: { contains: filters.search, mode: "insensitive" } } } },
             { description: { contains: filters.search, mode: "insensitive" } },
             { reference: { contains: filters.search, mode: "insensitive" } },
           ],

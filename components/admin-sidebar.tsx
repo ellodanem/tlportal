@@ -74,7 +74,10 @@ function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyU
       id: "purchases",
       label: "Purchases",
       createSection: "purchases",
-      links: [{ href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses }],
+      links: [
+        { href: "/admin/vendors", label: "Vendors", Icon: IconUsers },
+        { href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses },
+      ],
     },
     {
       id: "fleet",

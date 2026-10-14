@@ -12,10 +12,12 @@ import type { ExpensePaymentMethod } from "@prisma/client";
 export type ExpenseCategoryOption = { id: string; name: string };
 export type ExpenseCustomerOption = { id: string; label: string };
 export type ExpenseDeviceOption = { id: string; label: string };
+export type ExpenseVendorOption = { id: string; name: string };
 
 export type ExpenseFormInitial = {
   expenseId: string;
   vendor: string;
+  vendorId: string;
   description: string;
   amount: string;
   currency: string;
@@ -38,11 +40,13 @@ const initialSave: SaveExpenseState = {};
 
 export function ExpenseForm({
   categories,
+  vendors,
   customers,
   devices,
   initial,
 }: {
   categories: ExpenseCategoryOption[];
+  vendors: ExpenseVendorOption[];
   customers: ExpenseCustomerOption[];
   devices: ExpenseDeviceOption[];
   initial?: ExpenseFormInitial;
@@ -51,6 +55,7 @@ export function ExpenseForm({
   const expenseId = initial?.expenseId ?? "";
 
   const [vendor, setVendor] = useState(initial?.vendor ?? "");
+  const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [currency, setCurrency] = useState(initial?.currency ?? "XCD");
@@ -80,6 +85,7 @@ export function ExpenseForm({
     return {
       payload: {
         vendor: vendor.trim(),
+        vendorId: vendorId || null,
         description: description.trim() || null,
         amount: amt,
         currency,
@@ -110,6 +116,18 @@ export function ExpenseForm({
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium">Vendor / payee</label>
+          <select
+            value={vendorId}
+            onChange={(e) => {
+              const selected = vendors.find((item) => item.id === e.target.value);
+              setVendorId(e.target.value);
+              if (selected) setVendor(selected.name);
+            }}
+            className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+          >
+            <option value="">Unlinked vendor name</option>
+            {vendors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
           <input
             type="text"
             required
