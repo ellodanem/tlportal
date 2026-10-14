@@ -3579,3 +3579,8 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-10-14 14:57 UTC — commit `f617644`
+
+- feat: add vendor foundation
+
