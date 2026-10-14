@@ -6,7 +6,7 @@ import { CUSTOMER_SUBSCRIPTION_STATUS_LABEL } from "@/lib/domain/customer-subscr
 import { prisma } from "@/lib/db";
 
 type Props = { searchParams: Promise<{ view?: string; q?: string }> };
-type SubscriptionRow = { id: string; kind: "card" | "manual"; customerId: string; customer: string; email: string | null; plan: string; amount: number; currency: string; status: string; statusLabel: string; nextDate: Date | null; href: string; attention: boolean };
+type SubscriptionRow = { id: string; kind: "card" | "manual"; customerId: string; customer: string; email: string | null; plan: string; amount: number; currency: string; status: string; statusLabel: string; nextDate: Date | null; updatedAt: Date; href: string; attention: boolean };
 
 function intervalLabel(months: number) {
   if (months === 1) return "Monthly";
@@ -20,6 +20,13 @@ function isWithinDays(date: Date | null, days: number) {
   return diff >= 0 && diff <= days * 86_400_000;
 }
 
+function statusRank(status: string) {
+  if (status === "active" || status === "trialing") return 5;
+  if (status === "past_due" || status === "unpaid" || status === "pending_payment") return 4;
+  if (status === "paused") return 3;
+  return 1;
+}
+
 export default async function AdminSubscriptionsPage({ searchParams }: Props) {
   const sp = await searchParams;
   const query = (sp.q ?? "").trim();
@@ -27,23 +34,34 @@ export default async function AdminSubscriptionsPage({ searchParams }: Props) {
   const view = ["all", "active", "attention", "card", "manual", "paused", "ended"].includes(requestedView) ? requestedView : "all";
   const customerFilter = query ? { OR: [{ company: { contains: query, mode: "insensitive" as const } }, { firstName: { contains: query, mode: "insensitive" as const } }, { lastName: { contains: query, mode: "insensitive" as const } }, { email: { contains: query, mode: "insensitive" as const } }] } : undefined;
   const [stripeSubscriptions, manualSchedules] = await Promise.all([
-    view === "manual" ? Promise.resolve([]) : prisma.customerSubscription.findMany({ where: { customer: customerFilter }, orderBy: { updatedAt: "desc" }, include: { customer: { select: { id: true, company: true, firstName: true, lastName: true, email: true } } } }),
-    view === "card" ? Promise.resolve([]) : prisma.recurringInvoiceSchedule.findMany({ where: { customer: customerFilter }, orderBy: { updatedAt: "desc" }, include: { customer: { select: { id: true, company: true, firstName: true, lastName: true, email: true } }, lineItems: { select: { quantity: true, unitPrice: true } } } }),
+    prisma.customerSubscription.findMany({ where: { customer: customerFilter }, orderBy: { updatedAt: "desc" }, include: { customer: { select: { id: true, company: true, firstName: true, lastName: true, email: true } } } }),
+    prisma.recurringInvoiceSchedule.findMany({ where: { customer: customerFilter }, orderBy: { updatedAt: "desc" }, include: { customer: { select: { id: true, company: true, firstName: true, lastName: true, email: true } }, lineItems: { select: { quantity: true, unitPrice: true } } } }),
   ]);
   const customerName = (customer: { company: string | null; firstName: string | null; lastName: string | null }) => customer.company?.trim() || [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unnamed customer";
-  const rows: SubscriptionRow[] = [
+  const rawRows: SubscriptionRow[] = [
     ...stripeSubscriptions.map((subscription) => {
       const amount = Number(subscription.monthlyRateXcd ?? 0) * (subscription.vehicleCount ?? 1);
-      const attention = ["past_due", "unpaid", "pending_payment"].includes(subscription.status) || isWithinDays(subscription.currentPeriodEnd, 14);
-      return { id: subscription.id, kind: "card" as const, customerId: subscription.customer.id, customer: customerName(subscription.customer), email: subscription.customer.email, plan: `${intervalLabel(subscription.planTermMonths)} · ${subscription.vehicleCount ?? 1} vehicle${(subscription.vehicleCount ?? 1) === 1 ? "" : "s"}`, amount, currency: "XCD", status: subscription.status, statusLabel: CUSTOMER_SUBSCRIPTION_STATUS_LABEL[subscription.status], nextDate: subscription.currentPeriodEnd, href: `/admin/subscriptions/${subscription.customer.id}`, attention };
+      const attention = ["past_due", "unpaid", "pending_payment"].includes(subscription.status) || ["active", "trialing"].includes(subscription.status) && isWithinDays(subscription.currentPeriodEnd, 14);
+      return { id: subscription.id, kind: "card" as const, customerId: subscription.customer.id, customer: customerName(subscription.customer), email: subscription.customer.email, plan: `${intervalLabel(subscription.planTermMonths)} · ${subscription.vehicleCount ?? 1} vehicle${(subscription.vehicleCount ?? 1) === 1 ? "" : "s"}`, amount, currency: "XCD", status: subscription.status, statusLabel: CUSTOMER_SUBSCRIPTION_STATUS_LABEL[subscription.status], nextDate: subscription.currentPeriodEnd, updatedAt: subscription.updatedAt, href: `/admin/subscriptions/${subscription.customer.id}`, attention };
     }),
     ...manualSchedules.map((schedule) => {
       const amount = schedule.lineItems.reduce((sum, line) => sum + Number(line.quantity) * Number(line.unitPrice), 0);
-      const attention = schedule.status === "paused" || schedule.status === "ended" || isWithinDays(schedule.nextIssueDate, 14);
+      const attention = schedule.status === "paused" || schedule.status === "active" && isWithinDays(schedule.nextIssueDate, 14);
       const statusLabel = schedule.status === "active" ? "Active" : schedule.status === "paused" ? "Paused" : "Ended";
-      return { id: schedule.id, kind: "manual" as const, customerId: schedule.customer?.id ?? "", customer: schedule.customer ? customerName(schedule.customer) : schedule.name ?? "Unassigned customer", email: schedule.customer?.email ?? null, plan: `${intervalLabel(schedule.intervalMonths)} · manual invoice`, amount: schedule.intervalMonths > 0 ? amount / schedule.intervalMonths : amount, currency: schedule.currency, status: schedule.status, statusLabel, nextDate: schedule.nextIssueDate, href: schedule.customer?.id ? `/admin/subscriptions/${schedule.customer.id}` : `/admin/recurring-invoices/${schedule.id}`, attention };
+      return { id: schedule.id, kind: "manual" as const, customerId: schedule.customer?.id ?? "", customer: schedule.customer ? customerName(schedule.customer) : schedule.name ?? "Unassigned customer", email: schedule.customer?.email ?? null, plan: `${intervalLabel(schedule.intervalMonths)} · manual invoice`, amount: schedule.intervalMonths > 0 ? amount / schedule.intervalMonths : amount, currency: schedule.currency, status: schedule.status, statusLabel, nextDate: schedule.nextIssueDate, updatedAt: schedule.updatedAt, href: schedule.customer?.id ? `/admin/subscriptions/${schedule.customer.id}` : `/admin/recurring-invoices/${schedule.id}`, attention };
     }),
-  ].filter((row) => view === "active" ? row.status === "active" : view === "attention" ? row.attention : view === "paused" ? row.status === "paused" : view === "ended" ? row.status === "ended" : true).sort((a, b) => (a.nextDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.nextDate?.getTime() ?? Number.MAX_SAFE_INTEGER));
+  ];
+  const historyView = view === "ended";
+  const candidateRows = historyView ? rawRows : rawRows.filter((row) => row.status !== "canceled" && row.status !== "ended");
+  const grouped = new Map<string, SubscriptionRow>();
+  for (const row of candidateRows) {
+    if (view === "card" && row.kind !== "card") continue;
+    if (view === "manual" && row.kind !== "manual") continue;
+    const key = row.customerId || `${row.kind}:${row.id}`;
+    const existing = grouped.get(key);
+    if (!existing || statusRank(row.status) > statusRank(existing.status) || statusRank(row.status) === statusRank(existing.status) && row.updatedAt.getTime() > existing.updatedAt.getTime()) grouped.set(key, row);
+  }
+  const rows = (historyView ? rawRows.filter((row) => row.status === "ended" || row.status === "canceled") : [...grouped.values()].filter((row) => view === "active" ? row.status === "active" || row.status === "trialing" : view === "attention" ? row.attention : view === "paused" ? row.status === "paused" : true)).sort((a, b) => (a.nextDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.nextDate?.getTime() ?? Number.MAX_SAFE_INTEGER));
   const activeRows = rows.filter((row) => row.status === "active" || row.status === "trialing");
   const attentionRows = rows.filter((row) => row.attention);
   const mrr = activeRows.reduce((sum, row) => sum + row.amount, 0);
