@@ -14,19 +14,19 @@ export const ADMIN_CREATE_ITEMS = [
     href: "/admin/tl-invoices/new",
     label: "Invoice",
     description: "One-off invoice for cash, cheque, or bank payers.",
-    section: "billing",
+    section: "sales",
   },
   {
     href: "/admin/recurring-invoices/new",
     label: "Recurring schedule",
     description: "Auto-bill cash/cheque customers on a monthly or quarterly cadence.",
-    section: "billing",
+    section: "sales",
   },
   {
     href: "/admin/expenses/new",
     label: "Expense",
     description: "Record a vendor payment with optional receipt.",
-    section: "billing",
+    section: "purchases",
   },
   {
     href: "/admin/proposals/new",
@@ -38,7 +38,7 @@ export const ADMIN_CREATE_ITEMS = [
     href: "/admin/customers/new",
     label: "Customer",
     description: "Add a company or person for billing.",
-    section: "overview",
+    section: "sales",
   },
   {
     href: "/admin/devices/new",

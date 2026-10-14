@@ -1,26 +1,35 @@
 import Link from "next/link";
+import type { InvoiceStatus, Prisma } from "@prisma/client";
 
 import { activeInvoiceWhere, archivedInvoiceWhere } from "@/lib/admin/active-invoice-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { displayInvoiceNumber, isNativeBillingPrimary } from "@/lib/domain/native-billing-cutover";
 import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS, invoiceStatusBadgeClass } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
+import { WorkQueueToolbar } from "@/components/admin/work-queue-toolbar";
 
 function invoiceClientLabel(row: {
   number: string | null;
   billToName: string | null;
-  customer: { company: string | null; firstName: string | null; lastName: string | null } | null;
+  customer?: { company: string | null; firstName: string | null; lastName: string | null } | null;
 }): string {
   if (row.billToName?.trim()) return row.billToName.trim();
   if (row.customer) return customerDisplayName(row.customer);
   return "—";
 }
 
-type Props = { searchParams: Promise<{ view?: string }> };
+type Props = { searchParams: Promise<{ view?: string; q?: string }> };
 
 export default async function AdminTlInvoicesPage({ searchParams }: Props) {
-  const { view } = await searchParams;
-  const showArchived = view === "archived";
+  const { view, q: rawQuery } = await searchParams;
+  const query = rawQuery?.trim() ?? "";
+  const invoiceViews = ["active", "unpaid", "draft", "overdue", "paid", "archived"] as const;
+  type InvoiceView = (typeof invoiceViews)[number];
+  const requestedView = view ?? "";
+  const selectedView: InvoiceView = invoiceViews.includes(requestedView as InvoiceView)
+    ? (requestedView as InvoiceView)
+    : "active";
+  const showArchived = selectedView === "archived";
   const nativePrimary = isNativeBillingPrimary();
   const pageTitle = showArchived
     ? "Archived invoices"
@@ -28,8 +37,37 @@ export default async function AdminTlInvoicesPage({ searchParams }: Props) {
       ? "Invoices"
       : "TL invoices";
 
+  const statusWhere: Prisma.InvoiceWhereInput =
+    selectedView === "unpaid"
+      ? { status: { in: ["open", "partially_paid", "overdue"] as InvoiceStatus[] } }
+      : selectedView === "draft" || selectedView === "overdue" || selectedView === "paid"
+        ? { status: selectedView as InvoiceStatus }
+        : {};
   const invoices = await prisma.invoice.findMany({
-    where: showArchived ? archivedInvoiceWhere : activeInvoiceWhere,
+    where: {
+      ...(showArchived ? archivedInvoiceWhere : activeInvoiceWhere),
+      ...statusWhere,
+      ...(query
+        ? {
+            OR: [
+              { number: { contains: query, mode: "insensitive" as const } },
+              { legacyInvoiceNumber: { contains: query, mode: "insensitive" as const } },
+              { billToName: { contains: query, mode: "insensitive" as const } },
+              {
+                customer: {
+                  is: {
+                    OR: [
+                      { company: { contains: query, mode: "insensitive" as const } },
+                      { firstName: { contains: query, mode: "insensitive" as const } },
+                      { lastName: { contains: query, mode: "insensitive" as const } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -92,6 +130,22 @@ export default async function AdminTlInvoicesPage({ searchParams }: Props) {
           ) : null}
         </div>
       </div>
+
+      <WorkQueueToolbar
+        basePath="/admin/tl-invoices"
+        query={query}
+        placeholder="Search invoice number or customer"
+        activeView={selectedView}
+        hiddenFields={{ view: selectedView }}
+        views={[
+          { id: "active", label: "All active" },
+          { id: "unpaid", label: "Unpaid" },
+          { id: "draft", label: "Draft" },
+          { id: "overdue", label: "Overdue" },
+          { id: "paid", label: "Paid" },
+          { id: "archived", label: "Archived" },
+        ]}
+      />
 
       {invoices.length === 0 ? (
         <p className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-10 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">

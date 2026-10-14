@@ -1,21 +1,55 @@
 import Link from "next/link";
+import type { QuoteStatus } from "@prisma/client";
 
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { formatMoney, QUOTE_STATUS_LABELS } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
+import { WorkQueueToolbar } from "@/components/admin/work-queue-toolbar";
 
 function quoteClientLabel(row: {
   number: string | null;
   billToName: string | null;
-  customer: { company: string | null; firstName: string | null; lastName: string | null } | null;
+  customer?: { company: string | null; firstName: string | null; lastName: string | null } | null;
 }): string {
   if (row.billToName?.trim()) return row.billToName.trim();
   if (row.customer) return customerDisplayName(row.customer);
   return "—";
 }
 
-export default async function AdminQuotesPage() {
+type Props = { searchParams: Promise<{ view?: string; q?: string }> };
+
+export default async function AdminQuotesPage({ searchParams }: Props) {
+  const { view, q: rawQuery } = await searchParams;
+  const query = rawQuery?.trim() ?? "";
+  const quoteViews = ["all", "draft", "sent", "accepted", "expired", "converted"] as const;
+  type QuoteView = (typeof quoteViews)[number];
+  const requestedView = view ?? "";
+  const selectedView: QuoteView = quoteViews.includes(requestedView as QuoteView)
+    ? (requestedView as QuoteView)
+    : "all";
   const quotes = await prisma.quote.findMany({
+    where: {
+      ...(selectedView !== "all" ? { status: selectedView as QuoteStatus } : {}),
+      ...(query
+        ? {
+            OR: [
+              { number: { contains: query, mode: "insensitive" as const } },
+              { billToName: { contains: query, mode: "insensitive" as const } },
+              {
+                customer: {
+                  is: {
+                    OR: [
+                      { company: { contains: query, mode: "insensitive" as const } },
+                      { firstName: { contains: query, mode: "insensitive" as const } },
+                      { lastName: { contains: query, mode: "insensitive" as const } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -55,6 +89,22 @@ export default async function AdminQuotesPage() {
           New quote
         </Link>
       </div>
+
+      <WorkQueueToolbar
+        basePath="/admin/quotes"
+        query={query}
+        placeholder="Search quote number or customer"
+        activeView={selectedView}
+        hiddenFields={{ view: selectedView }}
+        views={[
+          { id: "all", label: "All quotes" },
+          { id: "draft", label: "Draft" },
+          { id: "sent", label: "Sent" },
+          { id: "accepted", label: "Accepted" },
+          { id: "expired", label: "Expired" },
+          { id: "converted", label: "Converted" },
+        ]}
+      />
 
       {quotes.length === 0 ? (
         <p className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-10 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">

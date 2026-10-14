@@ -39,27 +39,28 @@ type NavLink = {
 type NavSection = {
   id: string;
   label: string;
-  createSection?: "sales" | "billing" | "fleet";
+  createSection?: "sales" | "purchases" | "fleet";
   links: NavLink[];
 };
 
 const overviewLinks: NavLink[] = [
   { href: "/admin", label: "Dashboard", Icon: IconNavDashboard },
-  { href: "/admin/customers", label: "Customers", Icon: IconUsers },
   { href: "/admin/reports", label: "Reports", Icon: IconNavReports },
 ];
 
 function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyUi: boolean }): NavSection[] {
   const invoiceLabel = ctx.nativeBillingPrimary ? "Invoices" : "TL invoices";
-  const billingLinks: NavLink[] = [
-    { href: "/admin/billing-health", label: "Health", Icon: IconNavHealth },
+  const salesLinks: NavLink[] = [
+    { href: "/admin/customers", label: "Customers", Icon: IconUsers },
+    { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
+    { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
     { href: "/admin/tl-invoices", label: invoiceLabel, Icon: IconNavInvoice },
-    { href: "/admin/statements", label: "Statements", Icon: IconNavReports },
     { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
-    { href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses },
+    { href: "/admin/statements", label: "Statements", Icon: IconNavReports },
+    { href: "/admin/billing-health", label: "Health", Icon: IconNavHealth },
   ];
   if (ctx.invoilessLegacyUi) {
-    billingLinks.push({ href: "/admin/invoices", label: "Invoiless", Icon: IconNavExternal });
+    salesLinks.push({ href: "/admin/invoices", label: "Invoiless", Icon: IconNavExternal });
   }
 
   return [
@@ -67,16 +68,13 @@ function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyU
       id: "sales",
       label: "Sales",
       createSection: "sales",
-      links: [
-        { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
-        { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
-      ],
+      links: salesLinks,
     },
     {
-      id: "billing",
-      label: "Billing",
-      createSection: "billing",
-      links: billingLinks,
+      id: "purchases",
+      label: "Purchases",
+      createSection: "purchases",
+      links: [{ href: "/admin/expenses", label: "Expenses", Icon: IconNavExpenses }],
     },
     {
       id: "fleet",

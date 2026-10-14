@@ -9,8 +9,9 @@ import {
 } from "@/lib/domain/expenses";
 import { prisma } from "@/lib/db";
 import { expenseListWhere, expenseMonthlyTotals } from "@/lib/services/expense-service";
+import { WorkQueueToolbar } from "@/components/admin/work-queue-toolbar";
 
-type Props = { searchParams: Promise<{ ym?: string; category?: string }> };
+type Props = { searchParams: Promise<{ ym?: string; category?: string; view?: string; q?: string }> };
 
 function formatYmd(d: Date): string {
   const y = d.getUTCFullYear();
@@ -23,11 +24,19 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
   const sp = await searchParams;
   const { year, month } = parseYearMonth(sp.ym);
   const categoryFilter = (sp.category ?? "").trim() || null;
+  const query = (sp.q ?? "").trim();
+  const selectedView = ["all", "with-receipt", "missing-receipt"].includes(sp.view ?? "") ? sp.view ?? "all" : "all";
   const ym = formatYearMonth(year, month);
 
   const [expenses, totals, categories] = await Promise.all([
     prisma.expense.findMany({
-      where: expenseListWhere({ year, month, categoryId: categoryFilter }),
+      where: expenseListWhere({
+        year,
+        month,
+        categoryId: categoryFilter,
+        search: query,
+        receipt: selectedView === "with-receipt" ? "attached" : selectedView === "missing-receipt" ? "missing" : null,
+      }),
       orderBy: { expenseDate: "desc" },
       include: {
         category: { select: { name: true } },
@@ -78,6 +87,19 @@ export default async function AdminExpensesPage({ searchParams }: Props) {
           </Link>
         </div>
       </div>
+
+      <WorkQueueToolbar
+        basePath="/admin/expenses"
+        query={query}
+        placeholder="Search vendor, description, or reference"
+        activeView={selectedView}
+        hiddenFields={{ ym, category: categoryFilter ?? "", view: selectedView }}
+        views={[
+          { id: "all", label: "All expenses" },
+          { id: "with-receipt", label: "With receipt" },
+          { id: "missing-receipt", label: "Missing receipt" },
+        ]}
+      />
 
       <div className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-end sm:justify-between">
         <form className="flex flex-wrap items-end gap-3" method="get">
