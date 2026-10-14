@@ -3731,3 +3731,23 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-10-14 15:34 UTC — commit `d051f96`
+
+- docs: sync project context log
+
+
+### 2026-10-14 15:34 UTC — pre-push (`main` → origin) @ `d051f96`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-14 15:37 UTC — commit `75cc511`
+
+- feat: align recurring invoice composer
+
+
+### 2026-10-14 15:37 UTC — pre-push (`main` → origin) @ `75cc511`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
