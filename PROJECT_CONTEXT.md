@@ -3524,3 +3524,8 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Fix missing try around customer update so production build can parse.
 
+
+### 2026-10-14 14:35 UTC — commit `355a00f`
+
+- feat: improve customer workspace phase 1
+
