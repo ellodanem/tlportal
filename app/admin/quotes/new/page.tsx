@@ -6,7 +6,8 @@ import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
 import { prisma } from "@/lib/db";
 
-export default async function NewQuotePage() {
+export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ customerId?: string }> }) {
+  const { customerId } = await searchParams;
   const customers = await prisma.customer.findMany({
     where: activeCustomerWhere,
     orderBy: [{ company: "asc" }, { lastName: "asc" }],
@@ -44,7 +45,7 @@ export default async function NewQuotePage() {
         </p>
       </div>
 
-      <QuoteGeneratorForm customers={customerOptions} />
+      <QuoteGeneratorForm customers={customerOptions} initialCustomerId={customerId ?? null} />
     </div>
   );
 }

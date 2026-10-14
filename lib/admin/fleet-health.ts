@@ -5,8 +5,6 @@ import type { DeviceStatus, ServiceAssignmentStatus } from "@prisma/client";
 import { opsUrgencyFromNextDueDate, type OpsUrgency } from "@/lib/admin/assignment-ops-urgency";
 import { prisma } from "@/lib/db";
 import { isOnceSimOperational } from "@/lib/nce/sim-status";
-import { isStripeBillingEnabled } from "@/lib/stripe/config";
-import { listRecentPaymentFailureCustomerIds } from "@/lib/stripe/payment-failure-recovery";
 
 export type FleetHealthBucket = "healthy" | "renewal" | "review";
 
@@ -22,8 +20,7 @@ export type FleetHealthReviewReason =
   | "device_suspended"
   | "missing_sim"
   | "sim_not_active"
-  | "missing_gps_link"
-  | "stripe_billing";
+  | "missing_gps_link";
 
 export type FleetHealthAssignmentInput = {
   id: string;
@@ -55,7 +52,6 @@ function hasActiveGpsLink(a: FleetHealthAssignmentInput) {
 /** Mutually exclusive bucket per open assignment (review > renewal > healthy). */
 export function classifyOpenAssignment(
   a: FleetHealthAssignmentInput,
-  options?: { stripeBillingAttention?: boolean },
 ): FleetHealthClassification {
   const reviewReasons: FleetHealthReviewReason[] = [];
   const renewalUrgency =
@@ -76,10 +72,6 @@ export function classifyOpenAssignment(
   if (!hasActiveGpsLink(a)) {
     reviewReasons.push("missing_gps_link");
   }
-  if (options?.stripeBillingAttention) {
-    reviewReasons.push("stripe_billing");
-  }
-
   if (reviewReasons.length > 0) {
     return { bucket: "review", renewalUrgency, reviewReasons };
   }
@@ -145,30 +137,14 @@ export type FleetHealthReviewRow = {
 };
 
 export async function getGlobalFleetHealth() {
-  const stripeConfigured = isStripeBillingEnabled();
-  const [assignments, stripePastDueCustomerIds, paymentFailureCustomerIds] = await Promise.all([
+  const [assignments] = await Promise.all([
     prisma.serviceAssignment.findMany({
       where: { endDate: null, status: { not: "cancelled" } },
       include: openAssignmentInclude,
     }),
-    stripeConfigured
-      ? prisma.billingAccount
-          .findMany({
-            where: { provider: "stripe", status: { in: ["past_due", "unpaid"] } },
-            select: { customerId: true },
-          })
-          .then((rows) => new Set(rows.map((r) => r.customerId)))
-      : Promise.resolve(new Set<string>()),
-    stripeConfigured ? listRecentPaymentFailureCustomerIds() : Promise.resolve(new Set<string>()),
   ]);
 
-  const stripeIssueCustomerIds = new Set([...stripePastDueCustomerIds, ...paymentFailureCustomerIds]);
-
-  const classifications = assignments.map((a) =>
-    classifyOpenAssignment(a, {
-      stripeBillingAttention: stripeIssueCustomerIds.has(a.customerId),
-    }),
-  );
+  const classifications = assignments.map((a) => classifyOpenAssignment(a));
 
   const counts = fleetHealthCountsFromClassifications(classifications);
 
@@ -206,9 +182,8 @@ export async function getGlobalFleetHealth() {
 
 export function classifyCustomerAssignments(
   assignments: FleetHealthAssignmentInput[],
-  options?: { stripeBillingAttention?: boolean },
 ) {
-  return assignments.map((a) => classifyOpenAssignment(a, options));
+  return assignments.map((a) => classifyOpenAssignment(a));
 }
 
 export function reviewReasonLabel(reason: FleetHealthReviewReason): string {
@@ -223,8 +198,6 @@ export function reviewReasonLabel(reason: FleetHealthReviewReason): string {
       return "SIM not active";
     case "missing_gps_link":
       return "No GPS provider link";
-    case "stripe_billing":
-      return "Stripe payment issue";
     default:
       return reason;
   }

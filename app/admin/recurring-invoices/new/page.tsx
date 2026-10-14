@@ -9,7 +9,8 @@ import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
 import { prisma } from "@/lib/db";
 
-export default async function NewRecurringInvoicePage() {
+export default async function NewRecurringInvoicePage({ searchParams }: { searchParams: Promise<{ customerId?: string }> }) {
+  const { customerId } = await searchParams;
   const customers = await prisma.customer.findMany({
     where: activeCustomerWhere,
     orderBy: [{ company: "asc" }, { lastName: "asc" }],
@@ -53,7 +54,7 @@ export default async function NewRecurringInvoicePage() {
         </p>
       </div>
 
-      <RecurringScheduleForm customers={customerOptions} />
+      <RecurringScheduleForm customers={customerOptions} initialCustomerId={customerId ?? null} />
     </div>
   );
 }

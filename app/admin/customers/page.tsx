@@ -6,19 +6,53 @@ import {
   CustomersTable,
   customersTableTitle,
 } from "@/components/admin/customers-table";
+import { CustomerListControls } from "@/components/admin/customer-list-controls";
 import { buildCustomerTableRows } from "@/lib/admin/customer-table-rows";
 import { activeCustomerWhere, archivedCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
-type Props = { searchParams: Promise<{ view?: string }> };
+type Props = { searchParams: Promise<{ view?: string; q?: string }> };
 
 export default async function CustomersPage({ searchParams }: Props) {
-  const { view } = await searchParams;
+  const { view: rawView, q: rawQuery } = await searchParams;
+  const view = rawView === "archived" || rawView === "attention" || rawView === "stripe" || rawView === "manual" || rawView === "no-services" ? rawView : "all";
+  const query = rawQuery?.trim() ?? "";
   const showArchived = view === "archived";
   const invoilessConfigured = Boolean(process.env.INVOILESS_API_KEY?.trim());
+  const dueSoon = new Date();
+  dueSoon.setDate(dueSoon.getDate() + 7);
+  const where: Prisma.CustomerWhereInput = {
+    ...(showArchived ? archivedCustomerWhere : activeCustomerWhere),
+    AND: [
+      ...(query
+        ? [{
+            OR: [
+              { company: { contains: query, mode: "insensitive" as const } },
+              { firstName: { contains: query, mode: "insensitive" as const } },
+              { lastName: { contains: query, mode: "insensitive" as const } },
+              { email: { contains: query, mode: "insensitive" as const } },
+              { phone: { contains: query, mode: "insensitive" as const } },
+            ],
+          }]
+        : []),
+      ...(view === "attention"
+        ? [{
+            OR: [
+              { serviceAssignments: { some: { endDate: null, status: "suspended" as const } } },
+              { serviceAssignments: { some: { endDate: null, status: { not: "cancelled" as const }, nextDueDate: { lte: dueSoon } } } },
+              { billingAccounts: { some: { provider: "stripe" as const, status: { in: ["past_due", "unpaid"] } } } },
+            ],
+          }]
+        : []),
+    ],
+    ...(view === "stripe" ? { billingMode: "stripe_subscription" } : {}),
+    ...(view === "manual" ? { billingMode: "manual_legacy" } : {}),
+    ...(view === "no-services" ? { serviceAssignments: { none: { endDate: null, status: { not: "cancelled" } } } } : {}),
+  };
 
   const customers = await prisma.customer.findMany({
-    where: showArchived ? archivedCustomerWhere : activeCustomerWhere,
+    where,
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -91,6 +125,8 @@ export default async function CustomersPage({ searchParams }: Props) {
           </Link>
         </div>
       </div>
+
+      <CustomerListControls query={query} view={view} showArchived={showArchived} />
 
       <CustomersTable rows={rows} invoilessConfigured={invoilessConfigured} showArchived={showArchived} />
     </div>

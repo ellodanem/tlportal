@@ -149,7 +149,7 @@ export function CustomersTable({
   const totals = customerListTotals(rows);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="overflow-x-auto rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
         <thead className="bg-zinc-50/90 dark:bg-zinc-950/80">
           <tr>

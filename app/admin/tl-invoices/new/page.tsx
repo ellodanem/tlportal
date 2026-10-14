@@ -7,7 +7,8 @@ import { customerBillToLines } from "@/lib/billing/customer-bill-to";
 import { prisma } from "@/lib/db";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 
-export default async function NewTlInvoicePage() {
+export default async function NewTlInvoicePage({ searchParams }: { searchParams: Promise<{ customerId?: string }> }) {
+  const { customerId } = await searchParams;
   const customers = await prisma.customer.findMany({
     where: activeCustomerWhere,
     orderBy: [{ company: "asc" }, { lastName: "asc" }],
@@ -48,7 +49,7 @@ export default async function NewTlInvoicePage() {
         </p>
       </div>
 
-      <InvoiceGeneratorForm customers={customerOptions} stripeConfigured={isStripeBillingEnabled()} />
+      <InvoiceGeneratorForm customers={customerOptions} initialCustomerId={customerId ?? null} stripeConfigured={isStripeBillingEnabled()} />
     </div>
   );
 }

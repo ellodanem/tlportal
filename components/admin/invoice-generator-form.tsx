@@ -85,12 +85,14 @@ function SaveDraftButton({ hasInvoiceId }: { hasInvoiceId: boolean }) {
 export function InvoiceGeneratorForm({
   customers,
   initial,
+  initialCustomerId,
   readOnly = false,
   publicPayUrl = null,
   stripeConfigured = false,
 }: {
   customers: InvoiceCustomerOption[];
   initial?: InvoiceFormInitial;
+  initialCustomerId?: string | null;
   readOnly?: boolean;
   publicPayUrl?: string | null;
   stripeConfigured?: boolean;
@@ -100,7 +102,7 @@ export function InvoiceGeneratorForm({
   const [invoiceId, setInvoiceId] = useState(initial?.invoiceId ?? "");
   const assignedNumber = initial?.number ?? null;
 
-  const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
+  const [customerId, setCustomerId] = useState(initial?.customerId ?? initialCustomerId ?? "");
   const [clientName, setClientName] = useState(initial?.clientName ?? "");
   const [issueDate, setIssueDate] = useState(initial?.issueDate ?? todayYmd());
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? addDaysYmd(todayYmd(), 30));

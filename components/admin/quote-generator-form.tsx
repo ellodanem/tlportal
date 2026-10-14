@@ -90,17 +90,19 @@ const initialMarkSentState: MarkQuoteSentState = {};
 export function QuoteGeneratorForm({
   customers,
   initial,
+  initialCustomerId,
   readOnly = false,
 }: {
   customers: QuoteCustomerOption[];
   initial?: QuoteFormInitial;
+  initialCustomerId?: string | null;
   readOnly?: boolean;
 }) {
   const router = useRouter();
   const lineIdRef = useRef(0);
   const quoteId = initial?.quoteId ?? "";
   const assignedNumber = initial?.number ?? null;
-  const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
+  const [customerId, setCustomerId] = useState(initial?.customerId ?? initialCustomerId ?? "");
   const [clientName, setClientName] = useState(initial?.clientName ?? "");
   const [quoteDate, setQuoteDate] = useState(initial?.quoteDate ?? todayDateInputValue);
   const [validUntil, setValidUntil] = useState(

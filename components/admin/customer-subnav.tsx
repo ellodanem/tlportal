@@ -16,7 +16,7 @@ export function CustomerSubnav({
 }) {
   return (
     <nav
-      className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800"
+      className="-mx-1 flex gap-1 overflow-x-auto border-b border-zinc-200 px-1 dark:border-zinc-800"
       aria-label="Customer sections"
     >
       {tabs.map((tab) => {
@@ -29,7 +29,7 @@ export function CustomerSubnav({
           <Link
             key={tab.segment || "overview"}
             href={href}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+            className={`-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition ${
               isActive
                 ? "border-emerald-600 text-emerald-800 dark:border-emerald-500 dark:text-emerald-300"
                 : "border-transparent text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"

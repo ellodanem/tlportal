@@ -23,6 +23,8 @@ import {
 import { CustomerActivityEvent, CustomerActivityEventTime } from "@/components/admin/customer-activity-event";
 import { CustomerPortalUsersPanel } from "@/components/admin/customer-portal-users-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
+import { CustomerFinancialSummary } from "@/components/admin/customer-financial-summary";
+import { CustomerWorkspaceHeader } from "@/components/admin/customer-workspace-header";
 import { UnarchiveCustomerButton } from "@/components/archive-customer-button";
 import {
   getInvoilessExternalCustomerId,
@@ -31,7 +33,6 @@ import {
 } from "@/lib/services/billing-service";
 import {
   getCurrentCustomerSubscription,
-  isSubscriptionAttentionStatus,
 } from "@/lib/services/customer-subscription-service";
 import { resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
@@ -126,12 +127,6 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
     (a) => a.endDate == null && a.status !== "cancelled",
   );
 
-  const stripeBillingAttention =
-    customerSubscription != null
-      ? isSubscriptionAttentionStatus(customerSubscription.status)
-      : stripeAccount != null &&
-        (stripeAccount.status === "past_due" || stripeAccount.status === "unpaid");
-
   const openHealthInputs = openAssignments.map((a) => ({
     id: a.id,
     status: a.status,
@@ -145,9 +140,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
     simCard: a.simCard,
   }));
 
-  const openClassifications = classifyCustomerAssignments(openHealthInputs, {
-    stripeBillingAttention,
-  });
+  const openClassifications = classifyCustomerAssignments(openHealthInputs);
   const fleetHealthCounts = fleetHealthCountsFromClassifications(openClassifications);
 
   const openClassificationById = new Map(
@@ -178,7 +171,22 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   const invoilessAddressPreview = buildInvoilessBillToAddress(customer);
   const invoilessApi = isInvoilessConfigured();
   let recentInvoices: Awaited<ReturnType<typeof fetchInvoicesForInvoilessCustomerId>> = [];
-  const activityEvents = await listOperationalEventsForCustomer(id, 12);
+  const [activityEvents, invoiceSummary, recentNativeInvoices, quoteCount, activeScheduleCount] = await Promise.all([
+    listOperationalEventsForCustomer(id, 12),
+    prisma.invoice.aggregate({
+      where: { customerId: id, status: { in: ["open", "partially_paid", "overdue"] } },
+      _sum: { amountDue: true },
+      _count: { _all: true },
+    }),
+    prisma.invoice.findMany({
+      where: { customerId: id },
+      orderBy: { issueDate: "desc" },
+      take: 5,
+      select: { id: true, number: true, status: true, amountDue: true, total: true, currency: true, dueDate: true },
+    }),
+    prisma.quote.count({ where: { customerId: id } }),
+    prisma.recurringInvoiceSchedule.count({ where: { customerId: id, status: "active" } }),
+  ]);
 
   if (invoilessApi && invoilessCustomerId) {
     try {
@@ -224,7 +232,8 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
           {decodeURIComponent(unarchiveError)}
         </p>
       ) : null}
-      <div className="flex flex-col gap-4 border-b border-zinc-200 pb-6 dark:border-zinc-800 sm:flex-row sm:items-start sm:justify-between">
+      <CustomerWorkspaceHeader customer={customer} />
+      <div className="hidden">
         <div className="min-w-0">
           <Link
             href="/admin/customers"
@@ -276,11 +285,24 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
         nextDue={nextDue}
       />
 
+      <CustomerFinancialSummary
+        customerId={customer.id}
+        amountDue={Number(invoiceSummary._sum.amountDue ?? 0)}
+        openInvoiceCount={invoiceSummary._count._all}
+        quoteCount={quoteCount}
+        activeScheduleCount={activeScheduleCount}
+        recentInvoices={recentNativeInvoices.map((invoice) => ({
+          ...invoice,
+          amountDue: Number(invoice.amountDue),
+          total: Number(invoice.total),
+        }))}
+      />
+
       <FleetHealthSummary
         counts={fleetHealthCounts}
         activeFilter={fleetFilter}
         baseHref={customerOverviewHref}
-        title="Account health"
+        title="Fleet health"
         subtitle="Open services · click a card to filter the device table below"
         compactWhenAllHealthy
       />

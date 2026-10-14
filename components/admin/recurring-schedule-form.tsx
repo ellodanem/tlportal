@@ -50,18 +50,20 @@ const initialSave: SaveRecurringScheduleState = {};
 export function RecurringScheduleForm({
   customers,
   initial,
+  initialCustomerId,
   readOnly = false,
 }: {
   customers: RecurringCustomerOption[];
   initial?: RecurringScheduleFormInitial;
+  initialCustomerId?: string | null;
   readOnly?: boolean;
 }) {
   const router = useRouter();
-  const lineIdRef = useRef(0);
+  const lineIdRef = useRef(initial?.lines?.length ?? 1);
   const scheduleId = initial?.scheduleId ?? "";
 
   const [name, setName] = useState(initial?.name ?? "");
-  const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
+  const [customerId, setCustomerId] = useState(initial?.customerId ?? initialCustomerId ?? "");
   const [clientName, setClientName] = useState(initial?.clientName ?? "");
   const [currency, setCurrency] = useState(initial?.currency ?? "XCD");
   const [notes, setNotes] = useState(initial?.notes ?? "");
@@ -74,9 +76,9 @@ export function RecurringScheduleForm({
   const [autoEmail, setAutoEmail] = useState(initial?.autoEmail ?? true);
   const [emailTo, setEmailTo] = useState(initial?.emailTo ?? "");
   const [lines, setLines] = useState<LineRow[]>(() =>
-    (initial?.lines?.length ? initial.lines : [{ description: "", quantity: "1", unitPrice: "0" }]).map((row) => ({
+    (initial?.lines?.length ? initial.lines : [{ description: "", quantity: "1", unitPrice: "0" }]).map((row, index) => ({
       ...row,
-      id: lineIdRef.current++,
+      id: index,
     })),
   );
   const [error, setError] = useState<string | null>(null);
