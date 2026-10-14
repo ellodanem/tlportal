@@ -3540,6 +3540,7 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
 
+
 ### 2026-10-14 — Payables foundation
 
 - Added vendor bills and bill payments with draft, open, partial, paid, overdue, and void lifecycle states.
@@ -3628,6 +3629,35 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 
 ### 2026-10-14 15:03 UTC — pre-push (`main` → origin) @ `8b1c1b2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-14 15:03 UTC — commit `18742ab`
+
+- docs: sync project context log
+
+
+### 2026-10-14 15:03 UTC — pre-push (`main` → origin) @ `18742ab`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-10-14 15:05 UTC — commit `ddd9a02`
+
+- feat: improve expense work queue filters
+
+
+### 2026-10-14 15:05 UTC — pre-push (`main` → origin) @ `ddd9a02`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-14 15:09 UTC — commit `44d05ac`
+
+- feat: refresh invoice creation workspace
+
+
+### 2026-10-14 15:09 UTC — pre-push (`main` → origin) @ `44d05ac`
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
