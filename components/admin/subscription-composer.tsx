@@ -10,9 +10,11 @@ const initial: CreateSubscriptionState = {};
 export function SubscriptionComposer({
   customers,
   defaultRate,
+  defaultCustomerId,
 }: {
   customers: { id: string; name: string; email: string | null }[];
   defaultRate: number;
+  defaultCustomerId?: string;
 }) {
   const [state, action, pending] = useActionState(createSubscriptionAction, initial);
   return (
@@ -20,7 +22,7 @@ export function SubscriptionComposer({
       <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800"><h2 className="font-semibold">Subscription details</h2><p className="mt-1 text-sm text-zinc-500">Set the commercial terms once. The collection method controls whether TL Portal uses card autocharge or native invoices.</p></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="flex flex-col gap-1.5 text-sm sm:col-span-2 lg:col-span-1"><span className="font-medium">Customer</span><select name="customerId" required className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-950"><option value="">Choose a customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.email ? ` · ${customer.email}` : ""}</option>)}</select></label>
+          <label className="flex flex-col gap-1.5 text-sm sm:col-span-2 lg:col-span-1"><span className="font-medium">Customer</span><select name="customerId" required defaultValue={defaultCustomerId ?? ""} className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-950"><option value="">Choose a customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.email ? ` · ${customer.email}` : ""}</option>)}</select></label>
           <label className="flex flex-col gap-1.5 text-sm"><span className="font-medium">Term</span><select name="durationMonths" defaultValue="1" className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-950"><option value="1">Monthly</option><option value="3">Every 3 months</option><option value="6">Every 6 months</option><option value="12">Annual</option></select></label>
           <label className="flex flex-col gap-1.5 text-sm"><span className="font-medium">Vehicles</span><input name="vehicleCount" type="number" min="1" defaultValue="1" className="rounded-lg border border-zinc-300 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-950" /></label>
           <label className="flex flex-col gap-1.5 text-sm"><span className="font-medium">Monthly rate per vehicle (XCD)</span><input name="monthlyRateXcd" defaultValue="default" placeholder={`${defaultRate} default`} className="rounded-lg border border-zinc-300 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-950" /><span className="text-xs text-zinc-500">Use “default” or enter a custom amount.</span></label>
