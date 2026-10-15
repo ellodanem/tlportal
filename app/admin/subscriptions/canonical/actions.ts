@@ -1,0 +1,229 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+
+import { getSession } from "@/lib/auth/get-session";
+import { prisma } from "@/lib/db";
+import {
+  assertCanonicalSubscriptionUiActionAllowed,
+  assertCanonicalSubscriptionUiEnabled,
+  canonicalSubscriptionUiAccess,
+  CanonicalSubscriptionUiError,
+} from "@/lib/domain/canonical-subscription-admin";
+import { CanonicalSubscriptionValidationError } from "@/lib/domain/canonical-subscription-application";
+import {
+  addBillableServiceToSubscription,
+  createDraftCanonicalSubscription,
+  scheduleSubscriptionItemEnd,
+  scheduleSubscriptionItemRate,
+  updateDraftSubscriptionItemCommercialDetails,
+} from "@/lib/services/canonical-subscription-application-service";
+
+export type CanonicalSubscriptionFormState = {
+  error?: string;
+  message?: string;
+  next?: string;
+};
+
+function text(formData: FormData, name: string): string {
+  return String(formData.get(name) ?? "").trim();
+}
+
+function optionalText(formData: FormData, name: string): string | null {
+  return text(formData, name) || null;
+}
+
+function actionError(error: unknown): CanonicalSubscriptionFormState {
+  if (
+    error instanceof CanonicalSubscriptionValidationError
+    || error instanceof CanonicalSubscriptionUiError
+  ) {
+    return { error: error.message };
+  }
+  return { error: error instanceof Error ? error.message : "The draft could not be updated." };
+}
+
+async function requireStaff() {
+  assertCanonicalSubscriptionUiEnabled();
+  const session = await getSession();
+  if (!session) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "You must be signed in.");
+  return session;
+}
+
+async function requireEditableDraft(subscriptionId: string) {
+  assertCanonicalSubscriptionUiEnabled();
+  const session = await getSession();
+  if (!session) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "You must be signed in.");
+  const subscription = await prisma.customerSubscription.findUnique({
+    where: { id: subscriptionId },
+    select: {
+      id: true,
+      controlMode: true,
+      lifecycleStatus: true,
+      canonicalMigrationLedger: { select: { id: true } },
+    },
+  });
+  if (!subscription) {
+    throw new CanonicalSubscriptionUiError("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
+  }
+  assertCanonicalSubscriptionUiActionAllowed({
+    authenticated: true,
+    access: canonicalSubscriptionUiAccess({
+      controlMode: subscription.controlMode,
+      lifecycleStatus: subscription.lifecycleStatus,
+      hasMigrationLedger: Boolean(subscription.canonicalMigrationLedger),
+    }),
+  });
+  return session;
+}
+
+async function requireEditableDraftItem(subscriptionId: string, subscriptionItemId: string) {
+  const session = await requireEditableDraft(subscriptionId);
+  const item = await prisma.subscriptionItem.findUnique({
+    where: { id: subscriptionItemId },
+    select: { customerSubscriptionId: true },
+  });
+  if (!item || item.customerSubscriptionId !== subscriptionId) {
+    throw new CanonicalSubscriptionUiError(
+      "ITEM_SUBSCRIPTION_MISMATCH",
+      "The draft service does not belong to this subscription.",
+    );
+  }
+  return session;
+}
+
+export async function createCanonicalDraftAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  try {
+    const session = await requireStaff();
+    const interval = Number(text(formData, "billingIntervalMonths"));
+    const defaultAmount = text(formData, "defaultAgreedAmountPerCycle");
+    const initialLabel = optionalText(formData, "initialItemLabel");
+    const initialAmount = optionalText(formData, "initialItemAmount");
+    const nextBillingDate = text(formData, "nextBillingDate");
+    const initialActivationDate = optionalText(formData, "initialActivationDate");
+    const subscription = await createDraftCanonicalSubscription({
+      customerId: text(formData, "customerId"),
+      name: text(formData, "name"),
+      reference: optionalText(formData, "reference"),
+      billingIntervalMonths: interval,
+      collectionMethod: text(formData, "collectionMethod") as "manual_invoice" | "stripe_autocharge",
+      currency: "XCD",
+      defaultAgreedAmountPerCycle: defaultAmount,
+      commercialStartDate: text(formData, "commercialStartDate"),
+      billingAnchorDate: text(formData, "billingAnchorDate"),
+      nextBillingDate,
+      items: initialLabel ? [{
+        label: initialLabel,
+        serviceActivatedDate: initialActivationDate,
+        billingEffectiveFrom: nextBillingDate,
+        agreedAmountPerCycle: initialAmount ?? defaultAmount,
+        rateClassification: initialAmount && initialAmount !== defaultAmount ? "negotiated" : "standard",
+        rateChangeReason: initialAmount && initialAmount !== defaultAmount ? "Initial negotiated draft rate" : null,
+        createdById: session.sub,
+      }] : [],
+    });
+    revalidatePath("/admin/subscriptions/canonical");
+    return {
+      message: "Shadow draft created. No billing or provider operation was started.",
+      next: `/admin/subscriptions/canonical/${subscription.id}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function addCanonicalDraftItemAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const session = await requireEditableDraft(subscriptionId);
+    await addBillableServiceToSubscription(subscriptionId, {
+      label: text(formData, "label"),
+      notes: optionalText(formData, "notes"),
+      serviceActivatedDate: optionalText(formData, "serviceActivatedDate"),
+      billingEffectiveFrom: optionalText(formData, "billingEffectiveFrom"),
+      billingEffectiveUntil: optionalText(formData, "billingEffectiveUntil"),
+      agreedAmountPerCycle: optionalText(formData, "agreedAmountPerCycle"),
+      rateClassification: text(formData, "classification") === "negotiated" ? "negotiated" : "standard",
+      rateChangeReason: optionalText(formData, "changeReason"),
+      createdById: session.sub,
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: "Draft service added." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function updateCanonicalDraftItemAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    await requireEditableDraftItem(subscriptionId, subscriptionItemId);
+    await updateDraftSubscriptionItemCommercialDetails({
+      subscriptionItemId,
+      label: text(formData, "label"),
+      notes: optionalText(formData, "notes"),
+      serviceActivatedDate: optionalText(formData, "serviceActivatedDate"),
+      billingEffectiveFrom: optionalText(formData, "billingEffectiveFrom"),
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    return { message: "Draft service details updated." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function scheduleCanonicalDraftRateAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const session = await requireEditableDraftItem(subscriptionId, subscriptionItemId);
+    await scheduleSubscriptionItemRate({
+      subscriptionItemId,
+      agreedAmountPerCycle: text(formData, "agreedAmountPerCycle"),
+      effectiveFrom: text(formData, "effectiveFrom"),
+      effectiveUntil: optionalText(formData, "effectiveUntil"),
+      classification: text(formData, "classification") === "standard" ? "standard" : "negotiated",
+      changeReason: optionalText(formData, "changeReason"),
+      createdById: session.sub,
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: "Rate change scheduled. This is a preview configuration only." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function scheduleCanonicalDraftItemEndAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    await requireEditableDraftItem(subscriptionId, subscriptionItemId);
+    await scheduleSubscriptionItemEnd({
+      subscriptionItemId,
+      effectiveUntil: text(formData, "effectiveUntil"),
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: "Draft service end date scheduled." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
