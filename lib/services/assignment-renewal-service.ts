@@ -286,6 +286,7 @@ async function resolveStripePlanTermMonths(customerId: string): Promise<number |
   const withStripeId = await prisma.customerSubscription.findFirst({
     where: {
       customerId,
+      controlMode: "legacy",
       stripeSubscriptionId: { not: null },
       status: { in: ["active", "trialing", "past_due", "unpaid", "pending_payment"] },
     },
@@ -297,7 +298,7 @@ async function resolveStripePlanTermMonths(customerId: string): Promise<number |
   }
 
   const anySub = await prisma.customerSubscription.findFirst({
-    where: { customerId },
+    where: { customerId, controlMode: "legacy" },
     orderBy: { updatedAt: "desc" },
     select: { planTermMonths: true },
   });

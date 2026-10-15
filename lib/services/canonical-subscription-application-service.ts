@@ -375,7 +375,7 @@ export async function listCanonicalSubscriptionsForCustomer(
   customerId: string,
 ): Promise<SubscriptionDetails[]> {
   return prisma.customerSubscription.findMany({
-    where: { customerId },
+    where: { customerId, controlMode: { in: ["shadow", "canonical"] } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     include: subscriptionDetailsInclude,
   });

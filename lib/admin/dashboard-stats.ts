@@ -161,6 +161,7 @@ export async function getDashboardStats() {
     stripeConfigured ? listRecentPaymentFailureAttentionItems(6) : Promise.resolve([]),
     prisma.customerSubscription.count({
       where: {
+        controlMode: "legacy",
         status: { in: [...PAST_DUE_SUB_STATUSES] },
         customer: activeCustomerWhere,
       },

@@ -28,9 +28,9 @@ export async function resolveTlCustomerIdFromStripeInvoice(
   if (subId) {
     const bySub = await prisma.customerSubscription.findUnique({
       where: { stripeSubscriptionId: subId },
-      select: { customerId: true },
+      select: { customerId: true, controlMode: true },
     });
-    if (bySub) return bySub.customerId;
+    if (bySub?.controlMode === "legacy") return bySub.customerId;
 
     const stripe = getStripeClient();
     const sub = await stripe.subscriptions.retrieve(subId);
@@ -53,7 +53,7 @@ export async function resolveTlCustomerIdFromStripeInvoice(
     if (account) return account.customerId;
 
     const byStripeCustomer = await prisma.customerSubscription.findFirst({
-      where: { stripeCustomerId },
+      where: { stripeCustomerId, controlMode: "legacy" },
       orderBy: { updatedAt: "desc" },
       select: { customerId: true },
     });
@@ -74,7 +74,7 @@ export async function resolveStripeCustomerIdForTlCustomer(
   if (fromAccount) return fromAccount;
 
   const sub = await prisma.customerSubscription.findFirst({
-    where: { customerId, stripeCustomerId: { not: null } },
+    where: { customerId, controlMode: "legacy", stripeCustomerId: { not: null } },
     orderBy: { updatedAt: "desc" },
     select: { stripeCustomerId: true },
   });

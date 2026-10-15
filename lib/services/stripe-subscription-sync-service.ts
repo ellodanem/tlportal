@@ -147,6 +147,7 @@ async function resolveLinkedStripeSubscriptionId(customerId: string): Promise<st
   const withStripeId = await prisma.customerSubscription.findFirst({
     where: {
       customerId,
+      controlMode: "legacy",
       stripeSubscriptionId: { not: null },
       status: { in: ["active", "trialing", "past_due", "unpaid", "pending_payment"] },
     },
@@ -216,7 +217,7 @@ export async function compareTlStripeSubscription(
   }
 
   const tlSub = await prisma.customerSubscription.findFirst({
-    where: { customerId, stripeSubscriptionId },
+    where: { customerId, controlMode: "legacy", stripeSubscriptionId },
     orderBy: { updatedAt: "desc" },
     select: {
       monthlyRateXcd: true,
@@ -415,7 +416,11 @@ export async function pushTlVehicleCountToStripe(input: {
   const itemUpdate: Stripe.SubscriptionUpdateParams.Item = { id: item.id, quantity: newQuantity };
   if (hasFeePassthroughMetadata(sub.metadata)) {
     const tlSub = await prisma.customerSubscription.findFirst({
-      where: { customerId: input.customerId, stripeSubscriptionId: sub.id },
+      where: {
+        customerId: input.customerId,
+        controlMode: "legacy",
+        stripeSubscriptionId: sub.id,
+      },
       orderBy: { updatedAt: "desc" },
       select: { monthlyRateXcd: true, planTermMonths: true },
     });

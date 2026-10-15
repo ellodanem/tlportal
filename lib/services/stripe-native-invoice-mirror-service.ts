@@ -64,7 +64,11 @@ async function buildMirrorLineItems(
   if (items.length > 0) return items;
 
   const sub = await prisma.customerSubscription.findFirst({
-    where: { customerId, status: { in: ["active", "trialing", "past_due"] } },
+    where: {
+      customerId,
+      controlMode: "legacy",
+      status: { in: ["active", "trialing", "past_due"] },
+    },
     orderBy: { updatedAt: "desc" },
     select: { planTermMonths: true, vehicleCount: true, monthlyRateXcd: true },
   });
