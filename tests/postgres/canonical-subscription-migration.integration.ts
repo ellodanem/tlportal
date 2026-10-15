@@ -383,7 +383,7 @@ test("26: an in-transaction provider conflict rolls back all canonical target re
   assert.equal(ledger.targetSubscriptionId, null);
 });
 
-test("27: unused shadow migration reverses cleanly, but financial history blocks deletion", async () => {
+test("27: unused shadow migration reverses cleanly, but financial or provider history blocks deletion", async () => {
   const reversibleCustomer = await createCustomer("reversible");
   const reversibleAssignment = await createAssignment(reversibleCustomer.id, 1);
   const reversibleLegacy = await createLegacyStripeArrangement({ customerId: reversibleCustomer.id });
@@ -418,6 +418,29 @@ test("27: unused shadow migration reverses cleanly, but financial history blocks
   assert.equal(await prisma.customerSubscription.count({ where: { id: protectedTargetId } }), 1);
   assert.equal((await prisma.canonicalMigrationLedger.findUniqueOrThrow({
     where: { migrationKey: protectedPlan.entries[0].migrationKey },
+  })).status, "needs_review");
+
+  const operationalCustomer = await createCustomer("provider-history");
+  await createAssignment(operationalCustomer.id, 1);
+  const operationalLegacy = await createLegacyStripeArrangement({ customerId: operationalCustomer.id });
+  const operationalPlan = await planFor([operationalLegacy.id]);
+  const operationalApplied = await execute(operationalPlan);
+  const operationalTargetId = operationalApplied.entries[0].targetSubscriptionId!;
+  const providerLink = await prisma.subscriptionProviderLink.findFirstOrThrow({
+    where: { customerSubscriptionId: operationalTargetId },
+  });
+  await prisma.subscriptionProviderLink.update({
+    where: { id: providerLink.id },
+    data: { lastSyncedAt: new Date("2026-10-16T00:00:00.000Z") },
+  });
+  await assert.rejects(
+    () => reverse(operationalPlan.entries[0].migrationKey),
+    (error: unknown) => error instanceof CanonicalMigrationExecutionError
+      && error.code === "REVERSAL_REQUIRES_MANUAL_REVIEW",
+  );
+  assert.equal(await prisma.customerSubscription.count({ where: { id: operationalTargetId } }), 1);
+  assert.equal((await prisma.canonicalMigrationLedger.findUniqueOrThrow({
+    where: { migrationKey: operationalPlan.entries[0].migrationKey },
   })).status, "needs_review");
 });
 
