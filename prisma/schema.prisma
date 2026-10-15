@@ -1635,6 +1635,7 @@ model InvoiceServiceSnapshot {
   allocationNotes            String?               @db.Text
   createdAt                  DateTime              @default(now())
 
+  @@unique([invoiceId, subscriptionItemId])
   @@index([invoiceId])
   @@index([invoiceLineItemId])
   @@index([subscriptionItemId])

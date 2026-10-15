@@ -7,7 +7,7 @@
     "dev:webpack": "next dev --webpack",
     "build": "node scripts/run-build.mjs",
     "test": "node --import tsx --conditions=react-server --test --test-isolation=none \"tests/**/*.test.ts\"",
-    "test:postgres-foundation": "node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/foundation.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-application.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-migration.integration.ts",
+    "test:postgres-foundation": "node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/foundation.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-application.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-migration.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-native-billing.integration.ts",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
