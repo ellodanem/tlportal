@@ -20,13 +20,22 @@ async function expectDatabaseRejection(operation: () => Promise<unknown>): Promi
   }
 
   assert.ok(rejection, "PostgreSQL should have rejected the invalid operation.");
+  if (rejection instanceof Prisma.PrismaClientKnownRequestError) {
+    assert.ok(
+      ["P2002", "P2003", "P2004", "P2010"].includes(rejection.code),
+      `Unexpected Prisma database error code: ${rejection.code}`,
+    );
+    return;
+  }
+
   assert.ok(
-    rejection instanceof Prisma.PrismaClientKnownRequestError,
+    rejection instanceof Prisma.PrismaClientUnknownRequestError,
     `Expected a PostgreSQL-backed Prisma error, received ${String(rejection)}`,
   );
-  assert.ok(
-    ["P2002", "P2003", "P2004", "P2010"].includes(rejection.code),
-    `Unexpected Prisma database error code: ${rejection.code}`,
+  assert.match(
+    rejection.message,
+    /PostgresError[\s\S]*code: "23[A-Z0-9]{3}"/,
+    "Expected an unmapped PostgreSQL integrity-constraint SQLSTATE.",
   );
 }
 
