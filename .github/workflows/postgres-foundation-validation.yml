@@ -1,0 +1,55 @@
+name: PostgreSQL foundation validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Migrations and PostgreSQL constraints
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tlportal_test
+          POSTGRES_PASSWORD: tlportal_test
+          POSTGRES_DB: tlportal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tlportal_test -d tlportal_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://tlportal_test:tlportal_test@127.0.0.1:5432/tlportal_test?schema=public
+      DIRECT_URL: postgresql://tlportal_test:tlportal_test@127.0.0.1:5432/tlportal_test?schema=public
+      NODE_ENV: test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations in dependency order
+        run: npx prisma migrate deploy
+
+      - name: Run PostgreSQL foundation integration tests
+        run: npm run test:postgres-foundation
+
+      - name: Run local regression suite
+        run: npm test
