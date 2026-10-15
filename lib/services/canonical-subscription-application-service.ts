@@ -471,6 +471,95 @@ export async function addBillableServiceToSubscription(
   );
 }
 
+export async function updateDraftSubscriptionItemCommercialDetails(input: {
+  subscriptionItemId: string;
+  label: string;
+  notes?: string | null;
+  serviceActivatedDate?: string | null;
+  billingEffectiveFrom?: string | null;
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const item = await tx.subscriptionItem.findUnique({
+      where: { id: input.subscriptionItemId },
+      include: {
+        customerSubscription: {
+          include: { canonicalMigrationLedger: { select: { id: true } } },
+        },
+        rates: { orderBy: { effectiveFrom: "asc" } },
+        _count: { select: { serviceAssignments: true, invoiceSnapshots: true } },
+      },
+    });
+    if (!item) validation("ITEM_NOT_FOUND", "Subscription item not found.");
+    await requireEditableSubscription(tx, item.customerSubscriptionId);
+    if (
+      item.customerSubscription.lifecycleStatus !== "draft"
+      || item.customerSubscription.canonicalMigrationLedger
+      || item.status !== "draft"
+    ) {
+      validation(
+        "ITEM_NOT_UI_EDITABLE",
+        "Only items on an unmigrated shadow draft can be edited in Phase UI-1.",
+      );
+    }
+    if (item._count.invoiceSnapshots > 0 || item._count.serviceAssignments > 0) {
+      validation(
+        "ITEM_HAS_HISTORY",
+        "A draft item with financial or assignment history cannot be edited here.",
+      );
+    }
+
+    const serviceActivatedDate = input.serviceActivatedDate
+      ? commercialDate(input.serviceActivatedDate, "serviceActivatedDate")
+      : null;
+    const billingEffectiveFrom = input.billingEffectiveFrom
+      ? commercialDate(input.billingEffectiveFrom, "billingEffectiveFrom")
+      : null;
+    if (serviceActivatedDate && billingEffectiveFrom && billingEffectiveFrom < serviceActivatedDate) {
+      validation(
+        "INVALID_ITEM_DATES",
+        "billingEffectiveFrom cannot be before serviceActivatedDate.",
+      );
+    }
+    if (item.billingEffectiveUntil && billingEffectiveFrom && item.billingEffectiveUntil <= billingEffectiveFrom) {
+      validation(
+        "INVALID_ITEM_DATES",
+        "The billing effective date must remain before the scheduled item end.",
+      );
+    }
+    const datesChanged = item.serviceActivatedDate?.getTime() !== serviceActivatedDate?.getTime()
+      || item.billingEffectiveFrom?.getTime() !== billingEffectiveFrom?.getTime();
+    if (datesChanged && item.rates.length !== 1) {
+      validation(
+        "ITEM_RATE_HISTORY_EXISTS",
+        "Dates cannot be moved after draft rate history has been scheduled.",
+      );
+    }
+    const rateEffectiveFrom = serviceActivatedDate ?? billingEffectiveFrom;
+    if (datesChanged && !rateEffectiveFrom) {
+      validation(
+        "ITEM_RATE_DATE_REQUIRED",
+        "An activation or billing-effective date is required when moving draft dates.",
+      );
+    }
+
+    await tx.subscriptionItem.update({
+      where: { id: item.id },
+      data: {
+        label: cleanRequiredText(input.label, "label"),
+        notes: cleanOptionalText(input.notes),
+        serviceActivatedDate,
+        billingEffectiveFrom,
+      },
+    });
+    if (datesChanged && item.rates[0]) {
+      await tx.subscriptionItemRate.update({
+        where: { id: item.rates[0].id },
+        data: { effectiveFrom: rateEffectiveFrom! },
+      });
+    }
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function scheduleSubscriptionItemEnd(input: {
   subscriptionItemId: string;
   effectiveUntil: string;
