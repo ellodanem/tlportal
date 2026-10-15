@@ -26,6 +26,12 @@ import {
   createDraftInvoiceInTransaction,
   finalizeInvoiceInTransaction,
 } from "@/lib/services/native-invoice-service";
+import {
+  canonicalRecurringGenerationKey,
+  persistCanonicalInvoiceSnapshots,
+  resolveCanonicalScheduleBillingCycle,
+  type CanonicalScheduleBillingCycle,
+} from "@/lib/services/canonical-native-billing-service";
 
 export type RecurringScheduleLineInput = NativeLineInput;
 
@@ -209,6 +215,7 @@ async function commitRecurringInvoicePeriod(
       where: { id: scheduleId },
       include: {
         lineItems: { orderBy: { sortOrder: "asc" } },
+        customerSubscription: { select: { id: true, controlMode: true } },
         customer: {
           select: { email: true, company: true, firstName: true, lastName: true },
         },
@@ -224,7 +231,16 @@ async function commitRecurringInvoicePeriod(
     const issueDate = options?.force ? startOfUtcDay(asOf) : schedule.nextIssueDate;
     const periodStart = startOfUtcDay(issueDate);
     const periodEnd = addUtcDays(periodStart, 1);
-    const generationKey = recurringGenerationKey(schedule.id, issueDate);
+    const canonicalCycle: CanonicalScheduleBillingCycle | null =
+      schedule.customerSubscription?.controlMode === "canonical"
+        ? await resolveCanonicalScheduleBillingCycle(tx, {
+            scheduleId: schedule.id,
+            periodStart,
+          })
+        : null;
+    const generationKey = canonicalCycle
+      ? canonicalRecurringGenerationKey(canonicalCycle.subscriptionId, issueDate)
+      : recurringGenerationKey(schedule.id, issueDate);
     const claimNow = new Date();
 
     let existing = await tx.invoice.findUnique({
@@ -232,6 +248,7 @@ async function commitRecurringInvoicePeriod(
       select: {
         id: true,
         recurringScheduleId: true,
+        customerSubscriptionId: true,
         sentAt: true,
         recurringDeliveryStatus: true,
         recurringDeliveryClaimedAt: true,
@@ -250,6 +267,7 @@ async function commitRecurringInvoicePeriod(
       select: {
         id: true,
         recurringScheduleId: true,
+        customerSubscriptionId: true,
         sentAt: true,
         recurringDeliveryStatus: true,
         recurringDeliveryClaimedAt: true,
@@ -265,7 +283,9 @@ async function commitRecurringInvoicePeriod(
     );
 
     if (existing) {
-      if (existing.recurringScheduleId !== schedule.id) {
+      const belongsToCanonicalSubscription = canonicalCycle
+        && existing.customerSubscriptionId === canonicalCycle.subscriptionId;
+      if (existing.recurringScheduleId !== schedule.id && !belongsToCanonicalSubscription) {
         throw new Error("Recurring invoice generation key belongs to another schedule.");
       }
 
@@ -297,6 +317,12 @@ async function commitRecurringInvoicePeriod(
           lastInvoiceId: existing.id,
         },
       });
+      if (canonicalCycle) {
+        await tx.customerSubscription.update({
+          where: { id: canonicalCycle.subscriptionId },
+          data: { nextBillingDate: advancedDate },
+        });
+      }
 
       return {
         kind: "invoice",
@@ -320,6 +346,7 @@ async function commitRecurringInvoicePeriod(
       recurringDeliveryAttempts: shouldDeliver ? 1 : 0,
       recurringDeliveryClaimedAt: shouldDeliver ? claimNow : null,
       customerId: schedule.customerId,
+      customerSubscriptionId: canonicalCycle?.subscriptionId ?? null,
       billToName: schedule.billToName,
       billToLines: schedule.billToLines,
       currency: schedule.currency,
@@ -331,15 +358,26 @@ async function commitRecurringInvoicePeriod(
       paymentInstructions: schedule.paymentInstructions,
       serviceAssignmentId: schedule.serviceAssignmentId,
       createdById: schedule.createdById,
-      lineItems: schedule.lineItems.map((line, index) => ({
-        description: line.description,
-        quantity: Number(line.quantity),
-        unitPrice: Number(line.unitPrice),
-        unitLabel: line.unitLabel,
-        sortOrder: line.sortOrder ?? index,
-      })),
+      lineItems: canonicalCycle
+        ? canonicalCycle.lines.map((line, index) => ({
+            description: line.description,
+            quantity: Number(line.quantity),
+            unitPrice: Number(line.billedAmount),
+            unitLabel: "service",
+            sortOrder: index,
+          }))
+        : schedule.lineItems.map((line, index) => ({
+            description: line.description,
+            quantity: Number(line.quantity),
+            unitPrice: Number(line.unitPrice),
+            unitLabel: line.unitLabel,
+            sortOrder: line.sortOrder ?? index,
+          })),
     });
 
+    if (canonicalCycle) {
+      await persistCanonicalInvoiceSnapshots(tx, invoiceId, canonicalCycle);
+    }
     await finalizeInvoiceInTransaction(tx, invoiceId);
     await tx.recurringInvoiceSchedule.update({
       where: { id: schedule.id },
@@ -349,6 +387,12 @@ async function commitRecurringInvoicePeriod(
         lastInvoiceId: invoiceId,
       },
     });
+    if (canonicalCycle) {
+      await tx.customerSubscription.update({
+        where: { id: canonicalCycle.subscriptionId },
+        data: { nextBillingDate: advancedDate },
+      });
+    }
 
     return {
       kind: "invoice",

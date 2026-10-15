@@ -25,6 +25,7 @@ export type NativeLineInput = {
 
 export type CreateDraftInvoiceInput = {
   customerId?: string | null;
+  customerSubscriptionId?: string | null;
   billToName?: string | null;
   billToLines?: string[];
   currency?: string;
@@ -88,6 +89,7 @@ async function createDraftInvoiceWithClient(
       status: "draft",
       kind: input.kind ?? "one_off",
       customerId: input.customerId ?? null,
+      customerSubscriptionId: input.customerSubscriptionId ?? null,
       recurringScheduleId: input.recurringScheduleId ?? null,
       recurringPeriodStart: input.recurringPeriodStart ?? null,
       recurringGenerationKey: input.recurringGenerationKey ?? null,
@@ -140,7 +142,7 @@ export async function updateDraftInvoice(invoiceId: string, input: CreateDraftIn
 
   const existing = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    select: { status: true },
+    select: { status: true, customerSubscriptionId: true },
   });
   if (!existing) throw new Error("Invoice not found");
   if (existing.status !== "draft") {
@@ -160,6 +162,9 @@ export async function updateDraftInvoice(invoiceId: string, input: CreateDraftIn
       where: { id: invoiceId },
       data: {
         customerId: input.customerId ?? null,
+        customerSubscriptionId: input.customerSubscriptionId === undefined
+          ? existing.customerSubscriptionId
+          : input.customerSubscriptionId,
         billToName: input.billToName ?? null,
         billToLines: input.billToLines ?? [],
         currency,
