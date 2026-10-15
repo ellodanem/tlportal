@@ -93,6 +93,7 @@ async function prepareCheckoutOperation(
     const activeSubscription = await tx.customerSubscription.findFirst({
       where: {
         customerId: input.customer.id,
+        controlMode: "legacy",
         status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
         stripeSubscriptionId: { not: null },
       },
@@ -140,6 +141,7 @@ async function prepareCheckoutOperation(
     const pending = await tx.customerSubscription.findFirst({
       where: {
         customerId: input.customer.id,
+        controlMode: "legacy",
         status: "pending_payment",
         stripeSubscriptionId: null,
       },
@@ -155,6 +157,7 @@ async function prepareCheckoutOperation(
     await tx.customerSubscription.updateMany({
       where: {
         customerId: input.customer.id,
+        controlMode: "legacy",
         status: "pending_payment",
         stripeSubscriptionId: null,
         ...(canReusePending && pending ? { id: { not: pending.id } } : {}),
@@ -254,6 +257,7 @@ export async function runStripeCheckoutOperation(input: StripeCheckoutOperationI
   const existingActive = await prisma.customerSubscription.findFirst({
     where: {
       customerId: input.customer.id,
+      controlMode: "legacy",
       status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
       stripeSubscriptionId: { not: null },
     },
@@ -378,6 +382,7 @@ export async function recordStripeCheckoutCompletion(
   const conflictingSubscription = await prisma.customerSubscription.findFirst({
     where: {
       customerId: resolvedCustomerId,
+      controlMode: "legacy",
       id: { not: operation.customerSubscriptionId ?? undefined },
       stripeSubscriptionId: { not: null, notIn: [stripeSubscriptionId] },
       status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },

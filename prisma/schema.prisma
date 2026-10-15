@@ -292,6 +292,16 @@ enum SubscriptionRateClassification {
   negotiated
 }
 
+/// Lifecycle of one explicitly approved legacy-to-canonical shadow migration.
+enum CanonicalMigrationStatus {
+  approved
+  in_progress
+  completed
+  failed_rolled_back
+  needs_review
+  reversed
+}
+
 /// Broadcast message templates (email now; WhatsApp body reserved for phase 2).
 enum BroadcastTemplateCategory {
   outage
@@ -466,6 +476,7 @@ model Customer {
   payments                Payment[]
   recurringInvoiceSchedules RecurringInvoiceSchedule[]
   expenses                Expense[]
+  canonicalMigrationLedgers CanonicalMigrationLedger[]
   @@index([archivedAt])
 }
 
@@ -1077,6 +1088,7 @@ model CustomerSubscription {
   items                 SubscriptionItem[]
   providerLinks         SubscriptionProviderLink[]
   billingInvoices       BillingInvoice[]
+  canonicalMigrationLedger CanonicalMigrationLedger? @relation("CanonicalMigrationTarget")
 
   @@index([customerId, updatedAt(sort: Desc)])
   @@index([status])
@@ -1172,6 +1184,38 @@ model SubscriptionProviderItem {
 
   @@unique([subscriptionProviderLinkId, rateGroupFingerprint])
   @@index([externalPriceId])
+}
+
+/// Durable audit and idempotency record for one approved Phase 2B shadow migration.
+model CanonicalMigrationLedger {
+  id                    String                   @id @default(uuid())
+  migrationKey          String                   @unique
+  sourceKind            String
+  sourceId              String
+  customerId            String
+  customer              Customer                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sourceFingerprint     String
+  planFingerprint       String
+  status                CanonicalMigrationStatus @default(approved)
+  approvedPlan          Json
+  approvedBy            String
+  approvalReason        String                   @db.Text
+  approvedAt            DateTime
+  targetSubscriptionId  String?                  @unique
+  targetSubscription    CustomerSubscription?    @relation("CanonicalMigrationTarget", fields: [targetSubscriptionId], references: [id], onDelete: Restrict)
+  startedAt             DateTime?
+  completedAt           DateTime?
+  failedAt              DateTime?
+  reversedAt            DateTime?
+  failureCode           String?
+  failureMessage        String?                  @db.Text
+  reconciliation        Json?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@unique([sourceKind, sourceId])
+  @@index([customerId, status])
+  @@index([status, updatedAt])
 }
 
 /// Maps a TL device to a vendor GPS/telematics identity.

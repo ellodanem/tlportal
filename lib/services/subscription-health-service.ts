@@ -98,6 +98,7 @@ export async function getSubscriptionHealthReport() {
     getGlobalFleetHealth(),
     prisma.customerSubscription.findMany({
       where: {
+        controlMode: "legacy",
         status: { in: MRR_STATUSES },
         customer: activeCustomerWhere,
       },
@@ -123,6 +124,7 @@ export async function getSubscriptionHealthReport() {
     }),
     prisma.customerSubscription.findMany({
       where: {
+        controlMode: "legacy",
         status: { in: PAST_DUE_SUB_STATUSES },
         customer: activeCustomerWhere,
       },
@@ -146,6 +148,7 @@ export async function getSubscriptionHealthReport() {
     }),
     prisma.customerSubscription.findMany({
       where: {
+        controlMode: "legacy",
         createdAt: { gte: trendStart },
         status: { not: "canceled" },
         customer: activeCustomerWhere,

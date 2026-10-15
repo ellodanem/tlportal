@@ -15,7 +15,7 @@ export default async function SubscriptionLifecyclePage({ params }: Props) {
   const { customerId } = await params;
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
-    select: { id: true, company: true, firstName: true, lastName: true, email: true, billingMode: true, customerSubscriptions: { orderBy: { updatedAt: "desc" }, take: 1 }, recurringInvoiceSchedules: { orderBy: { updatedAt: "desc" }, take: 1, include: { lineItems: { select: { quantity: true, unitPrice: true } } } } },
+    select: { id: true, company: true, firstName: true, lastName: true, email: true, billingMode: true, customerSubscriptions: { where: { controlMode: "legacy" }, orderBy: { updatedAt: "desc" }, take: 1 }, recurringInvoiceSchedules: { orderBy: { updatedAt: "desc" }, take: 1, include: { lineItems: { select: { quantity: true, unitPrice: true } } } } },
   });
   if (!customer) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Customer not found.</div>;
   const stripe = customer.customerSubscriptions[0] ?? null;

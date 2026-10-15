@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "phase-2a-source-v1",
+  "analysisDate": "2026-10-15",
+  "customers": [
+    { "id": "customer-standard", "billingMode": "stripe_subscription", "archivedAt": null },
+    { "id": "customer-annual-explicit", "billingMode": "stripe_subscription", "archivedAt": null },
+    { "id": "customer-annual-missing", "billingMode": "stripe_subscription", "archivedAt": null },
+    { "id": "customer-multiple", "billingMode": "stripe_subscription", "archivedAt": null },
+    { "id": "customer-ambiguous", "billingMode": "stripe_subscription", "archivedAt": null },
+    { "id": "customer-hardware", "billingMode": "stripe_subscription", "archivedAt": null },
+    { "id": "customer-overlap", "billingMode": "stripe_subscription", "archivedAt": null },
+    { "id": "customer-financial", "billingMode": "manual_legacy", "archivedAt": null }
+  ],
+  "subscriptions": [
+    {
+      "id": "subscription-standard", "customerId": "customer-standard", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 1, "monthlyRateXcd": "25.00", "vehicleCount": 2,
+      "stripeSubscriptionId": "sub_synthetic_standard", "stripeCustomerId": "cus_synthetic_standard",
+      "currentPeriodStart": "2026-10-01T00:00:00.000Z", "currentPeriodEnd": "2026-11-01T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    },
+    {
+      "id": "subscription-annual-explicit", "customerId": "customer-annual-explicit", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 12, "monthlyRateXcd": "25.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_annual_explicit", "stripeCustomerId": "cus_synthetic_annual_explicit",
+      "currentPeriodStart": "2026-01-15T00:00:00.000Z", "currentPeriodEnd": "2027-01-15T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": "275.00", "currency": "XCD",
+      "billingAnchorDate": "2026-01-15T00:00:00.000Z", "nextBillingDate": "2027-01-15T00:00:00.000Z"
+    },
+    {
+      "id": "subscription-annual-missing", "customerId": "customer-annual-missing", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 12, "monthlyRateXcd": "25.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_annual_missing", "stripeCustomerId": "cus_synthetic_annual_missing",
+      "currentPeriodStart": "2026-02-01T00:00:00.000Z", "currentPeriodEnd": "2027-02-01T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    },
+    {
+      "id": "subscription-multiple-monthly", "customerId": "customer-multiple", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 1, "monthlyRateXcd": "25.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_multiple_monthly", "stripeCustomerId": "cus_synthetic_multiple",
+      "currentPeriodStart": "2026-10-05T00:00:00.000Z", "currentPeriodEnd": "2026-11-05T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    },
+    {
+      "id": "subscription-multiple-quarterly", "customerId": "customer-multiple", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 3, "monthlyRateXcd": "20.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_multiple_quarterly", "stripeCustomerId": "cus_synthetic_multiple",
+      "currentPeriodStart": "2026-09-05T00:00:00.000Z", "currentPeriodEnd": "2026-12-05T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    },
+    {
+      "id": "subscription-ambiguous-a", "customerId": "customer-ambiguous", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 1, "monthlyRateXcd": "25.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_ambiguous_a", "stripeCustomerId": "cus_synthetic_ambiguous",
+      "currentPeriodStart": "2026-10-08T00:00:00.000Z", "currentPeriodEnd": "2026-11-08T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    },
+    {
+      "id": "subscription-ambiguous-b", "customerId": "customer-ambiguous", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 1, "monthlyRateXcd": "25.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_ambiguous_b", "stripeCustomerId": "cus_synthetic_ambiguous",
+      "currentPeriodStart": "2026-10-09T00:00:00.000Z", "currentPeriodEnd": "2026-11-09T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    },
+    {
+      "id": "subscription-hardware", "customerId": "customer-hardware", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 1, "monthlyRateXcd": "25.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_hardware", "stripeCustomerId": "cus_synthetic_hardware",
+      "currentPeriodStart": "2026-10-10T00:00:00.000Z", "currentPeriodEnd": "2026-11-10T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    },
+    {
+      "id": "subscription-overlap", "customerId": "customer-overlap", "controlMode": "legacy", "status": "active",
+      "planTermMonths": 1, "monthlyRateXcd": "25.00", "vehicleCount": 1,
+      "stripeSubscriptionId": "sub_synthetic_overlap", "stripeCustomerId": "cus_synthetic_overlap",
+      "currentPeriodStart": "2026-10-12T00:00:00.000Z", "currentPeriodEnd": "2026-11-12T00:00:00.000Z",
+      "cancelAt": null, "agreedAmountPerCycle": null, "currency": "XCD",
+      "billingAnchorDate": null, "nextBillingDate": null
+    }
+  ],
+  "billingAccounts": [
+    { "id": "account-standard", "customerId": "customer-standard", "provider": "stripe", "externalCustomerId": "cus_synthetic_standard", "status": "active" },
+    { "id": "account-annual-explicit", "customerId": "customer-annual-explicit", "provider": "stripe", "externalCustomerId": "cus_synthetic_annual_explicit", "status": "active" },
+    { "id": "account-annual-missing", "customerId": "customer-annual-missing", "provider": "stripe", "externalCustomerId": "cus_synthetic_annual_missing", "status": "active" },
+    { "id": "account-multiple", "customerId": "customer-multiple", "provider": "stripe", "externalCustomerId": "cus_synthetic_multiple", "status": "active" },
+    { "id": "account-ambiguous", "customerId": "customer-ambiguous", "provider": "stripe", "externalCustomerId": "cus_synthetic_ambiguous", "status": "active" },
+    { "id": "account-hardware", "customerId": "customer-hardware", "provider": "stripe", "externalCustomerId": "cus_synthetic_hardware", "status": "active" },
+    { "id": "account-overlap", "customerId": "customer-overlap", "provider": "stripe", "externalCustomerId": "cus_synthetic_overlap", "status": "active" }
+  ],
+  "catalogPrices": [
+    { "id": "catalog-monthly-25", "monthlyRateXcd": "25.00", "durationMonths": 1, "isActive": true },
+    { "id": "catalog-quarterly-25", "monthlyRateXcd": "25.00", "durationMonths": 3, "isActive": true },
+    { "id": "catalog-six-month-25", "monthlyRateXcd": "25.00", "durationMonths": 6, "isActive": true },
+    { "id": "catalog-annual-25", "monthlyRateXcd": "25.00", "durationMonths": 12, "isActive": true }
+  ],
+  "inventory": {
+    "deviceIds": ["device-standard-a", "device-standard-b", "device-annual-explicit", "device-annual-missing", "device-multiple-monthly", "device-multiple-quarterly", "device-ambiguous-a", "device-ambiguous-b", "device-hardware-old", "device-hardware-new", "device-overlap", "device-financial", "device-unassigned"],
+    "simCardIds": ["sim-standard-a", "sim-standard-b", "sim-annual-explicit", "sim-annual-missing", "sim-multiple-monthly", "sim-multiple-quarterly", "sim-ambiguous-a", "sim-ambiguous-b", "sim-hardware-old", "sim-hardware-new", "sim-overlap", "sim-financial", "sim-unassigned"]
+  },
+  "assignments": [
+    { "id": "assignment-standard-a", "customerId": "customer-standard", "deviceId": "device-standard-a", "simCardId": "sim-standard-a", "status": "active", "startDate": "2026-01-01T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-01T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-standard-b", "customerId": "customer-standard", "deviceId": "device-standard-b", "simCardId": "sim-standard-b", "status": "active", "startDate": "2026-01-01T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-01T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-annual-explicit", "customerId": "customer-annual-explicit", "deviceId": "device-annual-explicit", "simCardId": "sim-annual-explicit", "status": "active", "startDate": "2026-01-15T00:00:00.000Z", "endDate": null, "intervalMonths": 12, "nextDueDate": "2027-01-15T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-annual-missing", "customerId": "customer-annual-missing", "deviceId": "device-annual-missing", "simCardId": "sim-annual-missing", "status": "active", "startDate": "2026-02-01T00:00:00.000Z", "endDate": null, "intervalMonths": 12, "nextDueDate": "2027-02-01T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-multiple-monthly", "customerId": "customer-multiple", "deviceId": "device-multiple-monthly", "simCardId": "sim-multiple-monthly", "status": "active", "startDate": "2026-03-05T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-05T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-multiple-quarterly", "customerId": "customer-multiple", "deviceId": "device-multiple-quarterly", "simCardId": "sim-multiple-quarterly", "status": "active", "startDate": "2026-03-05T00:00:00.000Z", "endDate": null, "intervalMonths": 3, "nextDueDate": "2026-12-05T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-ambiguous-a", "customerId": "customer-ambiguous", "deviceId": "device-ambiguous-a", "simCardId": "sim-ambiguous-a", "status": "active", "startDate": "2026-04-01T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-08T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-ambiguous-b", "customerId": "customer-ambiguous", "deviceId": "device-ambiguous-b", "simCardId": "sim-ambiguous-b", "status": "active", "startDate": "2026-04-01T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-09T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-hardware-old", "customerId": "customer-hardware", "deviceId": "device-hardware-old", "simCardId": "sim-hardware-old", "status": "cancelled", "startDate": "2025-01-10T00:00:00.000Z", "endDate": "2026-08-10T00:00:00.000Z", "intervalMonths": 1, "nextDueDate": null, "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-hardware-new", "customerId": "customer-hardware", "deviceId": "device-hardware-new", "simCardId": "sim-hardware-new", "status": "active", "startDate": "2026-08-10T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-10T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-overlap", "customerId": "customer-overlap", "deviceId": "device-overlap", "simCardId": "sim-overlap", "status": "active", "startDate": "2026-05-12T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-12T00:00:00.000Z", "invoilessRecurringId": null, "subscriptionItemId": null },
+    { "id": "assignment-financial", "customerId": "customer-financial", "deviceId": "device-financial", "simCardId": "sim-financial", "status": "active", "startDate": "2026-06-15T00:00:00.000Z", "endDate": null, "intervalMonths": 1, "nextDueDate": "2026-11-15T00:00:00.000Z", "invoilessRecurringId": "legacy-recurring-financial", "subscriptionItemId": null }
+  ],
+  "recurringSchedules": [
+    {
+      "id": "schedule-overlap", "customerId": "customer-overlap", "customerSubscriptionId": null,
+      "serviceAssignmentId": null, "status": "active", "intervalMonths": 1, "currency": "XCD",
+      "nextIssueDate": "2026-11-12T12:00:00.000Z",
+      "lineItems": [{ "id": "schedule-overlap-line", "description": "Synthetic tracking service", "quantity": "1", "unitPrice": "25.00", "lineTotal": "25.00" }]
+    },
+    {
+      "id": "schedule-financial", "customerId": "customer-financial", "customerSubscriptionId": null,
+      "serviceAssignmentId": "assignment-financial", "status": "active", "intervalMonths": 1, "currency": "XCD",
+      "nextIssueDate": "2026-11-15T12:00:00.000Z",
+      "lineItems": [{ "id": "schedule-financial-line", "description": "Synthetic negotiated service", "quantity": "1", "unitPrice": "30.00", "lineTotal": "30.00" }]
+    }
+  ],
+  "invoices": [
+    {
+      "id": "invoice-financial", "customerId": "customer-financial", "customerSubscriptionId": null,
+      "recurringScheduleId": "schedule-financial", "billingInvoiceId": null,
+      "status": "partially_paid", "kind": "recurring", "currency": "XCD",
+      "total": "30.00", "amountPaid": "10.00", "amountDue": "25.00",
+      "issueDate": "2026-10-15T12:00:00.000Z", "archivedAt": null,
+      "recurringGenerationKey": "schedule-financial:2026-10-15", "invoilessInvoiceId": null
+    }
+  ],
+  "billingInvoices": [
+    {
+      "id": "billing-invoice-annual-explicit", "customerId": "customer-annual-explicit",
+      "customerSubscriptionId": "subscription-annual-explicit", "subscriptionProviderLinkId": null,
+      "provider": "stripe", "externalInvoiceId": "in_synthetic_annual_explicit", "status": "paid",
+      "kind": "subscription", "amountXcd": "275.00", "currency": "xcd",
+      "stripeSubscriptionId": "sub_synthetic_annual_explicit",
+      "periodStart": "2026-01-15T00:00:00.000Z", "periodEnd": "2027-01-15T00:00:00.000Z",
+      "createdAt": "2026-01-15T00:00:00.000Z"
+    }
+  ],
+  "payments": [
+    {
+      "id": "payment-financial", "invoiceId": "invoice-financial", "customerId": "customer-financial",
+      "amount": "5.00", "currency": "XCD", "method": "cheque", "reference": "synthetic-reference",
+      "stripePaymentIntentId": null, "voidedAt": null
+    }
+  ]
+}

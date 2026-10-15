@@ -61,7 +61,7 @@ function periodDatesFromSubscription(sub: Stripe.Subscription): {
 
 export async function getCurrentCustomerSubscription(customerId: string) {
   return prisma.customerSubscription.findFirst({
-    where: { customerId },
+    where: { customerId, controlMode: "legacy" },
     orderBy: { updatedAt: "desc" },
   });
 }
@@ -78,6 +78,7 @@ export async function createPendingCustomerSubscription(input: {
   await prisma.customerSubscription.updateMany({
     where: {
       customerId: input.customerId,
+      controlMode: "legacy",
       status: "pending_payment",
       stripeSubscriptionId: null,
     },
@@ -132,9 +133,9 @@ export async function upsertCustomerSubscriptionFromStripe(
   if (tlSubscriptionId) {
     const existing = await prisma.customerSubscription.findUnique({
       where: { id: tlSubscriptionId },
-      select: { id: true, customerId: true },
+      select: { id: true, customerId: true, controlMode: true },
     });
-    if (existing?.customerId === tlCustomerId) {
+    if (existing?.customerId === tlCustomerId && existing.controlMode === "legacy") {
       const updated = await prisma.customerSubscription.update({
         where: { id: tlSubscriptionId },
         data: baseData,
@@ -146,9 +147,9 @@ export async function upsertCustomerSubscriptionFromStripe(
 
   const byStripe = await prisma.customerSubscription.findUnique({
     where: { stripeSubscriptionId },
-    select: { id: true },
+    select: { id: true, controlMode: true },
   });
-  if (byStripe) {
+  if (byStripe?.controlMode === "legacy") {
     const updated = await prisma.customerSubscription.update({
       where: { id: byStripe.id },
       data: baseData,
@@ -172,17 +173,17 @@ export async function markCustomerSubscriptionCanceledFromStripe(
   const periods = periodDatesFromSubscription(sub);
   const tlSubscriptionId = sub.metadata?.tl_subscription_id?.trim();
 
-  let row =
+  const row =
     (tlSubscriptionId
       ? await prisma.customerSubscription.findFirst({
-          where: { id: tlSubscriptionId, customerId: tlCustomerId },
+          where: { id: tlSubscriptionId, customerId: tlCustomerId, controlMode: "legacy" },
         })
       : null) ??
     (await prisma.customerSubscription.findUnique({
       where: { stripeSubscriptionId },
-    })) ??
+    }).then((candidate) => candidate?.controlMode === "legacy" ? candidate : null)) ??
     (await prisma.customerSubscription.findFirst({
-      where: { customerId: tlCustomerId },
+      where: { customerId: tlCustomerId, controlMode: "legacy" },
       orderBy: { updatedAt: "desc" },
     }));
 

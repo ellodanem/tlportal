@@ -34,6 +34,7 @@ jobs:
       DATABASE_URL: postgresql://tlportal_test:tlportal_test@127.0.0.1:5432/tlportal_test?schema=public
       DIRECT_URL: postgresql://tlportal_test:tlportal_test@127.0.0.1:5432/tlportal_test?schema=public
       NODE_ENV: test
+      ALLOW_CANONICAL_MIGRATION_EXECUTION: "true"
 
     steps:
       - name: Check out repository

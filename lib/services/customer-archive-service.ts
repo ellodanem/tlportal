@@ -29,6 +29,7 @@ export async function archiveCustomer(
       prisma.customerSubscription.count({
         where: {
           customerId,
+          controlMode: "legacy",
           status: { in: ["active", "trialing", "past_due", "unpaid", "pending_payment"] },
         },
       }),

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "phase-2b-approval-v1",
+  "sourceFingerprint": "b554dc01394a368574ee0e783f362c231f1c5e822e2b028999f0cdbab1ae2550",
+  "decisions": [
+    {
+      "proposalId": "subscription:subscription-standard",
+      "approvedBy": "synthetic-reviewer",
+      "approvedAt": "2026-10-15T12:00:00.000Z",
+      "approvalReason": "Synthetic standard monthly arrangement reviewed against the Phase 2A fixture.",
+      "name": "Standard monthly tracking",
+      "reference": "synthetic-standard-monthly",
+      "collectionMethod": "stripe_autocharge",
+      "lifecycleStatus": "active",
+      "billingIntervalMonths": 1,
+      "currency": "XCD",
+      "commercialStartDate": "2026-01-01",
+      "billingAnchorDate": "2026-10-01",
+      "nextBillingDate": "2026-11-01",
+      "gracePeriodDays": 7,
+      "defaultItemAmountPerCycle": "25.00",
+      "expectedTotalAmountPerCycle": "50.00",
+      "items": [
+        {
+          "itemKey": "standard-a",
+          "label": "Tracking service A",
+          "assignmentIds": ["assignment-standard-a"],
+          "serviceActivatedDate": "2026-01-01",
+          "billingEffectiveFrom": "2026-10-01",
+          "billingEffectiveUntil": null,
+          "agreedAmountPerCycle": "25.00",
+          "classification": "standard",
+          "changeReason": "Initial canonical migration from reviewed synthetic evidence."
+        },
+        {
+          "itemKey": "standard-b",
+          "label": "Tracking service B",
+          "assignmentIds": ["assignment-standard-b"],
+          "serviceActivatedDate": "2026-01-01",
+          "billingEffectiveFrom": "2026-10-01",
+          "billingEffectiveUntil": null,
+          "agreedAmountPerCycle": "25.00",
+          "classification": "standard",
+          "changeReason": "Initial canonical migration from reviewed synthetic evidence."
+        }
+      ],
+      "providerRelationship": {
+        "provider": "stripe",
+        "externalSubscriptionId": "sub_synthetic_standard",
+        "providerStatus": "active",
+        "activatedAt": "2026-10-01T00:00:00.000Z",
+        "providerItems": []
+      },
+      "issueResolutions": []
+    }
+  ]
+}
