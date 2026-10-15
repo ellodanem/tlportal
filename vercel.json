@@ -1,4 +1,10 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "validation/postgres-foundation": false
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/nightly-sims-sync",

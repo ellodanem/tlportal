@@ -2,6 +2,9 @@ name: PostgreSQL foundation validation
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - validation/postgres-foundation
 
 permissions:
   contents: read
@@ -45,6 +48,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
       - name: Apply migrations in dependency order
         run: npx prisma migrate deploy
 
@@ -53,3 +62,6 @@ jobs:
 
       - name: Run local regression suite
         run: npm test
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
