@@ -227,8 +227,8 @@ class MockCanonicalStripeAdapter implements CanonicalStripeProviderAdapter {
   }
 
   async createActivationCheckout(proposal: CanonicalStripeOperationProposal) {
-    const recovered = await this.recoverActivation(proposal.operationKey);
-    if (recovered) return recovered;
+    const existingSessionId = this.activationByOperation.get(proposal.operationKey);
+    if (existingSessionId) return this.sessions.get(existingSessionId)!;
     this.activationCreates += 1;
     const session: CanonicalStripeCheckoutSession = {
       id: `cs_mock_${this.activationCreates}_${randomUUID()}`,
