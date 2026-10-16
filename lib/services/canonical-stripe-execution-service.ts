@@ -64,6 +64,7 @@ type SerializedProposal = Omit<
 
 const CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
 const PROVIDER_IDEMPOTENCY_WINDOW_MS = 23 * 60 * 60 * 1000;
+const SERIALIZABLE_RETRY_LIMIT = 10;
 
 function retryableSerializableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -74,7 +75,7 @@ function retryableSerializableError(error: unknown): boolean {
 
 async function runSerializable<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
     try {
       return await prisma.$transaction(work, {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -82,6 +83,9 @@ async function runSerializable<T>(work: (tx: Prisma.TransactionClient) => Promis
     } catch (caught) {
       lastError = caught;
       if (!retryableSerializableError(caught)) throw caught;
+      if (attempt + 1 < SERIALIZABLE_RETRY_LIMIT) {
+        await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 10));
+      }
     }
   }
   throw lastError;
