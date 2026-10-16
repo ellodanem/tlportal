@@ -10,8 +10,13 @@ import {
   canonicalStripeExecutionEnabled,
   type CanonicalStripeExecutionEnvironment,
   type CanonicalStripeProviderMutationResult,
-  type CanonicalStripeProviderRateGroup,
 } from "@/lib/domain/canonical-stripe-execution";
+import {
+  assertCanonicalStripeLiveCanaryAuthorization,
+  CanonicalStripeLiveCanaryError,
+  type CanonicalStripeLiveCanaryAuthorization,
+  type CanonicalStripeLiveCanaryEnvironment,
+} from "@/lib/domain/canonical-stripe-live-canary";
 import {
   buildCanonicalStripeRateGroups,
   planCanonicalStripeInvoiceAttribution,
@@ -23,6 +28,7 @@ import {
   persistCanonicalStripeProviderResult,
 } from "@/lib/services/canonical-stripe-execution-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import { normalizeCanonicalStripeSubscription } from "@/lib/stripe/canonical-provider-normalization";
 import { stripeInvoiceSubscriptionId } from "@/lib/stripe/invoice-subscription";
 
 export type CanonicalStripeCheckoutWebhook = {
@@ -72,69 +78,11 @@ export type CanonicalStripeWebhookResult = {
   reconciliation: "reconciled" | "pending" | "manual_review" | null;
 };
 
-function majorAmount(minor: number | null | undefined): string {
-  return new Prisma.Decimal(minor ?? 0).dividedBy(100).toDecimalPlaces(2).toFixed(2);
-}
-
-function stripeIntervalMonths(price: Stripe.Price): number | null {
-  const recurring = price.recurring;
-  if (!recurring) return null;
-  const count = recurring.interval_count ?? 1;
-  if (recurring.interval === "month") return count;
-  if (recurring.interval === "year") return count * 12;
-  return null;
-}
-
-function subscriptionItemFingerprint(item: Stripe.SubscriptionItem): string | null {
-  const itemMetadata = (item as Stripe.SubscriptionItem & { metadata?: Stripe.Metadata }).metadata;
-  return itemMetadata?.tl_rate_group_fingerprint?.trim()
-    || item.price?.metadata?.tl_rate_group_fingerprint?.trim()
-    || null;
-}
-
-function normalizeSubscription(sub: Stripe.Subscription): CanonicalStripeProviderMutationResult {
-  const observedItems = sub.items.data.map((item) => ({
-    externalSubscriptionItemId: item.id,
-    externalPriceId: item.price?.id ?? null,
-    currency: item.price?.currency?.toUpperCase() ?? null,
-    billingIntervalMonths: item.price ? stripeIntervalMonths(item.price) : null,
-    unitAmount: item.price?.unit_amount_decimal != null
-      ? new Prisma.Decimal(item.price.unit_amount_decimal).dividedBy(100).toFixed(2)
-      : item.price?.unit_amount != null
-        ? majorAmount(item.price.unit_amount)
-        : null,
-    quantity: item.quantity ?? null,
-  }));
-  const rateGroups = sub.items.data.flatMap<CanonicalStripeProviderRateGroup>((item) => {
-    const fingerprint = subscriptionItemFingerprint(item);
-    const interval = item.price ? stripeIntervalMonths(item.price) : null;
-    const amount = item.price?.unit_amount_decimal != null
-      ? new Prisma.Decimal(item.price.unit_amount_decimal).dividedBy(100).toFixed(2)
-      : item.price?.unit_amount != null
-        ? majorAmount(item.price.unit_amount)
-        : null;
-    if (!fingerprint || !item.price?.id || !item.price.currency || interval == null || amount == null) return [];
-    return [{
-      fingerprint,
-      externalSubscriptionItemId: item.id,
-      externalPriceId: item.price.id,
-      currency: item.price.currency.toUpperCase(),
-      billingIntervalMonths: interval,
-      agreedAmountPerCycle: amount,
-      quantity: item.quantity ?? 0,
-    }];
-  });
-  return {
-    subscription: {
-      externalSubscriptionId: sub.id,
-      status: sub.status,
-      currentPeriodStart: sub.current_period_start == null ? null : new Date(sub.current_period_start * 1000),
-      currentPeriodEnd: sub.current_period_end == null ? null : new Date(sub.current_period_end * 1000),
-      cancelAtPeriodEnd: sub.cancel_at_period_end,
-      items: observedItems,
-    },
-    rateGroups,
-  };
+function majorAmount(minor: number | null | undefined, minorUnitExponent = 2): string {
+  return new Prisma.Decimal(minor ?? 0)
+    .dividedBy(new Prisma.Decimal(10).pow(minorUnitExponent))
+    .toDecimalPlaces(minorUnitExponent)
+    .toFixed(minorUnitExponent);
 }
 
 function invoiceLineSubscriptionItemId(line: Stripe.InvoiceLineItem): string | null {
@@ -146,16 +94,16 @@ function invoiceLineSubscriptionItemId(line: Stripe.InvoiceLineItem): string | n
   return parent?.subscription_item_details?.subscription_item ?? null;
 }
 
-function normalizeInvoiceLines(invoice: Stripe.Invoice): ObservedStripeInvoiceLine[] {
+function normalizeInvoiceLines(invoice: Stripe.Invoice, minorUnitExponent = 2): ObservedStripeInvoiceLine[] {
   return (invoice.lines?.data ?? []).map((line) => ({
     externalInvoiceLineId: line.id,
     externalSubscriptionItemId: invoiceLineSubscriptionItemId(line),
     externalPriceId: line.price?.id ?? null,
     currency: (line.currency ?? invoice.currency ?? "xcd").toUpperCase(),
     quantity: line.quantity ?? 1,
-    recurringSubtotal: majorAmount(line.amount),
-    discountAmount: majorAmount(line.discount_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0),
-    taxAmount: majorAmount(line.tax_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0),
+    recurringSubtotal: majorAmount(line.amount, minorUnitExponent),
+    discountAmount: majorAmount(line.discount_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0, minorUnitExponent),
+    taxAmount: majorAmount(line.tax_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0, minorUnitExponent),
     creditAmount: "0.00",
   }));
 }
@@ -176,7 +124,11 @@ function invoicePeriod(invoice: Stripe.Invoice): { start: Date; end: Date } | nu
   };
 }
 
-export function normalizeCanonicalStripeWebhook(event: Stripe.Event): CanonicalStripeNormalizedWebhook | null {
+export function normalizeCanonicalStripeWebhook(
+  event: Stripe.Event,
+  options: { minorUnitExponent?: number } = {},
+): CanonicalStripeNormalizedWebhook | null {
+  const minorUnitExponent = options.minorUnitExponent ?? 2;
   const eventCreatedAt = new Date(event.created * 1000);
   if (event.type === "checkout.session.completed" || event.type === "checkout.session.expired") {
     const session = event.data.object as Stripe.Checkout.Session;
@@ -205,7 +157,7 @@ export function normalizeCanonicalStripeWebhook(event: Stripe.Event): CanonicalS
       eventId: event.id,
       eventCreatedAt,
       operationKey: sub.metadata?.tl_canonical_operation_key?.trim() || null,
-      providerResult: normalizeSubscription(sub),
+      providerResult: normalizeCanonicalStripeSubscription(sub, minorUnitExponent),
     };
   }
   if (
@@ -226,15 +178,15 @@ export function normalizeCanonicalStripeWebhook(event: Stripe.Event): CanonicalS
       externalSubscriptionId,
       status: invoice.status ?? "unknown",
       currency: (invoice.currency ?? "xcd").toUpperCase(),
-      total: majorAmount(invoice.total ?? invoice.amount_due ?? 0),
-      amountPaid: majorAmount(invoice.amount_paid),
+      total: majorAmount(invoice.total ?? invoice.amount_due ?? 0, minorUnitExponent),
+      amountPaid: majorAmount(invoice.amount_paid, minorUnitExponent),
       periodStart: period.start,
       periodEnd: period.end,
       paymentIntentId: invoicePaymentIntentId(invoice),
       providerInvoiceNumber: invoice.number,
       hostedInvoiceUrl: invoice.hosted_invoice_url,
       invoicePdfUrl: invoice.invoice_pdf,
-      lines: normalizeInvoiceLines(invoice),
+      lines: normalizeInvoiceLines(invoice, minorUnitExponent),
     };
   }
   return null;
@@ -665,11 +617,9 @@ async function handleInvoiceWebhook(event: CanonicalStripeInvoiceWebhook): Promi
   return { handled: true, stale: false, reconciliation };
 }
 
-export async function handleCanonicalStripeNormalizedWebhook(
+async function handleCanonicalStripeNormalizedWebhookCore(
   event: CanonicalStripeNormalizedWebhook,
-  environment: CanonicalStripeExecutionEnvironment = process.env,
 ): Promise<CanonicalStripeWebhookResult> {
-  assertCanonicalStripeExecutionEnabled(environment);
   if (event.kind === "checkout_completed" || event.kind === "checkout_expired") {
     return recordCheckoutWebhook(event);
   }
@@ -677,12 +627,161 @@ export async function handleCanonicalStripeNormalizedWebhook(
   return handleInvoiceWebhook(event as CanonicalStripeInvoiceWebhook);
 }
 
+export async function handleCanonicalStripeNormalizedWebhook(
+  event: CanonicalStripeNormalizedWebhook,
+  environment: CanonicalStripeExecutionEnvironment = process.env,
+): Promise<CanonicalStripeWebhookResult> {
+  assertCanonicalStripeExecutionEnabled(environment);
+  return handleCanonicalStripeNormalizedWebhookCore(event);
+}
+
+type LiveCanaryOperationMetadata = {
+  phase?: string;
+  proposal?: Omit<import("@/lib/domain/canonical-stripe-execution").CanonicalStripeOperationProposal, "billingAnchorDate" | "nextBillingDate"> & {
+    billingAnchorDate: string;
+    nextBillingDate: string;
+  };
+  liveCanaryAuthorization?: CanonicalStripeLiveCanaryAuthorization;
+};
+
+function canaryEvidence(stripeEvent: Stripe.Event): {
+  operationKey: string | null;
+  externalSubscriptionId: string | null;
+  authorizationId: string | null;
+  providerMode: string | null;
+} {
+  if (stripeEvent.type.startsWith("checkout.session.")) {
+    const session = stripeEvent.data.object as Stripe.Checkout.Session;
+    return {
+      operationKey: session.metadata?.tl_canonical_operation_key?.trim() || null,
+      externalSubscriptionId: typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null,
+      authorizationId: session.metadata?.tl_canary_authorization_id?.trim() || null,
+      providerMode: session.metadata?.tl_provider_mode?.trim() || null,
+    };
+  }
+  if (stripeEvent.type.startsWith("customer.subscription.")) {
+    const subscription = stripeEvent.data.object as Stripe.Subscription;
+    return {
+      operationKey: subscription.metadata?.tl_canonical_operation_key?.trim()
+        || subscription.metadata?.tl_canonical_last_operation_key?.trim()
+        || null,
+      externalSubscriptionId: subscription.id,
+      authorizationId: subscription.metadata?.tl_canary_authorization_id?.trim() || null,
+      providerMode: subscription.metadata?.tl_provider_mode?.trim() || null,
+    };
+  }
+  if (stripeEvent.type.startsWith("invoice.")) {
+    return {
+      operationKey: null,
+      externalSubscriptionId: stripeInvoiceSubscriptionId(stripeEvent.data.object as Stripe.Invoice),
+      authorizationId: null,
+      providerMode: null,
+    };
+  }
+  if (stripeEvent.type.startsWith("payment_intent.")) {
+    const payment = stripeEvent.data.object as Stripe.PaymentIntent;
+    return {
+      operationKey: payment.metadata?.tl_canonical_operation_key?.trim() || null,
+      externalSubscriptionId: null,
+      authorizationId: payment.metadata?.tl_canary_authorization_id?.trim() || null,
+      providerMode: payment.metadata?.tl_provider_mode?.trim() || null,
+    };
+  }
+  return { operationKey: null, externalSubscriptionId: null, authorizationId: null, providerMode: null };
+}
+
+/**
+ * Production live-canary events use the existing verified Stripe endpoint but
+ * never rely on the general canonical production switch. Exact durable owner
+ * authorization is required before canonical fulfillment can run.
+ */
+export async function tryHandleCanonicalStripeLiveCanaryWebhookEvent(
+  stripeEvent: Stripe.Event,
+  environment: CanonicalStripeLiveCanaryEnvironment = process.env,
+): Promise<boolean> {
+  const evidence = canaryEvidence(stripeEvent);
+  const operation = evidence.operationKey
+    ? await prisma.billingOperation.findUnique({
+        where: { operationKey: evidence.operationKey },
+        select: { id: true, operationKey: true, customerId: true, customerSubscriptionId: true, providerSubscriptionReference: true, metadata: true },
+      })
+    : evidence.externalSubscriptionId
+      ? await prisma.billingOperation.findFirst({
+          where: {
+            operationKey: { startsWith: "canonical-stripe-live-canary:" },
+            providerSubscriptionReference: evidence.externalSubscriptionId,
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, operationKey: true, customerId: true, customerSubscriptionId: true, providerSubscriptionReference: true, metadata: true },
+        })
+      : null;
+  const metadata = operation?.metadata && typeof operation.metadata === "object" && !Array.isArray(operation.metadata)
+    ? operation.metadata as LiveCanaryOperationMetadata
+    : null;
+  const hasCanaryEvidence = evidence.providerMode === "live_canary"
+    || Boolean(evidence.authorizationId)
+    || operation?.operationKey.startsWith("canonical-stripe-live-canary:") === true
+    || metadata?.phase === "3B3B";
+  if (!hasCanaryEvidence) return false;
+  if (stripeEvent.livemode !== true) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_LIVE_WEBHOOK_REQUIRED", "Live canary ownership was presented by a non-live Stripe event.");
+  }
+  if (!operation || !operation.customerSubscriptionId || !metadata?.proposal || !metadata.liveCanaryAuthorization) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_OWNERSHIP_INCOMPLETE", "Live canary webhook lacks an exact durable operation.");
+  }
+  if (evidence.authorizationId && evidence.authorizationId !== metadata.liveCanaryAuthorization.authorizationId) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_AUTHORIZATION_MISMATCH", "Webhook authorization identity differs from the durable canary approval.");
+  }
+  const proposal = {
+    ...metadata.proposal,
+    billingAnchorDate: new Date(metadata.proposal.billingAnchorDate),
+    nextBillingDate: new Date(metadata.proposal.nextBillingDate),
+  };
+  assertCanonicalStripeLiveCanaryAuthorization({
+    proposal,
+    authorization: metadata.liveCanaryAuthorization,
+    environment,
+    // Webhook fulfillment remains valid after the short execution window. The
+    // signature and all approved terms are still revalidated at issuedAt.
+    now: new Date(metadata.liveCanaryAuthorization.issuedAt),
+  });
+  if (proposal.customerId !== operation.customerId || proposal.subscriptionId !== operation.customerSubscriptionId) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_OPERATION_MISMATCH", "Webhook operation identity is inconsistent.");
+  }
+  if (
+    evidence.externalSubscriptionId
+    && operation.providerSubscriptionReference
+    && evidence.externalSubscriptionId !== operation.providerSubscriptionReference
+  ) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_SUBSCRIPTION_MISMATCH", "Webhook subscription differs from the durable provider reference.");
+  }
+  const competing = await prisma.billingOperation.findFirst({
+    where: { operationKey: { startsWith: "canonical-stripe-live-canary:" }, id: { not: operation.id } },
+    select: { id: true },
+  });
+  if (competing) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_MULTIPLE_OPERATIONS", "Multiple live canary operations exist; webhook fulfillment is blocked.");
+  }
+
+  // PaymentIntent events are secondary to invoice events for recurring
+  // subscriptions. Claiming them here prevents legacy fulfillment; the signed
+  // invoice event performs the durable financial reconciliation.
+  if (stripeEvent.type.startsWith("payment_intent.")) return true;
+  const normalized = normalizeCanonicalStripeWebhook(stripeEvent, { minorUnitExponent: 2 });
+  if (!normalized) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_EVIDENCE_INCOMPLETE", "Canary webhook lacks required period or item evidence.");
+  }
+  await handleCanonicalStripeNormalizedWebhookCore(normalized);
+  return true;
+}
+
 /** Return false only when the event has no exact canonical operation or provider relationship. */
 export async function tryHandleCanonicalStripeWebhookEvent(
   stripeEvent: Stripe.Event,
   environment: CanonicalStripeExecutionEnvironment = process.env,
+  options: { minorUnitExponent?: number } = {},
 ): Promise<boolean> {
-  const normalized = normalizeCanonicalStripeWebhook(stripeEvent);
+  const normalized = normalizeCanonicalStripeWebhook(stripeEvent, options);
   if (!normalized) {
     let operationKey: string | null = null;
     let externalSubscriptionId: string | null = null;

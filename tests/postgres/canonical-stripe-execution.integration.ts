@@ -13,6 +13,14 @@ import type {
 } from "../../lib/domain/canonical-stripe-execution";
 import { buildCanonicalStripeRateGroups, type ObservedStripeSubscription } from "../../lib/domain/canonical-stripe-shadow";
 import {
+  asCanonicalStripeLiveCanaryProposal,
+  canonicalStripeLiveCanaryProposalDigest,
+  LIVE_CANARY_PROVIDER_CONTEXT,
+  signCanonicalStripeLiveCanaryAuthorization,
+  type CanonicalStripeLiveCanaryAuthorization,
+  type CanonicalStripeLiveCanaryEnvironment,
+} from "../../lib/domain/canonical-stripe-live-canary";
+import {
   approveCanonicalStripeOperation,
   executeCanonicalStripeActivation,
   executeCanonicalStripeSynchronization,
@@ -20,8 +28,10 @@ import {
 } from "../../lib/services/canonical-stripe-execution-service";
 import {
   handleCanonicalStripeNormalizedWebhook,
+  tryHandleCanonicalStripeLiveCanaryWebhookEvent,
   type CanonicalStripeInvoiceWebhook,
 } from "../../lib/services/canonical-stripe-webhook-service";
+import type Stripe from "stripe";
 
 const originalExecutionFlag = process.env.CANONICAL_STRIPE_EXECUTION_ENABLED;
 process.env.CANONICAL_STRIPE_EXECUTION_ENABLED = "true";
@@ -201,7 +211,14 @@ function providerResultFromProposal(
 }
 
 class MockCanonicalStripeAdapter implements CanonicalStripeProviderAdapter {
-  readonly kind = "mock" as const;
+  readonly liveCanaryAuthorizationId?: string;
+
+  constructor(
+    readonly kind: "mock" | "stripe_test" | "stripe_live_canary" = "mock",
+    liveCanaryAuthorizationId?: string,
+  ) {
+    this.liveCanaryAuthorizationId = liveCanaryAuthorizationId;
+  }
   sessions = new Map<string, CanonicalStripeCheckoutSession>();
   activationByOperation = new Map<string, string>();
   synchronizationByOperation = new Map<string, CanonicalStripeProviderMutationResult>();
@@ -287,6 +304,68 @@ async function approve(input: {
   return { proposal, operation };
 }
 
+function liveCanaryEnvironment(input: { customerId: string; subscriptionId: string }): CanonicalStripeLiveCanaryEnvironment {
+  return {
+    NODE_ENV: "production",
+    VERCEL_ENV: "production",
+    CANONICAL_STRIPE_LIVE_CANARY_ENABLED: "true",
+    CANONICAL_STRIPE_LIVE_CANARY_CUSTOMER_ID: input.customerId,
+    CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID: input.subscriptionId,
+    CANONICAL_STRIPE_LIVE_CANARY_STRIPE_ACCOUNT_ID: "acct_phase3b3b_synthetic",
+    CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL: "owner@example.com",
+    CANONICAL_STRIPE_LIVE_CANARY_APPROVAL_SECRET: "phase-3b3b-synthetic-approval-secret-32-bytes",
+    STRIPE_SECRET_KEY: "sk_live_synthetic_never_sent",
+    STRIPE_WEBHOOK_SECRET: "whsec_synthetic_never_sent",
+  };
+}
+
+async function liveCanaryAuthorization(input: {
+  customerId: string;
+  subscriptionId: string;
+  environment: CanonicalStripeLiveCanaryEnvironment;
+}): Promise<CanonicalStripeLiveCanaryAuthorization> {
+  const base = asCanonicalStripeLiveCanaryProposal(await getCanonicalStripeExecutionProposal({
+    subscriptionId: input.subscriptionId,
+    kind: "activation",
+    observed: null,
+    environment: { NODE_ENV: "test", CANONICAL_STRIPE_EXECUTION_ENABLED: "true" },
+  }));
+  const issuedAt = new Date();
+  const unsigned: Omit<CanonicalStripeLiveCanaryAuthorization, "signature"> = {
+    authorizationId: `canary_${randomUUID()}`,
+    operation: "activate_subscription",
+    operationKey: base.operationKey,
+    requestFingerprint: base.requestFingerprint,
+    sourceFingerprint: base.sourceFingerprint,
+    proposalDigest: canonicalStripeLiveCanaryProposalDigest(base),
+    providerContext: LIVE_CANARY_PROVIDER_CONTEXT,
+    providerAccountId: input.environment.CANONICAL_STRIPE_LIVE_CANARY_STRIPE_ACCOUNT_ID!,
+    externalSubscriptionId: null,
+    approvedByEmail: "owner@example.com",
+    customerId: input.customerId,
+    subscriptionId: input.subscriptionId,
+    currency: "XCD",
+    recurringAmount: base.expectedRecurringTotal,
+    taxAmount: "0.00",
+    totalExpectedCharge: base.expectedRecurringTotal,
+    billingIntervalMonths: 1,
+    renewalDate: base.nextBillingDate.toISOString().slice(0, 10),
+    cancellationProcedure: "cancel_at_period_end_and_verify",
+    customerIdentityConfirmed: true,
+    subscriptionConfirmed: true,
+    chargeConfirmed: true,
+    minimumChargeConfirmed: true,
+    renewalConfirmed: true,
+    cancellationConfirmed: true,
+    issuedAt: issuedAt.toISOString(),
+    expiresAt: new Date(issuedAt.getTime() + 60 * 60 * 1000).toISOString(),
+  };
+  return {
+    ...unsigned,
+    signature: signCanonicalStripeLiveCanaryAuthorization(unsigned, input.environment),
+  };
+}
+
 test("Phase 3B2: concurrent multi-rate activation creates one reusable mock Checkout", async () => {
   const fixture = await createFixture({ lifecycle: "pending_activation" });
   const { proposal, operation } = await approve({ subscriptionId: fixture.subscription.id, kind: "activation", observed: null });
@@ -326,6 +405,35 @@ test("Phase 3B2: concurrent multi-rate activation creates one reusable mock Chec
     where: { subscriptionProviderLink: { customerSubscriptionId: fixture.subscription.id } },
   }), 2);
   assert.equal((await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } })).lifecycleStatus, "active");
+});
+
+test("Phase 3B3A: stripe_test execution requires its separate opt-in before claiming provider work", async () => {
+  const fixture = await createFixture({ lifecycle: "pending_activation" });
+  const { operation } = await approve({ subscriptionId: fixture.subscription.id, kind: "activation", observed: null });
+  const adapter = new MockCanonicalStripeAdapter("stripe_test");
+  await assert.rejects(
+    executeCanonicalStripeActivation({
+      operationId: operation.operationId,
+      adapter,
+      environment: {
+        NODE_ENV: "test",
+        CANONICAL_STRIPE_EXECUTION_ENABLED: "true",
+      },
+    }),
+    /CANONICAL_STRIPE_TEST_PROVIDER_ENABLED=true/,
+  );
+  assert.equal(adapter.activationCreates, 0);
+  const result = await executeCanonicalStripeActivation({
+    operationId: operation.operationId,
+    adapter,
+    environment: {
+      NODE_ENV: "test",
+      CANONICAL_STRIPE_EXECUTION_ENABLED: "true",
+      CANONICAL_STRIPE_TEST_PROVIDER_ENABLED: "true",
+    },
+  });
+  assert.equal(result.status, "pending");
+  assert.equal(adapter.activationCreates, 1);
 });
 
 test("Phase 3B2: activation timeout after provider success recovers the same Checkout", async () => {
@@ -636,4 +744,276 @@ test("Phase 3B2: legacy, shadow and production safeguards prevent canonical exec
     }),
     /disabled in production/,
   );
+});
+
+test("Phase 3B3B: a live adapter cannot execute a general or unsigned production operation", async () => {
+  const fixture = await createFixture({
+    lifecycle: "pending_activation",
+    items: [{ label: "Canary service", amount: "5.00", classification: "negotiated" }],
+  });
+  const { operation } = await approve({
+    subscriptionId: fixture.subscription.id,
+    kind: "activation",
+    observed: null,
+  });
+  const environment = liveCanaryEnvironment({
+    customerId: fixture.customer.id,
+    subscriptionId: fixture.subscription.id,
+  });
+  const adapter = new MockCanonicalStripeAdapter("stripe_live_canary", "unapproved_authorization");
+  await assert.rejects(
+    executeCanonicalStripeActivation({ operationId: operation.operationId, adapter, environment }),
+    /durable Phase 3B3B owner authorization/,
+  );
+  assert.equal(adapter.activationCreates, 0);
+});
+
+test("Phase 3B3B: one approved EC$5 subscription executes once and reconciles live webhooks without legacy spillover", async () => {
+  const fixture = await createFixture({
+    lifecycle: "pending_activation",
+    items: [{ label: "Approved canary service", amount: "5.00", classification: "negotiated" }],
+  });
+  const environment = liveCanaryEnvironment({
+    customerId: fixture.customer.id,
+    subscriptionId: fixture.subscription.id,
+  });
+  const authorization = await liveCanaryAuthorization({
+    customerId: fixture.customer.id,
+    subscriptionId: fixture.subscription.id,
+    environment,
+  });
+  const proposal = await getCanonicalStripeExecutionProposal({
+    subscriptionId: fixture.subscription.id,
+    kind: "activation",
+    observed: null,
+    environment,
+    liveCanaryAuthorization: authorization,
+  });
+  assert.equal(proposal.expectedRecurringTotal, "5.00");
+  assert.equal(proposal.billingIntervalMonths, 1);
+  assert.match(proposal.operationKey, /^canonical-stripe-live-canary:/);
+  const operation = await approveCanonicalStripeOperation({
+    subscriptionId: fixture.subscription.id,
+    kind: "activation",
+    observed: null,
+    confirmed: true,
+    confirmationToken: proposal.confirmationToken,
+    approvedBy: authorization.approvedByEmail,
+    approvalReason: "Owner-approved synthetic PostgreSQL canary validation",
+    environment,
+    liveCanaryAuthorization: authorization,
+  });
+
+  const other = await createFixture({
+    customerId: fixture.customer.id,
+    lifecycle: "pending_activation",
+    items: [{ label: "Not approved", amount: "5.00", classification: "negotiated" }],
+  });
+  const otherEnvironment = { ...environment, CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID: other.subscription.id };
+  const otherAuthorization = await liveCanaryAuthorization({
+    customerId: fixture.customer.id,
+    subscriptionId: other.subscription.id,
+    environment: otherEnvironment,
+  });
+  const otherProposal = await getCanonicalStripeExecutionProposal({
+    subscriptionId: other.subscription.id,
+    kind: "activation",
+    observed: null,
+    environment: otherEnvironment,
+    liveCanaryAuthorization: otherAuthorization,
+  });
+  await assert.rejects(
+    approveCanonicalStripeOperation({
+      subscriptionId: other.subscription.id,
+      kind: "activation",
+      observed: null,
+      confirmed: true,
+      confirmationToken: otherProposal.confirmationToken,
+      approvedBy: otherAuthorization.approvedByEmail,
+      approvalReason: "Must be blocked by single-subscription isolation",
+      environment: otherEnvironment,
+      liveCanaryAuthorization: otherAuthorization,
+    }),
+    /single-subscription live canary already has a different durable operation/,
+  );
+
+  const adapter = new MockCanonicalStripeAdapter("stripe_live_canary", authorization.authorizationId);
+  const executions = await Promise.all(Array.from({ length: 6 }, () => executeCanonicalStripeActivation({
+    operationId: operation.operationId,
+    adapter,
+    environment,
+  })));
+  assert.equal(adapter.activationCreates, 1);
+  assert.ok(executions.every((result) => result.status === "pending"));
+  const stored = await prisma.billingOperation.findUniqueOrThrow({ where: { id: operation.operationId } });
+  const externalSubscriptionId = `sub_canary_${randomUUID()}`;
+  adapter.sessions.set(stored.providerReference!, {
+    ...adapter.sessions.get(stored.providerReference!)!,
+    status: "complete",
+    externalSubscriptionId,
+  });
+
+  const checkoutEvent = {
+    id: `evt_canary_checkout_${randomUUID()}`,
+    object: "event",
+    api_version: "2025-02-24.acacia",
+    created: Math.floor(Date.now() / 1000),
+    data: {
+      object: {
+        id: stored.providerReference,
+        object: "checkout.session",
+        livemode: true,
+        status: "complete",
+        subscription: externalSubscriptionId,
+        metadata: {
+          tl_canonical_operation_key: operation.operationKey,
+          tl_canonical_subscription_id: fixture.subscription.id,
+          tl_provider_mode: "live_canary",
+          tl_canary_authorization_id: authorization.authorizationId,
+        },
+      },
+    },
+    livemode: true,
+    pending_webhooks: 0,
+    request: { id: null, idempotency_key: null },
+    type: "checkout.session.completed",
+  } as unknown as Stripe.Event;
+  assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(checkoutEvent, environment), true);
+
+  const providerResult = providerResultFromProposal(proposal, externalSubscriptionId);
+  const subscriptionEvent = {
+    id: `evt_canary_subscription_${randomUUID()}`,
+    object: "event",
+    api_version: "2025-02-24.acacia",
+    created: Math.floor(Date.now() / 1000),
+    data: {
+      object: {
+        id: externalSubscriptionId,
+        object: "subscription",
+        livemode: true,
+        status: "active",
+        current_period_start: Math.floor(providerResult.subscription.currentPeriodStart!.getTime() / 1000),
+        current_period_end: Math.floor(providerResult.subscription.currentPeriodEnd!.getTime() / 1000),
+        cancel_at_period_end: false,
+        metadata: {
+          tl_canonical_operation_key: operation.operationKey,
+          tl_canonical_subscription_id: fixture.subscription.id,
+          tl_provider_mode: "live_canary",
+          tl_canary_authorization_id: authorization.authorizationId,
+        },
+        items: {
+          object: "list",
+          has_more: false,
+          url: `/v1/subscription_items?subscription=${externalSubscriptionId}`,
+          data: providerResult.rateGroups.map((group) => ({
+            id: group.externalSubscriptionItemId,
+            object: "subscription_item",
+            quantity: group.quantity,
+            price: {
+              id: group.externalPriceId,
+              object: "price",
+              livemode: true,
+              active: true,
+              type: "recurring",
+              currency: group.currency.toLowerCase(),
+              unit_amount: Number(group.agreedAmountPerCycle) * 100,
+              unit_amount_decimal: String(Number(group.agreedAmountPerCycle) * 100),
+              recurring: { interval: "month", interval_count: 1, usage_type: "licensed" },
+              metadata: { tl_rate_group_fingerprint: group.fingerprint },
+            },
+          })),
+        },
+      },
+    },
+    livemode: true,
+    pending_webhooks: 0,
+    request: { id: null, idempotency_key: null },
+    type: "customer.subscription.created",
+  } as unknown as Stripe.Event;
+  assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(subscriptionEvent, environment), true);
+  assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(subscriptionEvent, environment), true);
+  assert.equal((await prisma.billingOperation.findUniqueOrThrow({ where: { id: operation.operationId } })).status, "completed");
+
+  const paidEvent = {
+    id: `evt_canary_invoice_${randomUUID()}`,
+    object: "event",
+    api_version: "2025-02-24.acacia",
+    created: Math.floor(Date.now() / 1000),
+    data: {
+      object: {
+        id: `in_canary_${randomUUID()}`,
+        object: "invoice",
+        livemode: true,
+        status: "paid",
+        currency: "xcd",
+        total: 500,
+        amount_due: 500,
+        amount_paid: 500,
+        subscription: externalSubscriptionId,
+        payment_intent: `pi_canary_${randomUUID()}`,
+        lines: {
+          object: "list",
+          has_more: false,
+          url: "/v1/invoices/canary/lines",
+          data: providerResult.rateGroups.map((group) => ({
+            id: `il_${group.externalSubscriptionItemId}`,
+            object: "line_item",
+            amount: 500,
+            currency: "xcd",
+            quantity: group.quantity,
+            subscription_item: group.externalSubscriptionItemId,
+            price: { id: group.externalPriceId },
+            period: {
+              start: Math.floor(providerResult.subscription.currentPeriodStart!.getTime() / 1000),
+              end: Math.floor(providerResult.subscription.currentPeriodEnd!.getTime() / 1000),
+            },
+            discount_amounts: [],
+            tax_amounts: [],
+          })),
+        },
+      },
+    },
+    livemode: true,
+    pending_webhooks: 0,
+    request: { id: null, idempotency_key: null },
+    type: "invoice.paid",
+  } as unknown as Stripe.Event;
+  assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(paidEvent, environment), true);
+  assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(paidEvent, environment), true);
+  const paidInvoiceId = (paidEvent.data.object as Stripe.Invoice).id;
+  assert.equal(await prisma.billingInvoice.count({ where: { externalInvoiceId: paidInvoiceId } }), 1);
+  assert.equal(await prisma.payment.count({ where: { stripePaymentIntentId: (paidEvent.data.object as Stripe.Invoice).payment_intent as string } }), 1);
+
+  const failedEvent = structuredClone(paidEvent) as Stripe.Event;
+  failedEvent.id = `evt_canary_failed_${randomUUID()}`;
+  failedEvent.type = "invoice.payment_failed";
+  const failedInvoice = failedEvent.data.object as Stripe.Invoice;
+  failedInvoice.id = `in_canary_failed_${randomUUID()}`;
+  failedInvoice.status = "open";
+  failedInvoice.amount_paid = 0;
+  failedInvoice.payment_intent = null;
+  failedEvent.created += 60;
+  assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(failedEvent, environment), true);
+  const afterFailure = await prisma.customerSubscription.findUniqueOrThrow({
+    where: { id: fixture.subscription.id },
+    include: { items: true },
+  });
+  assert.equal(afterFailure.collectionHealth, "past_due");
+  assert.equal(afterFailure.lifecycleStatus, "active");
+  assert.ok(afterFailure.items.every((item) => item.status === "active"));
+
+  const strippedCanaryEvent = {
+    ...checkoutEvent,
+    id: `evt_canary_stripped_${randomUUID()}`,
+    data: { object: { ...(checkoutEvent.data.object as object), metadata: { tl_customer_id: fixture.customer.id } } },
+  } as unknown as Stripe.Event;
+  await assert.rejects(
+    tryHandleCanonicalStripeLiveCanaryWebhookEvent(strippedCanaryEvent, environment),
+    /lacks required period or item evidence/,
+  );
+
+  const legacyEvent = structuredClone(strippedCanaryEvent) as Stripe.Event;
+  legacyEvent.id = `evt_legacy_${randomUUID()}`;
+  (legacyEvent.data.object as Stripe.Checkout.Session).subscription = `sub_legacy_${randomUUID()}`;
+  assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(legacyEvent, environment), false);
 });

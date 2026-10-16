@@ -15,9 +15,11 @@ import {
 } from "@/lib/domain/canonical-stripe-shadow";
 
 export const CANONICAL_STRIPE_EXECUTION_FLAG = "CANONICAL_STRIPE_EXECUTION_ENABLED";
+export const CANONICAL_STRIPE_TEST_PROVIDER_FLAG = "CANONICAL_STRIPE_TEST_PROVIDER_ENABLED";
 
 export type CanonicalStripeExecutionEnvironment = {
   CANONICAL_STRIPE_EXECUTION_ENABLED?: string;
+  CANONICAL_STRIPE_TEST_PROVIDER_ENABLED?: string;
   NODE_ENV?: string;
   VERCEL_ENV?: string;
 };
@@ -57,6 +59,25 @@ export function assertCanonicalStripeExecutionEnabled(
     executionError(
       "EXECUTION_FEATURE_DISABLED",
       `${CANONICAL_STRIPE_EXECUTION_FLAG}=true is required for local canonical Stripe execution.`,
+    );
+  }
+}
+
+export function canonicalStripeTestProviderEnabled(
+  environment: CanonicalStripeExecutionEnvironment = process.env,
+): boolean {
+  return canonicalStripeExecutionEnabled(environment)
+    && environment.CANONICAL_STRIPE_TEST_PROVIDER_ENABLED === "true";
+}
+
+export function assertCanonicalStripeTestProviderEnabled(
+  environment: CanonicalStripeExecutionEnvironment = process.env,
+): void {
+  assertCanonicalStripeExecutionEnabled(environment);
+  if (environment.CANONICAL_STRIPE_TEST_PROVIDER_ENABLED !== "true") {
+    executionError(
+      "TEST_PROVIDER_FEATURE_DISABLED",
+      `${CANONICAL_STRIPE_TEST_PROVIDER_FLAG}=true is required for isolated Stripe test-mode execution.`,
     );
   }
 }
@@ -325,11 +346,16 @@ export type CanonicalStripeCheckoutSession = {
   externalSubscriptionId: string | null;
 };
 
-/** Phase 3B2 intentionally ships no live implementation of this port. */
+/** Provider mutations remain behind the canonical execution and provider-mode guards. */
 export interface CanonicalStripeProviderAdapter {
-  readonly kind: "mock";
+  readonly kind: "mock" | "stripe_test" | "stripe_live_canary";
+  readonly liveCanaryAuthorizationId?: string;
   retrieveSubscription(externalSubscriptionId: string): Promise<ObservedStripeSubscription | null>;
-  retrieveCheckoutSession(sessionId: string): Promise<CanonicalStripeCheckoutSession>;
+  retrieveCheckoutSession(
+    sessionId: string,
+    operationKey: string,
+    subscriptionId: string,
+  ): Promise<CanonicalStripeCheckoutSession>;
   recoverActivation(operationKey: string, subscriptionId: string): Promise<CanonicalStripeCheckoutSession | null>;
   createActivationCheckout(
     proposal: CanonicalStripeOperationProposal,
