@@ -255,7 +255,7 @@ async function claimOperation(
   operationId: string,
   expectedKind: CanonicalStripeOperationKind,
 ): Promise<ClaimedOperation> {
-  return runSerializable(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "BillingOperation" WHERE "id" = ${operationId} FOR UPDATE`;
     const operation = await tx.billingOperation.findUnique({ where: { id: operationId } });
     if (!operation) executionError("OPERATION_NOT_FOUND", "Canonical Stripe operation not found.");
@@ -368,6 +368,8 @@ async function claimOperation(
       priorLastAttemptAt: operation.lastAttemptAt,
       completed: false,
     };
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
   });
 }
 
