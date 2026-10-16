@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { formatExpenseAmount } from "@/lib/domain/expenses";
 import {
@@ -7,10 +7,12 @@ import {
   canonicalIntervalLabel,
   canonicalProviderStatusLabel,
   canonicalSubscriptionUiEnabled,
+  canonicalSubscriptionUiVisible,
   filterCanonicalSubscriptionAdminRows,
 } from "@/lib/domain/canonical-subscription-admin";
 import {
   listCanonicalSubscriptionAdminRows,
+  canonicalSubscriptionUiStaffViewer,
   type CanonicalSubscriptionAdminRow,
 } from "@/lib/services/canonical-subscription-admin-service";
 
@@ -55,7 +57,8 @@ function destination(row: CanonicalSubscriptionAdminRow) {
 }
 
 export default async function CanonicalSubscriptionsPage({ searchParams }: Props) {
-  if (!canonicalSubscriptionUiEnabled()) notFound();
+  if (!canonicalSubscriptionUiVisible()) notFound();
+  if (!await canonicalSubscriptionUiStaffViewer()) redirect("/login");
   const {
     q = "",
     view = "all",
@@ -91,7 +94,8 @@ export default async function CanonicalSubscriptionsPage({ searchParams }: Props
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/subscriptions" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold dark:border-zinc-700">Legacy operations</Link>
-          <Link href="/admin/subscriptions/canonical/new" className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Create shadow draft</Link>
+          <Link href="/admin/subscriptions/canonical/demo" className="rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-semibold text-blue-800 dark:border-blue-800 dark:text-blue-300">View synthetic demo</Link>
+          {canonicalSubscriptionUiEnabled() ? <Link href="/admin/subscriptions/canonical/new" className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Create shadow draft</Link> : null}
         </div>
       </div>
 

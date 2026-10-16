@@ -3,10 +3,13 @@ import { Prisma } from "@prisma/client";
 import { normalizedMonthlyRecurringRevenue } from "./canonical-subscription-application";
 
 export const CANONICAL_SUBSCRIPTION_UI_FLAG = "CANONICAL_SUBSCRIPTION_UI_ENABLED";
+export const CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBILITY_FLAG = "CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE";
 
 export type CanonicalSubscriptionUiEnvironment = {
   CANONICAL_SUBSCRIPTION_UI_ENABLED?: string;
+  CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE?: string;
   NODE_ENV?: string;
+  VERCEL_ENV?: string;
 };
 
 export type CanonicalSubscriptionUiAccess =
@@ -77,6 +80,20 @@ export function canonicalSubscriptionUiEnabled(
 ): boolean {
   return environment.NODE_ENV !== "production"
     && environment.CANONICAL_SUBSCRIPTION_UI_ENABLED === "true";
+}
+
+/**
+ * Read-only route visibility is deliberately separate from the local draft
+ * editing flag. Production can expose the review screens only when the owner
+ * explicitly opts in; this function never enables billing or write actions.
+ */
+export function canonicalSubscriptionUiVisible(
+  environment: CanonicalSubscriptionUiEnvironment = process.env,
+): boolean {
+  if (canonicalSubscriptionUiEnabled(environment)) return true;
+  return environment.NODE_ENV === "production"
+    && (environment.VERCEL_ENV == null || environment.VERCEL_ENV === "production")
+    && environment.CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE === "true";
 }
 
 export function assertCanonicalSubscriptionUiEnabled(

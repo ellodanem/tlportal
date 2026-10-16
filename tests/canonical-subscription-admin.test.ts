@@ -8,6 +8,7 @@ import {
   canonicalProviderStatusLabel,
   canonicalSubscriptionUiAccess,
   canonicalSubscriptionUiEnabled,
+  canonicalSubscriptionUiVisible,
   CanonicalSubscriptionUiError,
   deriveCanonicalProviderStatus,
   filterCanonicalSubscriptionAdminRows,
@@ -98,6 +99,13 @@ test("production remains disabled even when the UI flag is set", () => {
   assert.equal(canonicalSubscriptionUiEnabled({ NODE_ENV: "test" }), false);
 });
 
+test("production read-only visibility requires its separate explicit flag", () => {
+  assert.equal(canonicalSubscriptionUiVisible({ NODE_ENV: "production" }), false);
+  assert.equal(canonicalSubscriptionUiVisible({ NODE_ENV: "production", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true", VERCEL_ENV: "production" }), true);
+  assert.equal(canonicalSubscriptionUiVisible({ NODE_ENV: "production", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true", VERCEL_ENV: "preview" }), false);
+  assert.equal(canonicalSubscriptionUiEnabled({ NODE_ENV: "production", CANONICAL_SUBSCRIPTION_UI_ENABLED: "true", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true" }), false);
+});
+
 test("legacy MRR can use stored monthly evidence without inventing a cycle total", () => {
   const legacy = row({
     controlMode: "legacy",
@@ -126,11 +134,13 @@ test("overview filters preserve one row per subscription and combine operational
 });
 
 test("UI routes include detail, empty, loading, error and price-history states", async () => {
-  const [overview, detail, loading, error] = await Promise.all([
+  const [overview, detail, demo, loading, error, preflight] = await Promise.all([
     readFile("app/admin/subscriptions/canonical/page.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/[subscriptionId]/page.tsx", "utf8"),
+    readFile("app/admin/subscriptions/canonical/demo/page.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/loading.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/error.tsx", "utf8"),
+    readFile("docs/production-preview-preflight.md", "utf8"),
   ]);
   assert.match(overview, /No subscriptions in this view/);
   assert.match(detail, /Billing summary/);
@@ -138,6 +148,13 @@ test("UI routes include detail, empty, loading, error and price-history states",
   assert.match(detail, /Hardware assignment history/);
   assert.match(loading, /aria-busy/);
   assert.match(error, /No billing action was performed/);
+  assert.match(overview, /View synthetic demo/);
+  assert.match(overview, /canonicalSubscriptionUiVisible/);
+  assert.match(detail, /canonicalSubscriptionUiEnabled/);
+  assert.match(demo, /Synthetic demonstration only/);
+  assert.match(demo, /No database writes/);
+  assert.match(preflight, /_prisma_migrations/);
+  assert.match(preflight, /btree_gist/);
 });
 
 test("draft actions delegate only to canonical draft services", async () => {
@@ -168,4 +185,11 @@ test("UI-2 draft workflow confirms commercial changes and never adds billing con
   assert.match(create, /Review before saving/);
   assert.match(create, /does not activate billing/);
   assert.doesNotMatch(create, /stripe\.subscriptions\.create|generateRecurringInvoice|createInvoice/);
+});
+
+test("production viewing mode cannot authorize canonical writes", async () => {
+  const actions = await readFile("app/admin/subscriptions/canonical/actions.ts", "utf8");
+  assert.match(actions, /assertCanonicalSubscriptionUiEnabled/);
+  assert.match(actions, /requireEditableDraft/);
+  assert.doesNotMatch(actions, /canonicalSubscriptionUiVisible/);
 });
