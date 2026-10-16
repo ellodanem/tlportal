@@ -120,7 +120,7 @@ The owner should confirm in Vercel, without sharing secrets:
 
 1. The target project and production branch are correct.
 2. `DIRECT_URL` and `DATABASE_URL` point to the intended production Neon database, with the direct URL used for migrations.
-3. `SKIP_PRISMA_MIGRATE_ON_BUILD` is not set unless the owner intentionally wants migrations deferred; the build wrapper runs `prisma migrate deploy` by default.
+3. `SKIP_PRISMA_MIGRATE_ON_BUILD` is not set unless the owner intentionally wants Production migrations deferred; the build wrapper runs `prisma migrate deploy` only for Vercel Production and skips it for Preview and Development environments.
 4. `CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE=true` is set only when the read-only preview is approved.
 5. `CANONICAL_SUBSCRIPTION_UI_ENABLED` is not used to authorize production writes; production server actions still reject it.
 6. Existing Stripe, cron, email, and payment environment variables are unchanged.

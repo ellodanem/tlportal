@@ -11,6 +11,8 @@ import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
 const env = { ...process.env };
+const isNonProductionVercelBuild =
+  env.VERCEL === "1" && env.VERCEL_ENV !== "production";
 
 if (!env.DIRECT_URL?.trim() && env.DATABASE_URL?.trim()) {
   env.DIRECT_URL = env.DATABASE_URL;
@@ -113,6 +115,11 @@ if (env.SKIP_PRISMA_MIGRATE_ON_BUILD === "1") {
   console.warn(
     "\n[tlportal build] SKIP_PRISMA_MIGRATE_ON_BUILD=1 — skipping prisma migrate deploy.",
     "Apply migrations manually (e.g. CI or `npx prisma migrate deploy` against DIRECT_URL) before relying on new schema.\n",
+  );
+} else if (isNonProductionVercelBuild) {
+  console.warn(
+    `\n[tlportal build] VERCEL_ENV=${env.VERCEL_ENV ?? "unset"} — skipping prisma migrate deploy.`,
+    "Only the Vercel Production environment may apply migrations during a build.\n",
   );
 } else {
   await runMigrateWithRetries();
