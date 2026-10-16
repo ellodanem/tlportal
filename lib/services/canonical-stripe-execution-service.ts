@@ -66,8 +66,10 @@ const CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
 const PROVIDER_IDEMPOTENCY_WINDOW_MS = 23 * 60 * 60 * 1000;
 
 function retryableSerializableError(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-  return error.code === "P2034" || error.code === "P2010" && error.meta?.code === "40001";
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; meta?: { code?: unknown } };
+  return candidate.code === "P2034"
+    || candidate.code === "P2010" && candidate.meta?.code === "40001";
 }
 
 async function runSerializable<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {

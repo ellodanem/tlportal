@@ -356,7 +356,10 @@ test("Phase 3B2: provider changes after approval block mutation and require revi
   const fixture = await createFixture({ withProvider: true, observedQuantities: { "XCD:1:25.00": 1 } });
   const { operation } = await approve({ subscriptionId: fixture.subscription.id, kind: "synchronization", observed: fixture.observed });
   const adapter = new MockCanonicalStripeAdapter();
-  const changed = structuredClone(fixture.observed!);
+  const changed = {
+    ...fixture.observed!,
+    items: fixture.observed!.items.map((item) => ({ ...item })),
+  };
   changed.items[0].unitAmount = "21.00";
   adapter.subscriptions.set(changed.externalSubscriptionId, changed);
   const result = await executeCanonicalStripeSynchronization({ operationId: operation.operationId, adapter });
