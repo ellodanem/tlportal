@@ -4,9 +4,12 @@ import { prisma } from "@/lib/db";
 import {
   buildCanonicalSubscriptionAdminRow,
   canonicalSubscriptionUiAccess,
+  deriveCanonicalProviderStatus,
   normalizedMonthlyAmount,
   type CanonicalSubscriptionAdminRow,
 } from "@/lib/domain/canonical-subscription-admin";
+import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
+import { getAnnualServiceAdjustmentProposal } from "@/lib/services/canonical-annual-adjustment-service";
 import { getCanonicalSubscriptionBillingSummary } from "@/lib/services/canonical-native-billing-service";
 
 function customerLabel(customer: {
@@ -27,6 +30,8 @@ export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSub
     include: {
       customer: { select: { company: true, firstName: true, lastName: true } },
       canonicalMigrationLedger: { select: { id: true } },
+      providerLinks: { select: { provider: true, endedAt: true, lastError: true } },
+      billingOperations: { select: { status: true, failureMessage: true } },
       _count: { select: { items: true } },
     },
   });
@@ -52,10 +57,17 @@ export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSub
         nextBillingDate: subscription.currentPeriodEnd,
         collectionHealth: null,
         attentionRequired: ["past_due", "unpaid", "pending_payment"].includes(subscription.status),
+        providerStatus: "not_applicable",
       });
     }
 
     const summary = await getCanonicalSubscriptionBillingSummary(subscription.id);
+    const providerStatus = deriveCanonicalProviderStatus({
+      controlMode: subscription.controlMode,
+      collectionMethod: subscription.collectionMethod,
+      providerLinks: subscription.providerLinks,
+      operationStatuses: subscription.billingOperations,
+    });
     return buildCanonicalSubscriptionAdminRow({
       id: subscription.id,
       customerId: subscription.customerId,
@@ -72,7 +84,8 @@ export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSub
       recurringCycleTotal: summary.recurringCycleTotal,
       nextBillingDate: subscription.nextBillingDate,
       collectionHealth: summary.collectionHealth,
-      attentionRequired: summary.attentionRequired,
+      attentionRequired: summary.attentionRequired || providerStatus === "attention",
+      providerStatus,
     });
   }));
 }
@@ -99,12 +112,68 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
       },
       providerLinks: {
         orderBy: [{ activatedAt: "desc" }, { id: "asc" }],
-        select: { id: true, provider: true, providerStatus: true, activatedAt: true, endedAt: true },
+        select: {
+          id: true,
+          provider: true,
+          externalSubscriptionId: true,
+          providerStatus: true,
+          activatedAt: true,
+          endedAt: true,
+          lastSyncedAt: true,
+          lastError: true,
+          providerItems: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              externalSubscriptionItemId: true,
+              externalPriceId: true,
+              currency: true,
+              billingIntervalMonths: true,
+              agreedAmountPerCycle: true,
+              quantity: true,
+              rateGroupFingerprint: true,
+              lastSyncedAt: true,
+            },
+          },
+        },
+      },
+      billingOperations: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 10,
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          providerReference: true,
+          providerSubscriptionReference: true,
+          attemptCount: true,
+          lastAttemptAt: true,
+          completedAt: true,
+          failureCode: true,
+          failureMessage: true,
+          createdAt: true,
+        },
       },
       invoices: {
         orderBy: [{ issueDate: "desc" }, { id: "desc" }],
         take: 10,
-        select: { id: true, number: true, status: true, total: true, amountDue: true, issueDate: true },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          kind: true,
+          total: true,
+          amountPaid: true,
+          amountDue: true,
+          issueDate: true,
+          dueDate: true,
+          paidAt: true,
+          payments: {
+            orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
+            take: 5,
+            select: { id: true, amount: true, method: true, receivedAt: true, voidedAt: true },
+          },
+        },
       },
       billingInvoices: {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -117,6 +186,10 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
           status: true,
           amountXcd: true,
           createdAt: true,
+          periodStart: true,
+          periodEnd: true,
+          paidAt: true,
+          stripeSubscriptionId: true,
         },
       },
     },
@@ -132,6 +205,33 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
     ? null
     : await getCanonicalSubscriptionBillingSummary(subscription.id);
 
+  const providerStatus = deriveCanonicalProviderStatus({
+    controlMode: subscription.controlMode,
+    collectionMethod: subscription.collectionMethod,
+    providerLinks: subscription.providerLinks,
+    operationStatuses: subscription.billingOperations,
+  });
+  const adjustmentStatuses = subscription.controlMode === "legacy" || subscription.billingIntervalMonths !== 12
+    ? subscription.items.map((item) => ({ itemId: item.id, status: "not_applicable" as const, message: "Annual adjustment status applies only to annual canonical arrangements.", proposal: null }))
+    : await Promise.all(subscription.items.map(async (item) => {
+      try {
+        const proposal = await getAnnualServiceAdjustmentProposal(item.id);
+        return {
+          itemId: item.id,
+          status: proposal.existingInvoice ? "issued" as const : proposal.invoiceRequired ? "preview_available" as const : "not_required" as const,
+          message: proposal.existingInvoice ? "An adjustment invoice already exists for this annual period." : "A reviewed preview is available; explicit authorization is still required.",
+          proposal,
+        };
+      } catch (error) {
+        return {
+          itemId: item.id,
+          status: "blocked" as const,
+          message: error instanceof CanonicalAnnualAdjustmentError ? error.message : "Adjustment status is unavailable.",
+          proposal: null,
+        };
+      }
+    }));
+
   return {
     ...subscription,
     customerLabel: customerLabel(subscription.customer),
@@ -141,5 +241,7 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
       summary?.recurringCycleTotal ?? null,
       subscription.billingIntervalMonths,
     ),
+    providerStatus,
+    adjustmentStatuses,
   };
 }

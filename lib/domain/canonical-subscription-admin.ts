@@ -16,6 +16,12 @@ export type CanonicalSubscriptionUiAccess =
   | "shadow_read_only"
   | "canonical_read_only";
 
+export type CanonicalSubscriptionProviderStatus =
+  | "not_applicable"
+  | "not_connected"
+  | "linked_observation_unavailable"
+  | "attention";
+
 export type CanonicalSubscriptionAdminRow = {
   id: string;
   customerId: string;
@@ -34,15 +40,26 @@ export type CanonicalSubscriptionAdminRow = {
   nextBillingDate: Date | null;
   collectionHealth: string | null;
   attentionRequired: boolean;
+  providerStatus: CanonicalSubscriptionProviderStatus;
 };
 
 export type CanonicalSubscriptionAdminRowInput = Omit<
   CanonicalSubscriptionAdminRow,
-  "access" | "normalizedMrr"
+  "access" | "normalizedMrr" | "providerStatus"
 > & {
   hasMigrationLedger: boolean;
   legacyMonthlyRate?: string | null;
   legacyQuantity?: number | null;
+  providerStatus?: CanonicalSubscriptionProviderStatus;
+};
+
+export type CanonicalSubscriptionAdminFilters = {
+  query?: string;
+  view?: string;
+  collectionMethod?: string;
+  lifecycleStatus?: string;
+  controlMode?: string;
+  providerStatus?: string;
 };
 
 export class CanonicalSubscriptionUiError extends Error {
@@ -146,7 +163,55 @@ export function buildCanonicalSubscriptionAdminRow(
     nextBillingDate: input.nextBillingDate,
     collectionHealth: input.collectionHealth,
     attentionRequired: input.attentionRequired,
+    providerStatus: input.providerStatus ?? "not_applicable",
   };
+}
+
+export function deriveCanonicalProviderStatus(input: {
+  controlMode: "legacy" | "shadow" | "canonical";
+  collectionMethod: string | null;
+  providerLinks: { provider: string; endedAt: Date | null; lastError?: string | null }[];
+  operationStatuses?: { status: string; failureMessage?: string | null }[];
+}): CanonicalSubscriptionProviderStatus {
+  if (input.controlMode === "legacy" || input.collectionMethod !== "stripe_autocharge") {
+    return "not_applicable";
+  }
+  const hasAttention = input.providerLinks.some((link) => Boolean(link.lastError))
+    || input.operationStatuses?.some((operation) => ["failed", "retry_required"].includes(operation.status))
+    || false;
+  if (hasAttention) return "attention";
+  const hasOpenStripeLink = input.providerLinks.some(
+    (link) => link.provider === "stripe" && link.endedAt == null,
+  );
+  return hasOpenStripeLink ? "linked_observation_unavailable" : "not_connected";
+}
+
+export function canonicalProviderStatusLabel(status: CanonicalSubscriptionProviderStatus): string {
+  switch (status) {
+    case "not_applicable": return "Not applicable";
+    case "not_connected": return "Not connected";
+    case "linked_observation_unavailable": return "Linked · observation unavailable";
+    case "attention": return "Needs provider review";
+  }
+}
+
+export function filterCanonicalSubscriptionAdminRows(
+  rows: CanonicalSubscriptionAdminRow[],
+  filters: CanonicalSubscriptionAdminFilters,
+): CanonicalSubscriptionAdminRow[] {
+  const query = filters.query?.trim().toLowerCase() ?? "";
+  return rows.filter((row) => {
+    if (query && !`${row.customer} ${row.name} ${row.reference ?? ""}`.toLowerCase().includes(query)) return false;
+    if (filters.view === "drafts" && row.access !== "editable_draft") return false;
+    if (filters.view === "migrated" && row.access !== "migrated_shadow_read_only") return false;
+    if (filters.view === "canonical" && row.controlMode !== "canonical") return false;
+    if (filters.view === "legacy" && row.controlMode !== "legacy") return false;
+    if (filters.collectionMethod && row.collectionMethod !== filters.collectionMethod) return false;
+    if (filters.lifecycleStatus && row.lifecycleStatus !== filters.lifecycleStatus) return false;
+    if (filters.controlMode && row.controlMode !== filters.controlMode) return false;
+    if (filters.providerStatus && row.providerStatus !== filters.providerStatus) return false;
+    return true;
+  });
 }
 
 export function canonicalIntervalLabel(months: number | null): string {

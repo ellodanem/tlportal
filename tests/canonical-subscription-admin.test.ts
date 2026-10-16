@@ -5,9 +5,12 @@ import test from "node:test";
 import {
   assertCanonicalSubscriptionUiActionAllowed,
   buildCanonicalSubscriptionAdminRow,
+  canonicalProviderStatusLabel,
   canonicalSubscriptionUiAccess,
   canonicalSubscriptionUiEnabled,
   CanonicalSubscriptionUiError,
+  deriveCanonicalProviderStatus,
+  filterCanonicalSubscriptionAdminRows,
   normalizedMonthlyAmount,
   type CanonicalSubscriptionAdminRowInput,
 } from "../lib/domain/canonical-subscription-admin";
@@ -107,6 +110,21 @@ test("legacy MRR can use stored monthly evidence without inventing a cycle total
   assert.equal(legacy.normalizedMrr, "75.00");
 });
 
+test("provider status distinguishes local links from unavailable live observations", () => {
+  assert.equal(deriveCanonicalProviderStatus({ controlMode: "canonical", collectionMethod: "manual_invoice", providerLinks: [] }), "not_applicable");
+  assert.equal(deriveCanonicalProviderStatus({ controlMode: "canonical", collectionMethod: "stripe_autocharge", providerLinks: [] }), "not_connected");
+  assert.equal(deriveCanonicalProviderStatus({ controlMode: "canonical", collectionMethod: "stripe_autocharge", providerLinks: [{ provider: "stripe", endedAt: null }] }), "linked_observation_unavailable");
+  assert.equal(deriveCanonicalProviderStatus({ controlMode: "canonical", collectionMethod: "stripe_autocharge", providerLinks: [{ provider: "stripe", endedAt: null, lastError: "sync failed" }] }), "attention");
+  assert.equal(canonicalProviderStatusLabel("linked_observation_unavailable"), "Linked · observation unavailable");
+});
+
+test("overview filters preserve one row per subscription and combine operational filters", () => {
+  const monthly = row({ id: "sub-monthly", collectionMethod: "manual_invoice", lifecycleStatus: "active", controlMode: "canonical", providerStatus: "not_applicable" });
+  const stripe = row({ id: "sub-stripe", collectionMethod: "stripe_autocharge", lifecycleStatus: "paused", controlMode: "shadow", providerStatus: "attention" });
+  assert.deepEqual(filterCanonicalSubscriptionAdminRows([monthly, stripe], { collectionMethod: "stripe_autocharge", providerStatus: "attention" }).map((entry) => entry.id), ["sub-stripe"]);
+  assert.deepEqual(filterCanonicalSubscriptionAdminRows([monthly, stripe], { query: "Fleet A", controlMode: "canonical" }).map((entry) => entry.id), ["sub-monthly"]);
+});
+
 test("UI routes include detail, empty, loading, error and price-history states", async () => {
   const [overview, detail, loading, error] = await Promise.all([
     readFile("app/admin/subscriptions/canonical/page.tsx", "utf8"),
@@ -135,4 +153,19 @@ test("detail presents negotiated classifications and server-backed annual previe
   assert.match(detail, /latestRate\.classification/);
   assert.match(detail, /previewAnnualSubscriptionAddition/);
   assert.match(detail, /not an adjustment invoice or payment obligation/);
+  assert.match(detail, /Annual adjustment status/);
+  assert.match(detail, /Provider relationship and reconciliation/);
+  assert.match(detail, /Live provider observation is unavailable/);
+});
+
+test("UI-2 draft workflow confirms commercial changes and never adds billing controls", async () => {
+  const [forms, create] = await Promise.all([
+    readFile("components/admin/canonical-subscription-draft-forms.tsx", "utf8"),
+    readFile("components/admin/canonical-subscription-create-form.tsx", "utf8"),
+  ]);
+  assert.match(forms, /confirmCommercialChange/);
+  assert.match(forms, /historical records remain unchanged/);
+  assert.match(create, /Review before saving/);
+  assert.match(create, /does not activate billing/);
+  assert.doesNotMatch(create, /stripe\.subscriptions\.create|generateRecurringInvoice|createInvoice/);
 });
