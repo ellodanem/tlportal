@@ -178,6 +178,7 @@ enum InvoiceStatus {
 enum InvoiceKind {
   one_off
   recurring
+  annual_adjustment
   subscription_mirror
   /// Historical row imported from Invoiless at cutover (Phase 7).
   invoiless_import
@@ -1468,6 +1469,8 @@ model Invoice {
   recurringDeliveryAttempts  Int                             @default(0)
   recurringDeliveryClaimedAt DateTime?
   recurringDeliveryError     String?                         @db.Text
+  /// Stable idempotency key for a one-time canonical annual service-addition adjustment.
+  adjustmentGenerationKey    String?                         @unique
   /// Stripe `BillingInvoice` mirror row (when kind = subscription_mirror).
   billingInvoiceId String?        @unique
   billingInvoice   BillingInvoice? @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)

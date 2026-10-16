@@ -12,7 +12,17 @@ import { getStripeClient } from "@/lib/stripe/config";
  * Record a native invoice payment from a completed Stripe Checkout (mode: payment).
  * Idempotent on PaymentIntent id.
  */
-export async function recordNativeInvoiceStripeCheckout(session: Stripe.Checkout.Session): Promise<void> {
+export type NativeInvoiceStripePaymentDependencies = {
+  retrievePaymentIntent?: (paymentIntentId: string) => Promise<Pick<
+    Stripe.PaymentIntent,
+    "status" | "amount_received" | "amount"
+  >>;
+};
+
+export async function recordNativeInvoiceStripeCheckout(
+  session: Stripe.Checkout.Session,
+  dependencies: NativeInvoiceStripePaymentDependencies = {},
+): Promise<void> {
   if (session.mode !== "payment") return;
   if (session.metadata?.tl_checkout_kind !== "native_invoice") return;
 
@@ -29,8 +39,11 @@ export async function recordNativeInvoiceStripeCheckout(session: Stripe.Checkout
   });
   if (existing) return;
 
-  const stripe = getStripeClient();
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  const retrievePaymentIntent = dependencies.retrievePaymentIntent ?? (async (id: string) => {
+    const stripe = getStripeClient();
+    return stripe.paymentIntents.retrieve(id);
+  });
+  const paymentIntent = await retrievePaymentIntent(paymentIntentId);
   if (paymentIntent.status !== "succeeded") return;
 
   const amount = (paymentIntent.amount_received ?? paymentIntent.amount ?? 0) / 100;

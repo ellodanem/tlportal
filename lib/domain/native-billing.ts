@@ -109,6 +109,7 @@ export function invoiceStatusBadgeClass(status: InvoiceStatus): string {
 export const INVOICE_KIND_LABELS: Record<InvoiceKind, string> = {
   one_off: "One-off",
   recurring: "Recurring",
+  annual_adjustment: "Annual adjustment",
   subscription_mirror: "Subscription",
   invoiless_import: "Invoiless (imported)",
 };

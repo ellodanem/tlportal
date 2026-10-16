@@ -36,6 +36,7 @@ jobs:
       NODE_ENV: test
       ALLOW_CANONICAL_MIGRATION_EXECUTION: "true"
       CANONICAL_NATIVE_BILLING_ENABLED: "true"
+      CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED: "true"
 
     steps:
       - name: Check out repository
