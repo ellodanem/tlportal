@@ -141,6 +141,8 @@ enum BillingInvoiceKind {
 
 enum BillingOperationType {
   stripe_checkout_activation
+  canonical_stripe_activation
+  canonical_stripe_synchronization
 }
 
 enum BillingOperationStatus {
@@ -898,6 +900,8 @@ model BillingInvoice {
   invoicePdfUrl            String?
   stripeSubscriptionId     String?
   paidAt                   DateTime?
+  /// Stripe event creation time used to reject stale, out-of-order canonical updates.
+  providerEventCreatedAt   DateTime?
   /// Invoiless invoice id created when mirroring Stripe `invoice.paid` (accounting copy).
   invoilessMirrorInvoiceId String?
   /// Vercel Blob path prefix `private:` + url, or public blob url for TL paid PDF.
@@ -916,6 +920,7 @@ model BillingInvoice {
   @@index([customerSubscriptionId])
   @@index([subscriptionProviderLinkId])
   @@index([status])
+  @@index([providerEventCreatedAt])
 }
 
 /// Sent billing WhatsApp reminders (Twilio Content); one row per customer × kind × due date.

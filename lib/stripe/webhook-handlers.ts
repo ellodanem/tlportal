@@ -16,6 +16,7 @@ import {
   recordStripeCheckoutCompletion,
   recordStripeCheckoutExpired,
 } from "@/lib/services/stripe-checkout-operation-service";
+import { tryHandleCanonicalStripeWebhookEvent } from "@/lib/services/canonical-stripe-webhook-service";
 
 import { getStripeClient } from "./config";
 import { handleCheckoutSessionExpired } from "./checkout-recovery";
@@ -141,6 +142,10 @@ async function processPaidStripeInvoice(invoice: Stripe.Invoice): Promise<void> 
 }
 
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
+  // Phase 3B2 canonical events are accepted only through exact operation/provider
+  // ownership and the non-production execution guard. All other events retain
+  // the established legacy fulfillment path below.
+  if (await tryHandleCanonicalStripeWebhookEvent(event)) return;
   switch (event.type) {
     case "checkout.session.expired": {
       const session = event.data.object as Stripe.Checkout.Session;

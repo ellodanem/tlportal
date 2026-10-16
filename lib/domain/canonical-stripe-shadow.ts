@@ -779,7 +779,6 @@ export function planCanonicalStripeOperations(input: {
     "provider_link_missing",
     "provider_state_missing",
     "missing_price_reference",
-    "missing_provider_mapping",
     "provider_mapping_mismatch",
   ].includes(entry.code));
   return {

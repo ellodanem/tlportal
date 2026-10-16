@@ -38,6 +38,7 @@ jobs:
       CANONICAL_NATIVE_BILLING_ENABLED: "true"
       CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED: "true"
       CANONICAL_STRIPE_SHADOW_ENABLED: "true"
+      CANONICAL_STRIPE_EXECUTION_ENABLED: "true"
 
     steps:
       - name: Check out repository
