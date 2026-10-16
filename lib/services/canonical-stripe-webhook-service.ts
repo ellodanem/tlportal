@@ -12,6 +12,12 @@ import {
   type CanonicalStripeProviderMutationResult,
 } from "@/lib/domain/canonical-stripe-execution";
 import {
+  assertCanonicalStripeLiveCanaryAuthorization,
+  CanonicalStripeLiveCanaryError,
+  type CanonicalStripeLiveCanaryAuthorization,
+  type CanonicalStripeLiveCanaryEnvironment,
+} from "@/lib/domain/canonical-stripe-live-canary";
+import {
   buildCanonicalStripeRateGroups,
   planCanonicalStripeInvoiceAttribution,
   reconcileCanonicalStripeSubscription,
@@ -611,16 +617,162 @@ async function handleInvoiceWebhook(event: CanonicalStripeInvoiceWebhook): Promi
   return { handled: true, stale: false, reconciliation };
 }
 
-export async function handleCanonicalStripeNormalizedWebhook(
+async function handleCanonicalStripeNormalizedWebhookCore(
   event: CanonicalStripeNormalizedWebhook,
-  environment: CanonicalStripeExecutionEnvironment = process.env,
 ): Promise<CanonicalStripeWebhookResult> {
-  assertCanonicalStripeExecutionEnabled(environment);
   if (event.kind === "checkout_completed" || event.kind === "checkout_expired") {
     return recordCheckoutWebhook(event);
   }
   if (event.kind === "subscription_state") return handleSubscriptionWebhook(event);
   return handleInvoiceWebhook(event as CanonicalStripeInvoiceWebhook);
+}
+
+export async function handleCanonicalStripeNormalizedWebhook(
+  event: CanonicalStripeNormalizedWebhook,
+  environment: CanonicalStripeExecutionEnvironment = process.env,
+): Promise<CanonicalStripeWebhookResult> {
+  assertCanonicalStripeExecutionEnabled(environment);
+  return handleCanonicalStripeNormalizedWebhookCore(event);
+}
+
+type LiveCanaryOperationMetadata = {
+  phase?: string;
+  proposal?: Omit<import("@/lib/domain/canonical-stripe-execution").CanonicalStripeOperationProposal, "billingAnchorDate" | "nextBillingDate"> & {
+    billingAnchorDate: string;
+    nextBillingDate: string;
+  };
+  liveCanaryAuthorization?: CanonicalStripeLiveCanaryAuthorization;
+};
+
+function canaryEvidence(stripeEvent: Stripe.Event): {
+  operationKey: string | null;
+  externalSubscriptionId: string | null;
+  authorizationId: string | null;
+  providerMode: string | null;
+} {
+  if (stripeEvent.type.startsWith("checkout.session.")) {
+    const session = stripeEvent.data.object as Stripe.Checkout.Session;
+    return {
+      operationKey: session.metadata?.tl_canonical_operation_key?.trim() || null,
+      externalSubscriptionId: typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null,
+      authorizationId: session.metadata?.tl_canary_authorization_id?.trim() || null,
+      providerMode: session.metadata?.tl_provider_mode?.trim() || null,
+    };
+  }
+  if (stripeEvent.type.startsWith("customer.subscription.")) {
+    const subscription = stripeEvent.data.object as Stripe.Subscription;
+    return {
+      operationKey: subscription.metadata?.tl_canonical_operation_key?.trim()
+        || subscription.metadata?.tl_canonical_last_operation_key?.trim()
+        || null,
+      externalSubscriptionId: subscription.id,
+      authorizationId: subscription.metadata?.tl_canary_authorization_id?.trim() || null,
+      providerMode: subscription.metadata?.tl_provider_mode?.trim() || null,
+    };
+  }
+  if (stripeEvent.type.startsWith("invoice.")) {
+    return {
+      operationKey: null,
+      externalSubscriptionId: stripeInvoiceSubscriptionId(stripeEvent.data.object as Stripe.Invoice),
+      authorizationId: null,
+      providerMode: null,
+    };
+  }
+  if (stripeEvent.type.startsWith("payment_intent.")) {
+    const payment = stripeEvent.data.object as Stripe.PaymentIntent;
+    return {
+      operationKey: payment.metadata?.tl_canonical_operation_key?.trim() || null,
+      externalSubscriptionId: null,
+      authorizationId: payment.metadata?.tl_canary_authorization_id?.trim() || null,
+      providerMode: payment.metadata?.tl_provider_mode?.trim() || null,
+    };
+  }
+  return { operationKey: null, externalSubscriptionId: null, authorizationId: null, providerMode: null };
+}
+
+/**
+ * Production live-canary events use the existing verified Stripe endpoint but
+ * never rely on the general canonical production switch. Exact durable owner
+ * authorization is required before canonical fulfillment can run.
+ */
+export async function tryHandleCanonicalStripeLiveCanaryWebhookEvent(
+  stripeEvent: Stripe.Event,
+  environment: CanonicalStripeLiveCanaryEnvironment = process.env,
+): Promise<boolean> {
+  const evidence = canaryEvidence(stripeEvent);
+  const operation = evidence.operationKey
+    ? await prisma.billingOperation.findUnique({
+        where: { operationKey: evidence.operationKey },
+        select: { id: true, operationKey: true, customerId: true, customerSubscriptionId: true, providerSubscriptionReference: true, metadata: true },
+      })
+    : evidence.externalSubscriptionId
+      ? await prisma.billingOperation.findFirst({
+          where: {
+            operationKey: { startsWith: "canonical-stripe-live-canary:" },
+            providerSubscriptionReference: evidence.externalSubscriptionId,
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, operationKey: true, customerId: true, customerSubscriptionId: true, providerSubscriptionReference: true, metadata: true },
+        })
+      : null;
+  const metadata = operation?.metadata && typeof operation.metadata === "object" && !Array.isArray(operation.metadata)
+    ? operation.metadata as LiveCanaryOperationMetadata
+    : null;
+  const hasCanaryEvidence = evidence.providerMode === "live_canary"
+    || Boolean(evidence.authorizationId)
+    || operation?.operationKey.startsWith("canonical-stripe-live-canary:") === true
+    || metadata?.phase === "3B3B";
+  if (!hasCanaryEvidence) return false;
+  if (stripeEvent.livemode !== true) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_LIVE_WEBHOOK_REQUIRED", "Live canary ownership was presented by a non-live Stripe event.");
+  }
+  if (!operation || !operation.customerSubscriptionId || !metadata?.proposal || !metadata.liveCanaryAuthorization) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_OWNERSHIP_INCOMPLETE", "Live canary webhook lacks an exact durable operation.");
+  }
+  if (evidence.authorizationId && evidence.authorizationId !== metadata.liveCanaryAuthorization.authorizationId) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_AUTHORIZATION_MISMATCH", "Webhook authorization identity differs from the durable canary approval.");
+  }
+  const proposal = {
+    ...metadata.proposal,
+    billingAnchorDate: new Date(metadata.proposal.billingAnchorDate),
+    nextBillingDate: new Date(metadata.proposal.nextBillingDate),
+  };
+  assertCanonicalStripeLiveCanaryAuthorization({
+    proposal,
+    authorization: metadata.liveCanaryAuthorization,
+    environment,
+    // Webhook fulfillment remains valid after the short execution window. The
+    // signature and all approved terms are still revalidated at issuedAt.
+    now: new Date(metadata.liveCanaryAuthorization.issuedAt),
+  });
+  if (proposal.customerId !== operation.customerId || proposal.subscriptionId !== operation.customerSubscriptionId) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_OPERATION_MISMATCH", "Webhook operation identity is inconsistent.");
+  }
+  if (
+    evidence.externalSubscriptionId
+    && operation.providerSubscriptionReference
+    && evidence.externalSubscriptionId !== operation.providerSubscriptionReference
+  ) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_SUBSCRIPTION_MISMATCH", "Webhook subscription differs from the durable provider reference.");
+  }
+  const competing = await prisma.billingOperation.findFirst({
+    where: { operationKey: { startsWith: "canonical-stripe-live-canary:" }, id: { not: operation.id } },
+    select: { id: true },
+  });
+  if (competing) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_MULTIPLE_OPERATIONS", "Multiple live canary operations exist; webhook fulfillment is blocked.");
+  }
+
+  // PaymentIntent events are secondary to invoice events for recurring
+  // subscriptions. Claiming them here prevents legacy fulfillment; the signed
+  // invoice event performs the durable financial reconciliation.
+  if (stripeEvent.type.startsWith("payment_intent.")) return true;
+  const normalized = normalizeCanonicalStripeWebhook(stripeEvent, { minorUnitExponent: 2 });
+  if (!normalized) {
+    throw new CanonicalStripeLiveCanaryError("CANARY_WEBHOOK_EVIDENCE_INCOMPLETE", "Canary webhook lacks required period or item evidence.");
+  }
+  await handleCanonicalStripeNormalizedWebhookCore(normalized);
+  return true;
 }
 
 /** Return false only when the event has no exact canonical operation or provider relationship. */

@@ -20,6 +20,13 @@ import {
   type CanonicalStripeProviderMutationResult,
 } from "@/lib/domain/canonical-stripe-execution";
 import {
+  asCanonicalStripeLiveCanaryProposal,
+  assertCanonicalStripeLiveCanaryAuthorization,
+  CanonicalStripeLiveCanaryError,
+  type CanonicalStripeLiveCanaryAuthorization,
+  type CanonicalStripeLiveCanaryEnvironment,
+} from "@/lib/domain/canonical-stripe-live-canary";
+import {
   buildCanonicalStripeRateGroups,
   reconcileCanonicalStripeSubscription,
   type LocalStripeProviderLink,
@@ -43,11 +50,12 @@ type SubscriptionConfiguration = Prisma.CustomerSubscriptionGetPayload<{
 }>;
 
 type OperationMetadata = {
-  phase: "3B2";
+  phase: "3B2" | "3B3B";
   approvedBy: string;
   approvalReason: string;
   approvedAt: string;
   proposal: SerializedProposal;
+  liveCanaryAuthorization?: CanonicalStripeLiveCanaryAuthorization;
   result?: {
     classification: string;
     reconciledAt: string;
@@ -121,7 +129,7 @@ function operationMetadata(value: Prisma.JsonValue | null): OperationMetadata {
     executionError("OPERATION_METADATA_INVALID", "Canonical Stripe operation approval metadata is missing.");
   }
   const metadata = value as unknown as Partial<OperationMetadata>;
-  if (metadata.phase !== "3B2" || !metadata.proposal || !metadata.approvedBy || !metadata.approvalReason) {
+  if (!metadata.phase || !["3B2", "3B3B"].includes(metadata.phase) || !metadata.proposal || !metadata.approvedBy || !metadata.approvalReason) {
     executionError("OPERATION_METADATA_INVALID", "Canonical Stripe operation approval metadata is incomplete.");
   }
   return metadata as OperationMetadata;
@@ -166,17 +174,26 @@ export async function getCanonicalStripeExecutionProposal(input: {
   subscriptionId: string;
   kind: CanonicalStripeOperationKind;
   observed: ObservedStripeSubscription | null;
-  environment?: CanonicalStripeExecutionEnvironment;
+  environment?: CanonicalStripeExecutionEnvironment & CanonicalStripeLiveCanaryEnvironment;
+  liveCanaryAuthorization?: CanonicalStripeLiveCanaryAuthorization;
 }): Promise<CanonicalStripeOperationProposal> {
-  assertCanonicalStripeExecutionEnabled(input.environment);
+  if (!input.liveCanaryAuthorization) assertCanonicalStripeExecutionEnabled(input.environment);
   const subscription = await loadConfiguration(prisma, input.subscriptionId);
-  return buildCanonicalStripeOperationProposal({
+  const baseProposal = buildCanonicalStripeOperationProposal({
     kind: input.kind,
     configuration: subscription,
     providerLink: oneOpenProviderLink(subscription),
     observed: input.observed,
     observedOwnerSubscriptionId: await observedOwnerSubscriptionId(input.observed),
   });
+  if (!input.liveCanaryAuthorization) return baseProposal;
+  const proposal = asCanonicalStripeLiveCanaryProposal(baseProposal);
+  assertCanonicalStripeLiveCanaryAuthorization({
+    proposal,
+    authorization: input.liveCanaryAuthorization,
+    environment: input.environment,
+  });
+  return proposal;
 }
 
 export async function approveCanonicalStripeOperation(input: {
@@ -187,7 +204,8 @@ export async function approveCanonicalStripeOperation(input: {
   confirmationToken: string;
   approvedBy: string;
   approvalReason: string;
-  environment?: CanonicalStripeExecutionEnvironment;
+  environment?: CanonicalStripeExecutionEnvironment & CanonicalStripeLiveCanaryEnvironment;
+  liveCanaryAuthorization?: CanonicalStripeLiveCanaryAuthorization;
 }): Promise<{ operationId: string; operationKey: string; reused: boolean }> {
   const proposal = await getCanonicalStripeExecutionProposal(input);
   assertCanonicalStripeOperationApproval({
@@ -211,6 +229,18 @@ export async function approveCanonicalStripeOperation(input: {
       }
       return { operationId: existing.id, operationKey: existing.operationKey, reused: true };
     }
+    if (input.liveCanaryAuthorization) {
+      const priorCanary = await tx.billingOperation.findFirst({
+        where: { operationKey: { startsWith: "canonical-stripe-live-canary:" } },
+        select: { id: true },
+      });
+      if (priorCanary) {
+        executionError(
+          "LIVE_CANARY_ALREADY_AUTHORIZED",
+          "The single-subscription live canary already has a different durable operation.",
+        );
+      }
+    }
     const competing = await tx.billingOperation.findUnique({ where: { activeKey } });
     if (competing) {
       executionError(
@@ -228,16 +258,82 @@ export async function approveCanonicalStripeOperation(input: {
         activeKey,
         requestFingerprint: proposal.requestFingerprint,
         metadata: jsonValue({
-          phase: "3B2",
+          phase: input.liveCanaryAuthorization ? "3B3B" : "3B2",
           approvedBy: input.approvedBy.trim(),
           approvalReason: input.approvalReason.trim(),
           approvedAt: new Date().toISOString(),
           proposal: serializeProposal(proposal),
+          ...(input.liveCanaryAuthorization
+            ? { liveCanaryAuthorization: input.liveCanaryAuthorization }
+            : {}),
         } satisfies OperationMetadata),
       },
     });
     return { operationId: created.id, operationKey: created.operationKey, reused: false };
   });
+}
+
+async function assertLiveCanaryOperationExecution(
+  operationId: string,
+  adapterAuthorizationId: string | undefined,
+  environment?: CanonicalStripeExecutionEnvironment & CanonicalStripeLiveCanaryEnvironment,
+): Promise<void> {
+  const operation = await prisma.billingOperation.findUnique({
+    where: { id: operationId },
+    select: {
+      id: true,
+      operationKey: true,
+      customerId: true,
+      customerSubscriptionId: true,
+      metadata: true,
+    },
+  });
+  if (!operation || !operation.customerSubscriptionId) {
+    executionError("OPERATION_NOT_FOUND", "Canonical Stripe live-canary operation not found.");
+  }
+  const metadata = operationMetadata(operation.metadata);
+  if (
+    metadata.phase !== "3B3B"
+    || !metadata.liveCanaryAuthorization
+    || !operation.operationKey.startsWith("canonical-stripe-live-canary:")
+  ) {
+    executionError("LIVE_CANARY_APPROVAL_REQUIRED", "A durable Phase 3B3B owner authorization is required.");
+  }
+  if (
+    !adapterAuthorizationId
+    || adapterAuthorizationId !== metadata.liveCanaryAuthorization.authorizationId
+  ) {
+    executionError("LIVE_CANARY_ADAPTER_AUTHORIZATION_MISMATCH", "The provider adapter does not carry the approved canary authorization.");
+  }
+  const proposal = deserializeProposal(metadata.proposal);
+  if (
+    proposal.customerId !== operation.customerId
+    || proposal.subscriptionId !== operation.customerSubscriptionId
+  ) {
+    executionError("LIVE_CANARY_OPERATION_MISMATCH", "The durable canary operation identity is inconsistent.");
+  }
+  try {
+    assertCanonicalStripeLiveCanaryAuthorization({
+      proposal,
+      authorization: metadata.liveCanaryAuthorization,
+      environment,
+    });
+  } catch (caught) {
+    if (caught instanceof CanonicalStripeLiveCanaryError) {
+      executionError(caught.code, caught.message);
+    }
+    throw caught;
+  }
+  const competing = await prisma.billingOperation.findFirst({
+    where: {
+      operationKey: { startsWith: "canonical-stripe-live-canary:" },
+      id: { not: operation.id },
+    },
+    select: { id: true },
+  });
+  if (competing) {
+    executionError("LIVE_CANARY_MULTIPLE_OPERATIONS", "More than one live-canary operation exists; execution is blocked.");
+  }
 }
 
 type ClaimedOperation = {
@@ -427,9 +523,17 @@ async function recordCheckoutSession(
 export async function executeCanonicalStripeActivation(input: {
   operationId: string;
   adapter: CanonicalStripeProviderAdapter;
-  environment?: CanonicalStripeExecutionEnvironment;
+  environment?: CanonicalStripeExecutionEnvironment & CanonicalStripeLiveCanaryEnvironment;
 }): Promise<CanonicalStripeExecutionResult> {
-  assertCanonicalStripeExecutionEnabled(input.environment);
+  if (input.adapter.kind === "stripe_live_canary") {
+    await assertLiveCanaryOperationExecution(
+      input.operationId,
+      input.adapter.liveCanaryAuthorizationId,
+      input.environment,
+    );
+  } else {
+    assertCanonicalStripeExecutionEnabled(input.environment);
+  }
   if (input.adapter.kind === "stripe_test") {
     assertCanonicalStripeTestProviderEnabled(input.environment);
   }
@@ -681,10 +785,18 @@ export async function persistCanonicalStripeProviderResult(input: {
 export async function executeCanonicalStripeSynchronization(input: {
   operationId: string;
   adapter: CanonicalStripeProviderAdapter;
-  environment?: CanonicalStripeExecutionEnvironment;
+  environment?: CanonicalStripeExecutionEnvironment & CanonicalStripeLiveCanaryEnvironment;
   beforePersist?: (result: CanonicalStripeProviderMutationResult) => Promise<void>;
 }): Promise<CanonicalStripeExecutionResult> {
-  assertCanonicalStripeExecutionEnabled(input.environment);
+  if (input.adapter.kind === "stripe_live_canary") {
+    await assertLiveCanaryOperationExecution(
+      input.operationId,
+      input.adapter.liveCanaryAuthorizationId,
+      input.environment,
+    );
+  } else {
+    assertCanonicalStripeExecutionEnabled(input.environment);
+  }
   if (input.adapter.kind === "stripe_test") {
     assertCanonicalStripeTestProviderEnabled(input.environment);
   }

@@ -348,7 +348,8 @@ export type CanonicalStripeCheckoutSession = {
 
 /** Provider mutations remain behind the canonical execution and provider-mode guards. */
 export interface CanonicalStripeProviderAdapter {
-  readonly kind: "mock" | "stripe_test";
+  readonly kind: "mock" | "stripe_test" | "stripe_live_canary";
+  readonly liveCanaryAuthorizationId?: string;
   retrieveSubscription(externalSubscriptionId: string): Promise<ObservedStripeSubscription | null>;
   retrieveCheckoutSession(
     sessionId: string,
