@@ -201,7 +201,7 @@ function providerResultFromProposal(
 }
 
 class MockCanonicalStripeAdapter implements CanonicalStripeProviderAdapter {
-  readonly kind = "mock" as const;
+  constructor(readonly kind: "mock" | "stripe_test" = "mock") {}
   sessions = new Map<string, CanonicalStripeCheckoutSession>();
   activationByOperation = new Map<string, string>();
   synchronizationByOperation = new Map<string, CanonicalStripeProviderMutationResult>();
@@ -326,6 +326,35 @@ test("Phase 3B2: concurrent multi-rate activation creates one reusable mock Chec
     where: { subscriptionProviderLink: { customerSubscriptionId: fixture.subscription.id } },
   }), 2);
   assert.equal((await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } })).lifecycleStatus, "active");
+});
+
+test("Phase 3B3A: stripe_test execution requires its separate opt-in before claiming provider work", async () => {
+  const fixture = await createFixture({ lifecycle: "pending_activation" });
+  const { operation } = await approve({ subscriptionId: fixture.subscription.id, kind: "activation", observed: null });
+  const adapter = new MockCanonicalStripeAdapter("stripe_test");
+  await assert.rejects(
+    executeCanonicalStripeActivation({
+      operationId: operation.operationId,
+      adapter,
+      environment: {
+        NODE_ENV: "test",
+        CANONICAL_STRIPE_EXECUTION_ENABLED: "true",
+      },
+    }),
+    /CANONICAL_STRIPE_TEST_PROVIDER_ENABLED=true/,
+  );
+  assert.equal(adapter.activationCreates, 0);
+  const result = await executeCanonicalStripeActivation({
+    operationId: operation.operationId,
+    adapter,
+    environment: {
+      NODE_ENV: "test",
+      CANONICAL_STRIPE_EXECUTION_ENABLED: "true",
+      CANONICAL_STRIPE_TEST_PROVIDER_ENABLED: "true",
+    },
+  });
+  assert.equal(result.status, "pending");
+  assert.equal(adapter.activationCreates, 1);
 });
 
 test("Phase 3B2: activation timeout after provider success recovers the same Checkout", async () => {
