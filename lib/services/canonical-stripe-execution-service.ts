@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import {
   assertCanonicalStripeExecutionEnabled,
   assertCanonicalStripeOperationApproval,
+  assertCanonicalStripeTestProviderEnabled,
   buildCanonicalStripeOperationProposal,
   canonicalStripeProviderStateFingerprint,
   canonicalStripeSourceFingerprint,
@@ -429,15 +430,19 @@ export async function executeCanonicalStripeActivation(input: {
   environment?: CanonicalStripeExecutionEnvironment;
 }): Promise<CanonicalStripeExecutionResult> {
   assertCanonicalStripeExecutionEnabled(input.environment);
-  if (input.adapter.kind !== "mock") {
-    executionError("MOCK_PROVIDER_REQUIRED", "Phase 3B2 permits only an isolated mock Stripe adapter.");
+  if (input.adapter.kind === "stripe_test") {
+    assertCanonicalStripeTestProviderEnabled(input.environment);
   }
   const claim = await claimOperation(input.operationId, "activation");
   if (!claim.claimed) return resultFromClaim(claim);
 
   try {
     let session: CanonicalStripeCheckoutSession | null = claim.providerReference
-      ? await input.adapter.retrieveCheckoutSession(claim.providerReference)
+      ? await input.adapter.retrieveCheckoutSession(
+        claim.providerReference,
+        claim.operationKey,
+        claim.proposal.subscriptionId,
+      )
       : await input.adapter.recoverActivation(claim.operationKey, claim.proposal.subscriptionId);
     const recovered = session != null;
     if (!session) {
@@ -680,8 +685,8 @@ export async function executeCanonicalStripeSynchronization(input: {
   beforePersist?: (result: CanonicalStripeProviderMutationResult) => Promise<void>;
 }): Promise<CanonicalStripeExecutionResult> {
   assertCanonicalStripeExecutionEnabled(input.environment);
-  if (input.adapter.kind !== "mock") {
-    executionError("MOCK_PROVIDER_REQUIRED", "Phase 3B2 permits only an isolated mock Stripe adapter.");
+  if (input.adapter.kind === "stripe_test") {
+    assertCanonicalStripeTestProviderEnabled(input.environment);
   }
   const claim = await claimOperation(input.operationId, "synchronization");
   if (!claim.claimed) return resultFromClaim(claim);

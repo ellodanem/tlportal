@@ -10,7 +10,6 @@ import {
   canonicalStripeExecutionEnabled,
   type CanonicalStripeExecutionEnvironment,
   type CanonicalStripeProviderMutationResult,
-  type CanonicalStripeProviderRateGroup,
 } from "@/lib/domain/canonical-stripe-execution";
 import {
   buildCanonicalStripeRateGroups,
@@ -23,6 +22,7 @@ import {
   persistCanonicalStripeProviderResult,
 } from "@/lib/services/canonical-stripe-execution-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import { normalizeCanonicalStripeSubscription } from "@/lib/stripe/canonical-provider-normalization";
 import { stripeInvoiceSubscriptionId } from "@/lib/stripe/invoice-subscription";
 
 export type CanonicalStripeCheckoutWebhook = {
@@ -72,69 +72,11 @@ export type CanonicalStripeWebhookResult = {
   reconciliation: "reconciled" | "pending" | "manual_review" | null;
 };
 
-function majorAmount(minor: number | null | undefined): string {
-  return new Prisma.Decimal(minor ?? 0).dividedBy(100).toDecimalPlaces(2).toFixed(2);
-}
-
-function stripeIntervalMonths(price: Stripe.Price): number | null {
-  const recurring = price.recurring;
-  if (!recurring) return null;
-  const count = recurring.interval_count ?? 1;
-  if (recurring.interval === "month") return count;
-  if (recurring.interval === "year") return count * 12;
-  return null;
-}
-
-function subscriptionItemFingerprint(item: Stripe.SubscriptionItem): string | null {
-  const itemMetadata = (item as Stripe.SubscriptionItem & { metadata?: Stripe.Metadata }).metadata;
-  return itemMetadata?.tl_rate_group_fingerprint?.trim()
-    || item.price?.metadata?.tl_rate_group_fingerprint?.trim()
-    || null;
-}
-
-function normalizeSubscription(sub: Stripe.Subscription): CanonicalStripeProviderMutationResult {
-  const observedItems = sub.items.data.map((item) => ({
-    externalSubscriptionItemId: item.id,
-    externalPriceId: item.price?.id ?? null,
-    currency: item.price?.currency?.toUpperCase() ?? null,
-    billingIntervalMonths: item.price ? stripeIntervalMonths(item.price) : null,
-    unitAmount: item.price?.unit_amount_decimal != null
-      ? new Prisma.Decimal(item.price.unit_amount_decimal).dividedBy(100).toFixed(2)
-      : item.price?.unit_amount != null
-        ? majorAmount(item.price.unit_amount)
-        : null,
-    quantity: item.quantity ?? null,
-  }));
-  const rateGroups = sub.items.data.flatMap<CanonicalStripeProviderRateGroup>((item) => {
-    const fingerprint = subscriptionItemFingerprint(item);
-    const interval = item.price ? stripeIntervalMonths(item.price) : null;
-    const amount = item.price?.unit_amount_decimal != null
-      ? new Prisma.Decimal(item.price.unit_amount_decimal).dividedBy(100).toFixed(2)
-      : item.price?.unit_amount != null
-        ? majorAmount(item.price.unit_amount)
-        : null;
-    if (!fingerprint || !item.price?.id || !item.price.currency || interval == null || amount == null) return [];
-    return [{
-      fingerprint,
-      externalSubscriptionItemId: item.id,
-      externalPriceId: item.price.id,
-      currency: item.price.currency.toUpperCase(),
-      billingIntervalMonths: interval,
-      agreedAmountPerCycle: amount,
-      quantity: item.quantity ?? 0,
-    }];
-  });
-  return {
-    subscription: {
-      externalSubscriptionId: sub.id,
-      status: sub.status,
-      currentPeriodStart: sub.current_period_start == null ? null : new Date(sub.current_period_start * 1000),
-      currentPeriodEnd: sub.current_period_end == null ? null : new Date(sub.current_period_end * 1000),
-      cancelAtPeriodEnd: sub.cancel_at_period_end,
-      items: observedItems,
-    },
-    rateGroups,
-  };
+function majorAmount(minor: number | null | undefined, minorUnitExponent = 2): string {
+  return new Prisma.Decimal(minor ?? 0)
+    .dividedBy(new Prisma.Decimal(10).pow(minorUnitExponent))
+    .toDecimalPlaces(minorUnitExponent)
+    .toFixed(minorUnitExponent);
 }
 
 function invoiceLineSubscriptionItemId(line: Stripe.InvoiceLineItem): string | null {
@@ -146,16 +88,16 @@ function invoiceLineSubscriptionItemId(line: Stripe.InvoiceLineItem): string | n
   return parent?.subscription_item_details?.subscription_item ?? null;
 }
 
-function normalizeInvoiceLines(invoice: Stripe.Invoice): ObservedStripeInvoiceLine[] {
+function normalizeInvoiceLines(invoice: Stripe.Invoice, minorUnitExponent = 2): ObservedStripeInvoiceLine[] {
   return (invoice.lines?.data ?? []).map((line) => ({
     externalInvoiceLineId: line.id,
     externalSubscriptionItemId: invoiceLineSubscriptionItemId(line),
     externalPriceId: line.price?.id ?? null,
     currency: (line.currency ?? invoice.currency ?? "xcd").toUpperCase(),
     quantity: line.quantity ?? 1,
-    recurringSubtotal: majorAmount(line.amount),
-    discountAmount: majorAmount(line.discount_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0),
-    taxAmount: majorAmount(line.tax_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0),
+    recurringSubtotal: majorAmount(line.amount, minorUnitExponent),
+    discountAmount: majorAmount(line.discount_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0, minorUnitExponent),
+    taxAmount: majorAmount(line.tax_amounts?.reduce((sum, entry) => sum + entry.amount, 0) ?? 0, minorUnitExponent),
     creditAmount: "0.00",
   }));
 }
@@ -176,7 +118,11 @@ function invoicePeriod(invoice: Stripe.Invoice): { start: Date; end: Date } | nu
   };
 }
 
-export function normalizeCanonicalStripeWebhook(event: Stripe.Event): CanonicalStripeNormalizedWebhook | null {
+export function normalizeCanonicalStripeWebhook(
+  event: Stripe.Event,
+  options: { minorUnitExponent?: number } = {},
+): CanonicalStripeNormalizedWebhook | null {
+  const minorUnitExponent = options.minorUnitExponent ?? 2;
   const eventCreatedAt = new Date(event.created * 1000);
   if (event.type === "checkout.session.completed" || event.type === "checkout.session.expired") {
     const session = event.data.object as Stripe.Checkout.Session;
@@ -205,7 +151,7 @@ export function normalizeCanonicalStripeWebhook(event: Stripe.Event): CanonicalS
       eventId: event.id,
       eventCreatedAt,
       operationKey: sub.metadata?.tl_canonical_operation_key?.trim() || null,
-      providerResult: normalizeSubscription(sub),
+      providerResult: normalizeCanonicalStripeSubscription(sub, minorUnitExponent),
     };
   }
   if (
@@ -226,15 +172,15 @@ export function normalizeCanonicalStripeWebhook(event: Stripe.Event): CanonicalS
       externalSubscriptionId,
       status: invoice.status ?? "unknown",
       currency: (invoice.currency ?? "xcd").toUpperCase(),
-      total: majorAmount(invoice.total ?? invoice.amount_due ?? 0),
-      amountPaid: majorAmount(invoice.amount_paid),
+      total: majorAmount(invoice.total ?? invoice.amount_due ?? 0, minorUnitExponent),
+      amountPaid: majorAmount(invoice.amount_paid, minorUnitExponent),
       periodStart: period.start,
       periodEnd: period.end,
       paymentIntentId: invoicePaymentIntentId(invoice),
       providerInvoiceNumber: invoice.number,
       hostedInvoiceUrl: invoice.hosted_invoice_url,
       invoicePdfUrl: invoice.invoice_pdf,
-      lines: normalizeInvoiceLines(invoice),
+      lines: normalizeInvoiceLines(invoice, minorUnitExponent),
     };
   }
   return null;
@@ -681,8 +627,9 @@ export async function handleCanonicalStripeNormalizedWebhook(
 export async function tryHandleCanonicalStripeWebhookEvent(
   stripeEvent: Stripe.Event,
   environment: CanonicalStripeExecutionEnvironment = process.env,
+  options: { minorUnitExponent?: number } = {},
 ): Promise<boolean> {
-  const normalized = normalizeCanonicalStripeWebhook(stripeEvent);
+  const normalized = normalizeCanonicalStripeWebhook(stripeEvent, options);
   if (!normalized) {
     let operationKey: string | null = null;
     let externalSubscriptionId: string | null = null;
