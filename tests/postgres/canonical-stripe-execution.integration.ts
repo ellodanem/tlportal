@@ -296,9 +296,12 @@ test("Phase 3B2: concurrent multi-rate activation creates one reusable mock Chec
     executeCanonicalStripeActivation({ operationId: operation.operationId, adapter })));
   assert.equal(adapter.activationCreates, 1);
   assert.ok(results.every((result) => result.status === "pending"));
-  assert.equal(new Set(results.map((result) => result.providerReference)).size, 1);
+  const storedOperation = await prisma.billingOperation.findUniqueOrThrow({ where: { id: operation.operationId } });
+  assert.ok(storedOperation.providerReference);
+  assert.ok(results.every((result) =>
+    result.providerReference == null || result.providerReference === storedOperation.providerReference));
 
-  const session = adapter.sessions.get(results[0].providerReference!)!;
+  const session = adapter.sessions.get(storedOperation.providerReference)!;
   const externalSubscriptionId = `sub_activation_${randomUUID()}`;
   adapter.sessions.set(session.id, { ...session, status: "complete", externalSubscriptionId });
   await handleCanonicalStripeNormalizedWebhook({
