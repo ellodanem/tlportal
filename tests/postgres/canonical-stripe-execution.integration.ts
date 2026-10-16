@@ -1002,10 +1002,18 @@ test("Phase 3B3B: one approved EC$5 subscription executes once and reconciles li
   assert.equal(afterFailure.lifecycleStatus, "active");
   assert.ok(afterFailure.items.every((item) => item.status === "active"));
 
-  const legacyEvent = {
+  const strippedCanaryEvent = {
     ...checkoutEvent,
-    id: `evt_legacy_${randomUUID()}`,
+    id: `evt_canary_stripped_${randomUUID()}`,
     data: { object: { ...(checkoutEvent.data.object as object), metadata: { tl_customer_id: fixture.customer.id } } },
   } as unknown as Stripe.Event;
+  await assert.rejects(
+    tryHandleCanonicalStripeLiveCanaryWebhookEvent(strippedCanaryEvent, environment),
+    /lacks required period or item evidence/,
+  );
+
+  const legacyEvent = structuredClone(strippedCanaryEvent) as Stripe.Event;
+  legacyEvent.id = `evt_legacy_${randomUUID()}`;
+  (legacyEvent.data.object as Stripe.Checkout.Session).subscription = `sub_legacy_${randomUUID()}`;
   assert.equal(await tryHandleCanonicalStripeLiveCanaryWebhookEvent(legacyEvent, environment), false);
 });
