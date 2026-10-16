@@ -16,7 +16,10 @@ import {
   recordStripeCheckoutCompletion,
   recordStripeCheckoutExpired,
 } from "@/lib/services/stripe-checkout-operation-service";
-import { tryHandleCanonicalStripeWebhookEvent } from "@/lib/services/canonical-stripe-webhook-service";
+import {
+  tryHandleCanonicalStripeLiveCanaryWebhookEvent,
+  tryHandleCanonicalStripeWebhookEvent,
+} from "@/lib/services/canonical-stripe-webhook-service";
 
 import { getStripeClient } from "./config";
 import { handleCheckoutSessionExpired } from "./checkout-recovery";
@@ -142,6 +145,10 @@ async function processPaidStripeInvoice(invoice: Stripe.Invoice): Promise<void> 
 }
 
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
+  // The controlled live canary uses the existing signed production endpoint,
+  // but exact Phase 3B3B ownership must be resolved before either general
+  // canonical or legacy fulfillment is considered.
+  if (await tryHandleCanonicalStripeLiveCanaryWebhookEvent(event)) return;
   // Phase 3B2 canonical events are accepted only through exact operation/provider
   // ownership and the non-production execution guard. All other events retain
   // the established legacy fulfillment path below.
