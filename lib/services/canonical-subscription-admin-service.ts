@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
 import {
   buildCanonicalSubscriptionAdminRow,
@@ -23,6 +24,14 @@ function customerLabel(customer: {
 }
 
 export type { CanonicalSubscriptionAdminRow } from "@/lib/domain/canonical-subscription-admin";
+
+/** Admin layout auth is the first boundary; this second check confirms the session belongs to a staff User row. */
+export async function canonicalSubscriptionUiStaffViewer(): Promise<boolean> {
+  const session = await getSession();
+  if (!session) return false;
+  const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { id: true } });
+  return Boolean(user);
+}
 
 export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSubscriptionAdminRow[]> {
   const subscriptions = await prisma.customerSubscription.findMany({

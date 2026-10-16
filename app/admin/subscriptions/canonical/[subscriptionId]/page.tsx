@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
   AddCanonicalDraftItemForm,
@@ -12,10 +12,11 @@ import {
   canonicalIntervalLabel,
   canonicalProviderStatusLabel,
   canonicalSubscriptionUiEnabled,
+  canonicalSubscriptionUiVisible,
 } from "@/lib/domain/canonical-subscription-admin";
 import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { previewAnnualSubscriptionAddition } from "@/lib/services/canonical-subscription-application-service";
-import { getCanonicalSubscriptionAdminDetail } from "@/lib/services/canonical-subscription-admin-service";
+import { canonicalSubscriptionUiStaffViewer, getCanonicalSubscriptionAdminDetail } from "@/lib/services/canonical-subscription-admin-service";
 
 type Props = {
   params: Promise<{ subscriptionId: string }>;
@@ -28,11 +29,12 @@ function money(value: string | number | null | undefined, currency = "XCD") { re
 function collectionLabel(value: string | null) { return value === "stripe_autocharge" ? "Stripe autocharge" : value === "manual_invoice" ? "Manual invoice" : "Legacy collection"; }
 
 export default async function CanonicalSubscriptionDetailPage({ params, searchParams }: Props) {
-  if (!canonicalSubscriptionUiEnabled()) notFound();
+  if (!canonicalSubscriptionUiVisible()) notFound();
+  if (!await canonicalSubscriptionUiStaffViewer()) redirect("/login");
   const [{ subscriptionId }, previewQuery] = await Promise.all([params, searchParams]);
   const subscription = await getCanonicalSubscriptionAdminDetail(subscriptionId);
   if (!subscription) notFound();
-  const editable = subscription.access === "editable_draft";
+  const editable = subscription.access === "editable_draft" && canonicalSubscriptionUiEnabled();
   const currency = subscription.currency ?? "XCD";
   const nextBillingDate = iso(subscription.nextBillingDate);
   let annualPreview: Awaited<ReturnType<typeof previewAnnualSubscriptionAddition>> | null = null;
