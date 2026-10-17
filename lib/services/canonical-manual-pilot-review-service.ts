@@ -2,7 +2,9 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 
+import { addUtcMonths } from "@/lib/billing/recurring-period";
 import { prisma } from "@/lib/db";
+import { commercialDate, commercialDateString } from "@/lib/domain/canonical-subscription-application";
 import {
   createCanonicalMigrationPlan,
   MIGRATION_APPROVAL_SCHEMA_VERSION,
@@ -112,6 +114,10 @@ export type BuildManualPilotPlanInput = {
   commercialStartDate: string;
   billingAnchorDate: string;
   nextBillingDate: string;
+  /** Required for a one-off/manual invoice source; explicit staff confirmation only. */
+  sourceCoverageStartDate?: string;
+  /** Required for a one-off/manual invoice source; explicit staff confirmation only. */
+  sourceCoverageEndDate?: string;
   gracePeriodDays: number;
   items: ManualPilotApprovedItemInput[];
 };
@@ -375,6 +381,22 @@ export async function buildCanonicalManualPilotMigrationPlan(
     new Prisma.Decimal(0),
   ).toFixed(2);
   if (proposal.sourceKind === "manual_invoice") {
+    const authorizedAssignments = snapshot.assignments.filter((assignment) =>
+      assignment.customerId === proposal.customerId
+      && assignment.subscriptionItemId == null
+      && assignment.endDate == null
+      && ["active", "due_soon", "overdue"].includes(assignment.status)
+      && assignment.intervalMonths === proposal.billingIntervalMonths
+      && assignment.nextDueDate === input.nextBillingDate,
+    );
+    const approvedAssignmentIds = new Set(normalizedItems.map((item) => item.assignmentIds[0]));
+    if (
+      !authorizedAssignments.length
+      || approvedAssignmentIds.size !== authorizedAssignments.length
+      || authorizedAssignments.some((assignment) => !approvedAssignmentIds.has(assignment.id))
+    ) {
+      throw new Error("Every authorized active service for the confirmed renewal date must be explicitly approved exactly once.");
+    }
     const sourceInvoice = await prisma.invoice.findUnique({
       where: { id: proposal.sourceId },
       select: {
@@ -383,12 +405,13 @@ export async function buildCanonicalManualPilotMigrationPlan(
         recurringScheduleId: true,
         archivedAt: true,
         status: true,
+        issueDate: true,
         currency: true,
         subtotal: true,
         taxRatePercent: true,
         taxTotal: true,
         total: true,
-        lineItems: { select: { quantity: true, unitPrice: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+        lineItems: { select: { quantity: true, unitPrice: true, lineTotal: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       },
     });
     if (
@@ -404,16 +427,36 @@ export async function buildCanonicalManualPilotMigrationPlan(
     if (sourceInvoice.currency.toUpperCase() !== proposal.currency.toUpperCase()) {
       throw new Error("The selected manual invoice currency does not match the approved arrangement.");
     }
+    const coverageStart = input.sourceCoverageStartDate?.trim();
+    const coverageEnd = input.sourceCoverageEndDate?.trim();
+    if (!coverageStart || !coverageEnd) {
+      throw new Error("The source invoice coverage start and end dates require explicit staff confirmation.");
+    }
+    const coverageStartDate = commercialDate(coverageStart, "sourceCoverageStartDate");
+    const coverageEndDate = commercialDate(coverageEnd, "sourceCoverageEndDate");
+    const expectedCoverageEnd = addUtcMonths(coverageStartDate, proposal.billingIntervalMonths);
+    if (
+      commercialDateString(coverageStartDate) !== sourceInvoice.issueDate.toISOString().slice(0, 10)
+      || commercialDateString(coverageStartDate) !== input.billingAnchorDate
+      || commercialDateString(coverageEndDate) !== input.nextBillingDate
+      || input.nextBillingDate !== proposal.nextBillingDate
+      || commercialDateString(expectedCoverageEnd) !== commercialDateString(coverageEndDate)
+    ) {
+      throw new Error("The explicitly confirmed invoice coverage must begin on the invoice date, span the approved interval, and end on the verified next billing date.");
+    }
     const sourceQuantity = sourceInvoice.lineItems.reduce((total, line) => {
       const quantity = new Prisma.Decimal(line.quantity);
       return quantity.isInteger() && quantity.greaterThan(0) ? total + quantity.toNumber() : total;
     }, 0);
     const sourceUnitPrices = [...new Set(sourceInvoice.lineItems.map((line) => line.unitPrice.toFixed(2)))];
-    if (!sourceQuantity || sourceQuantity !== normalizedItems.length || sourceUnitPrices.length !== 1) {
-      throw new Error("The selected manual invoice must provide one unambiguous unit price for every approved service assignment.");
-    }
-    if (normalizedItems.some((item) => item.agreedAmountPerCycle !== sourceUnitPrices[0])) {
-      throw new Error("Each approved service price must match the selected manual invoice unit price exactly.");
+    const linesReconcile = sourceInvoice.lineItems.length > 0 && sourceInvoice.lineItems.every((line) => {
+      const quantity = new Prisma.Decimal(line.quantity);
+      return quantity.isInteger()
+        && quantity.greaterThan(0)
+        && line.unitPrice.mul(quantity).equals(line.lineTotal);
+    });
+    if (!sourceQuantity || !linesReconcile || sourceUnitPrices.length !== 1) {
+      throw new Error("The selected manual invoice has an unexplained quantity or line-total mismatch.");
     }
     if (!sourceInvoice.subtotal.equals(expectedTotal)) {
       throw new Error("Approved service prices must equal the selected manual invoice subtotal exactly.");
@@ -423,6 +466,28 @@ export async function buildCanonicalManualPilotMigrationPlan(
       : sourceInvoice.subtotal.mul(sourceInvoice.taxRatePercent).div(100).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     if (!sourceInvoice.taxTotal.equals(expectedTax) || !sourceInvoice.total.equals(sourceInvoice.subtotal.plus(sourceInvoice.taxTotal))) {
       throw new Error("The selected manual invoice tax treatment is not internally consistent.");
+    }
+    if (!sourceInvoice.taxTotal.isZero() || (sourceInvoice.taxRatePercent != null && !sourceInvoice.taxRatePercent.isZero())) {
+      throw new Error("The selected manual invoice must be tax exempt for the pilot; tax cannot be carried into an unconfigured canonical schedule.");
+    }
+    const directPerServiceInvoice = sourceQuantity === normalizedItems.length;
+    const durationAggregateInvoice = sourceInvoice.lineItems.length === 1
+      && sourceQuantity === proposal.billingIntervalMonths;
+    if (!directPerServiceInvoice && !durationAggregateInvoice) {
+      throw new Error("The selected manual invoice must either itemize one unit per approved service or use one verified duration-times-aggregate-fleet line.");
+    }
+    if (directPerServiceInvoice && normalizedItems.some((item) => item.agreedAmountPerCycle !== sourceUnitPrices[0])) {
+      throw new Error("Each approved service price must match the selected manual invoice unit price exactly.");
+    }
+    if (durationAggregateInvoice) {
+      const perServiceCycleAmount = sourceInvoice.subtotal.div(normalizedItems.length);
+      if (!perServiceCycleAmount.isFinite() || perServiceCycleAmount.decimalPlaces() > 2) {
+        throw new Error("The aggregate manual invoice subtotal cannot be allocated exactly to every approved service.");
+      }
+      const expectedPerServiceAmount = perServiceCycleAmount.toFixed(2);
+      if (normalizedItems.some((item) => item.agreedAmountPerCycle !== expectedPerServiceAmount)) {
+        throw new Error("Every approved service must explicitly confirm the exact per-service cycle amount derived from the aggregate invoice subtotal.");
+      }
     }
   }
   const requiredIssueCodes = [...new Set([...customer.issues, ...proposal.issues]

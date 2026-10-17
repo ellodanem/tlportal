@@ -655,9 +655,9 @@ async function createEstablishedManualInvoiceFixture() {
       dueDate: new Date("2026-11-14T00:00:00.000Z"),
       paymentInstructions: "Pay by cheque.",
       lineItems: { create: {
-        description: "Quarterly tracking services",
-        quantity: "14",
-        unitPrice: "60.00",
+        description: "GPS Tracker 3-Month Subscription (14 devices)",
+        quantity: "3",
+        unitPrice: "280.00",
         lineTotal: "840.00",
       } },
     },
@@ -676,6 +676,8 @@ async function buildEstablishedManualInvoicePlan(fixture: Awaited<ReturnType<typ
     commercialStartDate: "2026-01-15",
     billingAnchorDate: "2026-10-15",
     nextBillingDate: "2027-01-15",
+    sourceCoverageStartDate: "2026-10-15",
+    sourceCoverageEndDate: "2027-01-15",
     gracePeriodDays: 7,
     items: fixture.assignments.map((assignment, index) => ({
       assignmentId: assignment.id,
@@ -733,7 +735,7 @@ function manualInvoiceMigrationAuthorization(input: {
   return { ...unsigned, signature: signCanonicalManualPilotMigrationAuthorization(unsigned, input.environment) };
 }
 
-test("85: an established EC$840 manual invoice produces a 14-service shadow and January canonical schedule", async () => {
+test("85: a 3 × EC$280 aggregate monthly manual invoice produces a 14-service shadow and January canonical schedule", async () => {
   const fixture = await createEstablishedManualInvoiceFixture();
   const review = await getCanonicalManualPilotMigrationReview(`manual-invoice:${fixture.sourceInvoice.id}`, "2026-10-16");
   assert.equal(review.candidate.sourceKind, "manual_invoice");
@@ -744,6 +746,15 @@ test("85: an established EC$840 manual invoice produces a 14-service shadow and 
   const plan = await buildEstablishedManualInvoicePlan(fixture);
   assert.equal(plan.entries[0].sourceKind, "manual_invoice");
   assert.equal(plan.entries[0].target.expectedTotalAmountPerCycle, "840.00");
+  assert.equal(plan.entries[0].target.items.length, 14);
+  assert.ok(plan.entries[0].target.items.every((item) => item.agreedAmountPerCycle === "60.00"));
+  const originalBeforeMigration = await prisma.invoice.findUniqueOrThrow({
+    where: { id: fixture.sourceInvoice.id },
+    include: { lineItems: true },
+  });
+  assert.equal(originalBeforeMigration.lineItems[0].quantity.toFixed(0), "3");
+  assert.equal(originalBeforeMigration.lineItems[0].unitPrice.toFixed(2), "280.00");
+  assert.equal(originalBeforeMigration.lineItems[0].lineTotal.toFixed(2), "840.00");
   const targetSubscriptionId = randomUUID();
   const environment = manualInvoicePilotEnvironment({
     customerId: fixture.customer.id,
@@ -836,6 +847,8 @@ test("87: established manual-invoice preparation rejects incomplete or repriced 
     commercialStartDate: "2026-01-15",
     billingAnchorDate: "2026-10-15",
     nextBillingDate: "2027-01-15",
+    sourceCoverageStartDate: "2026-10-15",
+    sourceCoverageEndDate: "2027-01-15",
     gracePeriodDays: 7,
   };
   await assert.rejects(buildCanonicalManualPilotMigrationPlan({
@@ -846,7 +859,7 @@ test("87: established manual-invoice preparation rejects incomplete or repriced 
       agreedAmountPerCycle: "60.00",
       classification: "negotiated" as const,
     })),
-  }, "2026-10-16"), /one unambiguous unit price for every approved service assignment/);
+  }, "2026-10-16"), /Every authorized active service/);
   await assert.rejects(buildCanonicalManualPilotMigrationPlan({
     ...base,
     items: fixture.assignments.map((assignment, index) => ({
@@ -855,10 +868,54 @@ test("87: established manual-invoice preparation rejects incomplete or repriced 
       agreedAmountPerCycle: index === 0 ? "61.00" : "60.00",
       classification: "negotiated" as const,
     })),
-  }, "2026-10-16"), /service price must match the selected manual invoice unit price exactly/);
+  }, "2026-10-16"), /exact per-service cycle amount derived from the aggregate invoice subtotal/);
 });
 
-test("88: a conflicting established invoice remains reviewable through an encoded proposal route", async () => {
+test("88: aggregate manual invoice validation rejects unconfirmed coverage and duration mismatches", async () => {
+  const fixture = await createEstablishedManualInvoiceFixture();
+  const base = {
+    proposalId: `manual-invoice:${fixture.sourceInvoice.id}`,
+    approvedBy: "owner@example.com",
+    approvedAt: "2026-10-16T12:00:00.000Z",
+    approvalReason: "Verify aggregate monthly fleet evidence.",
+    name: "Aggregate validation arrangement",
+    reference: "aggregate-validation",
+    commercialStartDate: "2026-01-15",
+    billingAnchorDate: "2026-10-15",
+    nextBillingDate: "2027-01-15",
+    sourceCoverageStartDate: "2026-10-16",
+    sourceCoverageEndDate: "2027-01-15",
+    gracePeriodDays: 7,
+    items: fixture.assignments.map((assignment, index) => ({
+      assignmentId: assignment.id,
+      label: `Quarterly tracking ${index + 1}`,
+      agreedAmountPerCycle: "60.00",
+      classification: "negotiated" as const,
+    })),
+  };
+  await assert.rejects(
+    buildCanonicalManualPilotMigrationPlan(base, "2026-10-16"),
+    /explicitly confirmed invoice coverage/,
+  );
+  await prisma.invoiceLineItem.updateMany({
+    where: { invoiceId: fixture.sourceInvoice.id },
+    data: { quantity: "2", lineTotal: "560.00" },
+  });
+  await assert.rejects(
+    buildCanonicalManualPilotMigrationPlan({ ...base, sourceCoverageStartDate: "2026-10-15" }, "2026-10-16"),
+    /itemize one unit per approved service or use one verified duration-times-aggregate-fleet line/,
+  );
+  const original = await prisma.invoice.findUniqueOrThrow({
+    where: { id: fixture.sourceInvoice.id },
+    include: { lineItems: true },
+  });
+  assert.equal(original.subtotal.toFixed(2), "840.00");
+  assert.equal(original.total.toFixed(2), "840.00");
+  assert.equal(original.lineItems[0].quantity.toFixed(0), "2");
+  assert.equal(original.lineItems[0].lineTotal.toFixed(2), "560.00");
+});
+
+test("89: a conflicting established invoice remains reviewable through an encoded proposal route", async () => {
   const fixture = await createEstablishedManualInvoiceFixture();
   await prisma.customerSubscription.create({
     data: {
