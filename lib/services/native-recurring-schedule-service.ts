@@ -10,6 +10,7 @@ import {
 } from "@/lib/billing/recurring-invoice-coordinator";
 import {
   addUtcDays,
+  addUtcMonths,
   nextRecurringScheduleDate,
   recurringGenerationKey,
   startOfUtcDay,
@@ -215,7 +216,13 @@ async function commitRecurringInvoicePeriod(
       where: { id: scheduleId },
       include: {
         lineItems: { orderBy: { sortOrder: "asc" } },
-        customerSubscription: { select: { id: true, controlMode: true } },
+        customerSubscription: {
+          select: {
+            id: true,
+            controlMode: true,
+            canonicalManualPilotActivation: { select: { sourceKind: true, sourceInvoiceId: true } },
+          },
+        },
         customer: {
           select: { email: true, company: true, firstName: true, lastName: true },
         },
@@ -241,6 +248,23 @@ async function commitRecurringInvoicePeriod(
     const generationKey = canonicalCycle
       ? canonicalRecurringGenerationKey(canonicalCycle.subscriptionId, issueDate)
       : recurringGenerationKey(schedule.id, issueDate);
+    if (canonicalCycle && schedule.customerSubscription?.canonicalManualPilotActivation?.sourceKind === "manual_invoice") {
+      const priorPeriodStart = addUtcMonths(periodStart, -schedule.intervalMonths);
+      const collision = await tx.invoice.findFirst({
+        where: {
+          customerId: schedule.customerId,
+          recurringScheduleId: null,
+          archivedAt: null,
+          status: { notIn: ["void", "written_off"] },
+          issueDate: { gte: priorPeriodStart, lte: periodStart },
+          id: { not: schedule.customerSubscription.canonicalManualPilotActivation.sourceInvoiceId ?? undefined },
+        },
+        select: { id: true },
+      });
+      if (collision) {
+        throw new Error("Manual invoice evidence may already cover this canonical billing period; resolve the collision before generation.");
+      }
+    }
     const claimNow = new Date();
 
     let existing = await tx.invoice.findUnique({

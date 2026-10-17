@@ -99,6 +99,10 @@ export type LegacyInvoice = {
   status: string;
   kind: string;
   currency: string;
+  subtotal?: string;
+  taxLabel?: string | null;
+  taxRatePercent?: string | null;
+  taxTotal?: string;
   total: string;
   amountPaid: string;
   amountDue: string;
@@ -106,6 +110,12 @@ export type LegacyInvoice = {
   archivedAt: string | null;
   recurringGenerationKey: string | null;
   invoilessInvoiceId: string | null;
+  lineItems?: Array<{
+    id: string;
+    quantity: string;
+    unitPrice: string;
+    lineTotal: string;
+  }>;
 };
 
 export type LegacyBillingInvoice = {
@@ -166,7 +176,7 @@ export type ProposedSubscriptionItem = {
 export type SubscriptionMigrationProposal = {
   proposalId: string;
   customerId: string;
-  sourceKind: "stripe_subscription" | "manual_schedule" | "legacy_subscription";
+  sourceKind: "stripe_subscription" | "manual_schedule" | "manual_invoice" | "legacy_subscription";
   sourceId: string;
   collectionMethod: "stripe_autocharge" | "manual_invoice" | null;
   lifecycleStatus: "pending_activation" | "active" | "paused" | "canceled" | "ended";
@@ -650,6 +660,128 @@ function scheduleSeed(
   };
 }
 
+/**
+ * A deliberately narrow source for established cheque/cash arrangements that have
+ * an issued native invoice but never used RecurringInvoiceSchedule.  It is only
+ * considered when the customer has no active legacy schedule, and it preserves the
+ * invoice itself as the source id/fingerprint rather than inventing a schedule.
+ */
+function manualInvoiceSeed(
+  invoice: LegacyInvoice,
+  assignments: LegacyAssignment[],
+  catalogPrices: LegacyCatalogPrice[],
+  payments: LegacyPayment[],
+): ProposalSeed {
+  const issues: MigrationIssue[] = [];
+  const activeAssignments = assignments.filter((assignment) =>
+    assignment.endDate == null
+    && ACTIVE_ASSIGNMENT_STATUSES.has(assignment.status)
+    && assignment.subscriptionItemId == null,
+  );
+  const intervals = [...new Set(activeAssignments
+    .flatMap((assignment) => assignment.intervalMonths != null ? [assignment.intervalMonths] : [])
+    .filter((interval) => [1, 3, 6, 12].includes(interval)))];
+  const interval = intervals.length === 1 ? intervals[0] : 0;
+  if (!interval) {
+    issues.push(issue(
+      "manual_invoice_interval_unresolved",
+      "conflict",
+      "An established manual invoice needs one explicit supported service interval before it can be prepared for canonical billing.",
+      [invoice.id, ...activeAssignments.map((assignment) => assignment.id)],
+    ));
+  }
+  const renewalDates = [...new Set(activeAssignments
+    .filter((assignment) => assignment.intervalMonths === interval)
+    .flatMap((assignment) => assignment.nextDueDate ? [assignment.nextDueDate] : []))];
+  const nextBillingDate = renewalDates.length === 1 ? renewalDates[0] : null;
+  if (!nextBillingDate) {
+    issues.push(issue(
+      "manual_invoice_renewal_unresolved",
+      "conflict",
+      "The existing invoice does not establish one shared next renewal from the linked active services.",
+      [invoice.id, ...activeAssignments.map((assignment) => assignment.id)],
+    ));
+  }
+  const invoiceLines = invoice.lineItems ?? [];
+  const subtotal = invoice.subtotal ?? invoice.total;
+  const taxTotal = invoice.taxTotal ?? "0.00";
+  const sourceQuantity = invoiceLines.reduce((total, line) => {
+    const quantity = Number(line.quantity);
+    return Number.isInteger(quantity) && quantity > 0 ? total + quantity : total;
+  }, 0) || null;
+  if (!sourceQuantity) {
+    issues.push(issue(
+      "manual_invoice_quantity_unresolved",
+      "decision",
+      "The manual invoice has no reliable positive line-item quantity; each service must be explicitly confirmed.",
+      [invoice.id],
+    ));
+  }
+  const lineSubtotal = invoiceLines.reduce((total, line) => total + cents(line.lineTotal), 0);
+  if (invoiceLines.length && lineSubtotal !== cents(subtotal)) {
+    issues.push(issue(
+      "manual_invoice_subtotal_mismatch",
+      "conflict",
+      "The manual invoice line items do not reconcile to its stored subtotal.",
+      [invoice.id, ...invoiceLines.map((line) => line.id)],
+    ));
+  }
+  if (cents(subtotal) + cents(taxTotal) !== cents(invoice.total)) {
+    issues.push(issue(
+      "manual_invoice_tax_mismatch",
+      "conflict",
+      "The manual invoice subtotal and tax do not reconcile to its total.",
+      [invoice.id],
+    ));
+  }
+  const unitPrices = new Set(invoiceLines.map((line) => money(cents(line.unitPrice))));
+  const uniformItemCycleAmount = unitPrices.size === 1 ? [...unitPrices][0] : null;
+  const pricingAssessment = assessRate(
+    interval === 1 ? uniformItemCycleAmount : null,
+    interval || 1,
+    catalogPrices,
+  );
+  if (pricingAssessment === "ambiguous") {
+    issues.push(issue(
+      "pricing_classification_ambiguous",
+      "decision",
+      "The established manual invoice rate must be classified and confirmed for each service.",
+      [invoice.id],
+    ));
+  }
+  const relatedPayments = sorted(payments.filter((payment) => payment.invoiceId === invoice.id));
+  return {
+    proposal: {
+      proposalId: `manual-invoice:${invoice.id}`,
+      customerId: invoice.customerId ?? "unlinked-customer",
+      sourceKind: "manual_invoice",
+      sourceId: invoice.id,
+      collectionMethod: "manual_invoice",
+      lifecycleStatus: "active",
+      billingIntervalMonths: interval || 1,
+      currency: invoice.currency.toUpperCase(),
+      billingAnchorDate: invoice.issueDate,
+      nextBillingDate,
+      sourceQuantity,
+      sourceCycleAmount: subtotal,
+      proposedCycleAmount: subtotal,
+      normalizedMonthlyAmount: interval ? normalizedMonthly(subtotal, interval) : null,
+      pricingAssessment,
+      billingAccountId: null,
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      observedProviderInvoiceAmounts: [],
+      observedNativeInvoiceTotals: [invoice.total],
+      invoiceIds: [invoice.id],
+      billingInvoiceIds: [],
+      paymentIds: relatedPayments.map((payment) => payment.id),
+      issues,
+    },
+    directAssignmentId: null,
+    uniformItemCycleAmount,
+  };
+}
+
 function allocateItems(
   seed: ProposalSeed,
   candidates: LegacyAssignment[],
@@ -863,6 +995,16 @@ export function analyzeSubscriptionMigration(
       || entry.stripeSubscriptionId != null
       || customer.billingMode === "stripe_subscription",
     );
+    const directManualInvoices = customerSchedules.length === 0
+      ? snapshot.invoices.filter((invoice) =>
+        invoice.customerId === customer.id
+        && invoice.customerSubscriptionId == null
+        && invoice.recurringScheduleId == null
+        && invoice.billingInvoiceId == null
+        && invoice.archivedAt == null
+        && !["void", "written_off"].includes(invoice.status),
+      )
+      : [];
     const seeds: ProposalSeed[] = [
       ...standaloneSubscriptions.map((entry) => subscriptionSeed(
         entry,
@@ -877,6 +1019,12 @@ export function analyzeSubscriptionMigration(
         entry,
         snapshot.catalogPrices,
         snapshot.invoices,
+        snapshot.payments,
+      )),
+      ...directManualInvoices.map((entry) => manualInvoiceSeed(
+        entry,
+        customerAssignments,
+        snapshot.catalogPrices,
         snapshot.payments,
       )),
     ];
