@@ -24,7 +24,6 @@ export async function activateCanonicalManualSubscription(input: {
   staffUserId?: string | null;
   environment?: CanonicalSubscriptionActivationEnvironment;
 }): Promise<{ scheduleId: string; reused: boolean }> {
-  assertCanonicalSubscriptionActivationEnabled(input.environment);
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "CustomerSubscription" WHERE "id" = ${input.subscriptionId} FOR UPDATE`;
     const subscription = await tx.customerSubscription.findUnique({
@@ -32,6 +31,10 @@ export async function activateCanonicalManualSubscription(input: {
       include: { items: { include: { rates: true } }, recurringSchedules: { where: { status: { not: "ended" } } } },
     });
     if (!subscription) fail("SUBSCRIPTION_NOT_FOUND", "Canonical subscription not found.");
+    assertCanonicalSubscriptionActivationEnabled(input.environment, {
+      customerId: subscription.customerId,
+      subscriptionId: subscription.id,
+    });
     if (subscription.controlMode !== "canonical" || subscription.collectionMethod !== "manual_invoice") {
       fail("MANUAL_CANONICAL_REQUIRED", "Only a canonical manual-invoice subscription can be activated here.");
     }

@@ -58,6 +58,22 @@ test("canonical execution is opt-in locally and remains hard-disabled in product
     (caught: unknown) => caught instanceof CanonicalNativeBillingError
       && caught.code === "PRODUCTION_EXECUTION_DISABLED",
   );
+  assert.doesNotThrow(() => assertCanonicalNativeBillingExecutionEnabled({
+    NODE_ENV: "production",
+    CANONICAL_PRODUCTION_MANUAL_ENABLED: "true",
+    CANONICAL_PRODUCTION_MANUAL_CUSTOMER_ID: "customer-1",
+    CANONICAL_PRODUCTION_MANUAL_SUBSCRIPTION_ID: "subscription-1",
+  }, { customerId: "customer-1", subscriptionId: "subscription-1", activationStatus: null }));
+  assert.throws(
+    () => assertCanonicalNativeBillingExecutionEnabled({
+      NODE_ENV: "production",
+      CANONICAL_PRODUCTION_MANUAL_ENABLED: "true",
+      CANONICAL_PRODUCTION_MANUAL_CUSTOMER_ID: "customer-1",
+      CANONICAL_PRODUCTION_MANUAL_SUBSCRIPTION_ID: "subscription-1",
+    }, { customerId: "customer-1", subscriptionId: "other", activationStatus: null }),
+    (caught: unknown) => caught instanceof CanonicalNativeBillingError
+      && caught.code === "PRODUCTION_EXECUTION_DISABLED",
+  );
 });
 
 test("mixed standard and negotiated item prices resolve exactly to EC$70", () => {

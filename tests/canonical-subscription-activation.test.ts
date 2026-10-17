@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   activationReviewLabel,
   assertCanonicalSubscriptionActivationEnabled,
+  canonicalProductionManualScopeAuthorized,
   CanonicalSubscriptionActivationError,
 } from "../lib/domain/canonical-subscription-activation";
 
@@ -24,4 +25,17 @@ test("canonical activation is explicit in local/test environments and default-de
 test("activation review labels distinguish manual and Stripe collection", () => {
   assert.equal(activationReviewLabel("manual_invoice"), "Manual recurring invoice approval");
   assert.equal(activationReviewLabel("stripe_autocharge"), "Stripe test checkout approval");
+});
+
+test("production manual authorization is exact and cannot be enabled by a broad flag", () => {
+  const scope = { customerId: "customer-1", subscriptionId: "subscription-1" };
+  const environment = {
+    NODE_ENV: "production",
+    CANONICAL_PRODUCTION_MANUAL_ENABLED: "true",
+    CANONICAL_PRODUCTION_MANUAL_CUSTOMER_ID: scope.customerId,
+    CANONICAL_PRODUCTION_MANUAL_SUBSCRIPTION_ID: scope.subscriptionId,
+  };
+  assert.equal(canonicalProductionManualScopeAuthorized({ scope, environment }), true);
+  assert.equal(canonicalProductionManualScopeAuthorized({ scope: { ...scope, subscriptionId: "other" }, environment }), false);
+  assert.doesNotThrow(() => assertCanonicalSubscriptionActivationEnabled(environment, scope));
 });

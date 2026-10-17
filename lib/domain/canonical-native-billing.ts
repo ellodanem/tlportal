@@ -8,6 +8,10 @@ import {
   canonicalManualPilotBillingAuthorized,
   type CanonicalManualPilotEnvironment,
 } from "./canonical-manual-pilot";
+import {
+  canonicalProductionManualScopeAuthorized,
+  type CanonicalSubscriptionActivationEnvironment,
+} from "./canonical-subscription-activation";
 
 export const CANONICAL_NATIVE_BILLING_FLAG = "CANONICAL_NATIVE_BILLING_ENABLED";
 
@@ -25,7 +29,7 @@ function billingError(code: string, message: string): never {
   throw new CanonicalNativeBillingError(code, message);
 }
 
-export type CanonicalNativeBillingEnvironment = CanonicalManualPilotEnvironment & {
+export type CanonicalNativeBillingEnvironment = CanonicalManualPilotEnvironment & CanonicalSubscriptionActivationEnvironment & {
   CANONICAL_NATIVE_BILLING_ENABLED?: string;
 };
 
@@ -40,10 +44,10 @@ export function canonicalNativeBillingExecutionEnabled(
   scope?: CanonicalNativeBillingExecutionScope,
 ): boolean {
   if (environment.NODE_ENV === "production") {
-    return scope != null && canonicalManualPilotBillingAuthorized({
-      ...scope,
-      environment,
-    });
+    return scope != null && (
+      canonicalManualPilotBillingAuthorized({ ...scope, environment })
+      || canonicalProductionManualScopeAuthorized({ scope, environment })
+    );
   }
   return environment.CANONICAL_NATIVE_BILLING_ENABLED === "true";
 }
@@ -53,10 +57,11 @@ export function assertCanonicalNativeBillingExecutionEnabled(
   scope?: CanonicalNativeBillingExecutionScope,
 ): void {
   if (environment.NODE_ENV === "production") {
-    if (!scope || !canonicalManualPilotBillingAuthorized({ ...scope, environment })) {
+    if (!scope || (!canonicalManualPilotBillingAuthorized({ ...scope, environment })
+      && !canonicalProductionManualScopeAuthorized({ scope, environment }))) {
       billingError(
         "PRODUCTION_EXECUTION_DISABLED",
-        "Canonical native billing is disabled in production except for the exact durably activated manual pilot.",
+        "Canonical native billing is disabled in production except for one exact owner-authorized agreement.",
       );
     }
     return;
