@@ -92,6 +92,8 @@ export type CreateDraftCanonicalSubscriptionInput = {
   nextBillingDate: string;
   gracePeriodDays?: number | null;
   items?: CreateCanonicalSubscriptionItemInput[];
+  /** Shadow remains the migration default; new-customer onboarding creates canonical drafts. */
+  controlMode?: "shadow" | "canonical";
 };
 
 function validation(code: string, message: string): never {
@@ -131,10 +133,10 @@ async function requireEditableSubscription(
     },
   });
   if (!subscription) validation("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
-  if (subscription.controlMode !== "shadow") {
+  if (subscription.controlMode !== "shadow" && subscription.controlMode !== "canonical") {
     validation(
       "SUBSCRIPTION_NOT_EDITABLE",
-      "Phase 1B operations are restricted to shadow-mode canonical subscriptions.",
+      "Only canonical draft subscriptions can be edited.",
     );
   }
   if (!subscription.lifecycleStatus) {
@@ -344,7 +346,7 @@ export async function createDraftCanonicalSubscription(
         billingAnchorDate: dates.billingAnchorDate,
         nextBillingDate: dates.nextBillingDate,
         gracePeriodDays,
-        controlMode: "shadow",
+        controlMode: input.controlMode ?? "shadow",
         status: "pending_payment",
         planTermMonths: billingIntervalMonths,
       },
@@ -358,6 +360,149 @@ export async function createDraftCanonicalSubscription(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   return getCanonicalSubscriptionById(subscriptionId);
+}
+
+export type CanonicalOnboardingCustomerInput = {
+  existingCustomerId?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  company?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  invoiceCc?: string | null;
+  invoiceBcc?: string | null;
+  notes?: string | null;
+};
+
+export type CanonicalOnboardingServiceInput = CreateCanonicalSubscriptionItemInput & {
+  deviceId?: string | null;
+};
+
+export type CreateCanonicalOnboardingInput = Omit<CreateDraftCanonicalSubscriptionInput, "customerId" | "items" | "controlMode"> & {
+  customer: CanonicalOnboardingCustomerInput;
+  items: CanonicalOnboardingServiceInput[];
+};
+
+/**
+ * Creates only commercial and operational draft records.  It intentionally
+ * does not activate billing, create a recurring schedule, contact Stripe, or
+ * notify the customer.
+ */
+export async function createCanonicalOnboarding(
+  input: CreateCanonicalOnboardingInput,
+): Promise<{ customerId: string; subscription: SubscriptionDetails }> {
+  const name = cleanRequiredText(input.name, "name");
+  const billingIntervalMonths = canonicalBillingInterval(input.billingIntervalMonths);
+  const currency = normalizeCurrency(input.currency);
+  const defaultAmount = exactCycleAmount(input.defaultAgreedAmountPerCycle);
+  const dates = assertSubscriptionDates(input);
+  const gracePeriodDays = canonicalGracePeriodDays(input.gracePeriodDays);
+  if (!input.items.length) validation("SUBSCRIPTION_HAS_NO_ITEMS", "Add at least one tracking service.");
+
+  const result = await prisma.$transaction(async (tx) => {
+    let customerId = cleanOptionalText(input.customer.existingCustomerId);
+    if (customerId) {
+      const customer = await tx.customer.findUnique({ where: { id: customerId }, select: { id: true, archivedAt: true } });
+      if (!customer) validation("CUSTOMER_NOT_FOUND", "The selected customer no longer exists.");
+      if (customer.archivedAt) validation("CUSTOMER_ARCHIVED", "Restore the selected customer before onboarding a subscription.");
+    } else {
+      const company = cleanOptionalText(input.customer.company);
+      const firstName = cleanOptionalText(input.customer.firstName);
+      const lastName = cleanOptionalText(input.customer.lastName);
+      if (!company && !(firstName && lastName)) {
+        validation("CUSTOMER_NAME_REQUIRED", "Enter a company name, or both a first and last name.");
+      }
+      const email = cleanOptionalText(input.customer.email);
+      if (email) {
+        const duplicate = await tx.customer.findFirst({ where: { email }, select: { id: true } });
+        if (duplicate) validation("DUPLICATE_CUSTOMER", "A customer already uses this email. Select the existing customer instead.");
+      }
+      const customer = await tx.customer.create({
+        data: {
+          company,
+          firstName,
+          lastName,
+          email,
+          phone: cleanOptionalText(input.customer.phone),
+          address: cleanOptionalText(input.customer.address),
+          city: cleanOptionalText(input.customer.city),
+          country: cleanOptionalText(input.customer.country),
+          invoiceCc: cleanOptionalText(input.customer.invoiceCc),
+          invoiceBcc: cleanOptionalText(input.customer.invoiceBcc),
+          notes: cleanOptionalText(input.customer.notes),
+        },
+        select: { id: true },
+      });
+      customerId = customer.id;
+    }
+
+    const subscription = await tx.customerSubscription.create({
+      data: {
+        customerId: customerId!,
+        name,
+        reference: cleanOptionalText(input.reference),
+        collectionMethod: input.collectionMethod,
+        lifecycleStatus: "draft",
+        collectionHealth: "not_started",
+        billingIntervalMonths,
+        currency,
+        agreedAmountPerCycle: defaultAmount,
+        commercialStartDate: dates.commercialStartDate,
+        billingAnchorDate: dates.billingAnchorDate,
+        nextBillingDate: dates.nextBillingDate,
+        gracePeriodDays,
+        controlMode: "canonical",
+        status: "pending_payment",
+        planTermMonths: billingIntervalMonths,
+      },
+      select: { id: true },
+    });
+
+    for (const [index, service] of input.items.entries()) {
+      let serviceAssignmentId: string | null = null;
+      if (service.deviceId) {
+        const device = await tx.device.findUnique({
+          where: { id: service.deviceId },
+          select: { id: true, status: true, simCardId: true },
+        });
+        if (!device || ["decommissioned", "lost"].includes(device.status)) {
+          validation("DEVICE_UNAVAILABLE", "A selected device is unavailable for assignment.");
+        }
+        const openAssignment = await tx.serviceAssignment.findFirst({
+          where: { deviceId: device.id, endDate: null, status: { not: "cancelled" } },
+          select: { id: true },
+        });
+        if (openAssignment) validation("DEVICE_ASSIGNMENT_CONFLICT", "A selected device already has an active service assignment.");
+        const assignment = await tx.serviceAssignment.create({
+          data: {
+            customerId: customerId!,
+            deviceId: device.id,
+            simCardId: device.simCardId,
+            status: "active",
+            startDate: service.serviceActivatedDate ? commercialDate(service.serviceActivatedDate, "serviceActivatedDate") : dates.commercialStartDate,
+            nextDueDate: dates.nextBillingDate,
+            intervalMonths: billingIntervalMonths,
+          },
+          select: { id: true },
+        });
+        serviceAssignmentId = assignment.id;
+        await tx.device.update({ where: { id: device.id }, data: { status: "assigned" } });
+      }
+      await addBillableServiceInTransaction(tx, subscription.id, {
+        ...service,
+        label: cleanOptionalText(service.label) ?? `Tracking service ${index + 1}`,
+        serviceActivatedDate: service.serviceActivatedDate ?? commercialDateString(dates.commercialStartDate),
+        agreedAmountPerCycle: service.agreedAmountPerCycle ?? defaultAmount,
+        serviceAssignmentId,
+      });
+    }
+    return { customerId: customerId!, subscriptionId: subscription.id };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  return { customerId: result.customerId, subscription: await getCanonicalSubscriptionById(result.subscriptionId) };
 }
 
 export async function getCanonicalSubscriptionById(
@@ -439,10 +584,10 @@ export async function previewAnnualSubscriptionAddition(input: {
     },
   });
   if (!subscription) validation("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
-  if (subscription.controlMode !== "shadow") {
+  if (subscription.controlMode !== "shadow" && subscription.controlMode !== "canonical") {
     validation(
       "SUBSCRIPTION_NOT_EDITABLE",
-      "Phase 1B previews are restricted to shadow-mode canonical subscriptions.",
+      "Annual previews are available only for canonical draft subscriptions.",
     );
   }
   if (subscription.billingIntervalMonths !== 12) {
@@ -498,7 +643,7 @@ export async function updateDraftSubscriptionItemCommercialDetails(input: {
     ) {
       validation(
         "ITEM_NOT_UI_EDITABLE",
-        "Only items on an unmigrated shadow draft can be edited in Phase UI-1.",
+        "Only items on an unmigrated canonical draft can be edited.",
       );
     }
     if (item._count.invoiceSnapshots > 0 || item._count.serviceAssignments > 0) {

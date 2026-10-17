@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   assertCanonicalSubscriptionUiActionAllowed,
+  assertCanonicalSubscriptionOnboardingAllowed,
   buildCanonicalSubscriptionAdminRow,
   canonicalProviderStatusLabel,
   canonicalSubscriptionUiAccess,
@@ -62,6 +63,7 @@ test("only unmigrated shadow drafts are editable", () => {
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "shadow", lifecycleStatus: "draft", hasMigrationLedger: false }), "editable_draft");
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "shadow", lifecycleStatus: "draft", hasMigrationLedger: true }), "migrated_shadow_read_only");
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "shadow", lifecycleStatus: "active", hasMigrationLedger: false }), "shadow_read_only");
+  assert.equal(canonicalSubscriptionUiAccess({ controlMode: "canonical", lifecycleStatus: "draft", hasMigrationLedger: false }), "editable_draft");
 });
 
 test("legacy and canonical arrangements are read-only", () => {
@@ -104,6 +106,22 @@ test("production read-only visibility requires its separate explicit flag", () =
   assert.equal(canonicalSubscriptionUiVisible({ NODE_ENV: "production", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true", VERCEL_ENV: "production" }), true);
   assert.equal(canonicalSubscriptionUiVisible({ NODE_ENV: "production", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true", VERCEL_ENV: "preview" }), false);
   assert.equal(canonicalSubscriptionUiEnabled({ NODE_ENV: "production", CANONICAL_SUBSCRIPTION_UI_ENABLED: "true", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true" }), false);
+});
+
+test("production onboarding permits only new canonical drafts when administration is visible", () => {
+  const environment = { NODE_ENV: "production", VERCEL_ENV: "production", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true" } as const;
+  assert.doesNotThrow(() => assertCanonicalSubscriptionOnboardingAllowed({
+    authenticated: true,
+    access: "editable_draft",
+    controlMode: "canonical",
+    environment,
+  }));
+  assert.throws(() => assertCanonicalSubscriptionOnboardingAllowed({
+    authenticated: true,
+    access: "editable_draft",
+    controlMode: "shadow",
+    environment,
+  }), (error) => error instanceof CanonicalSubscriptionUiError && error.code === "SHADOW_WRITE_DISABLED");
 });
 
 test("legacy MRR can use stored monthly evidence without inventing a cycle total", () => {
@@ -186,20 +204,26 @@ test("detail presents negotiated classifications and server-backed annual previe
 });
 
 test("UI-2 draft workflow confirms commercial changes and never adds billing controls", async () => {
-  const [forms, create] = await Promise.all([
+  const [forms, create, onboarding] = await Promise.all([
     readFile("components/admin/canonical-subscription-draft-forms.tsx", "utf8"),
     readFile("components/admin/canonical-subscription-create-form.tsx", "utf8"),
+    readFile("components/admin/canonical-customer-onboarding-form.tsx", "utf8"),
   ]);
   assert.match(forms, /confirmCommercialChange/);
   assert.match(forms, /historical records remain unchanged/);
   assert.match(create, /Review before saving/);
   assert.match(create, /does not activate billing/);
   assert.doesNotMatch(create, /stripe\.subscriptions\.create|generateRecurringInvoice|createInvoice/);
+  assert.match(onboarding, /Choose an existing customer or create a new one/);
+  assert.match(onboarding, /Available device \/ SIM/);
+  assert.match(onboarding, /does not activate billing or create financial records/);
+  assert.doesNotMatch(onboarding, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
 });
 
-test("production viewing mode cannot authorize canonical writes", async () => {
+test("onboarding actions stay within canonical draft services and do not invoke financial operations", async () => {
   const actions = await readFile("app/admin/subscriptions/canonical/actions.ts", "utf8");
-  assert.match(actions, /assertCanonicalSubscriptionUiEnabled/);
+  assert.match(actions, /assertCanonicalSubscriptionOnboardingAllowed/);
+  assert.match(actions, /createCanonicalOnboarding/);
   assert.match(actions, /requireEditableDraft/);
-  assert.doesNotMatch(actions, /canonicalSubscriptionUiVisible/);
+  assert.doesNotMatch(actions, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
 });

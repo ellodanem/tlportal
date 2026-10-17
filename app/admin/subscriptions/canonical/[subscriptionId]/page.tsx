@@ -35,7 +35,10 @@ export default async function CanonicalSubscriptionDetailPage({ params, searchPa
   const [{ subscriptionId }, previewQuery] = await Promise.all([params, searchParams]);
   const subscription = await getCanonicalSubscriptionAdminDetail(subscriptionId);
   if (!subscription) notFound();
-  const editable = subscription.access === "editable_draft" && canonicalSubscriptionUiEnabled();
+  const editable = subscription.access === "editable_draft" && (
+    canonicalSubscriptionUiEnabled()
+    || (subscription.controlMode === "canonical" && canonicalSubscriptionUiVisible())
+  );
   const localPilotActivationAvailable = canonicalSubscriptionUiEnabled()
     && process.env.CANONICAL_MANUAL_PILOT_ENABLED === "true"
     && process.env.CANONICAL_MANUAL_PILOT_CUSTOMER_ID === subscription.customerId

@@ -121,8 +121,9 @@ export function canonicalSubscriptionUiAccess(input: {
   hasMigrationLedger: boolean;
 }): CanonicalSubscriptionUiAccess {
   if (input.controlMode === "legacy") return "legacy_read_only";
-  if (input.controlMode === "canonical") return "canonical_read_only";
   if (input.hasMigrationLedger) return "migrated_shadow_read_only";
+  if (input.controlMode === "canonical" && input.lifecycleStatus === "draft") return "editable_draft";
+  if (input.controlMode === "canonical") return "canonical_read_only";
   if (input.lifecycleStatus === "draft") return "editable_draft";
   return "shadow_read_only";
 }
@@ -142,6 +143,41 @@ export function assertCanonicalSubscriptionUiActionAllowed(input: {
       "Only an unmigrated canonical shadow subscription in draft status can be edited in Phase UI-1.",
     );
   }
+}
+
+/** New-customer onboarding may edit only fresh canonical drafts in production. */
+export function assertCanonicalSubscriptionOnboardingAllowed(input: {
+  authenticated: boolean;
+  access: CanonicalSubscriptionUiAccess;
+  controlMode?: "legacy" | "shadow" | "canonical";
+  environment?: CanonicalSubscriptionUiEnvironment;
+}): void {
+  const environment = input.environment ?? process.env;
+  if (!input.authenticated) {
+    throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "You must be signed in.");
+  }
+  if (input.access !== "editable_draft") {
+    throw new CanonicalSubscriptionUiError(
+      "SUBSCRIPTION_READ_ONLY",
+      "Only an unmigrated canonical draft can be edited.",
+    );
+  }
+  if (environment.NODE_ENV === "production") {
+    if (!canonicalSubscriptionUiVisible(environment)) {
+      throw new CanonicalSubscriptionUiError(
+        "PRODUCTION_UI_DISABLED",
+        "Canonical customer onboarding requires the approved production administration setting.",
+      );
+    }
+    if (input.controlMode !== "canonical") {
+      throw new CanonicalSubscriptionUiError(
+        "SHADOW_WRITE_DISABLED",
+        "Production onboarding cannot modify a legacy migration shadow.",
+      );
+    }
+    return;
+  }
+  assertCanonicalSubscriptionUiEnabled(environment);
 }
 
 export function normalizedMonthlyAmount(

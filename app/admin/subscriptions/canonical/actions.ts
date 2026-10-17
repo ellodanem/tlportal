@@ -4,15 +4,17 @@ import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
+import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 import {
-  assertCanonicalSubscriptionUiActionAllowed,
-  assertCanonicalSubscriptionUiEnabled,
+  assertCanonicalSubscriptionOnboardingAllowed,
+  canonicalSubscriptionUiVisible,
   canonicalSubscriptionUiAccess,
   CanonicalSubscriptionUiError,
 } from "@/lib/domain/canonical-subscription-admin";
 import { CanonicalSubscriptionValidationError } from "@/lib/domain/canonical-subscription-application";
 import {
   addBillableServiceToSubscription,
+  createCanonicalOnboarding,
   createDraftCanonicalSubscription,
   scheduleSubscriptionItemEnd,
   scheduleSubscriptionItemRate,
@@ -44,16 +46,16 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
 }
 
 async function requireStaff() {
-  assertCanonicalSubscriptionUiEnabled();
+  if (!canonicalSubscriptionUiVisible()) throw new CanonicalSubscriptionUiError("FEATURE_DISABLED", "Canonical onboarding is unavailable.");
   const session = await getSession();
   if (!session) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "You must be signed in.");
+  const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { id: true } });
+  if (!user) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "A staff account is required.");
   return session;
 }
 
 async function requireEditableDraft(subscriptionId: string) {
-  assertCanonicalSubscriptionUiEnabled();
-  const session = await getSession();
-  if (!session) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "You must be signed in.");
+  const session = await requireStaff();
   const subscription = await prisma.customerSubscription.findUnique({
     where: { id: subscriptionId },
     select: {
@@ -66,13 +68,14 @@ async function requireEditableDraft(subscriptionId: string) {
   if (!subscription) {
     throw new CanonicalSubscriptionUiError("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
   }
-  assertCanonicalSubscriptionUiActionAllowed({
+  assertCanonicalSubscriptionOnboardingAllowed({
     authenticated: true,
     access: canonicalSubscriptionUiAccess({
       controlMode: subscription.controlMode,
       lifecycleStatus: subscription.lifecycleStatus,
       hasMigrationLedger: Boolean(subscription.canonicalMigrationLedger),
     }),
+    controlMode: subscription.controlMode,
   });
   return session;
 }
@@ -98,6 +101,9 @@ export async function createCanonicalDraftAction(
 ): Promise<CanonicalSubscriptionFormState> {
   try {
     const session = await requireStaff();
+    if (process.env.NODE_ENV === "production") {
+      return { error: "Use canonical customer onboarding for new production subscriptions." };
+    }
     const interval = Number(text(formData, "billingIntervalMonths"));
     const defaultAmount = text(formData, "defaultAgreedAmountPerCycle");
     const initialLabel = optionalText(formData, "initialItemLabel");
@@ -129,6 +135,71 @@ export async function createCanonicalDraftAction(
     return {
       message: "Shadow draft created. No billing or provider operation was started.",
       next: `/admin/subscriptions/canonical/${subscription.id}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function createCanonicalOnboardingAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  try {
+    await requireStaff();
+    const customerMode = text(formData, "customerMode");
+    const rawPhone = optionalText(formData, "newCustomerPhone");
+    const phone = rawPhone ? normalizeWhatsAppPhone(rawPhone) : null;
+    if (rawPhone && !phone) return { error: "Enter the new customer phone with a valid country code." };
+
+    const labels = formData.getAll("serviceLabel").map((value) => String(value).trim());
+    const amounts = formData.getAll("serviceAmount").map((value) => String(value).trim());
+    const classifications = formData.getAll("serviceClassification").map((value) => String(value));
+    const deviceIds = formData.getAll("serviceDeviceId").map((value) => String(value).trim());
+    if (!labels.length || labels.some((label) => !label)) return { error: "Every tracking service needs a label." };
+    if (amounts.length !== labels.length || amounts.some((amount) => !amount)) return { error: "Every tracking service needs an explicit cycle price." };
+
+    const result = await createCanonicalOnboarding({
+      customer: customerMode === "existing" ? {
+        existingCustomerId: text(formData, "customerId"),
+      } : {
+        firstName: optionalText(formData, "newCustomerFirstName"),
+        lastName: optionalText(formData, "newCustomerLastName"),
+        company: optionalText(formData, "newCustomerCompany"),
+        email: optionalText(formData, "newCustomerEmail"),
+        phone,
+        address: optionalText(formData, "newCustomerAddress"),
+        city: optionalText(formData, "newCustomerCity"),
+        country: optionalText(formData, "newCustomerCountry"),
+        invoiceCc: optionalText(formData, "newCustomerInvoiceCc"),
+        invoiceBcc: optionalText(formData, "newCustomerInvoiceBcc"),
+        notes: optionalText(formData, "newCustomerNotes"),
+      },
+      name: text(formData, "name"),
+      reference: optionalText(formData, "reference"),
+      billingIntervalMonths: Number(text(formData, "billingIntervalMonths")),
+      collectionMethod: text(formData, "collectionMethod") as "manual_invoice" | "stripe_autocharge",
+      currency: text(formData, "currency") || "XCD",
+      defaultAgreedAmountPerCycle: amounts[0],
+      commercialStartDate: text(formData, "commercialStartDate"),
+      billingAnchorDate: text(formData, "billingAnchorDate"),
+      nextBillingDate: text(formData, "nextBillingDate"),
+      gracePeriodDays: Number(text(formData, "gracePeriodDays") || "7"),
+      items: labels.map((label, index) => ({
+        label,
+        agreedAmountPerCycle: amounts[index],
+        rateClassification: classifications[index] === "negotiated" ? "negotiated" : "standard",
+        rateChangeReason: classifications[index] === "negotiated" ? "Initial negotiated onboarding rate" : "Initial onboarding rate",
+        deviceId: deviceIds[index] || null,
+      })),
+    });
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${result.customerId}`);
+    revalidatePath("/admin/devices");
+    revalidatePath("/admin/subscriptions/canonical");
+    return {
+      message: "Canonical customer onboarding draft created. Billing remains inactive until a later explicit activation.",
+      next: `/admin/subscriptions/canonical/${result.subscription.id}`,
     };
   } catch (error) {
     return actionError(error);
