@@ -16,9 +16,17 @@ export type TwilioWhatsAppCustomerTemplateKey =
   | "payment_declined"
   | "outstanding_invoices";
 
+export type TwilioWhatsAppBillingNotificationTemplateKey =
+  | "billing_manual_upcoming"
+  | "billing_overdue"
+  | "billing_pause_warning"
+  | "billing_stripe_upcoming"
+  | "billing_payment_received";
+
 export type TwilioWhatsAppTemplateKey =
   | TwilioWhatsAppReminderTemplateKey
-  | TwilioWhatsAppCustomerTemplateKey;
+  | TwilioWhatsAppCustomerTemplateKey
+  | TwilioWhatsAppBillingNotificationTemplateKey;
 
 const TEMPLATE_ENV: Record<TwilioWhatsAppTemplateKey, string> = {
   due_5d: "TWILIO_WA_TEMPLATE_DUE_5_DAYS",
@@ -31,6 +39,11 @@ const TEMPLATE_ENV: Record<TwilioWhatsAppTemplateKey, string> = {
   invoice_new: "TWILIO_WA_TEMPLATE_INVOICE_NEW",
   payment_declined: "TWILIO_WA_TEMPLATE_PAYMENT_DECLINED",
   outstanding_invoices: "TWILIO_WA_TEMPLATE_OUTSTANDING_INVOICES",
+  billing_manual_upcoming: "TWILIO_WA_TEMPLATE_BILLING_MANUAL_UPCOMING",
+  billing_overdue: "TWILIO_WA_TEMPLATE_BILLING_OVERDUE",
+  billing_pause_warning: "TWILIO_WA_TEMPLATE_BILLING_PAUSE_WARNING",
+  billing_stripe_upcoming: "TWILIO_WA_TEMPLATE_BILLING_STRIPE_UPCOMING",
+  billing_payment_received: "TWILIO_WA_TEMPLATE_BILLING_PAYMENT_RECEIVED",
 };
 
 export function isTwilioWhatsAppConfigured(): boolean {

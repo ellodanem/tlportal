@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
+import { BillingNotificationHistory } from "@/components/admin/billing-notification-history";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
 import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-status-strip";
 import { PaymentRemindersSection } from "@/components/admin/payment-reminders-section";
@@ -16,6 +17,7 @@ import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
 import { formatMoney } from "@/lib/domain/native-billing";
 import { buildPaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-messaging";
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
+import { prisma } from "@/lib/db";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -36,6 +38,12 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
   if (!data) {
     notFound();
   }
+  const notificationDeliveries = await prisma.billingNotificationDelivery.findMany({
+    where: { customerId: id },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+    select: { id: true, eventKind: true, channel: true, status: true, destination: true, attempts: true, lastError: true },
+  });
 
   const {
     customer,
@@ -172,6 +180,8 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
           whatsAppConfigured={isTwilioWhatsAppConfigured()}
         />
       ) : null}
+
+      <BillingNotificationHistory customerId={customer.id} deliveries={notificationDeliveries} />
 
       {isManual ? (
         <>

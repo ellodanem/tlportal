@@ -60,6 +60,7 @@ import { recordOutboundWhatsAppMessage } from "@/lib/communications/whatsapp-con
 import { getTwilioContentSid, isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { toSmsAddress, toWhatsAppAddress } from "@/lib/twilio/phone";
 import { sendTwilioWhatsAppContent } from "@/lib/twilio/whatsapp-send";
+import { retryBillingNotificationDelivery } from "@/lib/billing/invoice-notifications";
 import { checkoutInitialEmailBody, checkoutInitialLinkNotice } from "@/lib/stripe/checkout-messaging";
 import { checkoutStaffPricingNote } from "@/lib/stripe/checkout-fee-copy";
 import { parseFeePassthrough } from "@/lib/stripe/fees";
@@ -1358,4 +1359,23 @@ export async function resendPaymentDeclineWhatsAppAction(
     ok: true,
     message: `Decline follow-up WhatsApp sent${result.phone ? ` to ${result.phone}` : ""}.`,
   };
+}
+
+export type RetryBillingNotificationState = { error: string | null; ok?: boolean; message?: string };
+
+/** Retry one failed automatic billing email or WhatsApp delivery after revalidating the invoice. */
+export async function retryBillingNotificationAction(
+  _prev: RetryBillingNotificationState,
+  formData: FormData,
+): Promise<RetryBillingNotificationState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+  const deliveryId = String(formData.get("deliveryId") ?? "").trim();
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!deliveryId || !customerId) return { error: "Missing notification delivery." };
+  const result = await retryBillingNotificationDelivery(deliveryId, session.sub);
+  if (!result.ok) return { error: result.error };
+  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/customers/${customerId}`);
+  return { error: null, ok: true, message: "Notification resent." };
 }

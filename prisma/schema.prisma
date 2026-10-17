@@ -129,6 +129,20 @@ enum PaymentRemindersPreference {
   off
 }
 
+/// Customer-facing billing notification transport. Customer SMS is intentionally excluded.
+enum BillingNotificationChannel {
+  email
+  whatsapp
+}
+
+enum BillingNotificationStatus {
+  pending
+  sending
+  sent
+  failed
+  suppressed
+}
+
 enum BillingProvider {
   invoiless
   stripe
@@ -412,6 +426,7 @@ model User {
   scheduledInvoiceEmailsCreated ScheduledInvoiceEmail[]
   paymentsRecorded              Payment[]
   recurringSchedulesCreated     RecurringInvoiceSchedule[]
+  billingNotificationRetries    BillingNotificationDelivery[] @relation("BillingNotificationRetriedBy")
   expensesRecorded              Expense[]
   vendorBillsCreated            VendorBill[]
   vendorBillPaymentsRecorded    VendorBillPayment[]
@@ -468,6 +483,7 @@ model Customer {
   billingAccounts            BillingAccount[]
   billingInvoices            BillingInvoice[]
   billingWhatsAppReminders   BillingWhatsAppReminder[]
+  billingNotificationDeliveries BillingNotificationDelivery[]
   billingPayLinkAdminAlerts  BillingPayLinkAdminAlert[]
   customerWhatsAppDeliveries CustomerWhatsAppDelivery[]
   whatsappConversations      WhatsAppConversation[]
@@ -948,6 +964,33 @@ model BillingWhatsAppReminder {
 
   @@unique([customerId, reminderKind, nextDueDate])
   @@index([customerId, sentAt(sort: Desc)])
+}
+
+/// Durable per-channel ledger for automatic and staff-retried billing notices.
+model BillingNotificationDelivery {
+  id                String                    @id @default(uuid())
+  idempotencyKey    String                    @unique
+  customerId        String
+  customer          Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  invoiceId         String?
+  invoice           Invoice?                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  eventKind         String
+  channel           BillingNotificationChannel
+  status            BillingNotificationStatus @default(pending)
+  destination       String?
+  providerMessageId String?
+  attempts          Int                       @default(0)
+  lastError         String?                   @db.Text
+  claimedAt         DateTime?
+  sentAt            DateTime?
+  suppressedAt      DateTime?
+  retriedById       String?
+  retriedBy         User?                     @relation("BillingNotificationRetriedBy", fields: [retriedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([customerId, status, createdAt(sort: Desc)])
+  @@index([invoiceId, eventKind])
 }
 
 /// One-off customer WhatsApp (Stripe checkout link, new Invoiless invoice).
@@ -1553,6 +1596,7 @@ model Invoice {
   payments  Payment[]
   serviceSnapshots InvoiceServiceSnapshot[]
   scheduledEmails ScheduledInvoiceEmail[]
+  billingNotificationDeliveries BillingNotificationDelivery[]
   lastOnSchedule RecurringInvoiceSchedule? @relation("ScheduleLastInvoice")
 
   createdAt DateTime @default(now())

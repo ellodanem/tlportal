@@ -10,6 +10,7 @@ import { syncCustomerToInvoilessBilling } from "@/lib/services/billing-service";
 import { archiveCustomer, unarchiveCustomer } from "@/lib/services/customer-archive-service";
 import { enableCustomerBillingLifecycle } from "@/lib/services/billing-lifecycle-service";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
+import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 
 import type { CustomerFormActionState } from "./customer-form-state";
 
@@ -56,6 +57,16 @@ function validateNameOrCompany(fields: ReturnType<typeof readCustomerFields>): s
   return null;
 }
 
+function normalizeCustomerPhone(fields: ReturnType<typeof readCustomerFields>): string | null {
+  if (!fields.phone) return null;
+  const normalized = normalizeWhatsAppPhone(fields.phone);
+  if (!normalized) {
+    return "Enter a valid WhatsApp-capable mobile number in international format (for example +1 758 555 1234).";
+  }
+  fields.phone = normalized;
+  return null;
+}
+
 export async function createCustomer(
   _prev: CustomerFormActionState,
   formData: FormData,
@@ -65,6 +76,8 @@ export async function createCustomer(
   if (v) {
     return { error: v };
   }
+  const phoneError = normalizeCustomerPhone(fields);
+  if (phoneError) return { error: phoneError };
 
   const session = await getSession();
   const setupBilling = String(formData.get("setupBilling") ?? "") === "1";
@@ -155,6 +168,8 @@ export async function updateCustomer(
     if (v) {
       return { error: v };
     }
+    const phoneError = normalizeCustomerPhone(fields);
+    if (phoneError) return { error: phoneError };
     data = {
       firstName: fields.firstName,
       lastName: fields.lastName,

@@ -202,7 +202,11 @@ function CustomerFormInner({
               defaultValue={defaults.phone ?? ""}
               className={inputClass}
               autoComplete="tel"
+              placeholder="+1 758 555 1234"
             />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              WhatsApp reminders use this mobile number. Include the country code.
+            </p>
           </div>
         </div>
 

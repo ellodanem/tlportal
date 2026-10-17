@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { processBillingWhatsAppReminders } from "@/lib/billing/whatsapp-reminders";
+import { processInvoiceNotificationReminders } from "@/lib/billing/invoice-notifications";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-/** Daily billing WhatsApp reminders (5/3/0 before due, +3/+5 overdue). Bearer CRON_SECRET. */
+/** Daily invoice-based customer billing notices (Email + WhatsApp; no customer SMS). */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {
@@ -23,6 +23,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const result = await processBillingWhatsAppReminders();
+  const result = await processInvoiceNotificationReminders();
   return NextResponse.json(result);
 }

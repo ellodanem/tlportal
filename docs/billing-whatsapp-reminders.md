@@ -1,4 +1,6 @@
-# Billing WhatsApp reminders (Twilio)
+# Billing invoice notifications (Email + Twilio WhatsApp)
+
+> **Current program:** invoice notices are Email + WhatsApp only; customer SMS is intentionally not used. The daily scheduler selects eligible unpaid invoices by actual `dueDate`: manual payers receive -5/-3/-1/+1/+3/+7/+8; Stripe payers receive -3 then +1/+3/+7/+8 if still unpaid. At +8 it creates a staff-review `billing.pause_pending` event rather than silently suspending service. Delivery history is stored per invoice, event, and channel; failed deliveries can be retried from Customer → Billing.
 
 Automated subscription payment nudges via **Twilio Content** templates, separate from **Invoiless email** reminders.
 
@@ -88,6 +90,20 @@ Tap below to complete your payment securely. Need help? Just reply to this messa
 - Variables: `{{1}}` first name · `{{2}}` short decline reason · `{{3}}` payment label (`your Track Lucia Subscription` / `TL-INV-…`) · `{{4}}` amount · `{{5}}` redirect token
 
 **`/pay/go/{token}` redirect:** WhatsApp URL buttons require a fixed base domain, so the pay link is a stable `/pay/go/{token}` on our domain that 302-redirects to the real destination (native pay page or Stripe hosted invoice). The token is stored as `payLinkToken` on the `billing.payment_failed` operational event.
+
+## Invoice-notification Content templates
+
+Create these approved **Utility** templates in Twilio and set the corresponding environment variable. The invoice scheduler supplies `{{1}}` name, `{{2}}` invoice, `{{3}}` amount, `{{4}}` due date, `{{5}}` days, and `{{6}}` payment URL unless noted otherwise.
+
+| Environment variable | Purpose |
+|---|---|
+| `TWILIO_WA_TEMPLATE_BILLING_MANUAL_UPCOMING` | Manual/cheque invoice due in 5, 3, or 1 day |
+| `TWILIO_WA_TEMPLATE_BILLING_OVERDUE` | Invoice overdue by 1, 3, or 7 days |
+| `TWILIO_WA_TEMPLATE_BILLING_PAUSE_WARNING` | Final day-8 service-pause warning |
+| `TWILIO_WA_TEMPLATE_BILLING_STRIPE_UPCOMING` | Stripe automatic charge due in 3 days |
+| `TWILIO_WA_TEMPLATE_BILLING_PAYMENT_RECEIVED` | Successful Stripe payment confirmation |
+
+The templates must use a customer-safe URL button. Messages should include “If you have already paid, please disregard” except for the successful-payment confirmation.
 
 ## Inbound WhatsApp (conversations)
 

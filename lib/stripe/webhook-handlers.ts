@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/invoiless-stripe-mirror-service";
 import { recordNativeInvoiceStripeCheckout } from "@/lib/services/native-invoice-stripe-payment-service";
 import { fulfillPaidStripeInvoiceReceipt } from "@/lib/services/billing-paid-receipt-fulfillment-service";
+import { sendStripePaymentReceivedNotification } from "@/lib/billing/invoice-notifications";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { catchUpOverdueRenewalsFromLatestPaidInvoice } from "@/lib/services/stripe-renewal-catchup-service";
 import {
@@ -141,6 +142,11 @@ async function processPaidStripeInvoice(invoice: Stripe.Invoice): Promise<void> 
   }
   if (tlBillingInvoiceId) {
     await fulfillPaidInvoiceReceiptBestEffort(tlBillingInvoiceId);
+    try {
+      await sendStripePaymentReceivedNotification(tlBillingInvoiceId);
+    } catch (error) {
+      console.error("[stripe webhook] payment received notification failed", error);
+    }
   }
 }
 
