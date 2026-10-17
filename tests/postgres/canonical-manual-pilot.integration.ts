@@ -857,3 +857,30 @@ test("87: established manual-invoice preparation rejects incomplete or repriced 
     })),
   }, "2026-10-16"), /service price must match the selected manual invoice unit price exactly/);
 });
+
+test("88: a conflicting established invoice remains reviewable through an encoded proposal route", async () => {
+  const fixture = await createEstablishedManualInvoiceFixture();
+  await prisma.customerSubscription.create({
+    data: {
+      customerId: fixture.customer.id,
+      planTermMonths: 3,
+      status: "canceled",
+      monthlyRateXcd: "20.00",
+      vehicleCount: 14,
+      currentPeriodStart: new Date("2026-10-15T00:00:00.000Z"),
+      currentPeriodEnd: new Date("2027-01-15T00:00:00.000Z"),
+    },
+  });
+
+  const review = await getCanonicalManualPilotMigrationReview(
+    `manual-invoice%3A${fixture.sourceInvoice.id}`,
+    "2026-10-16",
+  );
+  assert.equal(review.candidate.proposalId, `manual-invoice:${fixture.sourceInvoice.id}`);
+  assert.equal(review.candidate.reviewStatus, "conflict");
+  assert.equal(review.assignments.length, 14);
+  assert.equal(review.sourceInvoice?.id, fixture.sourceInvoice.id);
+  assert.ok(review.candidate.issueDetails.some((issue) => issue.code === "multiple_arrangements_same_interval"));
+  assert.ok(review.candidate.issueDetails.some((issue) => issue.code === "active_assignments_unmapped"));
+  assert.equal(await prisma.invoice.count({ where: { id: fixture.sourceInvoice.id } }), 1);
+});

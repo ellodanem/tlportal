@@ -133,6 +133,16 @@ test("overview filters preserve one row per subscription and combine operational
   assert.deepEqual(filterCanonicalSubscriptionAdminRows([monthly, stripe], { query: "Fleet A", controlMode: "canonical" }).map((entry) => entry.id), ["sub-monthly"]);
 });
 
+test("current and history views distinguish terminated arrangements without combining them", () => {
+  const current = row({ id: "sub-current", lifecycleStatus: "active", controlMode: "legacy" });
+  const historical = row({ id: "sub-history", lifecycleStatus: "canceled", controlMode: "legacy" });
+  assert.equal(current.historical, false);
+  assert.equal(historical.historical, true);
+  assert.deepEqual(filterCanonicalSubscriptionAdminRows([current, historical], { view: "current" }).map((entry) => entry.id), ["sub-current"]);
+  assert.deepEqual(filterCanonicalSubscriptionAdminRows([current, historical], { view: "history" }).map((entry) => entry.id), ["sub-history"]);
+  assert.deepEqual(filterCanonicalSubscriptionAdminRows([current, historical], { view: "all" }).map((entry) => entry.id), ["sub-current", "sub-history"]);
+});
+
 test("UI routes include detail, empty, loading, error and price-history states", async () => {
   const [overview, detail, demo, loading, error, preflight] = await Promise.all([
     readFile("app/admin/subscriptions/canonical/page.tsx", "utf8"),
