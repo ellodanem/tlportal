@@ -19,7 +19,9 @@ import { loadLegacyBillingSnapshot } from "@/lib/services/subscription-migration
 
 export type CanonicalManualPilotCandidate = {
   proposalId: string;
-  sourceScheduleId: string;
+  sourceKind: "manual_schedule" | "manual_invoice";
+  sourceScheduleId: string | null;
+  sourceInvoiceId: string | null;
   customerId: string;
   customerLabel: string;
   reviewStatus: string;
@@ -64,6 +66,15 @@ export type CanonicalManualPilotMigrationReview = {
   }>;
   outstandingBalance: string;
   sourceFingerprint: string;
+  sourceInvoice: {
+    id: string;
+    issueDate: string;
+    subtotal: string;
+    taxLabel: string | null;
+    taxRatePercent: string | null;
+    taxTotal: string;
+    total: string;
+  } | null;
 };
 
 export type ManualPilotApprovedItemInput = {
@@ -113,7 +124,9 @@ export async function listCanonicalManualPilotCandidates(
   const analysis = analyzeSubscriptionMigration(snapshot);
   const proposals = analysis.customers.flatMap((customer) =>
     customer.proposals
-      .filter((proposal) => proposal.sourceKind === "manual_schedule")
+      .filter((proposal) =>
+        (proposal.sourceKind === "manual_schedule" || proposal.sourceKind === "manual_invoice")
+        && proposal.collectionMethod === "manual_invoice")
       .map((proposal) => ({ customer, proposal })));
   const [customers, ledgers] = await Promise.all([
     prisma.customer.findMany({
@@ -122,7 +135,7 @@ export async function listCanonicalManualPilotCandidates(
     }),
     prisma.canonicalMigrationLedger.findMany({
       where: {
-        sourceKind: "manual_schedule",
+        sourceKind: { in: ["manual_schedule", "manual_invoice"] },
         sourceId: { in: proposals.map(({ proposal }) => proposal.sourceId) },
       },
       select: { sourceId: true, status: true, targetSubscriptionId: true },
@@ -135,7 +148,9 @@ export async function listCanonicalManualPilotCandidates(
     const record = customerById.get(proposal.customerId);
     return {
       proposalId: proposal.proposalId,
-      sourceScheduleId: proposal.sourceId,
+      sourceKind: proposal.sourceKind as "manual_schedule" | "manual_invoice",
+      sourceScheduleId: proposal.sourceKind === "manual_schedule" ? proposal.sourceId : null,
+      sourceInvoiceId: proposal.sourceKind === "manual_invoice" ? proposal.sourceId : null,
       customerId: proposal.customerId,
       customerLabel: record ? displayName(record) : proposal.customerId,
       reviewStatus: customer.reviewStatus === "conflict" ? "conflict" : proposal.reviewStatus,
@@ -160,8 +175,11 @@ export async function getCanonicalManualPilotMigrationReview(
 ): Promise<CanonicalManualPilotMigrationReview> {
   const snapshot = await loadLegacyBillingSnapshot(analysisDate);
   const { customer, proposal } = proposalFromSnapshot(snapshot, proposalId);
-  if (proposal.sourceKind !== "manual_schedule" || proposal.collectionMethod !== "manual_invoice") {
-    throw new Error("The first operational pilot is restricted to an existing manual recurring schedule.");
+  if (
+    (proposal.sourceKind !== "manual_schedule" && proposal.sourceKind !== "manual_invoice")
+    || proposal.collectionMethod !== "manual_invoice"
+  ) {
+    throw new Error("The first operational pilot is restricted to a verified manual billing arrangement.");
   }
   const customerRecord = await prisma.customer.findUniqueOrThrow({
     where: { id: proposal.customerId },
@@ -186,6 +204,36 @@ export async function getCanonicalManualPilotMigrationReview(
   });
   const invoices = snapshot.invoices.filter((invoice) => proposal.invoiceIds.includes(invoice.id));
   const payments = snapshot.payments.filter((payment) => proposal.paymentIds.includes(payment.id));
+  const sourceInvoice = proposal.sourceKind === "manual_invoice"
+    ? await prisma.invoice.findUnique({
+      where: { id: proposal.sourceId },
+      select: {
+        id: true,
+        customerId: true,
+        customerSubscriptionId: true,
+        recurringScheduleId: true,
+        archivedAt: true,
+        status: true,
+        issueDate: true,
+        subtotal: true,
+        taxLabel: true,
+        taxRatePercent: true,
+        taxTotal: true,
+        total: true,
+        lineItems: { select: { quantity: true, unitPrice: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+      },
+    })
+    : null;
+  if (proposal.sourceKind === "manual_invoice" && (
+    !sourceInvoice
+    || sourceInvoice.customerId !== proposal.customerId
+    || sourceInvoice.customerSubscriptionId != null
+    || sourceInvoice.recurringScheduleId != null
+    || sourceInvoice.archivedAt != null
+    || ["void", "written_off"].includes(sourceInvoice.status)
+  )) {
+    throw new Error("The selected manual invoice is no longer a valid independent billing source.");
+  }
   const ledger = await prisma.canonicalMigrationLedger.findUnique({
     where: { sourceKind_sourceId: { sourceKind: proposal.sourceKind, sourceId: proposal.sourceId } },
     select: { status: true, targetSubscriptionId: true },
@@ -193,7 +241,9 @@ export async function getCanonicalManualPilotMigrationReview(
   return {
     candidate: {
       proposalId,
-      sourceScheduleId: proposal.sourceId,
+      sourceKind: proposal.sourceKind,
+      sourceScheduleId: proposal.sourceKind === "manual_schedule" ? proposal.sourceId : null,
+      sourceInvoiceId: proposal.sourceKind === "manual_invoice" ? proposal.sourceId : null,
       customerId: proposal.customerId,
       customerLabel: displayName(customerRecord),
       reviewStatus: customer.reviewStatus === "conflict" ? "conflict" : proposal.reviewStatus,
@@ -240,6 +290,15 @@ export async function getCanonicalManualPilotMigrationReview(
     })),
     outstandingBalance: customer.outstandingNativeBalance,
     sourceFingerprint: migrationSourceFingerprint(snapshot),
+    sourceInvoice: sourceInvoice ? {
+      id: sourceInvoice.id,
+      issueDate: sourceInvoice.issueDate.toISOString(),
+      subtotal: sourceInvoice.subtotal.toFixed(2),
+      taxLabel: sourceInvoice.taxLabel,
+      taxRatePercent: sourceInvoice.taxRatePercent?.toFixed(2) ?? null,
+      taxTotal: sourceInvoice.taxTotal.toFixed(2),
+      total: sourceInvoice.total.toFixed(2),
+    } : null,
   };
 }
 
@@ -249,8 +308,11 @@ export async function buildCanonicalManualPilotMigrationPlan(
 ): Promise<CanonicalMigrationPlan> {
   const snapshot = await loadLegacyBillingSnapshot(analysisDate);
   const { customer, proposal } = proposalFromSnapshot(snapshot, input.proposalId);
-  if (proposal.sourceKind !== "manual_schedule" || proposal.collectionMethod !== "manual_invoice") {
-    throw new Error("Only a manual recurring schedule can be prepared for the first pilot.");
+  if (
+    (proposal.sourceKind !== "manual_schedule" && proposal.sourceKind !== "manual_invoice")
+    || proposal.collectionMethod !== "manual_invoice"
+  ) {
+    throw new Error("Only a verified manual billing arrangement can be prepared for the first pilot.");
   }
   if (!input.items.length) throw new Error("At least one explicitly priced service is required.");
   const assignments = new Map(snapshot.assignments.map((assignment) => [assignment.id, assignment]));
@@ -282,6 +344,57 @@ export async function buildCanonicalManualPilotMigrationPlan(
     (total, item) => total.plus(item.agreedAmountPerCycle),
     new Prisma.Decimal(0),
   ).toFixed(2);
+  if (proposal.sourceKind === "manual_invoice") {
+    const sourceInvoice = await prisma.invoice.findUnique({
+      where: { id: proposal.sourceId },
+      select: {
+        customerId: true,
+        customerSubscriptionId: true,
+        recurringScheduleId: true,
+        archivedAt: true,
+        status: true,
+        currency: true,
+        subtotal: true,
+        taxRatePercent: true,
+        taxTotal: true,
+        total: true,
+        lineItems: { select: { quantity: true, unitPrice: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+      },
+    });
+    if (
+      !sourceInvoice
+      || sourceInvoice.customerId !== proposal.customerId
+      || sourceInvoice.customerSubscriptionId != null
+      || sourceInvoice.recurringScheduleId != null
+      || sourceInvoice.archivedAt != null
+      || ["void", "written_off"].includes(sourceInvoice.status)
+    ) {
+      throw new Error("The selected manual invoice is no longer a valid independent billing source.");
+    }
+    if (sourceInvoice.currency.toUpperCase() !== proposal.currency.toUpperCase()) {
+      throw new Error("The selected manual invoice currency does not match the approved arrangement.");
+    }
+    const sourceQuantity = sourceInvoice.lineItems.reduce((total, line) => {
+      const quantity = new Prisma.Decimal(line.quantity);
+      return quantity.isInteger() && quantity.greaterThan(0) ? total + quantity.toNumber() : total;
+    }, 0);
+    const sourceUnitPrices = [...new Set(sourceInvoice.lineItems.map((line) => line.unitPrice.toFixed(2)))];
+    if (!sourceQuantity || sourceQuantity !== normalizedItems.length || sourceUnitPrices.length !== 1) {
+      throw new Error("The selected manual invoice must provide one unambiguous unit price for every approved service assignment.");
+    }
+    if (normalizedItems.some((item) => item.agreedAmountPerCycle !== sourceUnitPrices[0])) {
+      throw new Error("Each approved service price must match the selected manual invoice unit price exactly.");
+    }
+    if (!sourceInvoice.subtotal.equals(expectedTotal)) {
+      throw new Error("Approved service prices must equal the selected manual invoice subtotal exactly.");
+    }
+    const expectedTax = sourceInvoice.taxRatePercent == null
+      ? new Prisma.Decimal(0)
+      : sourceInvoice.subtotal.mul(sourceInvoice.taxRatePercent).div(100).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    if (!sourceInvoice.taxTotal.equals(expectedTax) || !sourceInvoice.total.equals(sourceInvoice.subtotal.plus(sourceInvoice.taxTotal))) {
+      throw new Error("The selected manual invoice tax treatment is not internally consistent.");
+    }
+  }
   const requiredIssueCodes = [...new Set([...customer.issues, ...proposal.issues]
     .filter((issue) => issue.severity === "decision" || issue.severity === "conflict")
     .map((issue) => issue.code))].sort();

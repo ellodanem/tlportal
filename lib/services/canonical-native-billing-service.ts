@@ -248,6 +248,9 @@ export async function getCanonicalSubscriptionBillingSummary(
       canonicalManualPilotActivation: {
         select: {
           status: true,
+          sourceInvoice: {
+            select: { id: true, amountDue: true, dueDate: true },
+          },
           legacySchedule: {
             select: {
               generatedInvoices: {
@@ -267,7 +270,10 @@ export async function getCanonicalSubscriptionBillingSummary(
 
   const collectionInvoices = [
     ...subscription.invoices,
-    ...(subscription.canonicalManualPilotActivation?.legacySchedule.generatedInvoices ?? []),
+    ...(subscription.canonicalManualPilotActivation?.legacySchedule?.generatedInvoices ?? []),
+    ...(subscription.canonicalManualPilotActivation?.sourceInvoice
+      ? [subscription.canonicalManualPilotActivation.sourceInvoice]
+      : []),
   ];
   const seenCollectionInvoices = new Set<string>();
   const collection = deriveCanonicalCollectionHealth({
