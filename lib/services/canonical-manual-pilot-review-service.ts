@@ -31,9 +31,27 @@ export type CanonicalManualPilotCandidate = {
   nextBillingDate: string | null;
   proposedItemCount: number;
   issueCodes: string[];
+  issueDetails: Array<{ code: string; severity: string; message: string }>;
   migrationStatus: string | null;
   targetSubscriptionId: string | null;
 };
+
+/** Only an absent/unknown proposal is a route-level 404. Review conflicts remain viewable. */
+export class CanonicalManualPilotReviewNotFoundError extends Error {
+  constructor() {
+    super("The selected legacy billing arrangement is no longer available for review.");
+    this.name = "CanonicalManualPilotReviewNotFoundError";
+  }
+}
+
+/** Next normally decodes a dynamic segment; accept a copied already-encoded link as well. */
+export function normalizeCanonicalManualPilotProposalId(proposalId: string): string {
+  try {
+    return decodeURIComponent(proposalId);
+  } catch {
+    return proposalId;
+  }
+}
 
 export type CanonicalManualPilotMigrationReview = {
   candidate: CanonicalManualPilotCandidate;
@@ -114,7 +132,14 @@ function proposalFromSnapshot(snapshot: LegacyBillingSnapshot, proposalId: strin
     const proposal = customer.proposals.find((entry) => entry.proposalId === proposalId);
     if (proposal) return { analysis, customer, proposal };
   }
-  throw new Error("The selected legacy billing arrangement is no longer available for review.");
+  throw new CanonicalManualPilotReviewNotFoundError();
+}
+
+function proposalIssueDetails(customer: { issues: SubscriptionMigrationProposal["issues"] }, proposal: SubscriptionMigrationProposal) {
+  return [...customer.issues, ...proposal.issues]
+    .map(({ code, severity, message }) => ({ code, severity, message }))
+    .filter((issue, index, all) => all.findIndex((candidate) => candidate.code === issue.code && candidate.message === issue.message) === index)
+    .sort((left, right) => `${left.severity}:${left.code}`.localeCompare(`${right.severity}:${right.code}`));
 }
 
 export async function listCanonicalManualPilotCandidates(
@@ -160,6 +185,7 @@ export async function listCanonicalManualPilotCandidates(
       nextBillingDate: proposal.nextBillingDate,
       proposedItemCount: proposal.proposedItems.length,
       issueCodes: [...new Set([...customer.issues, ...proposal.issues].map((issue) => issue.code))].sort(),
+      issueDetails: proposalIssueDetails(customer, proposal),
       migrationStatus: ledger?.status ?? null,
       targetSubscriptionId: ledger?.targetSubscriptionId ?? null,
     };
@@ -174,7 +200,7 @@ export async function getCanonicalManualPilotMigrationReview(
   analysisDate = new Date().toISOString().slice(0, 10),
 ): Promise<CanonicalManualPilotMigrationReview> {
   const snapshot = await loadLegacyBillingSnapshot(analysisDate);
-  const { customer, proposal } = proposalFromSnapshot(snapshot, proposalId);
+  const { customer, proposal } = proposalFromSnapshot(snapshot, normalizeCanonicalManualPilotProposalId(proposalId));
   if (
     (proposal.sourceKind !== "manual_schedule" && proposal.sourceKind !== "manual_invoice")
     || proposal.collectionMethod !== "manual_invoice"
@@ -240,7 +266,7 @@ export async function getCanonicalManualPilotMigrationReview(
   });
   return {
     candidate: {
-      proposalId,
+      proposalId: proposal.proposalId,
       sourceKind: proposal.sourceKind,
       sourceScheduleId: proposal.sourceKind === "manual_schedule" ? proposal.sourceId : null,
       sourceInvoiceId: proposal.sourceKind === "manual_invoice" ? proposal.sourceId : null,
@@ -253,6 +279,7 @@ export async function getCanonicalManualPilotMigrationReview(
       nextBillingDate: proposal.nextBillingDate,
       proposedItemCount: proposal.proposedItems.length,
       issueCodes: [...new Set([...customer.issues, ...proposal.issues].map((issue) => issue.code))].sort(),
+      issueDetails: proposalIssueDetails(customer, proposal),
       migrationStatus: ledger?.status ?? null,
       targetSubscriptionId: ledger?.targetSubscriptionId ?? null,
     },
@@ -307,7 +334,10 @@ export async function buildCanonicalManualPilotMigrationPlan(
   analysisDate = new Date().toISOString().slice(0, 10),
 ): Promise<CanonicalMigrationPlan> {
   const snapshot = await loadLegacyBillingSnapshot(analysisDate);
-  const { customer, proposal } = proposalFromSnapshot(snapshot, input.proposalId);
+  const { customer, proposal } = proposalFromSnapshot(
+    snapshot,
+    normalizeCanonicalManualPilotProposalId(input.proposalId),
+  );
   if (
     (proposal.sourceKind !== "manual_schedule" && proposal.sourceKind !== "manual_invoice")
     || proposal.collectionMethod !== "manual_invoice"

@@ -82,7 +82,7 @@ export default async function CanonicalManualPilotCandidatesPage() {
                 <div><dt className="text-zinc-500">Next renewal</dt><dd className="mt-1 font-medium">{candidate.nextBillingDate ? new Date(candidate.nextBillingDate).toLocaleDateString(undefined, { dateStyle: "medium", timeZone: "UTC" }) : "Unresolved"}</dd></div>
                 <div><dt className="text-zinc-500">Mapped services</dt><dd className="mt-1 font-medium">{candidate.proposedItemCount}</dd></div>
               </dl>
-              {candidate.issueCodes.length ? <p className="mt-4 text-xs text-zinc-500">Review flags: {candidate.issueCodes.join(", ")}</p> : null}
+              {candidate.issueDetails.length ? <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-zinc-600 dark:text-zinc-300"><li className="list-none font-medium text-zinc-700 dark:text-zinc-200">Review flags</li>{candidate.issueDetails.map((issue) => <li key={`${issue.code}:${issue.message}`}>{issue.message}</li>)}</ul> : null}
             </article>
           ))}
         </div>

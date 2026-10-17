@@ -44,11 +44,13 @@ export type CanonicalSubscriptionAdminRow = {
   collectionHealth: string | null;
   attentionRequired: boolean;
   providerStatus: CanonicalSubscriptionProviderStatus;
+  /** A terminated arrangement is retained for audit/history, but is not current work. */
+  historical: boolean;
 };
 
 export type CanonicalSubscriptionAdminRowInput = Omit<
   CanonicalSubscriptionAdminRow,
-  "access" | "normalizedMrr" | "providerStatus"
+  "access" | "normalizedMrr" | "providerStatus" | "historical"
 > & {
   hasMigrationLedger: boolean;
   legacyMonthlyRate?: string | null;
@@ -181,6 +183,9 @@ export function buildCanonicalSubscriptionAdminRow(
     collectionHealth: input.collectionHealth,
     attentionRequired: input.attentionRequired,
     providerStatus: input.providerStatus ?? "not_applicable",
+    historical: input.controlMode === "legacy"
+      ? input.lifecycleStatus === "canceled"
+      : input.lifecycleStatus === "canceled" || input.lifecycleStatus === "ended",
   };
 }
 
@@ -223,6 +228,8 @@ export function filterCanonicalSubscriptionAdminRows(
     if (filters.view === "migrated" && row.access !== "migrated_shadow_read_only") return false;
     if (filters.view === "canonical" && row.controlMode !== "canonical") return false;
     if (filters.view === "legacy" && row.controlMode !== "legacy") return false;
+    if (filters.view === "current" && row.historical) return false;
+    if (filters.view === "history" && !row.historical) return false;
     if (filters.collectionMethod && row.collectionMethod !== filters.collectionMethod) return false;
     if (filters.lifecycleStatus && row.lifecycleStatus !== filters.lifecycleStatus) return false;
     if (filters.controlMode && row.controlMode !== filters.controlMode) return false;
