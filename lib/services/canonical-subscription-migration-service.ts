@@ -11,12 +11,17 @@ import {
   type CanonicalMigrationPlanEntry,
 } from "@/lib/domain/canonical-subscription-migration";
 import { analyzeSubscriptionMigration } from "@/lib/domain/subscription-migration-analysis";
+import {
+  assertCanonicalManualPilotMigrationAuthorization,
+  type CanonicalManualPilotEnvironment,
+  type CanonicalManualPilotMigrationAuthorization,
+} from "@/lib/domain/canonical-manual-pilot";
 import { loadLegacyBillingSnapshot } from "@/lib/services/subscription-migration-analysis-service";
 
 export const APPLY_MIGRATION_CONFIRMATION = "APPLY_SHADOW_CANONICAL_MIGRATION" as const;
 export const REVERSE_MIGRATION_CONFIRMATION = "REVERSE_UNUSED_SHADOW_MIGRATION" as const;
 
-export type MigrationExecutionEnvironment = {
+export type MigrationExecutionEnvironment = CanonicalManualPilotEnvironment & {
   NODE_ENV?: string;
   VERCEL?: string;
   DATABASE_URL?: string;
@@ -27,6 +32,7 @@ export type MigrationExecutionOptions = {
   execute: true;
   confirmation: typeof APPLY_MIGRATION_CONFIRMATION;
   environment?: MigrationExecutionEnvironment;
+  pilotAuthorization?: CanonicalManualPilotMigrationAuthorization;
 };
 
 export type MigrationReversalOptions = {
@@ -399,6 +405,7 @@ async function verifyCurrentSources(plan: CanonicalMigrationPlan, entries: Canon
 
 async function executePlanTransaction(
   plan: CanonicalMigrationPlan,
+  targetSubscriptionIds: ReadonlyMap<string, string>,
 ): Promise<MigrationExecutionResult> {
   return prisma.$transaction(async (tx) => {
     const keys = plan.entries.map((entry) => entry.migrationKey).sort();
@@ -424,6 +431,17 @@ async function executePlanTransaction(
         executionError("MIGRATION_APPROVAL_CONFLICT", "Approved migration plan fingerprint differs.", entry.migrationKey);
       }
       if (ledger.status === "completed") {
+        const authorizedTargetSubscriptionId = targetSubscriptionIds.get(entry.migrationKey);
+        if (
+          authorizedTargetSubscriptionId
+          && ledger.targetSubscriptionId !== authorizedTargetSubscriptionId
+        ) {
+          executionError(
+            "PILOT_TARGET_SUBSCRIPTION_MISMATCH",
+            "The completed migration target does not match the exact owner-authorized pilot subscription.",
+            entry.migrationKey,
+          );
+        }
         results.push({
           migrationKey: entry.migrationKey,
           ledgerId: ledger.id,
@@ -484,6 +502,7 @@ async function executePlanTransaction(
       const before = await sideEffectCounts(tx, entry.customerId);
       const target = await tx.customerSubscription.create({
         data: {
+          id: targetSubscriptionIds.get(entry.migrationKey),
           customerId: entry.customerId,
           name: entry.target.name,
           reference: entry.target.reference,
@@ -612,11 +631,14 @@ function isRetryableTransactionError(error: unknown): boolean {
   return error.code === "P2010" && error.meta?.code === "40001";
 }
 
-async function runWithSerializableRetry(plan: CanonicalMigrationPlan): Promise<MigrationExecutionResult> {
+async function runWithSerializableRetry(
+  plan: CanonicalMigrationPlan,
+  targetSubscriptionIds: ReadonlyMap<string, string>,
+): Promise<MigrationExecutionResult> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await executePlanTransaction(plan);
+      return await executePlanTransaction(plan, targetSubscriptionIds);
     } catch (error) {
       lastError = error;
       if (!isRetryableTransactionError(error)) throw error;
@@ -629,14 +651,30 @@ export async function executeCanonicalMigrationPlan(
   plan: CanonicalMigrationPlan,
   options: MigrationExecutionOptions,
 ): Promise<MigrationExecutionResult> {
-  assertLocalMigrationExecutionGuard({
-    execute: options.execute,
-    confirmation: options.confirmation,
-    expectedConfirmation: APPLY_MIGRATION_CONFIRMATION,
-    environment: options.environment,
-  });
   assertCanonicalMigrationPlanIntegrity(plan);
   if (!plan.entries.length) executionError("NO_APPROVED_ENTRIES", "The plan contains no approved entries.");
+  const targetSubscriptionIds = new Map<string, string>();
+  if (options.pilotAuthorization) {
+    if (!options.execute || options.confirmation !== APPLY_MIGRATION_CONFIRMATION) {
+      executionError("EXPLICIT_EXECUTION_REQUIRED", "Migration execution requires the exact explicit confirmation token.");
+    }
+    assertCanonicalManualPilotMigrationAuthorization({
+      plan,
+      authorization: options.pilotAuthorization,
+      environment: options.environment,
+    });
+    targetSubscriptionIds.set(
+      plan.entries[0].migrationKey,
+      options.pilotAuthorization.targetSubscriptionId,
+    );
+  } else {
+    assertLocalMigrationExecutionGuard({
+      execute: options.execute,
+      confirmation: options.confirmation,
+      expectedConfirmation: APPLY_MIGRATION_CONFIRMATION,
+      environment: options.environment,
+    });
+  }
   await registerApprovedLedgers(plan);
   const ledgers = await prisma.canonicalMigrationLedger.findMany({
     where: { migrationKey: { in: plan.entries.map((entry) => entry.migrationKey) } },
@@ -649,7 +687,7 @@ export async function executeCanonicalMigrationPlan(
     plan.entries.filter((entry) => !completedKeys.has(entry.migrationKey)),
   );
   try {
-    return await runWithSerializableRetry(plan);
+    return await runWithSerializableRetry(plan, targetSubscriptionIds);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const code = error instanceof CanonicalMigrationExecutionError

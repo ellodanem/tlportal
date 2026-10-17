@@ -305,6 +305,16 @@ enum CanonicalMigrationStatus {
   reversed
 }
 
+/// Durable state for one owner-approved manual-billing pilot cutover.
+enum CanonicalManualPilotStatus {
+  approved
+  in_progress
+  active
+  failed_rolled_back
+  reversed
+  needs_review
+}
+
 /// Broadcast message templates (email now; WhatsApp body reserved for phase 2).
 enum BroadcastTemplateCategory {
   outage
@@ -480,6 +490,7 @@ model Customer {
   recurringInvoiceSchedules RecurringInvoiceSchedule[]
   expenses                Expense[]
   canonicalMigrationLedgers CanonicalMigrationLedger[]
+  canonicalManualPilotActivations CanonicalManualPilotActivation[]
   @@index([archivedAt])
 }
 
@@ -1095,6 +1106,7 @@ model CustomerSubscription {
   providerLinks         SubscriptionProviderLink[]
   billingInvoices       BillingInvoice[]
   canonicalMigrationLedger CanonicalMigrationLedger? @relation("CanonicalMigrationTarget")
+  canonicalManualPilotActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotTarget")
 
   @@index([customerId, updatedAt(sort: Desc)])
   @@index([status])
@@ -1218,8 +1230,50 @@ model CanonicalMigrationLedger {
   reconciliation        Json?
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
+  manualPilotActivation CanonicalManualPilotActivation?
 
   @@unique([sourceKind, sourceId])
+  @@index([customerId, status])
+  @@index([status, updatedAt])
+}
+
+/// One explicitly authorized transfer from a legacy manual schedule to canonical billing.
+/// The activation row is durable even when an execution attempt rolls back.
+model CanonicalManualPilotActivation {
+  id                     String                     @id @default(uuid())
+  activationKey          String                     @unique
+  authorizationId        String                     @unique
+  migrationLedgerId      String                     @unique
+  migrationLedger        CanonicalMigrationLedger   @relation(fields: [migrationLedgerId], references: [id], onDelete: Restrict)
+  customerId             String
+  customer               Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  targetSubscriptionId   String                     @unique
+  targetSubscription     CustomerSubscription       @relation("CanonicalManualPilotTarget", fields: [targetSubscriptionId], references: [id], onDelete: Restrict)
+  legacyScheduleId       String                     @unique
+  legacySchedule         RecurringInvoiceSchedule   @relation("CanonicalManualPilotLegacySchedule", fields: [legacyScheduleId], references: [id], onDelete: Restrict)
+  canonicalScheduleId    String?                    @unique
+  canonicalSchedule      RecurringInvoiceSchedule?  @relation("CanonicalManualPilotCanonicalSchedule", fields: [canonicalScheduleId], references: [id], onDelete: Restrict)
+  status                 CanonicalManualPilotStatus  @default(approved)
+  sourceStateFingerprint String
+  proposalFingerprint    String
+  approvalFingerprint    String
+  cutoverPeriodStart     DateTime                   @db.Date
+  recurringAmount        Decimal                    @db.Decimal(12, 2)
+  currency               String                     @db.VarChar(3)
+  billingIntervalMonths  Int
+  approvedBy             String
+  approvalReason         String                     @db.Text
+  approvedAt             DateTime
+  startedAt              DateTime?
+  activatedAt            DateTime?
+  failedAt               DateTime?
+  reversedAt             DateTime?
+  failureCode            String?
+  failureMessage         String?                    @db.Text
+  reconciliation         Json?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
   @@index([customerId, status])
   @@index([status, updatedAt])
 }
@@ -1579,6 +1633,8 @@ model RecurringInvoiceSchedule {
 
   lineItems         RecurringScheduleLineItem[]
   generatedInvoices Invoice[]                 @relation("ScheduleGeneratedInvoices")
+  legacyManualPilotActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotLegacySchedule")
+  canonicalManualPilotActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotCanonicalSchedule")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
