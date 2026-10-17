@@ -855,5 +855,5 @@ test("87: established manual-invoice preparation rejects incomplete or repriced 
       agreedAmountPerCycle: index === 0 ? "61.00" : "60.00",
       classification: "negotiated" as const,
     })),
-  }, "2026-10-16"), /selected manual invoice subtotal exactly/);
+  }, "2026-10-16"), /service price must match the selected manual invoice unit price exactly/);
 });
