@@ -387,7 +387,7 @@ export async function buildCanonicalManualPilotMigrationPlan(
       && assignment.endDate == null
       && ["active", "due_soon", "overdue"].includes(assignment.status)
       && assignment.intervalMonths === proposal.billingIntervalMonths
-      && assignment.nextDueDate === input.nextBillingDate,
+      && assignment.nextDueDate?.slice(0, 10) === input.nextBillingDate,
     );
     const approvedAssignmentIds = new Set(normalizedItems.map((item) => item.assignmentIds[0]));
     if (
