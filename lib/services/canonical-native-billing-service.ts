@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/canonical-native-billing";
 
 const canonicalConfigurationInclude = {
+  canonicalManualPilotActivation: { select: { status: true } },
   items: {
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     include: { rates: { orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }] } },
@@ -56,7 +57,6 @@ export async function resolveCanonicalScheduleBillingCycle(
     environment?: CanonicalNativeBillingEnvironment;
   },
 ): Promise<CanonicalScheduleBillingCycle> {
-  assertCanonicalNativeBillingExecutionEnabled(input.environment);
   const schedule = await tx.recurringInvoiceSchedule.findUnique({
     where: { id: input.scheduleId },
     include: {
@@ -72,6 +72,11 @@ export async function resolveCanonicalScheduleBillingCycle(
   if (!subscription) {
     error("SUBSCRIPTION_NOT_LINKED", "Canonical recurring billing requires an exact subscription link.");
   }
+  assertCanonicalNativeBillingExecutionEnabled(input.environment, {
+    customerId: subscription.customerId,
+    subscriptionId: subscription.id,
+    activationStatus: subscription.canonicalManualPilotActivation?.status ?? null,
+  });
   if (subscription.controlMode !== "canonical") {
     error("CANONICAL_CONTROL_REQUIRED", "Only explicitly canonical-controlled subscriptions may generate canonical invoices.");
   }
@@ -238,14 +243,40 @@ export async function getCanonicalSubscriptionBillingSummary(
           archivedAt: null,
           status: { notIn: ["draft", "void", "written_off"] },
         },
-        select: { amountDue: true, dueDate: true },
+        select: { id: true, amountDue: true, dueDate: true },
+      },
+      canonicalManualPilotActivation: {
+        select: {
+          status: true,
+          legacySchedule: {
+            select: {
+              generatedInvoices: {
+                where: {
+                  archivedAt: null,
+                  status: { notIn: ["draft", "void", "written_off"] },
+                },
+                select: { id: true, amountDue: true, dueDate: true },
+              },
+            },
+          },
+        },
       },
     },
   });
   if (!subscription) error("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
 
+  const collectionInvoices = [
+    ...subscription.invoices,
+    ...(subscription.canonicalManualPilotActivation?.legacySchedule.generatedInvoices ?? []),
+  ];
+  const seenCollectionInvoices = new Set<string>();
   const collection = deriveCanonicalCollectionHealth({
-    invoices: subscription.invoices,
+    invoices: collectionInvoices.filter((invoice) => {
+      const key = invoice.id;
+      if (seenCollectionInvoices.has(key)) return false;
+      seenCollectionInvoices.add(key);
+      return true;
+    }),
     gracePeriodDays: subscription.gracePeriodDays,
     asOf,
   });
@@ -292,8 +323,19 @@ export async function getCanonicalSubscriptionBillingSummary(
     }
   }
 
-  const executionEnabled = environment.NODE_ENV !== "production"
-    && environment.CANONICAL_NATIVE_BILLING_ENABLED === "true";
+  const executionEnabled = (() => {
+    try {
+      assertCanonicalNativeBillingExecutionEnabled(environment, {
+        customerId: subscription.customerId,
+        subscriptionId: subscription.id,
+        activationStatus: subscription.canonicalManualPilotActivation?.status ?? null,
+      });
+      return true;
+    } catch (caught) {
+      if (!(caught instanceof CanonicalNativeBillingError)) throw caught;
+      return false;
+    }
+  })();
   return {
     subscriptionId: subscription.id,
     customerId: subscription.customerId,
