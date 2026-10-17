@@ -24,6 +24,7 @@ import {
   transferSubscriptionItem,
   transitionCanonicalSubscriptionLifecycle,
 } from "../../lib/services/canonical-subscription-application-service";
+import { activateCanonicalManualSubscription } from "../../lib/services/canonical-subscription-activation-service";
 
 after(async () => {
   await prisma.$disconnect();
@@ -458,4 +459,28 @@ test("service uses exact Decimal values rather than floating point reconstructio
     { label: "Exact service", serviceActivatedDate: "2026-10-01", agreedAmountPerCycle: new Prisma.Decimal("20.00") },
   ]);
   assert.equal(subscription.items[0].rates[0].agreedAmountPerCycle.toFixed(2), "20.00");
+});
+
+test("manual canonical activation creates one future schedule without issuing or delivering an invoice", async () => {
+  const customer = await createCustomer("manual-activation");
+  const subscription = await createMonthlySubscription(customer.id, "Manual activation", [
+    { label: "Ready service", serviceActivatedDate: "2026-10-01" },
+  ]);
+  await prisma.customerSubscription.update({ where: { id: subscription.id }, data: { controlMode: "canonical" } });
+  const environment = { NODE_ENV: "test", CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED: "true" };
+  const first = await activateCanonicalManualSubscription({ subscriptionId: subscription.id, environment });
+  const second = await activateCanonicalManualSubscription({ subscriptionId: subscription.id, environment });
+  assert.equal(second.reused, true);
+  assert.equal(second.scheduleId, first.scheduleId);
+  const [active, schedule, invoices] = await Promise.all([
+    prisma.customerSubscription.findUniqueOrThrow({ where: { id: subscription.id }, include: { items: true } }),
+    prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: first.scheduleId }, include: { lineItems: true } }),
+    prisma.invoice.count({ where: { customerSubscriptionId: subscription.id } }),
+  ]);
+  assert.equal(active.lifecycleStatus, "active");
+  assert.equal(active.items[0].status, "active");
+  assert.equal(schedule.nextIssueDate.toISOString().slice(0, 10), "2026-11-01");
+  assert.equal(schedule.autoEmail, false);
+  assert.equal(schedule.lineItems.length, 1);
+  assert.equal(invoices, 0);
 });

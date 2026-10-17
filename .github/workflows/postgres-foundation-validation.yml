@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - validation/postgres-foundation
 
 permissions:
@@ -36,6 +37,7 @@ jobs:
       NODE_ENV: test
       ALLOW_CANONICAL_MIGRATION_EXECUTION: "true"
       CANONICAL_NATIVE_BILLING_ENABLED: "true"
+      CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED: "true"
       CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED: "true"
       CANONICAL_STRIPE_SHADOW_ENABLED: "true"
       CANONICAL_STRIPE_EXECUTION_ENABLED: "true"

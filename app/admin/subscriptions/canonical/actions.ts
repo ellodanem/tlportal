@@ -20,6 +20,8 @@ import {
   scheduleSubscriptionItemRate,
   updateDraftSubscriptionItemCommercialDetails,
 } from "@/lib/services/canonical-subscription-application-service";
+import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
+import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
 
 export type CanonicalSubscriptionFormState = {
   error?: string;
@@ -39,6 +41,7 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
   if (
     error instanceof CanonicalSubscriptionValidationError
     || error instanceof CanonicalSubscriptionUiError
+    || error instanceof CanonicalSubscriptionActivationError
   ) {
     return { error: error.message };
   }
@@ -52,6 +55,25 @@ async function requireStaff() {
   const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { id: true } });
   if (!user) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "A staff account is required.");
   return session;
+}
+
+export async function activateCanonicalManualSubscriptionAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const session = await requireEditableDraft(subscriptionId);
+    if (text(formData, "confirmed") !== "yes") {
+      return { error: "Confirm the commercial review before activation." };
+    }
+    const result = await activateCanonicalManualSubscription({ subscriptionId, staffUserId: session.sub });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: result.reused ? "Existing canonical recurring schedule retained; no duplicate schedule was created." : "Canonical manual subscription activated for local/test billing. No invoice or notification was created." };
+  } catch (error) {
+    return actionError(error);
+  }
 }
 
 async function requireEditableDraft(subscriptionId: string) {
