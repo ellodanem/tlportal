@@ -914,7 +914,7 @@ test("88: aggregate manual invoice validation rejects unconfirmed coverage and d
   };
   await assert.rejects(
     buildCanonicalManualPilotMigrationPlan(base, "2026-10-16"),
-    /explicitly confirmed invoice coverage/,
+    /coverage start and end dates require explicit staff confirmation/,
   );
   await prisma.invoiceLineItem.updateMany({
     where: { invoiceId: fixture.sourceInvoice.id },
