@@ -64,6 +64,8 @@ export async function migrateManualPilotShadowAction(formData: FormData): Promis
       commercialStartDate: text(formData, "commercialStartDate"),
       billingAnchorDate: text(formData, "billingAnchorDate"),
       nextBillingDate,
+      sourceCoverageStartDate: text(formData, "sourceCoverageStartDate") || undefined,
+      sourceCoverageEndDate: text(formData, "sourceCoverageEndDate") || undefined,
       gracePeriodDays: Number(text(formData, "gracePeriodDays")),
       items: assignmentIds.map((assignmentId) => ({
         assignmentId,

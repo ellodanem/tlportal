@@ -185,6 +185,12 @@ export type SubscriptionMigrationProposal = {
   billingAnchorDate: string | null;
   nextBillingDate: string | null;
   sourceQuantity: number | null;
+  /**
+   * A verified service count when a manual invoice records duration × aggregate
+   * fleet monthly price instead of one line per service. Source quantity remains
+   * the literal invoice quantity for audit purposes.
+   */
+  assignmentQuantity?: number | null;
   sourceCycleAmount: string | null;
   proposedCycleAmount: string | null;
   normalizedMonthlyAmount: string | null;
@@ -736,8 +742,26 @@ function manualInvoiceSeed(
   }
   const unitPrices = new Set(invoiceLines.map((line) => money(cents(line.unitPrice))));
   const uniformItemCycleAmount = unitPrices.size === 1 ? [...unitPrices][0] : null;
+  const durationAggregateInvoice = Boolean(
+    interval
+    && invoiceLines.length === 1
+    && sourceQuantity === interval
+    && lineSubtotal === cents(subtotal)
+    && cents(invoiceLines[0].unitPrice) > 0,
+  );
+  const assignmentQuantity = durationAggregateInvoice
+    ? activeAssignments.filter((assignment) => assignment.intervalMonths === interval).length
+    : null;
+  if (durationAggregateInvoice) {
+    issues.push(issue(
+      "manual_invoice_duration_aggregate_pricing",
+      "decision",
+      "The invoice records billing duration times an aggregate monthly fleet price. Every active service, its cycle price, and the covered period require explicit confirmation.",
+      [invoice.id, ...activeAssignments.map((assignment) => assignment.id)],
+    ));
+  }
   const pricingAssessment = assessRate(
-    interval === 1 ? uniformItemCycleAmount : null,
+    interval === 1 && !durationAggregateInvoice ? uniformItemCycleAmount : null,
     interval || 1,
     catalogPrices,
   );
@@ -763,6 +787,7 @@ function manualInvoiceSeed(
       billingAnchorDate: invoice.issueDate,
       nextBillingDate,
       sourceQuantity,
+      assignmentQuantity,
       sourceCycleAmount: subtotal,
       proposedCycleAmount: subtotal,
       normalizedMonthlyAmount: interval ? normalizedMonthly(subtotal, interval) : null,
@@ -806,7 +831,8 @@ function allocateItems(
       "Multiple billing arrangements share this cadence; assignments cannot be divided safely without confirmation.",
       [proposal.sourceId, ...candidates.map((assignment) => assignment.id)],
     ));
-  } else if (proposal.sourceQuantity != null && candidates.length === proposal.sourceQuantity) {
+  } else if ((proposal.assignmentQuantity ?? proposal.sourceQuantity) != null
+    && candidates.length === (proposal.assignmentQuantity ?? proposal.sourceQuantity)) {
     mapped = candidates;
   } else if (candidates.length > 0) {
     issues.push(issue(
@@ -852,7 +878,8 @@ function allocateItems(
   const unmappedAssignmentIds = candidates
     .filter((assignment) => !mappedIds.has(assignment.id))
     .map((assignment) => assignment.id);
-  if (proposal.sourceQuantity != null && mapped.length !== proposal.sourceQuantity) {
+  const expectedAssignmentCount = proposal.assignmentQuantity ?? proposal.sourceQuantity;
+  if (expectedAssignmentCount != null && mapped.length !== expectedAssignmentCount) {
     issues.push(issue(
       "proposed_item_count_differs",
       "decision",
