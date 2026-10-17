@@ -118,6 +118,8 @@ export type BuildManualPilotPlanInput = {
   sourceCoverageStartDate?: string;
   /** Required for a one-off/manual invoice source; explicit staff confirmation only. */
   sourceCoverageEndDate?: string;
+  /** Required for a one-off/manual invoice source; prevents inferred coverage. */
+  sourceCoverageConfirmed?: boolean;
   gracePeriodDays: number;
   items: ManualPilotApprovedItemInput[];
 };
@@ -429,20 +431,19 @@ export async function buildCanonicalManualPilotMigrationPlan(
     }
     const coverageStart = input.sourceCoverageStartDate?.trim();
     const coverageEnd = input.sourceCoverageEndDate?.trim();
-    if (!coverageStart || !coverageEnd) {
+    if (!input.sourceCoverageConfirmed || !coverageStart || !coverageEnd) {
       throw new Error("The source invoice coverage start and end dates require explicit staff confirmation.");
     }
     const coverageStartDate = commercialDate(coverageStart, "sourceCoverageStartDate");
     const coverageEndDate = commercialDate(coverageEnd, "sourceCoverageEndDate");
     const expectedCoverageEnd = addUtcMonths(coverageStartDate, proposal.billingIntervalMonths);
     if (
-      commercialDateString(coverageStartDate) !== sourceInvoice.issueDate.toISOString().slice(0, 10)
-      || commercialDateString(coverageStartDate) !== input.billingAnchorDate
+      commercialDateString(coverageStartDate) !== input.billingAnchorDate
       || commercialDateString(coverageEndDate) !== input.nextBillingDate
       || input.nextBillingDate !== proposal.nextBillingDate
       || commercialDateString(expectedCoverageEnd) !== commercialDateString(coverageEndDate)
     ) {
-      throw new Error("The explicitly confirmed invoice coverage must begin on the invoice date, span the approved interval, and end on the verified next billing date.");
+      throw new Error("The explicitly confirmed invoice coverage must begin on the approved billing anchor, span the approved interval, and end on the verified next billing date.");
     }
     const sourceQuantity = sourceInvoice.lineItems.reduce((total, line) => {
       const quantity = new Prisma.Decimal(line.quantity);
@@ -511,6 +512,11 @@ export async function buildCanonicalManualPilotMigrationPlan(
     defaultItemAmountPerCycle: normalizedItems[0].agreedAmountPerCycle,
     expectedTotalAmountPerCycle: expectedTotal,
     items: normalizedItems,
+    sourceInvoiceCoverageConfirmation: proposal.sourceKind === "manual_invoice" ? {
+      periodStart: input.sourceCoverageStartDate!,
+      periodEnd: input.sourceCoverageEndDate!,
+      explicitlyConfirmed: true,
+    } : null,
     providerRelationship: null,
     issueResolutions: requiredIssueCodes.map((code) => ({
       code,

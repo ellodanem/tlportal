@@ -49,6 +49,17 @@ export type ApprovedProviderRelationship = {
   providerItems: ApprovedProviderItem[];
 };
 
+/**
+ * A staff-confirmed coverage period for a standalone legacy invoice.  It is
+ * retained in the migration plan so the approval fingerprint cannot be reused
+ * for a different covered period.
+ */
+export type SourceInvoiceCoverageConfirmation = {
+  periodStart: string;
+  periodEnd: string;
+  explicitlyConfirmed: true;
+};
+
 export type ApprovedArrangementDecision = {
   proposalId: string;
   approvedBy: string;
@@ -67,6 +78,7 @@ export type ApprovedArrangementDecision = {
   defaultItemAmountPerCycle: string;
   expectedTotalAmountPerCycle: string;
   items: ApprovedMigrationItem[];
+  sourceInvoiceCoverageConfirmation?: SourceInvoiceCoverageConfirmation | null;
   providerRelationship?: ApprovedProviderRelationship | null;
   issueResolutions: MigrationIssueResolution[];
 };
@@ -109,6 +121,7 @@ export type CanonicalMigrationPlanEntry = {
     defaultItemAmountPerCycle: string;
     expectedTotalAmountPerCycle: string;
     items: CanonicalMigrationPlanItem[];
+    sourceInvoiceCoverageConfirmation?: SourceInvoiceCoverageConfirmation | null;
     providerRelationship: ApprovedProviderRelationship | null;
   };
   historicalReferences: {
@@ -340,6 +353,37 @@ function normalizeDecision(
     "expectedTotalAmountPerCycle",
     proposalId,
   );
+  const sourceInvoiceCoverageConfirmation = decision.sourceInvoiceCoverageConfirmation ?? null;
+  const normalizedSourceInvoiceCoverage = sourceInvoiceCoverageConfirmation ? {
+    periodStart: dateOnly(
+      sourceInvoiceCoverageConfirmation.periodStart,
+      "source invoice coverage period start",
+      proposalId,
+    ),
+    periodEnd: dateOnly(
+      sourceInvoiceCoverageConfirmation.periodEnd,
+      "source invoice coverage period end",
+      proposalId,
+    ),
+    explicitlyConfirmed: sourceInvoiceCoverageConfirmation.explicitlyConfirmed,
+  } : null;
+  if (normalizedSourceInvoiceCoverage && !normalizedSourceInvoiceCoverage.explicitlyConfirmed) {
+    throw new CanonicalMigrationPlanningError(
+      "SOURCE_INVOICE_COVERAGE_NOT_CONFIRMED",
+      "The source invoice coverage period requires explicit staff confirmation.",
+      proposalId,
+    );
+  }
+  if (
+    normalizedSourceInvoiceCoverage
+    && normalizedSourceInvoiceCoverage.periodEnd <= normalizedSourceInvoiceCoverage.periodStart
+  ) {
+    throw new CanonicalMigrationPlanningError(
+      "INVALID_SOURCE_INVOICE_COVERAGE",
+      "The source invoice coverage period must end after it begins.",
+      proposalId,
+    );
+  }
   if (!decision.items.length) {
     throw new CanonicalMigrationPlanningError(
       "NO_APPROVED_ITEMS",
@@ -578,6 +622,7 @@ function normalizeDecision(
       defaultItemAmountPerCycle,
       expectedTotalAmountPerCycle,
       items,
+      sourceInvoiceCoverageConfirmation: normalizedSourceInvoiceCoverage,
       providerRelationship: normalizedProvider,
     },
     historicalReferences: {
