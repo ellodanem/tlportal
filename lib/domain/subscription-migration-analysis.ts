@@ -698,7 +698,7 @@ function manualInvoiceSeed(
   }
   const renewalDates = [...new Set(activeAssignments
     .filter((assignment) => assignment.intervalMonths === interval)
-    .flatMap((assignment) => assignment.nextDueDate ? [assignment.nextDueDate] : []))];
+    .flatMap((assignment) => assignment.nextDueDate ? [assignment.nextDueDate.slice(0, 10)] : []))];
   const nextBillingDate = renewalDates.length === 1 ? renewalDates[0] : null;
   if (!nextBillingDate) {
     issues.push(issue(
