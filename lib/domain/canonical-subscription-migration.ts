@@ -249,6 +249,7 @@ function sourceEvidence(
     customerIssues: customer.issues,
     subscription: snapshot.subscriptions.find((entry) => entry.id === proposal.sourceId) ?? null,
     schedule: snapshot.recurringSchedules.find((entry) => entry.id === proposal.sourceId) ?? null,
+    invoice: snapshot.invoices.find((entry) => entry.id === proposal.sourceId) ?? null,
     assignments: snapshot.assignments.filter((entry) => entry.customerId === customerId),
     billingAccounts: snapshot.billingAccounts.filter((entry) => entry.customerId === customerId),
     invoices: snapshot.invoices.filter((entry) => invoiceIds.has(entry.id)),

@@ -1249,8 +1249,12 @@ model CanonicalManualPilotActivation {
   customer               Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
   targetSubscriptionId   String                     @unique
   targetSubscription     CustomerSubscription       @relation("CanonicalManualPilotTarget", fields: [targetSubscriptionId], references: [id], onDelete: Restrict)
-  legacyScheduleId       String                     @unique
-  legacySchedule         RecurringInvoiceSchedule   @relation("CanonicalManualPilotLegacySchedule", fields: [legacyScheduleId], references: [id], onDelete: Restrict)
+  /// The original authority is either an existing manual schedule or a regular manual invoice.
+  sourceKind             String                     @default("manual_schedule") @db.VarChar(32)
+  legacyScheduleId       String?                    @unique
+  legacySchedule         RecurringInvoiceSchedule?  @relation("CanonicalManualPilotLegacySchedule", fields: [legacyScheduleId], references: [id], onDelete: Restrict)
+  sourceInvoiceId        String?                    @unique
+  sourceInvoice          Invoice?                   @relation("CanonicalManualPilotSourceInvoice", fields: [sourceInvoiceId], references: [id], onDelete: Restrict)
   canonicalScheduleId    String?                    @unique
   canonicalSchedule      RecurringInvoiceSchedule?  @relation("CanonicalManualPilotCanonicalSchedule", fields: [canonicalScheduleId], references: [id], onDelete: Restrict)
   status                 CanonicalManualPilotStatus  @default(approved)
@@ -1519,6 +1523,8 @@ model Invoice {
   /// Recurring schedule that generated this invoice (when kind = recurring).
   recurringScheduleId String?
   recurringSchedule   RecurringInvoiceSchedule? @relation("ScheduleGeneratedInvoices", fields: [recurringScheduleId], references: [id], onDelete: SetNull)
+  /// Immutable source evidence for a pilot that begins from a one-off/manual invoice.
+  manualPilotSourceActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotSourceInvoice")
   /// UTC billing-period day used by recurring generation idempotency.
   recurringPeriodStart       DateTime?
   /// Stable schedule + billing-period key. Null on historical/non-recurring invoices.

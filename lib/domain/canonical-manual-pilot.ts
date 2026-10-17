@@ -11,6 +11,7 @@ export const CANONICAL_MANUAL_PILOT_FLAG = "CANONICAL_MANUAL_PILOT_ENABLED";
 export const CANONICAL_MANUAL_PILOT_CUSTOMER_ID = "CANONICAL_MANUAL_PILOT_CUSTOMER_ID";
 export const CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID = "CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID";
 export const CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID = "CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID";
+export const CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID = "CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID";
 export const CANONICAL_MANUAL_PILOT_OWNER_EMAIL = "CANONICAL_MANUAL_PILOT_OWNER_EMAIL";
 export const CANONICAL_MANUAL_PILOT_APPROVAL_SECRET = "CANONICAL_MANUAL_PILOT_APPROVAL_SECRET";
 export const MANUAL_PILOT_AUTHORIZATION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -22,6 +23,7 @@ export type CanonicalManualPilotEnvironment = {
   CANONICAL_MANUAL_PILOT_CUSTOMER_ID?: string;
   CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID?: string;
   CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID?: string;
+  CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID?: string;
   CANONICAL_MANUAL_PILOT_OWNER_EMAIL?: string;
   CANONICAL_MANUAL_PILOT_APPROVAL_SECRET?: string;
 };
@@ -31,7 +33,9 @@ export type CanonicalManualPilotMigrationAuthorization = {
   operation: "migrate_manual_pilot_shadow";
   customerId: string;
   targetSubscriptionId: string;
-  legacyScheduleId: string;
+  sourceKind: "manual_schedule" | "manual_invoice";
+  legacyScheduleId: string | null;
+  sourceInvoiceId: string | null;
   migrationKey: string;
   migrationSourceFingerprint: string;
   migrationPlanFingerprint: string;
@@ -56,7 +60,9 @@ export type CanonicalManualPilotProposal = {
   migrationKey: string;
   customerId: string;
   subscriptionId: string;
-  legacyScheduleId: string;
+  sourceKind: "manual_schedule" | "manual_invoice";
+  legacyScheduleId: string | null;
+  sourceInvoiceId: string | null;
   migrationSourceFingerprint: string;
   migrationPlanFingerprint: string;
   sourceStateFingerprint: string;
@@ -78,7 +84,9 @@ export type CanonicalManualPilotAuthorization = {
   customerId: string;
   subscriptionId: string;
   migrationKey: string;
-  legacyScheduleId: string;
+  sourceKind: "manual_schedule" | "manual_invoice";
+  legacyScheduleId: string | null;
+  sourceInvoiceId: string | null;
   sourceStateFingerprint: string;
   cutoverPeriodStart: string;
   billingIntervalMonths: number;
@@ -155,7 +163,9 @@ function normalizedProposal(proposal: CanonicalManualPilotProposal) {
     migrationKey: proposal.migrationKey,
     customerId: proposal.customerId,
     subscriptionId: proposal.subscriptionId,
+    sourceKind: proposal.sourceKind,
     legacyScheduleId: proposal.legacyScheduleId,
+    sourceInvoiceId: proposal.sourceInvoiceId,
     migrationSourceFingerprint: proposal.migrationSourceFingerprint,
     migrationPlanFingerprint: proposal.migrationPlanFingerprint,
     sourceStateFingerprint: proposal.sourceStateFingerprint,
@@ -188,7 +198,9 @@ function unsignedAuthorizationPayload(
     customerId: authorization.customerId,
     subscriptionId: authorization.subscriptionId,
     migrationKey: authorization.migrationKey,
+    sourceKind: authorization.sourceKind,
     legacyScheduleId: authorization.legacyScheduleId,
+    sourceInvoiceId: authorization.sourceInvoiceId,
     sourceStateFingerprint: authorization.sourceStateFingerprint,
     cutoverPeriodStart: normalizeDate(authorization.cutoverPeriodStart, "Cutover period"),
     billingIntervalMonths: authorization.billingIntervalMonths,
@@ -226,7 +238,9 @@ function unsignedMigrationAuthorizationPayload(
     operation: authorization.operation,
     customerId: authorization.customerId,
     targetSubscriptionId: authorization.targetSubscriptionId,
+    sourceKind: authorization.sourceKind,
     legacyScheduleId: authorization.legacyScheduleId,
+    sourceInvoiceId: authorization.sourceInvoiceId,
     migrationKey: authorization.migrationKey,
     migrationSourceFingerprint: authorization.migrationSourceFingerprint,
     migrationPlanFingerprint: authorization.migrationPlanFingerprint,
@@ -271,7 +285,6 @@ export function assertCanonicalManualPilotMigrationAuthorization(input: {
   const authorization = input.authorization;
   const allowedCustomerId = required(environment, CANONICAL_MANUAL_PILOT_CUSTOMER_ID);
   const allowedSubscriptionId = required(environment, CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID);
-  const allowedScheduleId = required(environment, CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID);
   const ownerEmail = required(environment, CANONICAL_MANUAL_PILOT_OWNER_EMAIL);
   if (!/^[a-f0-9]{64}$/i.test(authorization.signature)) {
     pilotError("PILOT_APPROVAL_SIGNATURE_INVALID", "Owner migration authorization signature is invalid.");
@@ -286,16 +299,23 @@ export function assertCanonicalManualPilotMigrationAuthorization(input: {
   if (authorization.operation !== "migrate_manual_pilot_shadow") {
     pilotError("PILOT_OPERATION_NOT_AUTHORIZED", "Authorization does not permit shadow migration.");
   }
+  const sourceIsSchedule = authorization.sourceKind === "manual_schedule";
+  const allowedSourceId = sourceIsSchedule
+    ? required(environment, CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID)
+    : required(environment, CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID);
+  const authorizedSourceId = sourceIsSchedule ? authorization.legacyScheduleId : authorization.sourceInvoiceId;
   if (
-    entry.sourceKind !== "manual_schedule"
+    entry.sourceKind !== authorization.sourceKind
     || entry.target.collectionMethod !== "manual_invoice"
     || entry.customerId !== allowedCustomerId
     || authorization.customerId !== allowedCustomerId
     || authorization.targetSubscriptionId !== allowedSubscriptionId
-    || entry.sourceId !== allowedScheduleId
-    || authorization.legacyScheduleId !== allowedScheduleId
+    || entry.sourceId !== allowedSourceId
+    || authorizedSourceId !== allowedSourceId
+    || (sourceIsSchedule && authorization.sourceInvoiceId != null)
+    || (!sourceIsSchedule && authorization.legacyScheduleId != null)
   ) {
-    pilotError("PILOT_IDENTITY_NOT_AUTHORIZED", "Migration does not match the exact customer, target subscription, and legacy schedule allowlist.");
+    pilotError("PILOT_IDENTITY_NOT_AUTHORIZED", "Migration does not match the exact customer, target subscription, and approved manual billing source.");
   }
   if (normalizeEmail(authorization.approvedByEmail) !== normalizeEmail(ownerEmail)) {
     pilotError("PILOT_OWNER_MISMATCH", "Migration authorization was not issued by the configured pilot owner.");
@@ -410,7 +430,9 @@ export function assertCanonicalManualPilotAuthorization(input: {
   if (
     authorization.proposalFingerprint !== canonicalManualPilotProposalFingerprint(input.proposal)
     || authorization.migrationKey !== input.proposal.migrationKey
+    || authorization.sourceKind !== input.proposal.sourceKind
     || authorization.legacyScheduleId !== input.proposal.legacyScheduleId
+    || authorization.sourceInvoiceId !== input.proposal.sourceInvoiceId
     || authorization.sourceStateFingerprint !== input.proposal.sourceStateFingerprint
   ) {
     pilotError("PILOT_APPROVAL_BINDING_MISMATCH", "Authorization does not match the reviewed migration and source state.");
