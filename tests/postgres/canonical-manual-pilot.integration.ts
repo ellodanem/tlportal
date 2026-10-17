@@ -651,7 +651,7 @@ async function createEstablishedManualInvoiceFixture() {
       total: "840.00",
       amountPaid: "0.00",
       amountDue: "840.00",
-      issueDate: new Date("2026-10-15T00:00:00.000Z"),
+      issueDate: new Date("2026-10-09T00:00:00.000Z"),
       dueDate: new Date("2026-11-14T00:00:00.000Z"),
       paymentInstructions: "Pay by cheque.",
       lineItems: { create: {
@@ -678,6 +678,7 @@ async function buildEstablishedManualInvoicePlan(fixture: Awaited<ReturnType<typ
     nextBillingDate: "2027-01-15",
     sourceCoverageStartDate: "2026-10-15",
     sourceCoverageEndDate: "2027-01-15",
+    sourceCoverageConfirmed: true,
     gracePeriodDays: 7,
     items: fixture.assignments.map((assignment, index) => ({
       assignmentId: assignment.id,
@@ -742,12 +743,18 @@ test("85: a 3 × EC$280 aggregate monthly manual invoice produces a 14-service s
   assert.equal(review.assignments.length, 14);
   assert.equal(review.sourceInvoice?.subtotal, "840.00");
   assert.equal(review.sourceInvoice?.taxTotal, "0.00");
+  assert.equal(review.sourceInvoice?.issueDate.slice(0, 10), "2026-10-09");
 
   const plan = await buildEstablishedManualInvoicePlan(fixture);
   assert.equal(plan.entries[0].sourceKind, "manual_invoice");
   assert.equal(plan.entries[0].target.expectedTotalAmountPerCycle, "840.00");
   assert.equal(plan.entries[0].target.items.length, 14);
   assert.ok(plan.entries[0].target.items.every((item) => item.agreedAmountPerCycle === "60.00"));
+  assert.deepEqual(plan.entries[0].target.sourceInvoiceCoverageConfirmation, {
+    periodStart: "2026-10-15",
+    periodEnd: "2027-01-15",
+    explicitlyConfirmed: true,
+  });
   const originalBeforeMigration = await prisma.invoice.findUniqueOrThrow({
     where: { id: fixture.sourceInvoice.id },
     include: { lineItems: true },
@@ -768,7 +775,17 @@ test("85: a 3 × EC$280 aggregate monthly manual invoice produces a 14-service s
     pilotAuthorization: manualInvoiceMigrationAuthorization({ fixture, plan, targetSubscriptionId, environment }),
   });
   assert.equal(await prisma.invoice.count({ where: { id: fixture.sourceInvoice.id } }), 1);
+  assert.equal(await prisma.invoice.count({ where: { customerId: fixture.customer.id } }), 1);
   assert.equal(await prisma.payment.count({ where: { invoiceId: fixture.sourceInvoice.id } }), 0);
+  assert.equal(await prisma.recurringInvoiceSchedule.count({ where: { customerSubscriptionId: targetSubscriptionId } }), 0);
+  const originalAfterMigration = await prisma.invoice.findUniqueOrThrow({
+    where: { id: fixture.sourceInvoice.id },
+    include: { lineItems: true },
+  });
+  assert.equal(originalAfterMigration.issueDate.toISOString().slice(0, 10), "2026-10-09");
+  assert.equal(originalAfterMigration.lineItems[0].quantity.toFixed(0), "3");
+  assert.equal(originalAfterMigration.lineItems[0].unitPrice.toFixed(2), "280.00");
+  assert.equal(originalAfterMigration.lineItems[0].lineTotal.toFixed(2), "840.00");
 
   const prepared = await activationAuthorization({ subscriptionId: targetSubscriptionId, environment });
   const activated = await activateCanonicalManualPilot({
@@ -849,6 +866,7 @@ test("87: established manual-invoice preparation rejects incomplete or repriced 
     nextBillingDate: "2027-01-15",
     sourceCoverageStartDate: "2026-10-15",
     sourceCoverageEndDate: "2027-01-15",
+    sourceCoverageConfirmed: true,
     gracePeriodDays: 7,
   };
   await assert.rejects(buildCanonicalManualPilotMigrationPlan({
@@ -885,6 +903,7 @@ test("88: aggregate manual invoice validation rejects unconfirmed coverage and d
     nextBillingDate: "2027-01-15",
     sourceCoverageStartDate: "2026-10-16",
     sourceCoverageEndDate: "2027-01-15",
+    sourceCoverageConfirmed: false,
     gracePeriodDays: 7,
     items: fixture.assignments.map((assignment, index) => ({
       assignmentId: assignment.id,
@@ -902,7 +921,7 @@ test("88: aggregate manual invoice validation rejects unconfirmed coverage and d
     data: { quantity: "2", lineTotal: "560.00" },
   });
   await assert.rejects(
-    buildCanonicalManualPilotMigrationPlan({ ...base, sourceCoverageStartDate: "2026-10-15" }, "2026-10-16"),
+    buildCanonicalManualPilotMigrationPlan({ ...base, sourceCoverageStartDate: "2026-10-15", sourceCoverageConfirmed: true }, "2026-10-16"),
     /itemize one unit per approved service or use one verified duration-times-aggregate-fleet line/,
   );
   const original = await prisma.invoice.findUniqueOrThrow({
