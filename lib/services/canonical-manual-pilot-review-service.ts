@@ -374,9 +374,6 @@ export async function buildCanonicalManualPilotMigrationPlan(
     if (sourceInvoice.currency.toUpperCase() !== proposal.currency.toUpperCase()) {
       throw new Error("The selected manual invoice currency does not match the approved arrangement.");
     }
-    if (!sourceInvoice.subtotal.equals(expectedTotal)) {
-      throw new Error("Approved service prices must equal the selected manual invoice subtotal exactly.");
-    }
     const sourceQuantity = sourceInvoice.lineItems.reduce((total, line) => {
       const quantity = new Prisma.Decimal(line.quantity);
       return quantity.isInteger() && quantity.greaterThan(0) ? total + quantity.toNumber() : total;
@@ -387,6 +384,9 @@ export async function buildCanonicalManualPilotMigrationPlan(
     }
     if (normalizedItems.some((item) => item.agreedAmountPerCycle !== sourceUnitPrices[0])) {
       throw new Error("Each approved service price must match the selected manual invoice unit price exactly.");
+    }
+    if (!sourceInvoice.subtotal.equals(expectedTotal)) {
+      throw new Error("Approved service prices must equal the selected manual invoice subtotal exactly.");
     }
     const expectedTax = sourceInvoice.taxRatePercent == null
       ? new Prisma.Decimal(0)
