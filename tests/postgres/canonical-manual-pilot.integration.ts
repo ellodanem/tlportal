@@ -865,7 +865,7 @@ test("87: established manual-invoice preparation rejects incomplete or repriced 
     items: fixture.assignments.map((assignment, index) => ({
       assignmentId: assignment.id,
       label: `Quarterly tracking ${index + 1}`,
-      agreedAmountPerCycle: index === 0 ? "61.00" : "60.00",
+      agreedAmountPerCycle: index === 0 ? "61.00" : index === 1 ? "59.00" : "60.00",
       classification: "negotiated" as const,
     })),
   }, "2026-10-16"), /exact per-service cycle amount derived from the aggregate invoice subtotal/);
