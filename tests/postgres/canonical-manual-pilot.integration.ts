@@ -815,6 +815,19 @@ test("85: a 3 × EC$280 aggregate monthly manual invoice produces a 14-service s
   }
 });
 
+test("85a: explicit invoice coverage accepts legacy assignments still marked at the coverage start", async () => {
+  const fixture = await createEstablishedManualInvoiceFixture();
+  await prisma.serviceAssignment.updateMany({
+    where: { id: { in: fixture.assignments.slice(0, 12).map((assignment) => assignment.id) } },
+    data: { nextDueDate: new Date("2026-10-15T00:00:00.000Z") },
+  });
+
+  const plan = await buildEstablishedManualInvoicePlan(fixture);
+  assert.equal(plan.entries[0].target.nextBillingDate, "2027-01-15");
+  assert.equal(plan.entries[0].target.items.length, 14);
+  assert.ok(plan.entries[0].target.items.every((item) => item.agreedAmountPerCycle === "60.00"));
+});
+
 test("86: a future regular invoice blocks manual-invoice cutover and preserves the original invoice", async () => {
   const fixture = await createEstablishedManualInvoiceFixture();
   const plan = await buildEstablishedManualInvoicePlan(fixture);

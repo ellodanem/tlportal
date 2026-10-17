@@ -383,14 +383,34 @@ export async function buildCanonicalManualPilotMigrationPlan(
     new Prisma.Decimal(0),
   ).toFixed(2);
   if (proposal.sourceKind === "manual_invoice") {
-    const authorizedAssignments = snapshot.assignments.filter((assignment) =>
+    const coverageStart = input.sourceCoverageStartDate?.trim();
+    const coverageEnd = input.sourceCoverageEndDate?.trim();
+    if (!input.sourceCoverageConfirmed || !coverageStart || !coverageEnd) {
+      throw new Error("The source invoice coverage start and end dates require explicit staff confirmation.");
+    }
+    const coverageStartDate = commercialDate(coverageStart, "sourceCoverageStartDate");
+    const coverageEndDate = commercialDate(coverageEnd, "sourceCoverageEndDate");
+    const coverageBoundaryDates = new Set([
+      commercialDateString(coverageStartDate),
+      commercialDateString(coverageEndDate),
+    ]);
+    const activeIntervalAssignments = snapshot.assignments.filter((assignment) =>
       assignment.customerId === proposal.customerId
       && assignment.subscriptionItemId == null
       && assignment.endDate == null
       && ["active", "due_soon", "overdue"].includes(assignment.status)
-      && assignment.intervalMonths === proposal.billingIntervalMonths
-      && assignment.nextDueDate?.slice(0, 10) === input.nextBillingDate,
+      && assignment.intervalMonths === proposal.billingIntervalMonths,
     );
+    const assignmentsOutsideConfirmedCoverage = activeIntervalAssignments.filter((assignment) =>
+      !assignment.nextDueDate || !coverageBoundaryDates.has(assignment.nextDueDate.slice(0, 10)),
+    );
+    if (assignmentsOutsideConfirmedCoverage.length) {
+      throw new Error("Every active service must use either the explicitly confirmed coverage start or next renewal date before it can be migrated.");
+    }
+    // Older manual records may retain the start of the invoice-covered period as
+    // nextDueDate. The explicit, fingerprint-bound coverage confirmation is the
+    // authority for that historical-to-next-renewal transition.
+    const authorizedAssignments = activeIntervalAssignments;
     const approvedAssignmentIds = new Set(normalizedItems.map((item) => item.assignmentIds[0]));
     if (
       !authorizedAssignments.length
@@ -429,18 +449,11 @@ export async function buildCanonicalManualPilotMigrationPlan(
     if (sourceInvoice.currency.toUpperCase() !== proposal.currency.toUpperCase()) {
       throw new Error("The selected manual invoice currency does not match the approved arrangement.");
     }
-    const coverageStart = input.sourceCoverageStartDate?.trim();
-    const coverageEnd = input.sourceCoverageEndDate?.trim();
-    if (!input.sourceCoverageConfirmed || !coverageStart || !coverageEnd) {
-      throw new Error("The source invoice coverage start and end dates require explicit staff confirmation.");
-    }
-    const coverageStartDate = commercialDate(coverageStart, "sourceCoverageStartDate");
-    const coverageEndDate = commercialDate(coverageEnd, "sourceCoverageEndDate");
     const expectedCoverageEnd = addUtcMonths(coverageStartDate, proposal.billingIntervalMonths);
     if (
       commercialDateString(coverageStartDate) !== input.billingAnchorDate
       || commercialDateString(coverageEndDate) !== input.nextBillingDate
-      || input.nextBillingDate !== proposal.nextBillingDate
+      || (proposal.nextBillingDate != null && input.nextBillingDate !== proposal.nextBillingDate)
       || commercialDateString(expectedCoverageEnd) !== commercialDateString(coverageEndDate)
     ) {
       throw new Error("The explicitly confirmed invoice coverage must begin on the approved billing anchor, span the approved interval, and end on the verified next billing date.");
