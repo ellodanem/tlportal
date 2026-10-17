@@ -9,7 +9,10 @@ import {
 } from "@/lib/domain/canonical-subscription-admin";
 import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { canonicalSubscriptionUiStaffViewer } from "@/lib/services/canonical-subscription-admin-service";
-import { getCanonicalManualPilotMigrationReview } from "@/lib/services/canonical-manual-pilot-review-service";
+import {
+  CanonicalManualPilotReviewNotFoundError,
+  getCanonicalManualPilotMigrationReview,
+} from "@/lib/services/canonical-manual-pilot-review-service";
 
 type Props = {
   params: Promise<{ proposalId: string }>;
@@ -27,8 +30,9 @@ export default async function CanonicalManualPilotReviewPage({ params, searchPar
   let review: Awaited<ReturnType<typeof getCanonicalManualPilotMigrationReview>>;
   try {
     review = await getCanonicalManualPilotMigrationReview(proposalId);
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof CanonicalManualPilotReviewNotFoundError) notFound();
+    throw error;
   }
   const editable = canonicalSubscriptionUiEnabled() && review.candidate.migrationStatus == null;
   const nextBillingDate = review.candidate.nextBillingDate?.slice(0, 10) ?? "";
@@ -69,7 +73,7 @@ export default async function CanonicalManualPilotReviewPage({ params, searchPar
           <div><dt className="text-zinc-500">Review status</dt><dd className="mt-1 font-medium capitalize">{review.candidate.reviewStatus.replaceAll("_", " ")}</dd></div>
           <div><dt className="text-zinc-500">Source fingerprint</dt><dd className="mt-1 truncate font-mono text-xs" title={review.sourceFingerprint}>{review.sourceFingerprint}</dd></div>
         </dl>
-        {review.candidate.issueCodes.length ? <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20"><p className="font-semibold text-amber-900 dark:text-amber-200">Information requiring explicit confirmation</p><ul className="mt-2 list-disc space-y-1 pl-5 text-amber-900 dark:text-amber-200">{review.candidate.issueCodes.map((code) => <li key={code}>{code.replaceAll("_", " ")}</li>)}</ul></div> : null}
+        {review.candidate.issueDetails.length ? <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20"><p className="font-semibold text-amber-900 dark:text-amber-200">Information requiring explicit confirmation</p><ul className="mt-2 list-disc space-y-2 pl-5 text-amber-900 dark:text-amber-200">{review.candidate.issueDetails.map((issue) => <li key={`${issue.code}:${issue.message}`}><span className="font-medium capitalize">{issue.severity}:</span> {issue.message}</li>)}</ul></div> : null}
       </section>
 
       {review.sourceInvoice ? <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 sm:p-6 dark:border-blue-900/60 dark:bg-blue-950/20">
