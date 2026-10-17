@@ -4,6 +4,10 @@ import {
   canonicalBillingInterval,
   normalizeCurrency,
 } from "./canonical-subscription-application";
+import {
+  canonicalManualPilotBillingAuthorized,
+  type CanonicalManualPilotEnvironment,
+} from "./canonical-manual-pilot";
 
 export const CANONICAL_NATIVE_BILLING_FLAG = "CANONICAL_NATIVE_BILLING_ENABLED";
 
@@ -21,26 +25,41 @@ function billingError(code: string, message: string): never {
   throw new CanonicalNativeBillingError(code, message);
 }
 
-export type CanonicalNativeBillingEnvironment = {
+export type CanonicalNativeBillingEnvironment = CanonicalManualPilotEnvironment & {
   CANONICAL_NATIVE_BILLING_ENABLED?: string;
-  NODE_ENV?: string;
+};
+
+export type CanonicalNativeBillingExecutionScope = {
+  customerId: string;
+  subscriptionId: string;
+  activationStatus: string | null;
 };
 
 export function canonicalNativeBillingExecutionEnabled(
   environment: CanonicalNativeBillingEnvironment = process.env,
+  scope?: CanonicalNativeBillingExecutionScope,
 ): boolean {
-  return environment.NODE_ENV !== "production"
-    && environment.CANONICAL_NATIVE_BILLING_ENABLED === "true";
+  if (environment.NODE_ENV === "production") {
+    return scope != null && canonicalManualPilotBillingAuthorized({
+      ...scope,
+      environment,
+    });
+  }
+  return environment.CANONICAL_NATIVE_BILLING_ENABLED === "true";
 }
 
 export function assertCanonicalNativeBillingExecutionEnabled(
   environment: CanonicalNativeBillingEnvironment = process.env,
+  scope?: CanonicalNativeBillingExecutionScope,
 ): void {
   if (environment.NODE_ENV === "production") {
-    billingError(
-      "PRODUCTION_EXECUTION_DISABLED",
-      "Canonical native billing execution is disabled in production during Phase 3A.",
-    );
+    if (!scope || !canonicalManualPilotBillingAuthorized({ ...scope, environment })) {
+      billingError(
+        "PRODUCTION_EXECUTION_DISABLED",
+        "Canonical native billing is disabled in production except for the exact durably activated manual pilot.",
+      );
+    }
+    return;
   }
   if (environment.CANONICAL_NATIVE_BILLING_ENABLED !== "true") {
     billingError(

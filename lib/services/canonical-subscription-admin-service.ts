@@ -12,6 +12,7 @@ import {
 import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
 import { getAnnualServiceAdjustmentProposal } from "@/lib/services/canonical-annual-adjustment-service";
 import { getCanonicalSubscriptionBillingSummary } from "@/lib/services/canonical-native-billing-service";
+import { getCanonicalManualPilotReview } from "@/lib/services/canonical-manual-pilot-service";
 
 function customerLabel(customer: {
   company: string | null;
@@ -240,6 +241,15 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
         };
       }
     }));
+  let manualPilotReview: Awaited<ReturnType<typeof getCanonicalManualPilotReview>> | null = null;
+  let manualPilotReviewError: string | null = null;
+  if (subscription.canonicalMigrationLedger?.sourceKind === "manual_schedule") {
+    try {
+      manualPilotReview = await getCanonicalManualPilotReview(subscription.id);
+    } catch (error) {
+      manualPilotReviewError = error instanceof Error ? error.message : "Manual pilot readiness is unavailable.";
+    }
+  }
 
   return {
     ...subscription,
@@ -252,5 +262,7 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
     ),
     providerStatus,
     adjustmentStatuses,
+    manualPilotReview,
+    manualPilotReviewError,
   };
 }

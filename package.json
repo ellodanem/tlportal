@@ -7,7 +7,7 @@
     "dev:webpack": "next dev --webpack",
     "build": "node scripts/run-build.mjs",
     "test": "node --import tsx --conditions=react-server --test --test-isolation=none \"tests/**/*.test.ts\"",
-    "test:postgres-foundation": "node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/foundation.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-application.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-migration.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-native-billing.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-annual-adjustment.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-stripe-shadow.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-stripe-execution.integration.ts",
+    "test:postgres-foundation": "node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/foundation.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-application.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-subscription-migration.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-native-billing.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-annual-adjustment.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-stripe-shadow.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-stripe-execution.integration.ts && node --import tsx --conditions=react-server --test --test-isolation=none tests/postgres/canonical-manual-pilot.integration.ts",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
@@ -23,7 +23,8 @@
     "docker:down": "docker compose down",
     "logo:optimize": "node scripts/optimize-traq-portal-logo.mjs",
     "billing:migration-preview": "tsx scripts/subscription-migration-dry-run.ts",
-    "billing:canonical-migration": "node --conditions=react-server --import tsx scripts/canonical-subscription-migration.ts"
+    "billing:canonical-migration": "node --conditions=react-server --import tsx scripts/canonical-subscription-migration.ts",
+    "billing:manual-pilot": "node --conditions=react-server --import tsx scripts/canonical-manual-pilot.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

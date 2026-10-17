@@ -1,0 +1,73 @@
+# Canonical manual-billing pilot runbook
+
+Phase 4A prepares one existing manual recurring arrangement for a separately authorized production pilot. It does not select or migrate a production customer by itself.
+
+## Eligibility checklist
+
+- One active, unarchived customer and one clearly identified manual recurring schedule.
+- One supported cadence: 1, 3, 6, or 12 months.
+- A known next renewal date shared by the schedule and assigned services.
+- Every active tracking service is attributable to this arrangement.
+- Every service has an explicit agreed per-cycle price; negotiated rates remain negotiated.
+- Historical invoices, partial payments, and outstanding balances reconcile.
+- No open Stripe provider relationship or competing recurring schedule owns the arrangement.
+- No invoice has already been generated for the proposed cutover period.
+
+## Owner review record
+
+Record, without including payment credentials:
+
+1. Customer ID and the exact legacy schedule ID.
+2. Preselected canonical subscription ID.
+3. Current interval, currency, per-service prices, and recurring total.
+4. Preserved billing anniversary and exact cutover period start.
+5. Historical paid and unpaid invoice totals.
+6. Migration source fingerprint and immutable Phase 2B plan fingerprint.
+7. Which legacy schedule will end and which canonical schedule will start.
+8. The expected first canonical invoice date and amount.
+
+The owner signs two short-lived authorizations: one to create the exact shadow subscription and one to transfer billing authority after reviewing that shadow. TL Portal does not create production owner signatures.
+
+## Disabled-by-default production configuration
+
+Keep all of these absent until a separately approved cutover window:
+
+- `CANONICAL_MANUAL_PILOT_ENABLED`
+- `CANONICAL_MANUAL_PILOT_CUSTOMER_ID`
+- `CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID`
+- `CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID`
+- `CANONICAL_MANUAL_PILOT_OWNER_EMAIL`
+- `CANONICAL_MANUAL_PILOT_APPROVAL_SECRET`
+
+The enable flag alone cannot migrate or bill anything. Execution also requires the exact customer, source schedule and preselected subscription IDs, a signed unexpired authorization, matching fingerprints, and an explicit CLI execution token. Recurring production billing additionally requires an active durable pilot activation record for the allowlisted subscription.
+
+## Cutover sequence
+
+1. Create a fresh Neon recovery snapshot and confirm migration health.
+2. Export and review the sanitized arrangement through the pilot review UI.
+3. Reconcile historical invoices and payments with the owner.
+4. Build one Phase 2B plan and record its fingerprints.
+5. Preselect the canonical subscription UUID and configure the exact temporary allowlist.
+6. Have the owner sign the shadow-migration authorization outside TL Portal.
+7. Run `billing:manual-pilot migrate` once and inspect the shadow record.
+8. Re-run the pilot review. Any changed source state invalidates approval.
+9. Have the owner sign the cutover authorization outside TL Portal.
+10. Run `billing:manual-pilot activate` once.
+11. Verify the legacy schedule is ended, one canonical schedule is active, no invoice/payment count changed, and the first canonical period is correct.
+12. Leave the exact pilot allowlist in place only for this subscription's approved recurring execution. Do not enable broad canonical migration or billing flags.
+
+## Verification after cutover
+
+- The legacy schedule cannot generate the cutover period.
+- Other legacy schedules remain active and unchanged.
+- The canonical schedule creates exactly one invoice at the sum of effective item rates.
+- Immutable invoice service snapshots identify every billed service and rate.
+- Historical invoices and payments remain attached to their original records.
+- Historical outstanding balances contribute to collection health.
+- Past-due status creates staff attention only; it does not suspend tracking services.
+
+## Recovery
+
+Activation runs in one serializable transaction. If any validation or write fails, the legacy schedule remains active, the canonical schedule is not created, control remains `shadow`, and no invoice or payment is created. The durable activation record is marked `failed_rolled_back`; correct the reviewed source data, generate a fresh proposal and owner authorization, then retry.
+
+If activation succeeds and an invoice is later created, do not attempt an automatic rollback. Pause the exact canonical schedule and perform an owner-reviewed financial reconciliation before changing billing authority.
