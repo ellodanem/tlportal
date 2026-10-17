@@ -44,7 +44,11 @@ export default async function CanonicalManualPilotReviewPage({ params, searchPar
         </Link>
         <p className="mt-4 text-xs font-medium text-zinc-500">First customer pilot / Migration review</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">{review.candidate.customerLabel}</h1>
-        <p className="mt-1 text-sm text-zinc-500">Manual schedule {review.candidate.sourceScheduleId}</p>
+        <p className="mt-1 text-sm text-zinc-500">
+          {review.candidate.sourceKind === "manual_schedule"
+            ? `Manual schedule ${review.candidate.sourceScheduleId}`
+            : `Established manual invoice ${review.candidate.sourceInvoiceId}`}
+        </p>
       </div>
 
       {query.error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{query.error}</p> : null}
@@ -67,6 +71,18 @@ export default async function CanonicalManualPilotReviewPage({ params, searchPar
         </dl>
         {review.candidate.issueCodes.length ? <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20"><p className="font-semibold text-amber-900 dark:text-amber-200">Information requiring explicit confirmation</p><ul className="mt-2 list-disc space-y-1 pl-5 text-amber-900 dark:text-amber-200">{review.candidate.issueCodes.map((code) => <li key={code}>{code.replaceAll("_", " ")}</li>)}</ul></div> : null}
       </section>
+
+      {review.sourceInvoice ? <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 sm:p-6 dark:border-blue-900/60 dark:bg-blue-950/20">
+        <h2 className="font-semibold">Established invoice evidence</h2>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This invoice remains unchanged. Its subtotal and tax treatment are validated before a shadow subscription can be prepared.</p>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
+          <div><dt className="text-zinc-500">Issued</dt><dd className="mt-1 font-medium">{review.sourceInvoice.issueDate.slice(0, 10)}</dd></div>
+          <div><dt className="text-zinc-500">Subtotal</dt><dd className="mt-1 font-medium tabular-nums">{money(review.sourceInvoice.subtotal, review.candidate.currency)}</dd></div>
+          <div><dt className="text-zinc-500">Tax</dt><dd className="mt-1 font-medium tabular-nums">{review.sourceInvoice.taxLabel ?? "No tax"} · {money(review.sourceInvoice.taxTotal, review.candidate.currency)}</dd></div>
+          <div><dt className="text-zinc-500">Rate</dt><dd className="mt-1 font-medium">{review.sourceInvoice.taxRatePercent ?? "—"}</dd></div>
+          <div><dt className="text-zinc-500">Total</dt><dd className="mt-1 font-medium tabular-nums">{money(review.sourceInvoice.total, review.candidate.currency)}</dd></div>
+        </dl>
+      </section> : null}
 
       <form action={migrateManualPilotShadowAction} className="space-y-6">
         <input type="hidden" name="proposalId" value={review.candidate.proposalId} />
@@ -98,7 +114,7 @@ export default async function CanonicalManualPilotReviewPage({ params, searchPar
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This creates a shadow record only. Legacy billing remains authoritative until a separately signed cutover authorization.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-sm font-medium sm:col-span-2">Subscription name<input disabled={!editable} required name="name" defaultValue={`${review.candidate.customerLabel} tracking services`} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:disabled:bg-zinc-800" /></label>
-            <label className="text-sm font-medium sm:col-span-2">Commercial reference<input disabled={!editable} required name="reference" defaultValue={`manual-${review.candidate.sourceScheduleId}`} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:disabled:bg-zinc-800" /></label>
+            <label className="text-sm font-medium sm:col-span-2">Commercial reference<input disabled={!editable} required name="reference" defaultValue={`manual-${review.candidate.sourceKind === "manual_schedule" ? review.candidate.sourceScheduleId : review.candidate.sourceInvoiceId}`} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:disabled:bg-zinc-800" /></label>
             <label className="text-sm font-medium">Commercial start<input disabled={!editable} required type="date" name="commercialStartDate" defaultValue={commercialStartDate} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:disabled:bg-zinc-800" /></label>
             <label className="text-sm font-medium">Billing anchor<input disabled={!editable} required type="date" name="billingAnchorDate" defaultValue={nextBillingDate} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:disabled:bg-zinc-800" /></label>
             <label className="text-sm font-medium">Next billing date<input disabled={!editable} required type="date" name="nextBillingDate" defaultValue={nextBillingDate} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:disabled:bg-zinc-800" /></label>

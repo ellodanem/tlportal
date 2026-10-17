@@ -27,7 +27,9 @@ export type CanonicalManualPilotExecutionResult = {
   activationKey: string;
   status: "active";
   targetSubscriptionId: string;
-  legacyScheduleId: string;
+  sourceKind: "manual_schedule" | "manual_invoice";
+  legacyScheduleId: string | null;
+  sourceInvoiceId: string | null;
   canonicalScheduleId: string;
   cutoverPeriodStart: string;
   recurringAmount: string;
@@ -59,7 +61,17 @@ export type CanonicalManualPilotReview = {
       unitPrice: string;
       lineTotal: string;
     }>;
-  };
+  } | null;
+  sourceInvoice: {
+    id: string;
+    status: string;
+    issueDate: Date;
+    subtotal: string;
+    taxLabel: string | null;
+    taxRatePercent: string | null;
+    taxTotal: string;
+    total: string;
+  } | null;
   items: Array<{
     id: string;
     label: string;
@@ -170,25 +182,41 @@ async function loadPilotReview(
   if (!subscription) pilotError("PILOT_SUBSCRIPTION_NOT_FOUND", "Canonical subscription was not found.");
   const ledger = subscription.canonicalMigrationLedger;
   if (!ledger) pilotError("PILOT_MIGRATION_REQUIRED", "The subscription does not have a migration ledger.");
-  if (ledger.sourceKind !== "manual_schedule") {
-    pilotError("PILOT_MANUAL_SOURCE_REQUIRED", "The first pilot requires a migrated manual recurring schedule.");
+  if (ledger.sourceKind !== "manual_schedule" && ledger.sourceKind !== "manual_invoice") {
+    pilotError("PILOT_MANUAL_SOURCE_REQUIRED", "The first pilot requires a migrated manual schedule or verified manual invoice.");
+  }
+  const sourceKind = ledger.sourceKind as "manual_schedule" | "manual_invoice";
+  const legacySchedule = sourceKind === "manual_schedule"
+    ? await client.recurringInvoiceSchedule.findUnique({
+      where: { id: ledger.sourceId },
+      include: { lineItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
+    })
+    : null;
+  if (sourceKind === "manual_schedule" && !legacySchedule) {
+    pilotError("PILOT_LEGACY_SCHEDULE_NOT_FOUND", "The approved legacy schedule no longer exists.");
+  }
+  const sourceInvoice = sourceKind === "manual_invoice"
+    ? await client.invoice.findUnique({
+      where: { id: ledger.sourceId },
+      include: { lineItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }, payments: { orderBy: [{ receivedAt: "asc" }, { id: "asc" }] } },
+    })
+    : null;
+  if (sourceKind === "manual_invoice" && !sourceInvoice) {
+    pilotError("PILOT_SOURCE_INVOICE_NOT_FOUND", "The approved source invoice no longer exists.");
   }
 
-  const legacySchedule = await client.recurringInvoiceSchedule.findUnique({
-    where: { id: ledger.sourceId },
-    include: { lineItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
-  });
-  if (!legacySchedule) pilotError("PILOT_LEGACY_SCHEDULE_NOT_FOUND", "The approved legacy schedule no longer exists.");
-
   const historicalInvoices = await client.invoice.findMany({
-    where: { recurringScheduleId: legacySchedule.id },
+    where: sourceKind === "manual_schedule"
+      ? { recurringScheduleId: legacySchedule!.id }
+      : { id: sourceInvoice!.id },
     orderBy: [{ issueDate: "asc" }, { id: "asc" }],
     include: {
       payments: { orderBy: [{ receivedAt: "asc" }, { id: "asc" }] },
     },
   });
 
-  const cutoverPeriodStart = subscription.nextBillingDate ?? legacySchedule.nextIssueDate;
+  const cutoverPeriodStart = subscription.nextBillingDate ?? legacySchedule?.nextIssueDate;
+  if (!cutoverPeriodStart) pilotError("PILOT_CUTOVER_DATE_MISSING", "The canonical next billing date is required.");
   const blockers: string[] = [];
   if (ledger.status !== "completed") blockers.push("The shadow migration has not completed successfully.");
   if (subscription.collectionMethod !== "manual_invoice") blockers.push("The first pilot is restricted to manual invoicing.");
@@ -196,8 +224,15 @@ async function loadPilotReview(
   if (subscription.controlMode !== "shadow" && subscription.controlMode !== "canonical") {
     blockers.push("The migrated subscription must remain in shadow mode until cutover.");
   }
-  if (legacySchedule.customerId !== subscription.customerId) blockers.push("Legacy schedule customer ownership differs.");
-  if (legacySchedule.status !== "active" && !ledger.manualPilotActivation?.activatedAt) {
+  if (legacySchedule && legacySchedule.customerId !== subscription.customerId) blockers.push("Legacy schedule customer ownership differs.");
+  if (sourceInvoice && (
+    sourceInvoice.customerId !== subscription.customerId
+    || sourceInvoice.customerSubscriptionId != null
+    || sourceInvoice.recurringScheduleId != null
+    || sourceInvoice.archivedAt != null
+    || ["void", "written_off"].includes(sourceInvoice.status)
+  )) blockers.push("The source invoice is no longer a valid independent manual billing record.");
+  if (legacySchedule && legacySchedule.status !== "active" && !ledger.manualPilotActivation?.activatedAt) {
     blockers.push("The legacy recurring schedule is not active.");
   }
   if (
@@ -209,6 +244,7 @@ async function loadPilotReview(
   }
   if (
     subscription.nextBillingDate
+    && legacySchedule != null
     && !sameUtcDay(subscription.nextBillingDate, legacySchedule.nextIssueDate)
     && !ledger.manualPilotActivation?.activatedAt
   ) {
@@ -216,12 +252,16 @@ async function loadPilotReview(
   }
   if (
     subscription.billingIntervalMonths != null
+    && legacySchedule != null
     && subscription.billingIntervalMonths !== legacySchedule.intervalMonths
   ) {
     blockers.push("Legacy and canonical billing intervals do not match.");
   }
-  if (subscription.currency && subscription.currency.toUpperCase() !== legacySchedule.currency.toUpperCase()) {
+  if (legacySchedule && subscription.currency && subscription.currency.toUpperCase() !== legacySchedule.currency.toUpperCase()) {
     blockers.push("Legacy and canonical currencies do not match.");
+  }
+  if (sourceInvoice && subscription.currency && subscription.currency.toUpperCase() !== sourceInvoice.currency.toUpperCase()) {
+    blockers.push("The source invoice currency does not match canonical billing.");
   }
   if (subscription.providerLinks.length) blockers.push("Manual pilot subscriptions cannot have an open provider relationship.");
   if (subscription.recurringSchedules.length && !ledger.manualPilotActivation?.canonicalScheduleId) {
@@ -286,7 +326,7 @@ async function loadPilotReview(
         })),
       })),
     },
-    legacySchedule: {
+    legacySchedule: legacySchedule ? {
       id: legacySchedule.id,
       status: legacySchedule.status,
       customerId: legacySchedule.customerId,
@@ -309,7 +349,35 @@ async function loadPilotReview(
         unitPrice: line.unitPrice.toFixed(2),
         lineTotal: line.lineTotal.toFixed(2),
       })),
-    },
+    } : null,
+    sourceInvoice: sourceInvoice ? {
+      id: sourceInvoice.id,
+      status: sourceInvoice.status,
+      customerId: sourceInvoice.customerId,
+      customerSubscriptionId: sourceInvoice.customerSubscriptionId,
+      recurringScheduleId: sourceInvoice.recurringScheduleId,
+      currency: sourceInvoice.currency,
+      issueDate: sourceInvoice.issueDate,
+      dueDate: sourceInvoice.dueDate,
+      subtotal: sourceInvoice.subtotal.toFixed(2),
+      taxLabel: sourceInvoice.taxLabel,
+      taxRatePercent: sourceInvoice.taxRatePercent?.toFixed(2) ?? null,
+      taxTotal: sourceInvoice.taxTotal.toFixed(2),
+      total: sourceInvoice.total.toFixed(2),
+      amountPaid: sourceInvoice.amountPaid.toFixed(2),
+      amountDue: sourceInvoice.amountDue.toFixed(2),
+      billToName: sourceInvoice.billToName,
+      billToLines: sourceInvoice.billToLines,
+      notes: sourceInvoice.notes,
+      paymentInstructions: sourceInvoice.paymentInstructions,
+      lineItems: sourceInvoice.lineItems.map((line) => ({
+        id: line.id,
+        description: line.description,
+        quantity: line.quantity.toString(),
+        unitPrice: line.unitPrice.toFixed(2),
+        lineTotal: line.lineTotal.toFixed(2),
+      })),
+    } : null,
     historicalInvoices: historicalInvoices.map((invoice) => ({
       id: invoice.id,
       status: invoice.status,
@@ -329,18 +397,20 @@ async function loadPilotReview(
 
   const recurringAmount = cycle?.subtotal.toFixed(2) ?? "0.00";
   const proposal: CanonicalManualPilotProposal = {
-    activationKey: `manual-pilot:${ledger.migrationKey}:${dateOnly(cutoverPeriodStart)}`,
+    activationKey: `manual-pilot:${sourceKind}:${ledger.migrationKey}:${dateOnly(cutoverPeriodStart)}`,
     migrationLedgerId: ledger.id,
     migrationKey: ledger.migrationKey,
     customerId: subscription.customerId,
     subscriptionId: subscription.id,
-    legacyScheduleId: legacySchedule.id,
+    sourceKind,
+    legacyScheduleId: legacySchedule?.id ?? null,
+    sourceInvoiceId: sourceInvoice?.id ?? null,
     migrationSourceFingerprint: ledger.sourceFingerprint,
     migrationPlanFingerprint: ledger.planFingerprint,
     sourceStateFingerprint,
     cutoverPeriodStart: dateOnly(cutoverPeriodStart),
     billingIntervalMonths: subscription.billingIntervalMonths as 1 | 3 | 6 | 12,
-    currency: (subscription.currency ?? legacySchedule.currency).toUpperCase(),
+    currency: (subscription.currency ?? legacySchedule?.currency ?? sourceInvoice?.currency ?? "XCD").toUpperCase(),
     recurringAmount,
     itemCount: cycle?.lines.length ?? 0,
     assignmentIds,
@@ -351,7 +421,7 @@ async function loadPilotReview(
   return {
     proposal,
     customerLabel: customerLabel(subscription.customer),
-    legacySchedule: {
+    legacySchedule: legacySchedule ? {
       id: legacySchedule.id,
       name: legacySchedule.name,
       status: legacySchedule.status,
@@ -365,7 +435,17 @@ async function loadPilotReview(
         unitPrice: line.unitPrice.toFixed(2),
         lineTotal: line.lineTotal.toFixed(2),
       })),
-    },
+    } : null,
+    sourceInvoice: sourceInvoice ? {
+      id: sourceInvoice.id,
+      status: sourceInvoice.status,
+      issueDate: sourceInvoice.issueDate,
+      subtotal: sourceInvoice.subtotal.toFixed(2),
+      taxLabel: sourceInvoice.taxLabel,
+      taxRatePercent: sourceInvoice.taxRatePercent?.toFixed(2) ?? null,
+      taxTotal: sourceInvoice.taxTotal.toFixed(2),
+      total: sourceInvoice.total.toFixed(2),
+    } : null,
     items: subscription.items.map((item) => {
       const line = cycle?.lines.find((candidate) => candidate.subscriptionItemId === item.id);
       return {
@@ -423,7 +503,9 @@ async function registerApproval(input: {
         migrationLedgerId: input.proposal.migrationLedgerId,
         customerId: input.proposal.customerId,
         targetSubscriptionId: input.proposal.subscriptionId,
+        sourceKind: input.proposal.sourceKind,
         legacyScheduleId: input.proposal.legacyScheduleId,
+        sourceInvoiceId: input.proposal.sourceInvoiceId,
         sourceStateFingerprint: input.proposal.sourceStateFingerprint,
         proposalFingerprint: canonicalManualPilotProposalFingerprint(input.proposal),
         approvalFingerprint,
@@ -445,7 +527,8 @@ async function registerApproval(input: {
           { authorizationId: input.authorization.authorizationId },
           { migrationLedgerId: input.proposal.migrationLedgerId },
           { targetSubscriptionId: input.proposal.subscriptionId },
-          { legacyScheduleId: input.proposal.legacyScheduleId },
+          ...(input.proposal.legacyScheduleId ? [{ legacyScheduleId: input.proposal.legacyScheduleId }] : []),
+          ...(input.proposal.sourceInvoiceId ? [{ sourceInvoiceId: input.proposal.sourceInvoiceId }] : []),
         ],
       },
     });
@@ -481,7 +564,9 @@ async function executeActivationTransaction(input: {
         activationKey: activation.activationKey,
         status: "active" as const,
         targetSubscriptionId: activation.targetSubscriptionId,
+        sourceKind: activation.sourceKind as "manual_schedule" | "manual_invoice",
         legacyScheduleId: activation.legacyScheduleId,
+        sourceInvoiceId: activation.sourceInvoiceId,
         canonicalScheduleId: activation.canonicalScheduleId,
         cutoverPeriodStart: dateOnly(activation.cutoverPeriodStart),
         recurringAmount: activation.recurringAmount.toFixed(2),
@@ -503,11 +588,20 @@ async function executeActivationTransaction(input: {
       WHERE "id" = ${input.proposal.subscriptionId}
       FOR UPDATE
     `);
-    await tx.$queryRaw(Prisma.sql`
-      SELECT "id" FROM "RecurringInvoiceSchedule"
-      WHERE "id" = ${input.proposal.legacyScheduleId}
-      FOR UPDATE
-    `);
+    if (input.proposal.legacyScheduleId) {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "RecurringInvoiceSchedule"
+        WHERE "id" = ${input.proposal.legacyScheduleId}
+        FOR UPDATE
+      `);
+    }
+    if (input.proposal.sourceInvoiceId) {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "Invoice"
+        WHERE "id" = ${input.proposal.sourceInvoiceId}
+        FOR UPDATE
+      `);
+    }
 
     const current = await loadPilotReview(input.proposal.subscriptionId, tx);
     if (current.blockers.length) {
@@ -523,15 +617,24 @@ async function executeActivationTransaction(input: {
     const cutoverStart = new Date(`${input.proposal.cutoverPeriodStart}T00:00:00.000Z`);
     const cutoverEnd = new Date(cutoverStart);
     cutoverEnd.setUTCDate(cutoverEnd.getUTCDate() + 1);
+    const periodLookback = new Date(cutoverStart);
+    periodLookback.setUTCMonth(periodLookback.getUTCMonth() - input.proposal.billingIntervalMonths);
     const alreadyBilled = await tx.invoice.findFirst({
-      where: {
-        recurringScheduleId: input.proposal.legacyScheduleId,
+      where: input.proposal.sourceKind === "manual_schedule" ? {
+        recurringScheduleId: input.proposal.legacyScheduleId!,
         issueDate: { gte: cutoverStart, lt: cutoverEnd },
+      } : {
+        customerId: input.proposal.customerId,
+        recurringScheduleId: null,
+        archivedAt: null,
+        status: { notIn: ["void", "written_off"] },
+        issueDate: { gte: periodLookback, lte: cutoverStart },
+        id: { not: input.proposal.sourceInvoiceId! },
       },
       select: { id: true },
     });
     if (alreadyBilled) {
-      pilotError("PILOT_CUTOVER_PERIOD_ALREADY_BILLED", "The legacy schedule already billed the approved cutover period.");
+      pilotError("PILOT_CUTOVER_PERIOD_ALREADY_BILLED", "An existing legacy or manual invoice already conflicts with the approved cutover period.");
     }
 
     const before = {
@@ -548,29 +651,34 @@ async function executeActivationTransaction(input: {
         failureMessage: null,
       },
     });
-    const legacySchedule = await tx.recurringInvoiceSchedule.update({
-      where: { id: input.proposal.legacyScheduleId },
-      data: { status: "ended" },
-    });
+    const legacySchedule = input.proposal.legacyScheduleId
+      ? await tx.recurringInvoiceSchedule.update({
+        where: { id: input.proposal.legacyScheduleId },
+        data: { status: "ended" },
+      })
+      : null;
+    const sourceInvoice = input.proposal.sourceInvoiceId
+      ? await tx.invoice.findUniqueOrThrow({ where: { id: input.proposal.sourceInvoiceId } })
+      : null;
     const canonicalSchedule = await tx.recurringInvoiceSchedule.create({
       data: {
         status: "active",
-        name: `${legacySchedule.name?.trim() || "Tracking services"} · canonical`,
+        name: `${legacySchedule?.name?.trim() || sourceInvoice?.billToName?.trim() || "Tracking services"} · canonical`,
         customerId: input.proposal.customerId,
         customerSubscriptionId: input.proposal.subscriptionId,
-        billToName: legacySchedule.billToName,
-        billToLines: legacySchedule.billToLines,
+        billToName: legacySchedule?.billToName ?? sourceInvoice?.billToName ?? null,
+        billToLines: legacySchedule?.billToLines ?? sourceInvoice?.billToLines ?? [],
         currency: input.proposal.currency,
-        taxLabel: legacySchedule.taxLabel,
-        taxRatePercent: legacySchedule.taxRatePercent,
-        notes: legacySchedule.notes,
-        paymentInstructions: legacySchedule.paymentInstructions,
+        taxLabel: legacySchedule?.taxLabel ?? sourceInvoice?.taxLabel ?? null,
+        taxRatePercent: legacySchedule?.taxRatePercent ?? sourceInvoice?.taxRatePercent ?? null,
+        notes: legacySchedule?.notes ?? sourceInvoice?.notes ?? null,
+        paymentInstructions: legacySchedule?.paymentInstructions ?? sourceInvoice?.paymentInstructions ?? null,
         intervalMonths: input.proposal.billingIntervalMonths,
         nextIssueDate: cutoverStart,
-        dueDaysAfterIssue: legacySchedule.dueDaysAfterIssue,
-        autoEmail: legacySchedule.autoEmail,
-        emailTo: legacySchedule.emailTo,
-        createdById: legacySchedule.createdById,
+        dueDaysAfterIssue: legacySchedule?.dueDaysAfterIssue ?? 30,
+        autoEmail: legacySchedule?.autoEmail ?? false,
+        emailTo: legacySchedule?.emailTo ?? null,
+        createdById: legacySchedule?.createdById ?? sourceInvoice?.createdById ?? null,
       },
     });
     await tx.customerSubscription.update({
@@ -587,7 +695,7 @@ async function executeActivationTransaction(input: {
     };
     const reconciliation = {
       oneBillingAuthority: true,
-      legacyScheduleEnded: true,
+      legacyScheduleEnded: input.proposal.sourceKind === "manual_schedule",
       canonicalScheduleActive: true,
       canonicalSubscriptionActive: true,
       invoiceCountChanged: before.invoices !== after.invoices,
@@ -611,7 +719,9 @@ async function executeActivationTransaction(input: {
       activationKey: activation.activationKey,
       status: "active" as const,
       targetSubscriptionId: input.proposal.subscriptionId,
+      sourceKind: input.proposal.sourceKind,
       legacyScheduleId: input.proposal.legacyScheduleId,
+      sourceInvoiceId: input.proposal.sourceInvoiceId,
       canonicalScheduleId: canonicalSchedule.id,
       cutoverPeriodStart: input.proposal.cutoverPeriodStart,
       recurringAmount: input.proposal.recurringAmount,

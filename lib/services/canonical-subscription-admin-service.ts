@@ -243,7 +243,10 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
     }));
   let manualPilotReview: Awaited<ReturnType<typeof getCanonicalManualPilotReview>> | null = null;
   let manualPilotReviewError: string | null = null;
-  if (subscription.canonicalMigrationLedger?.sourceKind === "manual_schedule") {
+  if (
+    subscription.canonicalMigrationLedger?.sourceKind === "manual_schedule"
+    || subscription.canonicalMigrationLedger?.sourceKind === "manual_invoice"
+  ) {
     try {
       manualPilotReview = await getCanonicalManualPilotReview(subscription.id);
     } catch (error) {

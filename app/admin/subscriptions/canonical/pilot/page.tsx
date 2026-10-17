@@ -40,7 +40,7 @@ export default async function CanonicalManualPilotCandidatesPage() {
 
       {candidates.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          No legacy manual recurring schedules are available for review.
+          No verified manual schedules or established manual-invoice arrangements are available for review.
         </div>
       ) : (
         <div className="grid gap-3">
@@ -59,7 +59,11 @@ export default async function CanonicalManualPilotCandidatesPage() {
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-sm text-zinc-500">Schedule {candidate.sourceScheduleId}</p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    {candidate.sourceKind === "manual_schedule"
+                      ? `Schedule ${candidate.sourceScheduleId}`
+                      : `Established invoice ${candidate.sourceInvoiceId}`}
+                  </p>
                 </div>
                 {candidate.targetSubscriptionId ? (
                   <Link href={`/admin/subscriptions/canonical/${candidate.targetSubscriptionId}`} className="rounded-lg border border-zinc-300 px-4 py-2 text-center text-sm font-semibold text-emerald-700 dark:border-zinc-700 dark:text-emerald-400">

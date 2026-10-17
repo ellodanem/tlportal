@@ -38,6 +38,7 @@ const originalEnvironment = {
   CANONICAL_MANUAL_PILOT_CUSTOMER_ID: process.env.CANONICAL_MANUAL_PILOT_CUSTOMER_ID,
   CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID: process.env.CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID,
   CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID: process.env.CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID,
+  CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID: process.env.CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID,
   CANONICAL_MANUAL_PILOT_OWNER_EMAIL: process.env.CANONICAL_MANUAL_PILOT_OWNER_EMAIL,
   CANONICAL_MANUAL_PILOT_APPROVAL_SECRET: process.env.CANONICAL_MANUAL_PILOT_APPROVAL_SECRET,
 };
@@ -222,7 +223,9 @@ function migrationAuthorization(input: {
     operation: "migrate_manual_pilot_shadow",
     customerId: input.fixture.customer.id,
     targetSubscriptionId: input.targetSubscriptionId,
+    sourceKind: "manual_schedule",
     legacyScheduleId: input.fixture.schedule.id,
+    sourceInvoiceId: null,
     migrationKey: entry.migrationKey,
     migrationSourceFingerprint: entry.sourceFingerprint,
     migrationPlanFingerprint: input.plan.planFingerprint,
@@ -282,7 +285,9 @@ async function activationAuthorization(input: {
     customerId: review.proposal.customerId,
     subscriptionId: review.proposal.subscriptionId,
     migrationKey: review.proposal.migrationKey,
+    sourceKind: review.proposal.sourceKind,
     legacyScheduleId: review.proposal.legacyScheduleId,
+    sourceInvoiceId: review.proposal.sourceInvoiceId,
     sourceStateFingerprint: review.proposal.sourceStateFingerprint,
     cutoverPeriodStart: review.proposal.cutoverPeriodStart,
     billingIntervalMonths: review.proposal.billingIntervalMonths,
@@ -333,6 +338,8 @@ function setRuntimeEnvironment(environment: CanonicalManualPilotEnvironment) {
   process.env.CANONICAL_MANUAL_PILOT_CUSTOMER_ID = environment.CANONICAL_MANUAL_PILOT_CUSTOMER_ID;
   process.env.CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID = environment.CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID;
   process.env.CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID = environment.CANONICAL_MANUAL_PILOT_SOURCE_SCHEDULE_ID;
+  if (environment.CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID == null) delete process.env.CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID;
+  else process.env.CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID = environment.CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID;
   process.env.CANONICAL_MANUAL_PILOT_OWNER_EMAIL = environment.CANONICAL_MANUAL_PILOT_OWNER_EMAIL;
   process.env.CANONICAL_MANUAL_PILOT_APPROVAL_SECRET = environment.CANONICAL_MANUAL_PILOT_APPROVAL_SECRET;
 }
@@ -620,4 +627,199 @@ test("84: signed pilot approval cannot adopt a completed migration with a differ
       && error.code === "PILOT_TARGET_SUBSCRIPTION_MISMATCH",
   );
   assert.equal(await prisma.customerSubscription.count({ where: { customerId: fixture.customer.id } }), 1);
+});
+
+async function createEstablishedManualInvoiceFixture() {
+  const suffix = randomUUID();
+  const customer = await prisma.customer.create({
+    data: { company: `Established cheque pilot ${suffix}`, billingMode: "manual_legacy" },
+  });
+  const assignments = await Promise.all(Array.from({ length: 14 }, (_, index) => createAssignment({
+    customerId: customer.id,
+    intervalMonths: 3,
+    nextDueDate: "2027-01-15",
+    label: `Quarterly vehicle ${index + 1}`,
+  })));
+  const sourceInvoice = await prisma.invoice.create({
+    data: {
+      customerId: customer.id,
+      kind: "one_off",
+      status: "open",
+      currency: "XCD",
+      subtotal: "840.00",
+      taxTotal: "0.00",
+      total: "840.00",
+      amountPaid: "0.00",
+      amountDue: "840.00",
+      issueDate: new Date("2026-10-15T00:00:00.000Z"),
+      dueDate: new Date("2026-11-14T00:00:00.000Z"),
+      paymentInstructions: "Pay by cheque.",
+      lineItems: { create: {
+        description: "Quarterly tracking services",
+        quantity: "14",
+        unitPrice: "60.00",
+        lineTotal: "840.00",
+      } },
+    },
+  });
+  return { customer, assignments, sourceInvoice };
+}
+
+async function buildEstablishedManualInvoicePlan(fixture: Awaited<ReturnType<typeof createEstablishedManualInvoiceFixture>>) {
+  return buildCanonicalManualPilotMigrationPlan({
+    proposalId: `manual-invoice:${fixture.sourceInvoice.id}`,
+    approvedBy: "owner@example.com",
+    approvedAt: "2026-10-16T12:00:00.000Z",
+    approvalReason: "Owner confirmed 14 active devices at EC$60 each per quarterly cycle; the EC$840 source invoice is cheque-only and tax exempt.",
+    name: "Established quarterly tracking",
+    reference: `manual-invoice-${fixture.sourceInvoice.id}`,
+    commercialStartDate: "2026-01-15",
+    billingAnchorDate: "2026-10-15",
+    nextBillingDate: "2027-01-15",
+    gracePeriodDays: 7,
+    items: fixture.assignments.map((assignment, index) => ({
+      assignmentId: assignment.id,
+      label: `Quarterly tracking ${index + 1}`,
+      agreedAmountPerCycle: "60.00",
+      classification: "negotiated" as const,
+    })),
+  }, "2026-10-16");
+}
+
+function manualInvoicePilotEnvironment(input: { customerId: string; subscriptionId: string; invoiceId: string }) {
+  return {
+    NODE_ENV: "production",
+    VERCEL_ENV: "production",
+    CANONICAL_MANUAL_PILOT_ENABLED: "true",
+    CANONICAL_MANUAL_PILOT_CUSTOMER_ID: input.customerId,
+    CANONICAL_MANUAL_PILOT_SUBSCRIPTION_ID: input.subscriptionId,
+    CANONICAL_MANUAL_PILOT_SOURCE_INVOICE_ID: input.invoiceId,
+    CANONICAL_MANUAL_PILOT_OWNER_EMAIL: "owner@example.com",
+    CANONICAL_MANUAL_PILOT_APPROVAL_SECRET: "phase-4a-postgres-secret-that-is-at-least-32-bytes",
+  } satisfies CanonicalManualPilotEnvironment;
+}
+
+function manualInvoiceMigrationAuthorization(input: {
+  fixture: Awaited<ReturnType<typeof createEstablishedManualInvoiceFixture>>;
+  plan: Awaited<ReturnType<typeof buildEstablishedManualInvoicePlan>>;
+  targetSubscriptionId: string;
+  environment: CanonicalManualPilotEnvironment;
+}): CanonicalManualPilotMigrationAuthorization {
+  const entry = input.plan.entries[0];
+  const unsigned: Omit<CanonicalManualPilotMigrationAuthorization, "signature"> = {
+    authorizationId: randomUUID(),
+    operation: "migrate_manual_pilot_shadow",
+    customerId: input.fixture.customer.id,
+    targetSubscriptionId: input.targetSubscriptionId,
+    sourceKind: "manual_invoice",
+    legacyScheduleId: null,
+    sourceInvoiceId: input.fixture.sourceInvoice.id,
+    migrationKey: entry.migrationKey,
+    migrationSourceFingerprint: entry.sourceFingerprint,
+    migrationPlanFingerprint: input.plan.planFingerprint,
+    currency: "XCD",
+    billingIntervalMonths: 3,
+    recurringAmount: "840.00",
+    cutoverPeriodStart: "2027-01-15",
+    approvedByEmail: "owner@example.com",
+    approvalReason: "Synthetic exact owner authorization for established cheque arrangement.",
+    customerIdentityConfirmed: true,
+    commercialTermsConfirmed: true,
+    sourceScheduleConfirmed: true,
+    historicalBalancesConfirmed: true,
+    issuedAt: authorizationIssuedAt,
+    expiresAt: authorizationExpiresAt,
+  };
+  return { ...unsigned, signature: signCanonicalManualPilotMigrationAuthorization(unsigned, input.environment) };
+}
+
+test("85: an established EC$840 manual invoice produces a 14-service shadow and January canonical schedule", async () => {
+  const fixture = await createEstablishedManualInvoiceFixture();
+  const review = await getCanonicalManualPilotMigrationReview(`manual-invoice:${fixture.sourceInvoice.id}`, "2026-10-16");
+  assert.equal(review.candidate.sourceKind, "manual_invoice");
+  assert.equal(review.assignments.length, 14);
+  assert.equal(review.sourceInvoice?.subtotal, "840.00");
+  assert.equal(review.sourceInvoice?.taxTotal, "0.00");
+
+  const plan = await buildEstablishedManualInvoicePlan(fixture);
+  assert.equal(plan.entries[0].sourceKind, "manual_invoice");
+  assert.equal(plan.entries[0].target.expectedTotalAmountPerCycle, "840.00");
+  const targetSubscriptionId = randomUUID();
+  const environment = manualInvoicePilotEnvironment({
+    customerId: fixture.customer.id,
+    subscriptionId: targetSubscriptionId,
+    invoiceId: fixture.sourceInvoice.id,
+  });
+  await executeCanonicalMigrationPlan(plan, {
+    execute: true,
+    confirmation: APPLY_MIGRATION_CONFIRMATION,
+    environment,
+    pilotAuthorization: manualInvoiceMigrationAuthorization({ fixture, plan, targetSubscriptionId, environment }),
+  });
+  assert.equal(await prisma.invoice.count({ where: { id: fixture.sourceInvoice.id } }), 1);
+  assert.equal(await prisma.payment.count({ where: { invoiceId: fixture.sourceInvoice.id } }), 0);
+
+  const prepared = await activationAuthorization({ subscriptionId: targetSubscriptionId, environment });
+  const activated = await activateCanonicalManualPilot({
+    subscriptionId: targetSubscriptionId,
+    authorization: prepared.authorization,
+    execute: true,
+    confirmation: ACTIVATE_MANUAL_PILOT_CONFIRMATION,
+    environment,
+    now: authorizationClock,
+  });
+  assert.equal(activated.sourceKind, "manual_invoice");
+  assert.equal(activated.legacyScheduleId, null);
+  assert.equal(activated.sourceInvoiceId, fixture.sourceInvoice.id);
+  const schedule = await prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: activated.canonicalScheduleId } });
+  assert.equal(schedule.nextIssueDate.toISOString().slice(0, 10), "2027-01-15");
+  assert.equal(schedule.intervalMonths, 3);
+  assert.equal(schedule.taxRatePercent, null);
+
+  setRuntimeEnvironment(environment);
+  const generated = await generateInvoiceFromSchedule(schedule.id, new Date("2027-01-15T00:00:00.000Z"));
+  assert.equal(generated.skipped, false);
+  if (!generated.skipped) {
+    const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: generated.invoiceId }, include: { serviceSnapshots: true } });
+    assert.equal(invoice.subtotal.toFixed(2), "840.00");
+    assert.equal(invoice.total.toFixed(2), "840.00");
+    assert.equal(invoice.serviceSnapshots.length, 14);
+  }
+});
+
+test("86: a future regular invoice blocks manual-invoice cutover and preserves the original invoice", async () => {
+  const fixture = await createEstablishedManualInvoiceFixture();
+  const plan = await buildEstablishedManualInvoicePlan(fixture);
+  const targetSubscriptionId = randomUUID();
+  const environment = manualInvoicePilotEnvironment({ customerId: fixture.customer.id, subscriptionId: targetSubscriptionId, invoiceId: fixture.sourceInvoice.id });
+  await executeCanonicalMigrationPlan(plan, {
+    execute: true,
+    confirmation: APPLY_MIGRATION_CONFIRMATION,
+    environment,
+    pilotAuthorization: manualInvoiceMigrationAuthorization({ fixture, plan, targetSubscriptionId, environment }),
+  });
+  await prisma.invoice.create({
+    data: {
+      customerId: fixture.customer.id,
+      kind: "one_off",
+      status: "open",
+      currency: "XCD",
+      subtotal: "840.00",
+      total: "840.00",
+      amountDue: "840.00",
+      issueDate: new Date("2027-01-10T00:00:00.000Z"),
+    },
+  });
+  const prepared = await activationAuthorization({ subscriptionId: targetSubscriptionId, environment });
+  await assert.rejects(activateCanonicalManualPilot({
+    subscriptionId: targetSubscriptionId,
+    authorization: prepared.authorization,
+    execute: true,
+    confirmation: ACTIVATE_MANUAL_PILOT_CONFIRMATION,
+    environment,
+    now: authorizationClock,
+  }), (error: unknown) => error instanceof CanonicalManualPilotError && error.code === "PILOT_CUTOVER_PERIOD_ALREADY_BILLED");
+  assert.equal((await prisma.customerSubscription.findUniqueOrThrow({ where: { id: targetSubscriptionId } })).controlMode, "shadow");
+  assert.equal(await prisma.recurringInvoiceSchedule.count({ where: { customerSubscriptionId: targetSubscriptionId } }), 0);
+  assert.equal((await prisma.invoice.findUniqueOrThrow({ where: { id: fixture.sourceInvoice.id } })).total.toFixed(2), "840.00");
 });
