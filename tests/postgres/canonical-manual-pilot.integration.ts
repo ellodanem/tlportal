@@ -823,3 +823,37 @@ test("86: a future regular invoice blocks manual-invoice cutover and preserves t
   assert.equal(await prisma.recurringInvoiceSchedule.count({ where: { customerSubscriptionId: targetSubscriptionId } }), 0);
   assert.equal((await prisma.invoice.findUniqueOrThrow({ where: { id: fixture.sourceInvoice.id } })).total.toFixed(2), "840.00");
 });
+
+test("87: established manual-invoice preparation rejects incomplete or repriced service mappings", async () => {
+  const fixture = await createEstablishedManualInvoiceFixture();
+  const base = {
+    proposalId: `manual-invoice:${fixture.sourceInvoice.id}`,
+    approvedBy: "owner@example.com",
+    approvedAt: "2026-10-16T12:00:00.000Z",
+    approvalReason: "Verify exact source quantities and prices.",
+    name: "Blocked established arrangement",
+    reference: "blocked-established-invoice",
+    commercialStartDate: "2026-01-15",
+    billingAnchorDate: "2026-10-15",
+    nextBillingDate: "2027-01-15",
+    gracePeriodDays: 7,
+  };
+  await assert.rejects(buildCanonicalManualPilotMigrationPlan({
+    ...base,
+    items: fixture.assignments.slice(0, 13).map((assignment, index) => ({
+      assignmentId: assignment.id,
+      label: `Quarterly tracking ${index + 1}`,
+      agreedAmountPerCycle: "60.00",
+      classification: "negotiated" as const,
+    })),
+  }, "2026-10-16"), /one unambiguous unit price for every approved service assignment/);
+  await assert.rejects(buildCanonicalManualPilotMigrationPlan({
+    ...base,
+    items: fixture.assignments.map((assignment, index) => ({
+      assignmentId: assignment.id,
+      label: `Quarterly tracking ${index + 1}`,
+      agreedAmountPerCycle: index === 0 ? "61.00" : "60.00",
+      classification: "negotiated" as const,
+    })),
+  }, "2026-10-16"), /selected manual invoice subtotal exactly/);
+});

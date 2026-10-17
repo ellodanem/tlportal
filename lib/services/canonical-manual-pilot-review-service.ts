@@ -220,6 +220,7 @@ export async function getCanonicalManualPilotMigrationReview(
         taxRatePercent: true,
         taxTotal: true,
         total: true,
+        lineItems: { select: { quantity: true, unitPrice: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       },
     })
     : null;
@@ -357,6 +358,7 @@ export async function buildCanonicalManualPilotMigrationPlan(
         taxRatePercent: true,
         taxTotal: true,
         total: true,
+        lineItems: { select: { quantity: true, unitPrice: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       },
     });
     if (
@@ -374,6 +376,17 @@ export async function buildCanonicalManualPilotMigrationPlan(
     }
     if (!sourceInvoice.subtotal.equals(expectedTotal)) {
       throw new Error("Approved service prices must equal the selected manual invoice subtotal exactly.");
+    }
+    const sourceQuantity = sourceInvoice.lineItems.reduce((total, line) => {
+      const quantity = new Prisma.Decimal(line.quantity);
+      return quantity.isInteger() && quantity.greaterThan(0) ? total + quantity.toNumber() : total;
+    }, 0);
+    const sourceUnitPrices = [...new Set(sourceInvoice.lineItems.map((line) => line.unitPrice.toFixed(2)))];
+    if (!sourceQuantity || sourceQuantity !== normalizedItems.length || sourceUnitPrices.length !== 1) {
+      throw new Error("The selected manual invoice must provide one unambiguous unit price for every approved service assignment.");
+    }
+    if (normalizedItems.some((item) => item.agreedAmountPerCycle !== sourceUnitPrices[0])) {
+      throw new Error("Each approved service price must match the selected manual invoice unit price exactly.");
     }
     const expectedTax = sourceInvoice.taxRatePercent == null
       ? new Prisma.Decimal(0)
