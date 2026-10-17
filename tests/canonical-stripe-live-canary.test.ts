@@ -114,6 +114,19 @@ function authorization(
   return { ...unsigned, signature: signCanonicalStripeLiveCanaryAuthorization(unsigned, environment) };
 }
 
+/** Provider-adapter tests use the real clock, so their synthetic approval must stay current. */
+function currentAuthorization(
+  overrides: Partial<Omit<CanonicalStripeLiveCanaryAuthorization, "signature">> = {},
+  proposalInput = proposal(),
+): CanonicalStripeLiveCanaryAuthorization {
+  const now = Date.now();
+  return authorization({
+    issuedAt: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + (60 * 60 * 1000)).toISOString(),
+    ...overrides,
+  }, proposalInput);
+}
+
 test("live canary requires production, an exact live account and a separate approval secret", () => {
   assert.doesNotThrow(() => assertCanonicalStripeLiveCanaryEnvironment(environment));
   for (const invalid of [
@@ -308,7 +321,7 @@ class FakeLiveStripe {
 const providerConfig: CanonicalStripeLiveCanaryProviderConfig = {
   expectedAccountId: "acct_expected",
   authorizationId: "authorization_canary",
-  authorization: authorization(),
+  authorization: currentAuthorization(),
   proposal: proposal(),
   environment,
   successUrl: "https://tlportal.example/pay/thanks?session_id={CHECKOUT_SESSION_ID}",
@@ -512,7 +525,7 @@ test("cancellation is end-of-period, idempotent and preserves the billing anchor
       tl_canary_authorization_id: "authorization_canary",
     },
   } as unknown as Stripe.Subscription);
-  const cancellationAuthorization = authorization({
+  const cancellationAuthorization = currentAuthorization({
     operation: "cancel_subscription_at_period_end",
     externalSubscriptionId: "sub_live",
   });
