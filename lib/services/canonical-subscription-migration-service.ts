@@ -24,8 +24,10 @@ export const REVERSE_MIGRATION_CONFIRMATION = "REVERSE_UNUSED_SHADOW_MIGRATION" 
 export type MigrationExecutionEnvironment = CanonicalManualPilotEnvironment & {
   NODE_ENV?: string;
   VERCEL?: string;
+  VERCEL_ENV?: string;
   DATABASE_URL?: string;
   ALLOW_CANONICAL_MIGRATION_EXECUTION?: string;
+  CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED?: string;
 };
 
 export type MigrationExecutionOptions = {
@@ -33,6 +35,15 @@ export type MigrationExecutionOptions = {
   confirmation: typeof APPLY_MIGRATION_CONFIRMATION;
   environment?: MigrationExecutionEnvironment;
   pilotAuthorization?: CanonicalManualPilotMigrationAuthorization;
+  /**
+   * Server-side application authorization for a durable owner-approved
+   * campaign entry. The caller must independently verify the entry, owner
+   * session, plan fingerprint, and replay state before passing this object.
+   */
+  campaignAuthorization?: {
+    campaignEntryId: string;
+    approvedBy: string;
+  };
 };
 
 export type MigrationReversalOptions = {
@@ -165,6 +176,29 @@ export function assertLocalMigrationExecutionGuard(
     executionError(
       "REMOTE_DATABASE_BLOCKED",
       "TLS-required database URLs are not accepted by the local migration executor.",
+    );
+  }
+}
+
+export function assertCampaignMigrationExecutionGuard(
+  input: {
+    execute: boolean;
+    confirmation: string;
+    authorization: NonNullable<MigrationExecutionOptions["campaignAuthorization"]>;
+    environment?: MigrationExecutionEnvironment;
+  },
+): void {
+  const environment = input.environment ?? process.env;
+  if (!input.execute || input.confirmation !== APPLY_MIGRATION_CONFIRMATION) {
+    executionError("EXPLICIT_EXECUTION_REQUIRED", "Migration execution requires the exact explicit confirmation token.");
+  }
+  if (!input.authorization.campaignEntryId || !input.authorization.approvedBy.trim()) {
+    executionError("CAMPAIGN_AUTHORIZATION_INVALID", "A durable owner-approved campaign entry is required.");
+  }
+  if (environment.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED !== "true") {
+    executionError(
+      "CAMPAIGN_EXECUTION_DISABLED",
+      "Owner-approved migration execution is disabled until the production campaign switch is explicitly enabled.",
     );
   }
 }
@@ -654,6 +688,9 @@ export async function executeCanonicalMigrationPlan(
   assertCanonicalMigrationPlanIntegrity(plan);
   if (!plan.entries.length) executionError("NO_APPROVED_ENTRIES", "The plan contains no approved entries.");
   const targetSubscriptionIds = new Map<string, string>();
+  if (options.pilotAuthorization && options.campaignAuthorization) {
+    executionError("MULTIPLE_EXECUTION_AUTHORITIES", "A migration must use exactly one execution authorization path.");
+  }
   if (options.pilotAuthorization) {
     if (!options.execute || options.confirmation !== APPLY_MIGRATION_CONFIRMATION) {
       executionError("EXPLICIT_EXECUTION_REQUIRED", "Migration execution requires the exact explicit confirmation token.");
@@ -667,6 +704,13 @@ export async function executeCanonicalMigrationPlan(
       plan.entries[0].migrationKey,
       options.pilotAuthorization.targetSubscriptionId,
     );
+  } else if (options.campaignAuthorization) {
+    assertCampaignMigrationExecutionGuard({
+      execute: options.execute,
+      confirmation: options.confirmation,
+      authorization: options.campaignAuthorization,
+      environment: options.environment,
+    });
   } else {
     assertLocalMigrationExecutionGuard({
       execute: options.execute,

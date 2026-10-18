@@ -327,6 +327,26 @@ enum CanonicalMigrationStatus {
   reversed
 }
 
+/// Durable owner-approved migration campaign. A campaign coordinates review and
+/// progress only; each entry executes in its own transaction.
+enum CanonicalMigrationCampaignStatus {
+  approved
+  executing
+  completed
+  completed_with_exceptions
+  needs_review
+}
+
+/// State of one independently executable migration arrangement in a campaign.
+enum CanonicalMigrationCampaignEntryStatus {
+  approved
+  executing
+  migrated
+  blocked
+  failed
+  skipped
+}
+
 /// Durable state for one owner-approved manual-billing pilot cutover.
 enum CanonicalManualPilotStatus {
   approved
@@ -441,6 +461,8 @@ model User {
   subscriptionItemRatesCreated  SubscriptionItemRate[]
   canonicalSubscriptionActivationsApproved CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationApprovedBy")
   canonicalSubscriptionActivationsPerformed CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationPerformedBy")
+  canonicalMigrationCampaignsCreated  CanonicalMigrationCampaign[] @relation("CanonicalMigrationCampaignCreatedBy")
+  canonicalMigrationCampaignsApproved CanonicalMigrationCampaign[] @relation("CanonicalMigrationCampaignApprovedBy")
 }
 
 // --- Core domain ---
@@ -516,6 +538,7 @@ model Customer {
   recurringInvoiceSchedules RecurringInvoiceSchedule[]
   expenses                Expense[]
   canonicalMigrationLedgers CanonicalMigrationLedger[]
+  canonicalMigrationCampaignEntries CanonicalMigrationCampaignEntry[]
   canonicalManualPilotActivations CanonicalManualPilotActivation[]
   canonicalOperationalActivations CanonicalSubscriptionOperationalActivation[]
   @@index([archivedAt])
@@ -1318,6 +1341,66 @@ model CanonicalMigrationLedger {
   @@unique([sourceKind, sourceId])
   @@index([customerId, status])
   @@index([status, updatedAt])
+}
+
+/// Owner-approved campaign for migrating legacy arrangements into protected
+/// canonical shadows. It deliberately has no billing-authority field: legacy
+/// schedules and provider subscriptions remain authoritative until a separate,
+/// explicitly authorized cutover.
+model CanonicalMigrationCampaign {
+  id                 String                           @id @default(uuid())
+  title              String
+  status             CanonicalMigrationCampaignStatus @default(approved)
+  sourceAnalysisDate String
+  sourceFingerprint  String
+  planFingerprint    String
+  ownerConfirmations Json
+  approvalReason     String                           @db.Text
+  createdById        String
+  createdBy          User                             @relation("CanonicalMigrationCampaignCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedById       String
+  approvedBy         User                             @relation("CanonicalMigrationCampaignApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt         DateTime
+  executionStartedAt DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime                         @default(now())
+  updatedAt          DateTime                         @updatedAt
+  entries            CanonicalMigrationCampaignEntry[]
+
+  @@index([status, updatedAt])
+  @@index([approvedById, approvedAt])
+}
+
+/// Immutable reviewed plan for one customer/source arrangement. The exact plan
+/// and source fingerprints are retained before execution, allowing a failed
+/// entry to be retried safely without reopening completed entries.
+model CanonicalMigrationCampaignEntry {
+  id                   String                                @id @default(uuid())
+  campaignId           String
+  campaign             CanonicalMigrationCampaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  proposalId           String
+  migrationKey         String
+  customerId           String
+  customer             Customer                              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sourceKind           String
+  sourceId             String
+  sourceFingerprint    String
+  planFingerprint      String
+  approvedPlan         Json
+  status               CanonicalMigrationCampaignEntryStatus @default(approved)
+  migrationLedgerId    String?
+  targetSubscriptionId String?
+  failureCode          String?
+  failureMessage       String?                               @db.Text
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime                              @default(now())
+  updatedAt            DateTime                              @updatedAt
+
+  @@unique([campaignId, proposalId])
+  @@index([campaignId, status])
+  @@index([customerId, status])
+  @@index([migrationKey])
 }
 
 /// One explicitly authorized transfer from a legacy manual schedule to canonical billing.
