@@ -345,8 +345,19 @@ function findProposal(
   analysis: ReturnType<typeof analyzeSubscriptionMigration>,
   proposalId: string,
 ): { customer: CustomerMigrationReview; proposal: SubscriptionMigrationProposal } | null {
+  // Dynamic route parameters are normally decoded by Next.js, but a copied
+  // encoded URL can still reach this layer as `manual-invoice%3A…`. Proposal
+  // IDs deliberately include a colon, so normalize once before looking up the
+  // exact source-backed proposal.
+  let normalizedProposalId = proposalId;
+  try {
+    normalizedProposalId = decodeURIComponent(proposalId);
+  } catch {
+    // Keep the original value: malformed user input must remain a not-found
+    // proposal rather than becoming a route error.
+  }
   for (const customer of analysis.customers) {
-    const proposal = customer.proposals.find((entry) => entry.proposalId === proposalId);
+    const proposal = customer.proposals.find((entry) => entry.proposalId === normalizedProposalId);
     if (proposal) return { customer, proposal };
   }
   return null;

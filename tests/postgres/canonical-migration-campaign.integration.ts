@@ -85,6 +85,14 @@ async function approveIndividual(input: Awaited<ReturnType<typeof fixture>>) {
   });
 }
 
+test("campaign review accepts an encoded proposal ID from the individual-review route", async () => {
+  const input = await fixture("campaign-encoded-proposal");
+  const proposalId = `schedule:${input.schedule.id}`;
+  const review = await getCanonicalMigrationProposalReview(encodeURIComponent(proposalId));
+  assert.ok(review, "an encoded dynamic route proposal ID should resolve to the source arrangement");
+  assert.equal(review.proposal.proposalId, proposalId);
+});
+
 test("campaign: owner-reviewed manual migration creates one shadow and preserves legacy authority", async () => {
   const input = await fixture("campaign-success");
   const campaign = await approveIndividual(input);
