@@ -1054,6 +1054,28 @@ export async function transitionCanonicalSubscriptionLifecycle(
       where: { id: subscriptionId },
       data: { lifecycleStatus: target },
     });
+    if (target === "paused") {
+      await tx.recurringInvoiceSchedule.updateMany({
+        where: { customerSubscriptionId: subscriptionId, status: "active" },
+        data: { status: "paused" },
+      });
+    }
+    if (target === "active") {
+      await tx.recurringInvoiceSchedule.updateMany({
+        where: { customerSubscriptionId: subscriptionId, status: "paused" },
+        data: { status: "active" },
+      });
+    }
+    if (target === "canceled" || target === "ended") {
+      await tx.recurringInvoiceSchedule.updateMany({
+        where: { customerSubscriptionId: subscriptionId, status: { in: ["active", "paused"] } },
+        data: { status: "ended" },
+      });
+      await tx.subscriptionItem.updateMany({
+        where: { customerSubscriptionId: subscriptionId, status: { notIn: ["ended", "canceled"] } },
+        data: { status: target === "canceled" ? "canceled" : "ended", endedAt: new Date() },
+      });
+    }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

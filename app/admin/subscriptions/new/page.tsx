@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { SubscriptionComposer } from "@/components/admin/subscription-composer";
 import { prisma } from "@/lib/db";
 import { getDefaultMonthlyRateXcd } from "@/lib/stripe/checkout-pricing";
+import { canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
 
 export default async function NewSubscriptionPage({
   searchParams,
@@ -10,6 +12,9 @@ export default async function NewSubscriptionPage({
   searchParams: Promise<{ customerId?: string }>;
 }) {
   const { customerId } = await searchParams;
+  if (canonicalSubscriptionUiVisible()) {
+    redirect(`/admin/subscriptions/canonical/new${customerId ? `?customerId=${encodeURIComponent(customerId)}` : ""}`);
+  }
   const [customers, defaultRate] = await Promise.all([
     prisma.customer.findMany({
       where: { archivedAt: null },

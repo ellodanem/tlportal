@@ -470,6 +470,40 @@ test("service uses exact Decimal values rather than floating point reconstructio
   assert.equal(subscription.items[0].rates[0].agreedAmountPerCycle.toFixed(2), "20.00");
 });
 
+test("canonical lifecycle pauses, resumes, and closes only its own recurring schedule", async () => {
+  const customer = await createCustomer("lifecycle-schedule");
+  const subscription = await createMonthlySubscription(customer.id, "Lifecycle schedule", [
+    { label: "Tracked vehicle", serviceActivatedDate: "2026-10-01" },
+  ]);
+  const schedule = await prisma.recurringInvoiceSchedule.create({
+    data: {
+      customerId: customer.id,
+      customerSubscriptionId: subscription.id,
+      name: "Canonical lifecycle test",
+      intervalMonths: 1,
+      nextIssueDate: new Date("2026-11-01T00:00:00.000Z"),
+      autoEmail: false,
+    },
+  });
+
+  await transitionCanonicalSubscriptionLifecycle(subscription.id, "pending_activation");
+  await transitionCanonicalSubscriptionLifecycle(subscription.id, "active");
+  await transitionCanonicalSubscriptionLifecycle(subscription.id, "paused");
+  assert.equal((await prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: schedule.id } })).status, "paused");
+
+  await transitionCanonicalSubscriptionLifecycle(subscription.id, "active");
+  assert.equal((await prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: schedule.id } })).status, "active");
+
+  await transitionCanonicalSubscriptionLifecycle(subscription.id, "ended");
+  const [storedSchedule, item] = await Promise.all([
+    prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: schedule.id } }),
+    prisma.subscriptionItem.findFirstOrThrow({ where: { customerSubscriptionId: subscription.id } }),
+  ]);
+  assert.equal(storedSchedule.status, "ended");
+  assert.equal(item.status, "ended");
+  assert.ok(item.endedAt);
+});
+
 test("manual canonical activation creates one future schedule without issuing or delivering an invoice", async () => {
   const customer = await createCustomer("manual-activation");
   const staff = await createStaff("manual-activation");

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   assertCanonicalSubscriptionUiActionAllowed,
+  assertCanonicalSubscriptionManagementAllowed,
   assertCanonicalSubscriptionOnboardingAllowed,
   buildCanonicalSubscriptionAdminRow,
   canonicalProviderStatusLabel,
@@ -66,9 +67,31 @@ test("only unmigrated shadow drafts are editable", () => {
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "canonical", lifecycleStatus: "draft", hasMigrationLedger: false }), "editable_draft");
 });
 
-test("legacy and canonical arrangements are read-only", () => {
+test("active canonical arrangements have staff operational access while legacy stays read-only", () => {
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "legacy", lifecycleStatus: null, hasMigrationLedger: false }), "legacy_read_only");
-  assert.equal(canonicalSubscriptionUiAccess({ controlMode: "canonical", lifecycleStatus: "active", hasMigrationLedger: false }), "canonical_read_only");
+  assert.equal(canonicalSubscriptionUiAccess({ controlMode: "canonical", lifecycleStatus: "active", hasMigrationLedger: false }), "canonical_operational");
+});
+
+test("canonical operational administration permits only normal canonical agreements", () => {
+  const production = { NODE_ENV: "production", VERCEL_ENV: "production", CANONICAL_SUBSCRIPTION_UI_PRODUCTION_VISIBLE: "true" } as const;
+  assert.doesNotThrow(() => assertCanonicalSubscriptionManagementAllowed({
+    authenticated: true,
+    access: "canonical_operational",
+    controlMode: "canonical",
+    environment: production,
+  }));
+  assert.throws(() => assertCanonicalSubscriptionManagementAllowed({
+    authenticated: true,
+    access: "migrated_shadow_read_only",
+    controlMode: "shadow",
+    environment: production,
+  }), (error) => error instanceof CanonicalSubscriptionUiError && error.code === "SUBSCRIPTION_READ_ONLY");
+  assert.throws(() => assertCanonicalSubscriptionManagementAllowed({
+    authenticated: true,
+    access: "canonical_operational",
+    controlMode: "canonical",
+    environment: { NODE_ENV: "production" },
+  }), (error) => error instanceof CanonicalSubscriptionUiError && error.code === "PRODUCTION_UI_DISABLED");
 });
 
 test("unauthenticated draft action is rejected", () => {
@@ -185,11 +208,15 @@ test("UI routes include detail, empty, loading, error and price-history states",
   assert.match(preflight, /btree_gist/);
 });
 
-test("draft actions delegate only to canonical draft services", async () => {
+test("canonical actions retain server-side authorization and do not directly invoke billing providers", async () => {
   const actions = await readFile("app/admin/subscriptions/canonical/actions.ts", "utf8");
   assert.match(actions, /createDraftCanonicalSubscription/);
   assert.match(actions, /addBillableServiceToSubscription/);
   assert.match(actions, /scheduleSubscriptionItemRate/);
+  assert.match(actions, /replaceSubscriptionItemHardware/);
+  assert.match(actions, /transferSubscriptionItem/);
+  assert.match(actions, /transitionCanonicalSubscriptionLifecycle/);
+  assert.match(actions, /assertCanonicalSubscriptionManagementAllowed/);
   assert.doesNotMatch(actions, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.checkout/);
 });
 
@@ -203,7 +230,7 @@ test("detail presents negotiated classifications and server-backed annual previe
   assert.match(detail, /Live provider observation is unavailable/);
 });
 
-test("UI-2 draft workflow confirms commercial changes and never adds billing controls", async () => {
+test("canonical workflow confirms commercial changes and never adds direct billing controls", async () => {
   const [forms, create, onboarding] = await Promise.all([
     readFile("components/admin/canonical-subscription-draft-forms.tsx", "utf8"),
     readFile("components/admin/canonical-subscription-create-form.tsx", "utf8"),

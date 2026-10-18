@@ -14,6 +14,7 @@ export type CanonicalSubscriptionUiEnvironment = {
 
 export type CanonicalSubscriptionUiAccess =
   | "editable_draft"
+  | "canonical_operational"
   | "legacy_read_only"
   | "migrated_shadow_read_only"
   | "shadow_read_only"
@@ -123,6 +124,9 @@ export function canonicalSubscriptionUiAccess(input: {
   if (input.controlMode === "legacy") return "legacy_read_only";
   if (input.hasMigrationLedger) return "migrated_shadow_read_only";
   if (input.controlMode === "canonical" && input.lifecycleStatus === "draft") return "editable_draft";
+  if (input.controlMode === "canonical" && ["pending_activation", "active", "paused"].includes(input.lifecycleStatus ?? "")) {
+    return "canonical_operational";
+  }
   if (input.controlMode === "canonical") return "canonical_read_only";
   if (input.lifecycleStatus === "draft") return "editable_draft";
   return "shadow_read_only";
@@ -143,6 +147,39 @@ export function assertCanonicalSubscriptionUiActionAllowed(input: {
       "Only an unmigrated canonical shadow subscription in draft status can be edited in Phase UI-1.",
     );
   }
+}
+
+/**
+ * Staff may manage a normal canonical agreement after activation, but never a
+ * legacy arrangement or a migration shadow. Financial execution retains its
+ * separate native/Stripe production guards.
+ */
+export function assertCanonicalSubscriptionManagementAllowed(input: {
+  authenticated: boolean;
+  access: CanonicalSubscriptionUiAccess;
+  controlMode: "legacy" | "shadow" | "canonical";
+  environment?: CanonicalSubscriptionUiEnvironment;
+}): void {
+  if (!input.authenticated) {
+    throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "You must be signed in.");
+  }
+  if (!["editable_draft", "canonical_operational"].includes(input.access) || input.controlMode !== "canonical") {
+    throw new CanonicalSubscriptionUiError(
+      "SUBSCRIPTION_READ_ONLY",
+      "Only a normal canonical draft, pending, active, or paused agreement can be managed here.",
+    );
+  }
+  const environment = input.environment ?? process.env;
+  if (environment.NODE_ENV === "production") {
+    if (!canonicalSubscriptionUiVisible(environment)) {
+      throw new CanonicalSubscriptionUiError(
+        "PRODUCTION_UI_DISABLED",
+        "Canonical subscription administration requires the approved production administration setting.",
+      );
+    }
+    return;
+  }
+  assertCanonicalSubscriptionUiEnabled(environment);
 }
 
 /** New-customer onboarding may edit only fresh canonical drafts in production. */
@@ -285,6 +322,7 @@ export function canonicalIntervalLabel(months: number | null): string {
 export function canonicalControlLabel(access: CanonicalSubscriptionUiAccess): string {
   switch (access) {
     case "editable_draft": return "Shadow draft";
+    case "canonical_operational": return "Canonical";
     case "legacy_read_only": return "Legacy";
     case "migrated_shadow_read_only": return "Migrated shadow";
     case "shadow_read_only": return "Shadow";

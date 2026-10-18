@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 import {
   assertCanonicalSubscriptionOnboardingAllowed,
+  assertCanonicalSubscriptionManagementAllowed,
   canonicalSubscriptionUiVisible,
   canonicalSubscriptionUiAccess,
   CanonicalSubscriptionUiError,
@@ -18,11 +19,15 @@ import {
   createDraftCanonicalSubscription,
   scheduleSubscriptionItemEnd,
   scheduleSubscriptionItemRate,
+  replaceSubscriptionItemHardware,
+  transferSubscriptionItem,
+  transitionCanonicalSubscriptionLifecycle,
   updateDraftSubscriptionCollectionMethod,
   updateDraftSubscriptionItemCommercialDetails,
 } from "@/lib/services/canonical-subscription-application-service";
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
 import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
+import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 
 export type CanonicalSubscriptionFormState = {
   error?: string;
@@ -175,6 +180,43 @@ async function requireEditableDraftItem(subscriptionId: string, subscriptionItem
   return session;
 }
 
+async function requireManageableCanonicalSubscription(subscriptionId: string) {
+  const session = await requireStaff();
+  const subscription = await prisma.customerSubscription.findUnique({
+    where: { id: subscriptionId },
+    select: {
+      id: true,
+      customerId: true,
+      controlMode: true,
+      lifecycleStatus: true,
+      canonicalMigrationLedger: { select: { id: true } },
+    },
+  });
+  if (!subscription) throw new CanonicalSubscriptionUiError("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
+  assertCanonicalSubscriptionManagementAllowed({
+    authenticated: true,
+    access: canonicalSubscriptionUiAccess({
+      controlMode: subscription.controlMode,
+      lifecycleStatus: subscription.lifecycleStatus,
+      hasMigrationLedger: Boolean(subscription.canonicalMigrationLedger),
+    }),
+    controlMode: subscription.controlMode,
+  });
+  return { session, subscription };
+}
+
+async function requireManageableCanonicalItem(subscriptionId: string, subscriptionItemId: string) {
+  const context = await requireManageableCanonicalSubscription(subscriptionId);
+  const item = await prisma.subscriptionItem.findUnique({
+    where: { id: subscriptionItemId },
+    select: { customerSubscriptionId: true },
+  });
+  if (!item || item.customerSubscriptionId !== subscriptionId) {
+    throw new CanonicalSubscriptionUiError("ITEM_SUBSCRIPTION_MISMATCH", "The service does not belong to this subscription.");
+  }
+  return context;
+}
+
 export async function createCanonicalDraftAction(
   _previous: CanonicalSubscriptionFormState,
   formData: FormData,
@@ -292,7 +334,7 @@ export async function addCanonicalDraftItemAction(
 ): Promise<CanonicalSubscriptionFormState> {
   const subscriptionId = text(formData, "subscriptionId");
   try {
-    const session = await requireEditableDraft(subscriptionId);
+    const { session, subscription } = await requireManageableCanonicalSubscription(subscriptionId);
     await addBillableServiceToSubscription(subscriptionId, {
       label: text(formData, "label"),
       notes: optionalText(formData, "notes"),
@@ -304,9 +346,16 @@ export async function addCanonicalDraftItemAction(
       rateChangeReason: optionalText(formData, "changeReason"),
       createdById: session.sub,
     });
+    await recordOperationalEvent({
+      category: "subscription.service_added",
+      summary: "Canonical service added by staff.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId },
+    });
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
-    return { message: "Draft service added." };
+    return { message: "Service added. It joins recurring billing on its configured effective date; no invoice or notification was created." };
   } catch (error) {
     return actionError(error);
   }
@@ -341,7 +390,7 @@ export async function scheduleCanonicalDraftRateAction(
   const subscriptionId = text(formData, "subscriptionId");
   try {
     const subscriptionItemId = text(formData, "subscriptionItemId");
-    const session = await requireEditableDraftItem(subscriptionId, subscriptionItemId);
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
     await scheduleSubscriptionItemRate({
       subscriptionItemId,
       agreedAmountPerCycle: text(formData, "agreedAmountPerCycle"),
@@ -351,9 +400,16 @@ export async function scheduleCanonicalDraftRateAction(
       changeReason: optionalText(formData, "changeReason"),
       createdById: session.sub,
     });
+    await recordOperationalEvent({
+      category: "subscription.rate_scheduled",
+      summary: "Canonical service rate change scheduled by staff.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, effectiveFrom: text(formData, "effectiveFrom") },
+    });
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
-    return { message: "Rate change scheduled. This is a preview configuration only." };
+    return { message: "Rate change scheduled. Historical prices remain unchanged and future billing uses the effective-dated rate." };
   } catch (error) {
     return actionError(error);
   }
@@ -366,14 +422,114 @@ export async function scheduleCanonicalDraftItemEndAction(
   const subscriptionId = text(formData, "subscriptionId");
   try {
     const subscriptionItemId = text(formData, "subscriptionItemId");
-    await requireEditableDraftItem(subscriptionId, subscriptionItemId);
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
     await scheduleSubscriptionItemEnd({
       subscriptionItemId,
       effectiveUntil: text(formData, "effectiveUntil"),
     });
+    await recordOperationalEvent({
+      category: "subscription.service_end_scheduled",
+      summary: "Canonical service end scheduled by staff.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, effectiveUntil: text(formData, "effectiveUntil") },
+    });
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
-    return { message: "Draft service end date scheduled." };
+    return { message: "Service end scheduled. Historical financial records remain unchanged." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function replaceCanonicalServiceHardwareAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    await replaceSubscriptionItemHardware({
+      subscriptionItemId,
+      replacementAssignmentId: text(formData, "replacementAssignmentId"),
+      replacedOn: text(formData, "replacedOn"),
+    });
+    await recordOperationalEvent({
+      category: "subscription.hardware_replaced",
+      summary: "Canonical service hardware replacement recorded by staff.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, replacementAssignmentId: text(formData, "replacementAssignmentId"), replacedOn: text(formData, "replacedOn") },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    return { message: "Hardware assignment replaced. The prior service and device history were preserved." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function transferCanonicalServiceAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    const targetSubscriptionId = text(formData, "targetSubscriptionId");
+    await requireManageableCanonicalSubscription(targetSubscriptionId);
+    await transferSubscriptionItem({
+      sourceSubscriptionItemId: subscriptionItemId,
+      targetSubscriptionId,
+      transferDate: text(formData, "transferDate"),
+      label: optionalText(formData, "label"),
+      agreedAmountPerCycle: optionalText(formData, "agreedAmountPerCycle"),
+      rateClassification: text(formData, "classification") === "standard" ? "standard" : "negotiated",
+      changeReason: optionalText(formData, "changeReason"),
+      successorAssignmentId: optionalText(formData, "successorAssignmentId"),
+      createdById: session.sub,
+    });
+    await recordOperationalEvent({
+      category: "subscription.service_transferred",
+      summary: "Canonical service transferred between customer agreements by staff.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, targetSubscriptionId, transferDate: text(formData, "transferDate") },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(`/admin/subscriptions/canonical/${targetSubscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: "Service transferred. Historical service and pricing attribution were preserved." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function transitionCanonicalSubscriptionLifecycleAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const { session, subscription } = await requireManageableCanonicalSubscription(subscriptionId);
+    const target = text(formData, "targetLifecycle");
+    if (!["active", "paused", "ended", "canceled"].includes(target)) {
+      return { error: "Choose a permitted lifecycle outcome." };
+    }
+    const note = text(formData, "confirmationNote");
+    if (!note) return { error: "A staff reason is required for a lifecycle change." };
+    await transitionCanonicalSubscriptionLifecycle(subscriptionId, target as "active" | "paused" | "ended" | "canceled");
+    await recordOperationalEvent({
+      category: "subscription.lifecycle_changed",
+      summary: `Canonical subscription lifecycle changed to ${target}.`,
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, from: subscription.lifecycleStatus, to: target, confirmationNote: note },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: `Subscription lifecycle updated to ${target.replaceAll("_", " ")}. No invoice, payment, provider, or notification operation was started.` };
   } catch (error) {
     return actionError(error);
   }
