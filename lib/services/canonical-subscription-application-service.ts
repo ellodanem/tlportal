@@ -495,6 +495,9 @@ export async function createCanonicalOnboarding(
         ...service,
         label: cleanOptionalText(service.label) ?? `Tracking service ${index + 1}`,
         serviceActivatedDate: service.serviceActivatedDate ?? commercialDateString(dates.commercialStartDate),
+        // A new agreement's first service period starts at commercial start.
+        // Mid-cycle additions still use the existing default of the next renewal.
+        billingEffectiveFrom: service.billingEffectiveFrom ?? commercialDateString(dates.commercialStartDate),
         agreedAmountPerCycle: service.agreedAmountPerCycle ?? defaultAmount,
         serviceAssignmentId,
       });
@@ -514,6 +517,24 @@ export async function getCanonicalSubscriptionById(
   });
   if (!subscription) validation("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
   return subscription;
+}
+
+/** Payment collection can be confirmed after installation while a new agreement is still a draft. */
+export async function updateDraftSubscriptionCollectionMethod(
+  subscriptionId: string,
+  collectionMethod: "manual_invoice" | "stripe_autocharge",
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const subscription = await tx.customerSubscription.findUnique({
+      where: { id: subscriptionId },
+      select: { controlMode: true, lifecycleStatus: true, canonicalMigrationLedger: { select: { id: true } } },
+    });
+    if (!subscription) validation("SUBSCRIPTION_NOT_FOUND", "Canonical subscription not found.");
+    if (subscription.controlMode !== "canonical" || subscription.lifecycleStatus !== "draft" || subscription.canonicalMigrationLedger) {
+      validation("SUBSCRIPTION_NOT_EDITABLE", "Collection method can only change on an unmigrated canonical draft.");
+    }
+    await tx.customerSubscription.update({ where: { id: subscriptionId }, data: { collectionMethod } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function listCanonicalSubscriptionsForCustomer(

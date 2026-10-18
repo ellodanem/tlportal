@@ -18,6 +18,7 @@ import {
   createDraftCanonicalSubscription,
   scheduleSubscriptionItemEnd,
   scheduleSubscriptionItemRate,
+  updateDraftSubscriptionCollectionMethod,
   updateDraftSubscriptionItemCommercialDetails,
 } from "@/lib/services/canonical-subscription-application-service";
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
@@ -35,6 +36,14 @@ function text(formData: FormData, name: string): string {
 
 function optionalText(formData: FormData, name: string): string | null {
   return text(formData, name) || null;
+}
+
+function utcDate(formData: FormData, name: string): Date | null {
+  const value = optionalText(formData, name);
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) throw new CanonicalSubscriptionValidationError("INVALID_DATE", `${name} must be a valid calendar date.`);
+  return parsed;
 }
 
 function actionError(error: unknown): CanonicalSubscriptionFormState {
@@ -64,13 +73,62 @@ export async function activateCanonicalManualSubscriptionAction(
   const subscriptionId = text(formData, "subscriptionId");
   try {
     const session = await requireEditableDraft(subscriptionId);
-    if (text(formData, "confirmed") !== "yes") {
-      return { error: "Confirm the commercial review before activation." };
+    if (["confirmCommercial", "confirmHardware", "confirmInitialBilling"].some((name) => text(formData, name) !== "yes")) {
+      return { error: "Confirm the commercial terms, assigned hardware, and initial billing decision before activation." };
     }
-    const result = await activateCanonicalManualSubscription({ subscriptionId, staffUserId: session.sub });
+    const descriptions = formData.getAll("initialChargeDescription").map((value) => String(value).trim());
+    const quantities = formData.getAll("initialChargeQuantity").map((value) => String(value).trim());
+    const prices = formData.getAll("initialChargeUnitPrice").map((value) => String(value).trim());
+    if (quantities.length !== descriptions.length || prices.length !== descriptions.length) {
+      return { error: "Initial charge rows are incomplete." };
+    }
+    const initialCharges = descriptions.flatMap((description, index) => {
+      const quantity = quantities[index];
+      const unitPrice = prices[index];
+      if (!description && !quantity && !unitPrice) return [];
+      return [{ description, quantity: Number(quantity), unitPrice: Number(unitPrice) }];
+    });
+    const mode = text(formData, "initialBillingMode") === "advance_invoice" ? "advance_invoice" : "deferred";
+    const result = await activateCanonicalManualSubscription({
+      subscriptionId,
+      staffUserId: session.sub,
+      confirmationNote: text(formData, "confirmationNote"),
+      initialBilling: {
+        mode,
+        periodStart: utcDate(formData, "initialPeriodStart"),
+        periodEnd: utcDate(formData, "initialPeriodEnd"),
+        issueDate: utcDate(formData, "initialInvoiceIssueDate"),
+        dueDaysAfterIssue: mode === "advance_invoice" ? Number(text(formData, "initialInvoiceDueDays")) : null,
+        oneTimeCharges: initialCharges,
+      },
+    });
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
-    return { message: result.reused ? "Existing canonical recurring schedule retained; no duplicate schedule was created." : "Canonical manual subscription activated for local/test billing. No invoice or notification was created." };
+    return { message: result.reused
+      ? "Existing operational activation was retained; no duplicate invoice or schedule was created."
+      : result.initialInvoiceId
+        ? "Subscription activated and the approved initial invoice was created. No payment or customer notification was recorded."
+        : "Subscription activated with an explicitly deferred first invoice. No payment or customer notification was recorded." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function updateCanonicalDraftCollectionMethodAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    await requireEditableDraft(subscriptionId);
+    const collectionMethod = text(formData, "collectionMethod");
+    if (collectionMethod !== "manual_invoice" && collectionMethod !== "stripe_autocharge") {
+      return { error: "Choose manual invoice or Stripe autocharge." };
+    }
+    await updateDraftSubscriptionCollectionMethod(subscriptionId, collectionMethod);
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: "Collection method saved. No provider, invoice, or payment operation was started." };
   } catch (error) {
     return actionError(error);
   }

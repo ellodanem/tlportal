@@ -13,6 +13,13 @@ type ServiceRow = { key: number; label: string; amount: string; classification: 
 const initialState: CanonicalSubscriptionFormState = {};
 const inputClass = "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-600 dark:border-zinc-700 dark:bg-zinc-950";
 
+function addMonths(value: string, months: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day || !Number.isInteger(months)) return value;
+  const date = new Date(Date.UTC(year, month - 1 + months, day));
+  return date.toISOString().slice(0, 10);
+}
+
 export function CanonicalCustomerOnboardingForm({
   customers,
   devices,
@@ -31,6 +38,9 @@ export function CanonicalCustomerOnboardingForm({
   const [nextKey, setNextKey] = useState(2);
   const [interval, setInterval] = useState("1");
   const [collection, setCollection] = useState("manual_invoice");
+  const [commercialStart, setCommercialStart] = useState(today);
+  const [billingAnchor, setBillingAnchor] = useState(today);
+  const [nextBillingDate, setNextBillingDate] = useState(() => addMonths(today, 1));
 
   useEffect(() => { if (state.next) router.push(state.next); }, [router, state.next]);
   const total = services.reduce((sum, service) => sum + (Number(service.amount) || 0), 0);
@@ -38,6 +48,16 @@ export function CanonicalCustomerOnboardingForm({
 
   function updateService(key: number, patch: Partial<ServiceRow>) {
     setServices((current) => current.map((service) => service.key === key ? { ...service, ...patch } : service));
+  }
+
+  function updateCommercialStart(value: string) {
+    setCommercialStart(value);
+    setNextBillingDate(addMonths(value, Number(interval)));
+  }
+
+  function updateInterval(value: string) {
+    setInterval(value);
+    setNextBillingDate(addMonths(commercialStart, Number(value)));
   }
 
   return (
@@ -50,8 +70,8 @@ export function CanonicalCustomerOnboardingForm({
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Step 2 · Commercial subscription</p><h2 className="mt-1 text-lg font-semibold">Set the agreement and future billing schedule</h2><p className="mt-1 text-sm text-zinc-500">This saves a canonical draft. It does not create an invoice, recurring schedule, Stripe customer, charge, or customer notification.</p>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label className="text-sm font-medium">Subscription name<input required name="name" className={inputClass} placeholder="Main fleet tracking" /></label><label className="text-sm font-medium">Reference<input name="reference" className={inputClass} placeholder="Optional PO / agreement" /></label><label className="text-sm font-medium">Collection method<select name="collectionMethod" value={collection} onChange={(event) => setCollection(event.target.value)} className={inputClass}><option value="manual_invoice">Manual / cheque invoice</option><option value="stripe_autocharge">Stripe-oriented (not connected yet)</option></select></label><label className="text-sm font-medium">Billing interval<select name="billingIntervalMonths" value={interval} onChange={(event) => setInterval(event.target.value)} className={inputClass}><option value="1">Monthly</option><option value="3">Every 3 months</option><option value="6">Every 6 months</option><option value="12">Annual</option></select></label><label className="text-sm font-medium">Currency<input required name="currency" defaultValue="XCD" maxLength={3} className={inputClass} /></label><label className="text-sm font-medium">Manual grace days<input required name="gracePeriodDays" type="number" min="0" defaultValue="7" className={inputClass} /></label><label className="text-sm font-medium">Commercial start<input required type="date" name="commercialStartDate" defaultValue={today} className={inputClass} /></label><label className="text-sm font-medium">Billing anchor<input required type="date" name="billingAnchorDate" defaultValue={today} className={inputClass} /></label><label className="text-sm font-medium">Next billing date<input required type="date" name="nextBillingDate" defaultValue={today} className={inputClass} /></label></div>
-        <p className="mt-3 text-xs text-zinc-500">{collection === "stripe_autocharge" ? "Stripe-oriented subscriptions are saved locally only; no Stripe operation is initiated." : "Manual subscriptions use the configured grace period when they are later explicitly activated."} {interval === "12" ? "Annual additions remain subject to the existing reviewed proration workflow; no adjustment invoice is created here." : "Mid-cycle monthly additions are configured for the next renewal, with no immediate proration."}</p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label className="text-sm font-medium">Subscription name<input required name="name" className={inputClass} placeholder="Main fleet tracking" /></label><label className="text-sm font-medium">Reference<input name="reference" className={inputClass} placeholder="Optional PO / agreement" /></label><label className="text-sm font-medium">Collection method<select name="collectionMethod" value={collection} onChange={(event) => setCollection(event.target.value)} className={inputClass}><option value="manual_invoice">Manual / cheque invoice</option><option value="stripe_autocharge">Stripe-oriented (not connected yet)</option></select></label><label className="text-sm font-medium">Billing interval<select name="billingIntervalMonths" value={interval} onChange={(event) => updateInterval(event.target.value)} className={inputClass}><option value="1">Monthly</option><option value="3">Every 3 months</option><option value="6">Every 6 months</option><option value="12">Annual</option></select></label><label className="text-sm font-medium">Currency<input required name="currency" defaultValue="XCD" maxLength={3} className={inputClass} /></label><label className="text-sm font-medium">Manual grace days<input required name="gracePeriodDays" type="number" min="0" defaultValue="7" className={inputClass} /></label><label className="text-sm font-medium">Commercial start<input required type="date" name="commercialStartDate" value={commercialStart} onChange={(event) => updateCommercialStart(event.target.value)} className={inputClass} /></label><label className="text-sm font-medium">Billing anchor<input required type="date" name="billingAnchorDate" value={billingAnchor} onChange={(event) => setBillingAnchor(event.target.value)} className={inputClass} /></label><label className="text-sm font-medium">First renewal / next billing date<input required type="date" name="nextBillingDate" value={nextBillingDate} onChange={(event) => setNextBillingDate(event.target.value)} className={inputClass} /></label></div>
+        <p className="mt-3 text-xs text-zinc-500">The first renewal defaults to one full interval after commercial start; staff can adjust it to the actual agreement. {collection === "stripe_autocharge" ? "Stripe-oriented subscriptions are saved locally only; no Stripe operation is initiated." : "Manual subscriptions use the configured grace period when they are later explicitly activated."}</p>
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">

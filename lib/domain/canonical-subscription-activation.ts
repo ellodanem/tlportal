@@ -1,6 +1,8 @@
 import type { SubscriptionCollectionMethod } from "@prisma/client";
 
 export const CANONICAL_SUBSCRIPTION_ACTIVATION_FLAG = "CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED";
+/** One global production gate. Individual customer IDs are never used for normal operations. */
+export const CANONICAL_SUBSCRIPTION_OPERATIONS_FLAG = "CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED";
 export const CANONICAL_PRODUCTION_MANUAL_ENABLED = "CANONICAL_PRODUCTION_MANUAL_ENABLED";
 export const CANONICAL_PRODUCTION_MANUAL_CUSTOMER_ID = "CANONICAL_PRODUCTION_MANUAL_CUSTOMER_ID";
 export const CANONICAL_PRODUCTION_MANUAL_SUBSCRIPTION_ID = "CANONICAL_PRODUCTION_MANUAL_SUBSCRIPTION_ID";
@@ -16,12 +18,19 @@ export type CanonicalSubscriptionActivationEnvironment = {
   NODE_ENV?: string;
   VERCEL_ENV?: string;
   CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED?: string;
+  CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED?: string;
   CANONICAL_PRODUCTION_MANUAL_ENABLED?: string;
   CANONICAL_PRODUCTION_MANUAL_CUSTOMER_ID?: string;
   CANONICAL_PRODUCTION_MANUAL_SUBSCRIPTION_ID?: string;
 };
 
 export type CanonicalProductionManualScope = { customerId: string; subscriptionId: string };
+
+export function canonicalSubscriptionOperationsEnabled(
+  environment: CanonicalSubscriptionActivationEnvironment = process.env,
+): boolean {
+  return environment.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED === "true";
+}
 
 /** Absent or partial configuration is never treated as production authorization. */
 export function canonicalProductionManualScopeAuthorized(input: {
@@ -43,10 +52,13 @@ export function assertCanonicalSubscriptionActivationEnabled(
   scope?: CanonicalProductionManualScope,
 ): void {
   if (environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production") {
+    if (canonicalSubscriptionOperationsEnabled(environment)) return;
+    // Preserve the existing narrow pilot authorization until it can be retired
+    // under its own approved cutover. It is not used by normal onboarding.
     if (scope && canonicalProductionManualScopeAuthorized({ scope, environment })) return;
     throw new CanonicalSubscriptionActivationError(
       "PRODUCTION_ACTIVATION_DISABLED",
-      "Canonical activation is disabled in production unless the exact customer and subscription are owner-authorized.",
+      "Canonical activation is disabled in production until normal staff operations are enabled.",
     );
   }
   if (environment.CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED !== "true") {

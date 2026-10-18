@@ -38,6 +38,7 @@ export type CreateDraftInvoiceInput = {
   recurringDeliveryClaimedAt?: Date | null;
   recurringDeliveryError?: string | null;
   adjustmentGenerationKey?: string | null;
+  canonicalInitialGenerationKey?: string | null;
   taxLabel?: string | null;
   taxRatePercent?: number | null;
   discountAmount?: number | null;
@@ -99,6 +100,7 @@ async function createDraftInvoiceWithClient(
       recurringDeliveryClaimedAt: input.recurringDeliveryClaimedAt ?? null,
       recurringDeliveryError: input.recurringDeliveryError ?? null,
       adjustmentGenerationKey: input.adjustmentGenerationKey ?? null,
+      canonicalInitialGenerationKey: input.canonicalInitialGenerationKey ?? null,
       billToName: input.billToName ?? null,
       billToLines: input.billToLines ?? [],
       currency,

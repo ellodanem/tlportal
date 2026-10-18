@@ -15,6 +15,7 @@ import {
 
 const canonicalConfigurationInclude = {
   canonicalManualPilotActivation: { select: { status: true } },
+  operationalActivation: { select: { id: true } },
   items: {
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     include: { rates: { orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }] } },
@@ -76,6 +77,7 @@ export async function resolveCanonicalScheduleBillingCycle(
     customerId: subscription.customerId,
     subscriptionId: subscription.id,
     activationStatus: subscription.canonicalManualPilotActivation?.status ?? null,
+    operationalActivationId: subscription.operationalActivation?.id ?? null,
   });
   if (subscription.controlMode !== "canonical") {
     error("CANONICAL_CONTROL_REQUIRED", "Only explicitly canonical-controlled subscriptions may generate canonical invoices.");
@@ -114,6 +116,7 @@ export async function persistCanonicalInvoiceSnapshots(
   tx: CanonicalBillingTransaction,
   invoiceId: string,
   cycle: CanonicalScheduleBillingCycle,
+  options: { allowAdditionalLines?: boolean; allocationNotes?: string } = {},
 ): Promise<void> {
   const invoice = await tx.invoice.findUnique({
     where: { id: invoiceId },
@@ -123,7 +126,10 @@ export async function persistCanonicalInvoiceSnapshots(
   if (invoice.customerSubscriptionId !== cycle.subscriptionId) {
     error("INVOICE_ATTRIBUTION_MISMATCH", "Invoice subscription attribution does not match its billing cycle.");
   }
-  if (invoice.currency.toUpperCase() !== cycle.currency || !invoice.subtotal.equals(cycle.subtotal)) {
+  if (
+    invoice.currency.toUpperCase() !== cycle.currency
+    || (options.allowAdditionalLines ? invoice.subtotal.lessThan(cycle.subtotal) : !invoice.subtotal.equals(cycle.subtotal))
+  ) {
     error("INVOICE_FINANCIAL_MISMATCH", "Invoice amounts do not match the resolved contractual cycle.");
   }
 
@@ -132,7 +138,7 @@ export async function persistCanonicalInvoiceSnapshots(
     orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
     select: { id: true, description: true, quantity: true, unitPrice: true, lineTotal: true },
   });
-  if (lineItems.length !== cycle.lines.length) {
+  if (lineItems.length !== cycle.lines.length && !(options.allowAdditionalLines && lineItems.length > cycle.lines.length)) {
     error("INVOICE_LINE_MISMATCH", "Invoice line count does not match the resolved subscription items.");
   }
 
@@ -158,7 +164,7 @@ export async function persistCanonicalInvoiceSnapshots(
       servicePeriodStart: cycle.periodStart,
       servicePeriodEnd: cycle.periodEnd,
       quantity: line.quantity,
-      allocationNotes: `${cycle.billingIntervalMonths}-month canonical recurring cycle`,
+      allocationNotes: options.allocationNotes ?? `${cycle.billingIntervalMonths}-month canonical recurring cycle`,
     };
   });
 
@@ -335,6 +341,7 @@ export async function getCanonicalSubscriptionBillingSummary(
         customerId: subscription.customerId,
         subscriptionId: subscription.id,
         activationStatus: subscription.canonicalManualPilotActivation?.status ?? null,
+        operationalActivationId: subscription.operationalActivation?.id ?? null,
       });
       return true;
     } catch (caught) {

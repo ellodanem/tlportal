@@ -58,6 +58,27 @@ test("canonical execution is opt-in locally and remains hard-disabled in product
     (caught: unknown) => caught instanceof CanonicalNativeBillingError
       && caught.code === "PRODUCTION_EXECUTION_DISABLED",
   );
+  assert.throws(
+    () => assertCanonicalNativeBillingExecutionEnabled({
+      NODE_ENV: "test",
+      VERCEL_ENV: "production",
+      CANONICAL_NATIVE_BILLING_ENABLED: "true",
+    }),
+    (caught: unknown) => caught instanceof CanonicalNativeBillingError
+      && caught.code === "PRODUCTION_EXECUTION_DISABLED",
+  );
+  assert.doesNotThrow(() => assertCanonicalNativeBillingExecutionEnabled({
+    NODE_ENV: "production",
+    CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED: "true",
+  }, { customerId: "customer-1", subscriptionId: "subscription-1", activationStatus: null, operationalActivationId: "activation-1" }));
+  assert.throws(
+    () => assertCanonicalNativeBillingExecutionEnabled({
+      NODE_ENV: "production",
+      CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED: "true",
+    }, { customerId: "customer-1", subscriptionId: "subscription-1", activationStatus: null }),
+    (caught: unknown) => caught instanceof CanonicalNativeBillingError
+      && caught.code === "PRODUCTION_EXECUTION_DISABLED",
+  );
   assert.doesNotThrow(() => assertCanonicalNativeBillingExecutionEnabled({
     NODE_ENV: "production",
     CANONICAL_PRODUCTION_MANUAL_ENABLED: "true",

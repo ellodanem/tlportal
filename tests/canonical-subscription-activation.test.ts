@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   activationReviewLabel,
   assertCanonicalSubscriptionActivationEnabled,
+  canonicalSubscriptionOperationsEnabled,
   canonicalProductionManualScopeAuthorized,
   CanonicalSubscriptionActivationError,
 } from "../lib/domain/canonical-subscription-activation";
@@ -38,4 +39,11 @@ test("production manual authorization is exact and cannot be enabled by a broad 
   assert.equal(canonicalProductionManualScopeAuthorized({ scope, environment }), true);
   assert.equal(canonicalProductionManualScopeAuthorized({ scope: { ...scope, subscriptionId: "other" }, environment }), false);
   assert.doesNotThrow(() => assertCanonicalSubscriptionActivationEnabled(environment, scope));
+});
+
+test("normal production operations use one global default-deny gate, never a customer allowlist", () => {
+  const environment = { NODE_ENV: "production", CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED: "true" };
+  assert.equal(canonicalSubscriptionOperationsEnabled(environment), true);
+  assert.doesNotThrow(() => assertCanonicalSubscriptionActivationEnabled(environment));
+  assert.equal(canonicalSubscriptionOperationsEnabled({ NODE_ENV: "production" }), false);
 });

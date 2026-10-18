@@ -293,6 +293,14 @@ enum SubscriptionControlMode {
   canonical
 }
 
+/// Staff's explicit decision for the first commercial service period.
+/// Deferred means the first invoice is intentionally left to the configured
+/// renewal schedule; it never means the customer has paid.
+enum CanonicalInitialBillingMode {
+  advance_invoice
+  deferred
+}
+
 /// Commercial state of one billable service within a canonical subscription.
 enum SubscriptionItemStatus {
   draft
@@ -431,6 +439,8 @@ model User {
   vendorBillsCreated            VendorBill[]
   vendorBillPaymentsRecorded    VendorBillPayment[]
   subscriptionItemRatesCreated  SubscriptionItemRate[]
+  canonicalSubscriptionActivationsApproved CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationApprovedBy")
+  canonicalSubscriptionActivationsPerformed CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationPerformedBy")
 }
 
 // --- Core domain ---
@@ -507,6 +517,7 @@ model Customer {
   expenses                Expense[]
   canonicalMigrationLedgers CanonicalMigrationLedger[]
   canonicalManualPilotActivations CanonicalManualPilotActivation[]
+  canonicalOperationalActivations CanonicalSubscriptionOperationalActivation[]
   @@index([archivedAt])
 }
 
@@ -1150,9 +1161,38 @@ model CustomerSubscription {
   billingInvoices       BillingInvoice[]
   canonicalMigrationLedger CanonicalMigrationLedger? @relation("CanonicalMigrationTarget")
   canonicalManualPilotActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotTarget")
+  operationalActivation CanonicalSubscriptionOperationalActivation?
 
   @@index([customerId, updatedAt(sort: Desc)])
   @@index([status])
+}
+
+/// Durable staff approval for a normal, newly-onboarded canonical agreement.
+/// This intentionally does not replace the separately authorized legacy/manual
+/// pilot mechanism. One agreement can be operationally activated only once.
+model CanonicalSubscriptionOperationalActivation {
+  id                     String                     @id @default(uuid())
+  customerSubscriptionId String                     @unique
+  customerSubscription   CustomerSubscription       @relation(fields: [customerSubscriptionId], references: [id], onDelete: Restrict)
+  customerId             String
+  customer               Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  activationKey          String                     @unique
+  initialBillingMode     CanonicalInitialBillingMode
+  initialPeriodStart     DateTime?                  @db.Date
+  initialPeriodEnd       DateTime?                  @db.Date
+  initialInvoiceId       String?                    @unique
+  initialInvoice         Invoice?                   @relation("CanonicalOperationalInitialInvoice", fields: [initialInvoiceId], references: [id], onDelete: Restrict)
+  approvedById           String
+  approvedBy             User                       @relation("CanonicalActivationApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt             DateTime
+  performedById          String
+  performedBy            User                       @relation("CanonicalActivationPerformedBy", fields: [performedById], references: [id], onDelete: Restrict)
+  performedAt            DateTime
+  confirmationNote       String?                    @db.Text
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  @@index([customerId, performedAt])
 }
 
 /// Stable commercial identity for one billable GPS tracking service.
@@ -1579,6 +1619,9 @@ model Invoice {
   recurringDeliveryError     String?                         @db.Text
   /// Stable idempotency key for a one-time canonical annual service-addition adjustment.
   adjustmentGenerationKey    String?                         @unique
+  /// Stable idempotency key for an activation-time canonical invoice.
+  canonicalInitialGenerationKey String?                      @unique
+  canonicalOperationalInitialActivation CanonicalSubscriptionOperationalActivation? @relation("CanonicalOperationalInitialInvoice")
   /// Stripe `BillingInvoice` mirror row (when kind = subscription_mirror).
   billingInvoiceId String?        @unique
   billingInvoice   BillingInvoice? @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)

@@ -9,6 +9,7 @@ import {
   type CanonicalManualPilotEnvironment,
 } from "./canonical-manual-pilot";
 import {
+  canonicalSubscriptionOperationsEnabled,
   canonicalProductionManualScopeAuthorized,
   type CanonicalSubscriptionActivationEnvironment,
 } from "./canonical-subscription-activation";
@@ -37,15 +38,17 @@ export type CanonicalNativeBillingExecutionScope = {
   customerId: string;
   subscriptionId: string;
   activationStatus: string | null;
+  operationalActivationId?: string | null;
 };
 
 export function canonicalNativeBillingExecutionEnabled(
   environment: CanonicalNativeBillingEnvironment = process.env,
   scope?: CanonicalNativeBillingExecutionScope,
 ): boolean {
-  if (environment.NODE_ENV === "production") {
+  if (environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production") {
     return scope != null && (
       canonicalManualPilotBillingAuthorized({ ...scope, environment })
+      || (canonicalSubscriptionOperationsEnabled(environment) && Boolean(scope.operationalActivationId))
       || canonicalProductionManualScopeAuthorized({ scope, environment })
     );
   }
@@ -56,12 +59,13 @@ export function assertCanonicalNativeBillingExecutionEnabled(
   environment: CanonicalNativeBillingEnvironment = process.env,
   scope?: CanonicalNativeBillingExecutionScope,
 ): void {
-  if (environment.NODE_ENV === "production") {
+  if (environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production") {
     if (!scope || (!canonicalManualPilotBillingAuthorized({ ...scope, environment })
+      && !(canonicalSubscriptionOperationsEnabled(environment) && Boolean(scope.operationalActivationId))
       && !canonicalProductionManualScopeAuthorized({ scope, environment }))) {
       billingError(
         "PRODUCTION_EXECUTION_DISABLED",
-        "Canonical native billing is disabled in production except for one exact owner-authorized agreement.",
+        "Canonical native billing is disabled in production unless a staff-approved operational activation owns this agreement.",
       );
     }
     return;

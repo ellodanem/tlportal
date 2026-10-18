@@ -36,6 +36,15 @@ async function createCustomer(label: string) {
   });
 }
 
+async function createStaff(label: string) {
+  return prisma.user.create({
+    data: {
+      email: `${label}-${randomUUID()}@example.test`,
+      passwordHash: "test-only-password-hash",
+    },
+  });
+}
+
 async function createAssignment(customerId: string, label: string) {
   const deviceModel = await prisma.deviceModel.create({
     data: {
@@ -463,13 +472,15 @@ test("service uses exact Decimal values rather than floating point reconstructio
 
 test("manual canonical activation creates one future schedule without issuing or delivering an invoice", async () => {
   const customer = await createCustomer("manual-activation");
+  const staff = await createStaff("manual-activation");
   const subscription = await createMonthlySubscription(customer.id, "Manual activation", [
     { label: "Ready service", serviceActivatedDate: "2026-10-01" },
   ]);
   await prisma.customerSubscription.update({ where: { id: subscription.id }, data: { controlMode: "canonical" } });
   const environment = { NODE_ENV: "test", CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED: "true" };
-  const first = await activateCanonicalManualSubscription({ subscriptionId: subscription.id, environment });
-  const second = await activateCanonicalManualSubscription({ subscriptionId: subscription.id, environment });
+  const input = { subscriptionId: subscription.id, staffUserId: staff.id, confirmationNote: "Deferred billing agreed during installation.", environment };
+  const first = await activateCanonicalManualSubscription(input);
+  const second = await activateCanonicalManualSubscription(input);
   assert.equal(second.reused, true);
   assert.equal(second.scheduleId, first.scheduleId);
   const [active, schedule, invoices] = await Promise.all([
@@ -483,4 +494,89 @@ test("manual canonical activation creates one future schedule without issuing or
   assert.equal(schedule.autoEmail, false);
   assert.equal(schedule.lineItems.length, 1);
   assert.equal(invoices, 0);
+  assert.equal(await prisma.canonicalSubscriptionOperationalActivation.count({ where: { customerSubscriptionId: subscription.id } }), 1);
+});
+
+test("staff activation issues one initial invoice with exact service snapshots and one-time charges", async () => {
+  const customer = await createCustomer("initial-invoice");
+  const staff = await createStaff("initial-invoice");
+  const subscription = await createDraftCanonicalSubscription({
+    customerId: customer.id,
+    name: "Initial invoice agreement",
+    billingIntervalMonths: 1,
+    collectionMethod: "manual_invoice",
+    currency: "XCD",
+    defaultAgreedAmountPerCycle: "25.00",
+    commercialStartDate: "2026-10-01",
+    billingAnchorDate: "2026-10-01",
+    nextBillingDate: "2026-11-01",
+    controlMode: "canonical",
+    items: [
+      { label: "Vehicle A", serviceActivatedDate: "2026-10-01", billingEffectiveFrom: "2026-10-01" },
+      { label: "Vehicle B", serviceActivatedDate: "2026-10-01", billingEffectiveFrom: "2026-10-01", agreedAmountPerCycle: "20.00", rateClassification: "negotiated" },
+    ],
+  });
+  const input = {
+    subscriptionId: subscription.id,
+    staffUserId: staff.id,
+    confirmationNote: "Installation and one-month advance billing confirmed.",
+    environment: { NODE_ENV: "test", CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED: "true" },
+    initialBilling: {
+      mode: "advance_invoice" as const,
+      periodStart: new Date("2026-10-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-11-01T00:00:00.000Z"),
+      issueDate: new Date("2026-10-01T00:00:00.000Z"),
+      dueDaysAfterIssue: 7,
+      oneTimeCharges: [{ description: "GPS installation", quantity: 2, unitPrice: 80 }],
+    },
+  };
+  const results = await Promise.all(Array.from({ length: 4 }, () => activateCanonicalManualSubscription(input)));
+  assert.equal(results.filter((result) => !result.reused).length, 1);
+  const activation = await prisma.canonicalSubscriptionOperationalActivation.findUniqueOrThrow({
+    where: { customerSubscriptionId: subscription.id },
+    include: { initialInvoice: { include: { lineItems: true, serviceSnapshots: true } } },
+  });
+  assert.equal(activation.initialBillingMode, "advance_invoice");
+  assert.equal(activation.initialPeriodStart?.toISOString().slice(0, 10), "2026-10-01");
+  assert.equal(activation.initialPeriodEnd?.toISOString().slice(0, 10), "2026-11-01");
+  assert.equal(activation.initialInvoice?.status, "open");
+  assert.equal(activation.initialInvoice?.total.toFixed(2), "205.00");
+  assert.equal(activation.initialInvoice?.amountDue.toFixed(2), "205.00");
+  assert.equal(activation.initialInvoice?.lineItems.length, 3);
+  assert.equal(activation.initialInvoice?.serviceSnapshots.length, 2);
+  assert.equal(await prisma.recurringInvoiceSchedule.count({ where: { customerSubscriptionId: subscription.id, status: "active" } }), 1);
+  assert.equal((await prisma.customerSubscription.findUniqueOrThrow({ where: { id: subscription.id } })).nextBillingDate?.toISOString().slice(0, 10), "2026-11-01");
+});
+
+test("invalid initial coverage rolls back activation, invoice, and schedule together", async () => {
+  const customer = await createCustomer("initial-invoice-invalid");
+  const staff = await createStaff("initial-invoice-invalid");
+  const subscription = await createDraftCanonicalSubscription({
+    customerId: customer.id,
+    name: "Invalid initial coverage",
+    billingIntervalMonths: 1,
+    collectionMethod: "manual_invoice",
+    currency: "XCD",
+    defaultAgreedAmountPerCycle: "25.00",
+    commercialStartDate: "2026-10-01",
+    billingAnchorDate: "2026-10-01",
+    nextBillingDate: "2026-11-01",
+    controlMode: "canonical",
+    items: [{ label: "Vehicle", serviceActivatedDate: "2026-10-01", billingEffectiveFrom: "2026-10-01" }],
+  });
+  await assert.rejects(() => activateCanonicalManualSubscription({
+    subscriptionId: subscription.id,
+    staffUserId: staff.id,
+    confirmationNote: "Invalid test.",
+    environment: { NODE_ENV: "test", CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED: "true" },
+    initialBilling: {
+      mode: "advance_invoice",
+      periodStart: new Date("2026-10-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-10-15T00:00:00.000Z"),
+      issueDate: new Date("2026-10-01T00:00:00.000Z"),
+    },
+  }), expectValidationCode("INITIAL_PERIOD_INTERVAL_MISMATCH"));
+  assert.equal(await prisma.canonicalSubscriptionOperationalActivation.count({ where: { customerSubscriptionId: subscription.id } }), 0);
+  assert.equal(await prisma.recurringInvoiceSchedule.count({ where: { customerSubscriptionId: subscription.id } }), 0);
+  assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: subscription.id } }), 0);
 });

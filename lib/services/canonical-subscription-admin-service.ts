@@ -108,6 +108,19 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
         select: { id: true, company: true, firstName: true, lastName: true, email: true },
       },
       canonicalMigrationLedger: { select: { id: true, status: true, sourceKind: true } },
+      operationalActivation: {
+        select: {
+          initialBillingMode: true,
+          initialPeriodStart: true,
+          initialPeriodEnd: true,
+          approvedAt: true,
+          performedAt: true,
+          confirmationNote: true,
+          approvedBy: { select: { name: true, email: true } },
+          performedBy: { select: { name: true, email: true } },
+          initialInvoice: { select: { id: true, number: true, status: true, total: true, amountDue: true, dueDate: true } },
+        },
+      },
       items: {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         include: {
