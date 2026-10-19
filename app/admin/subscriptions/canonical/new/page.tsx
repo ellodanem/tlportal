@@ -38,8 +38,8 @@ export default async function NewCanonicalSubscriptionPage({
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <div>
-        <Link href="/admin/subscriptions/canonical" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">← Canonical subscriptions</Link>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Onboard a canonical customer</h1>
+        <Link href="/admin/subscriptions/canonical" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">← Subscriptions</Link>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Add a customer subscription</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">Create a new customer or select an existing one, define one commercial subscription with services and equipment, then review it without affecting live billing.</p>
       </div>
       <CanonicalCustomerOnboardingForm

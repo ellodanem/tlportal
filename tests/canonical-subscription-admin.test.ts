@@ -199,7 +199,7 @@ test("UI routes include detail, empty, loading, error and price-history states",
   assert.match(detail, /Hardware assignment history/);
   assert.match(loading, /aria-busy/);
   assert.match(error, /No billing action was performed/);
-  assert.match(overview, /View synthetic demo/);
+  assert.match(overview, /Billing records and transition history/);
   assert.match(overview, /canonicalSubscriptionUiVisible/);
   assert.match(detail, /canonicalSubscriptionUiEnabled/);
   assert.match(demo, /Synthetic demonstration only/);
