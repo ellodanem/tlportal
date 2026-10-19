@@ -947,7 +947,7 @@ test("88: aggregate manual invoice validation rejects unconfirmed coverage and d
   assert.equal(original.lineItems[0].lineTotal.toFixed(2), "560.00");
 });
 
-test("89: a conflicting established invoice remains reviewable through an encoded proposal route", async () => {
+test("89: an established invoice remains reviewable when a canceled historical source exists", async () => {
   const fixture = await createEstablishedManualInvoiceFixture();
   await prisma.customerSubscription.create({
     data: {
@@ -969,7 +969,7 @@ test("89: a conflicting established invoice remains reviewable through an encode
   assert.equal(review.candidate.reviewStatus, "conflict");
   assert.equal(review.assignments.length, 14);
   assert.equal(review.sourceInvoice?.id, fixture.sourceInvoice.id);
-  assert.ok(review.candidate.issueDetails.some((issue) => issue.code === "multiple_arrangements_same_interval"));
+  assert.equal(review.candidate.issueDetails.some((issue) => issue.code === "multiple_arrangements_same_interval"), false);
   assert.ok(review.candidate.issueDetails.some((issue) => issue.code === "active_assignments_unmapped"));
   assert.equal(await prisma.invoice.count({ where: { id: fixture.sourceInvoice.id } }), 1);
 });
