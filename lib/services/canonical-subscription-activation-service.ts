@@ -130,8 +130,11 @@ export async function activateCanonicalManualSubscription(
     if (!subscription) fail("SUBSCRIPTION_NOT_FOUND", "Canonical subscription not found.");
     const promotingMigrationShadow = input.promoteMigrationShadow === true && subscription.controlMode === "shadow";
     const requestedInitialBilling = input.initialBilling ?? { mode: "deferred" as const };
+    // Some invoice-backed arrangements never had a legacy recurring schedule.
+    // A migration promotion is still safe in that case: this path is limited to
+    // an existing shadow, deferred billing, and no one-time charges, so it
+    // cannot issue an invoice while transferring future manual authority.
     const migrationPromotion = promotingMigrationShadow
-      && Boolean(input.legacyScheduleId)
       && requestedInitialBilling.mode === "deferred"
       && !(requestedInitialBilling.oneTimeCharges?.length);
     assertCanonicalSubscriptionActivationEnabled(input.environment, {

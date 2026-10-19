@@ -572,6 +572,39 @@ test("a migration shadow becomes canonical while ending the old manual schedule 
   assert.equal(invoices, 0);
 });
 
+test("an invoice-backed migration shadow without a legacy schedule can promote future authority without billing", async () => {
+  const customer = await createCustomer("invoice-backed-migration");
+  const staff = await createStaff("invoice-backed-migration");
+  const subscription = await createMonthlySubscription(customer.id, "Invoice-backed migration", [
+    { label: "Mapped service", serviceActivatedDate: "2026-10-01" },
+  ]);
+  await prisma.customerSubscription.update({ where: { id: subscription.id }, data: { controlMode: "shadow" } });
+
+  const result = await activateCanonicalManualSubscription({
+    subscriptionId: subscription.id,
+    staffUserId: staff.id,
+    confirmationNote: "The existing invoice covers the current period; canonical billing starts at the next renewal.",
+    initialBilling: { mode: "deferred" },
+    promoteMigrationShadow: true,
+    environment: {
+      NODE_ENV: "production",
+      VERCEL_ENV: "production",
+      CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED: "true",
+    },
+  });
+
+  const [canonical, schedule, invoices] = await Promise.all([
+    prisma.customerSubscription.findUniqueOrThrow({ where: { id: subscription.id } }),
+    prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: result.scheduleId } }),
+    prisma.invoice.count({ where: { customerId: customer.id } }),
+  ]);
+  assert.equal(canonical.controlMode, "canonical");
+  assert.equal(canonical.lifecycleStatus, "active");
+  assert.equal(schedule.status, "active");
+  assert.equal(schedule.autoEmail, false);
+  assert.equal(invoices, 0);
+});
+
 test("staff activation issues one initial invoice with exact service snapshots and one-time charges", async () => {
   const customer = await createCustomer("initial-invoice");
   const staff = await createStaff("initial-invoice");
