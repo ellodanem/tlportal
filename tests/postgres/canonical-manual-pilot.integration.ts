@@ -966,10 +966,10 @@ test("89: an established invoice remains reviewable when a canceled historical s
     "2026-10-16",
   );
   assert.equal(review.candidate.proposalId, `manual-invoice:${fixture.sourceInvoice.id}`);
-  assert.equal(review.candidate.reviewStatus, "conflict");
   assert.equal(review.assignments.length, 14);
   assert.equal(review.sourceInvoice?.id, fixture.sourceInvoice.id);
   assert.equal(review.candidate.issueDetails.some((issue) => issue.code === "multiple_arrangements_same_interval"), false);
-  assert.ok(review.candidate.issueDetails.some((issue) => issue.code === "active_assignments_unmapped"));
+  assert.equal(review.candidate.issueDetails.some((issue) => issue.code === "active_assignments_unmapped"), false);
+  assert.equal(review.candidate.proposedItems.length, 14);
   assert.equal(await prisma.invoice.count({ where: { id: fixture.sourceInvoice.id } }), 1);
 });

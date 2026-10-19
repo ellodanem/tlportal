@@ -818,8 +818,16 @@ function allocateItems(
 ): SubscriptionMigrationProposal {
   const proposal = seed.proposal;
   const issues = [...proposal.issues];
+  const isHistorical = ["canceled", "ended"].includes(proposal.lifecycleStatus);
   let mapped: LegacyAssignment[] = [];
-  if (seed.directAssignmentId) {
+  if (isHistorical && candidates.length > 0) {
+    issues.push(issue(
+      "closed_arrangement_has_active_assignments",
+      "conflict",
+      "A canceled or ended billing arrangement still matches active service assignments.",
+      [proposal.sourceId, ...candidates.map((assignment) => assignment.id)],
+    ));
+  } else if (seed.directAssignmentId) {
     const direct = candidates.find((assignment) => assignment.id === seed.directAssignmentId);
     if (direct) mapped = [direct];
     else issues.push(issue(
@@ -889,14 +897,6 @@ function allocateItems(
       "decision",
       "The proposed canonical item count does not match the legacy billing quantity.",
       [proposal.sourceId],
-    ));
-  }
-  if (["canceled", "ended"].includes(proposal.lifecycleStatus) && mapped.length > 0) {
-    issues.push(issue(
-      "closed_arrangement_has_active_assignments",
-      "conflict",
-      "A canceled or ended billing arrangement still matches active service assignments.",
-      [proposal.sourceId, ...mapped.map((assignment) => assignment.id)],
     ));
   }
   const renewalDates = new Set(mapped
