@@ -1,13 +1,22 @@
 import "server-only";
 
+import type { CustomerSubscriptionStatus, InvoiceStatus } from "@prisma/client";
+
 import type { FleetSegmentKey } from "@/lib/admin/fleet-segments";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { activeInvoiceWhere } from "@/lib/admin/active-invoice-filter";
 import { opsUrgencyFromNextDueDate, opsUrgencyRank } from "@/lib/admin/assignment-ops-urgency";
 import { getGlobalFleetHealth } from "@/lib/admin/fleet-health";
+import { resolveCanonicalBillingCycle, CanonicalNativeBillingError } from "@/lib/domain/canonical-native-billing";
+import { round2 } from "@/lib/domain/native-billing";
+import {
+  effectiveMonthlyFromScheduleCycle,
+  effectiveMonthlyRecurringXcd,
+} from "@/lib/domain/subscription-mrr";
 import { isInvoilessLegacyUiEnabled } from "@/lib/domain/native-billing-cutover";
 
 import { prisma } from "@/lib/db";
+import { getDefaultMonthlyRateXcd } from "@/lib/stripe/checkout-pricing";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 import {
   listRecentPaymentFailureAttentionItems,
@@ -21,8 +30,13 @@ const unlinkedInvoilessWhere = {
   billingAccounts: { none: { provider: "invoiless" as const } },
 } as const;
 
-const PAST_DUE_SUB_STATUSES = ["past_due", "unpaid"] as const;
-const OPEN_AR_STATUSES = ["open", "partially_paid", "overdue"] as const;
+const PAST_DUE_SUB_STATUSES: CustomerSubscriptionStatus[] = ["past_due", "unpaid"];
+const ACTIVE_LEGACY_SUB_STATUSES: CustomerSubscriptionStatus[] = ["active", "trialing"];
+const OPEN_AR_STATUSES: InvoiceStatus[] = ["open", "partially_paid", "overdue"];
+const SIM_NEAR_LIMIT_PERCENT = 80;
+const SIM_HIGH_USAGE_PERCENT = 90;
+const LOW_INVENTORY_THRESHOLD = 3;
+const MONTHS_IN_TREND = 6;
 
 export type DashboardAttentionItem = {
   id: string;
@@ -44,11 +58,31 @@ export type DashboardRecentItem = {
   href: string;
 };
 
+export type DashboardTrendPoint = {
+  label: string;
+  count: number;
+};
+
+function isXcd(currency: string | null | undefined): boolean {
+  return currency?.trim().toUpperCase() === "XCD";
+}
+
+function monthStartUtc(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function formatMonthLabel(date: Date): string {
+  return date.toLocaleDateString("en-029", { month: "short", timeZone: "UTC" });
+}
+
 const STRIPE_ATTENTION_STATUSES = ["past_due", "unpaid"] as const;
 
 export async function getDashboardStats() {
   const invoilessConfigured = isInvoilessLegacyUiEnabled();
   const stripeConfigured = isStripeBillingEnabled();
+  const dashboardNow = new Date();
+  const serviceTrendStart = monthStartUtc(dashboardNow);
+  serviceTrendStart.setUTCMonth(serviceTrendStart.getUTCMonth() - (MONTHS_IN_TREND - 1));
 
   const [
     fleetHealth,
@@ -74,6 +108,16 @@ export async function getDashboardStats() {
     overdueInvoiceCount,
     stripeBillingIssueCount,
     paymentFailureCustomerIds,
+    activeLegacySubscriptions,
+    activeStandaloneSchedules,
+    canonicalSubscriptions,
+    outstandingInvoiceGroups,
+    overdueInvoices,
+    simUsageRows,
+    availableSimCount,
+    serviceTrendRows,
+    defaultMonthlyRate,
+    assignmentCountsByCustomer,
   ] = await Promise.all([
     getGlobalFleetHealth(),
     prisma.device.count({
@@ -93,7 +137,11 @@ export async function getDashboardStats() {
     prisma.device.count({ where: { status: "in_stock", usagePurpose: "customer" } }),
     prisma.device.count({ where: { status: "suspended", usagePurpose: "customer" } }),
     prisma.serviceAssignment.count({
-      where: { endDate: null, status: { not: "cancelled" } },
+      where: {
+        endDate: null,
+        status: { in: ["active", "due_soon", "overdue"] },
+        customer: activeCustomerWhere,
+      },
     }),
     prisma.serviceAssignment.findMany({
       where: {
@@ -183,6 +231,111 @@ export async function getDashboardStats() {
         })
       : Promise.resolve(0),
     stripeConfigured ? listRecentPaymentFailureCustomerIds(7) : Promise.resolve(new Set<string>()),
+    prisma.customerSubscription.findMany({
+      where: {
+        controlMode: "legacy",
+        status: { in: ACTIVE_LEGACY_SUB_STATUSES },
+        customer: activeCustomerWhere,
+      },
+      select: {
+        id: true,
+        customerId: true,
+        planTermMonths: true,
+        monthlyRateXcd: true,
+        vehicleCount: true,
+        customer: { select: { stripeMonthlyRateXcd: true } },
+      },
+    }),
+    prisma.recurringInvoiceSchedule.findMany({
+      where: {
+        status: "active",
+        customer: activeCustomerWhere,
+        OR: [
+          { customerSubscriptionId: null },
+          {
+            customerSubscription: {
+              controlMode: "legacy",
+              status: { notIn: ACTIVE_LEGACY_SUB_STATUSES },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        currency: true,
+        intervalMonths: true,
+        lineItems: { select: { lineTotal: true } },
+      },
+    }),
+    prisma.customerSubscription.findMany({
+      where: {
+        controlMode: "canonical",
+        lifecycleStatus: "active",
+        customer: activeCustomerWhere,
+      },
+      select: {
+        id: true,
+        lifecycleStatus: true,
+        billingIntervalMonths: true,
+        currency: true,
+        items: {
+          select: {
+            id: true,
+            label: true,
+            status: true,
+            billingEffectiveFrom: true,
+            billingEffectiveUntil: true,
+            rates: {
+              select: {
+                id: true,
+                billingIntervalMonths: true,
+                agreedAmountPerCycle: true,
+                currency: true,
+                effectiveFrom: true,
+                effectiveUntil: true,
+                classification: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.invoice.groupBy({
+      by: ["currency"],
+      where: {
+        ...activeInvoiceWhere,
+        status: { in: OPEN_AR_STATUSES },
+        amountDue: { gt: 0 },
+      },
+      _sum: { amountDue: true },
+      _count: { _all: true },
+    }),
+    prisma.invoice.findMany({
+      where: {
+        ...activeInvoiceWhere,
+        status: { in: OPEN_AR_STATUSES },
+        amountDue: { gt: 0 },
+        dueDate: { lt: dashboardNow },
+      },
+      select: { id: true, number: true, amountDue: true, dueDate: true, customerId: true },
+      orderBy: { dueDate: "asc" },
+      take: 6,
+    }),
+    prisma.simCard.findMany({
+      where: { totalDataMB: { gt: 0 }, usedDataMB: { not: null } },
+      select: { usedDataMB: true, totalDataMB: true },
+    }),
+    prisma.simCard.count({ where: { device: { is: null } } }),
+    prisma.serviceAssignment.findMany({
+      where: { customer: activeCustomerWhere, createdAt: { gte: serviceTrendStart } },
+      select: { createdAt: true },
+    }),
+    getDefaultMonthlyRateXcd(),
+    prisma.serviceAssignment.groupBy({
+      by: ["customerId"],
+      where: { endDate: null, status: { not: "cancelled" }, customer: activeCustomerWhere },
+      _count: { _all: true },
+    }),
   ]);
 
   type DueAssignment = (typeof openAssignmentsWithDue)[number];
@@ -389,6 +542,95 @@ export async function getDashboardStats() {
   const simUsedSumMb = simDataSums._sum.usedDataMB ?? 0;
   const simTotalSumMb = simDataSums._sum.totalDataMB ?? 0;
 
+  let simsNearDataLimitCount = 0;
+  let simsHighUsageCount = 0;
+  let simsOverDataLimitCount = 0;
+  for (const sim of simUsageRows) {
+    const total = sim.totalDataMB ?? 0;
+    const used = sim.usedDataMB ?? 0;
+    if (total <= 0 || used < 0) continue;
+    const usagePercent = (used / total) * 100;
+    if (usagePercent >= SIM_NEAR_LIMIT_PERCENT) simsNearDataLimitCount += 1;
+    if (usagePercent >= SIM_HIGH_USAGE_PERCENT) simsHighUsageCount += 1;
+    if (usagePercent >= 100) simsOverDataLimitCount += 1;
+  }
+
+  const devicesInventoryLow = inStockDeviceCount < LOW_INVENTORY_THRESHOLD;
+  const simsInventoryLow = availableSimCount < LOW_INVENTORY_THRESHOLD;
+
+  const activeAssignmentsByCustomer = new Map(
+    assignmentCountsByCustomer.map((row) => [row.customerId, row._count._all]),
+  );
+
+  let legacyMrrXcd = 0;
+  for (const subscription of activeLegacySubscriptions) {
+    const monthlyRate = subscription.monthlyRateXcd != null
+      ? Number(subscription.monthlyRateXcd)
+      : subscription.customer.stripeMonthlyRateXcd != null
+        ? Number(subscription.customer.stripeMonthlyRateXcd)
+        : defaultMonthlyRate;
+    const vehicles = subscription.vehicleCount ?? activeAssignmentsByCustomer.get(subscription.customerId) ?? 1;
+    legacyMrrXcd += effectiveMonthlyRecurringXcd(
+      monthlyRate,
+      subscription.planTermMonths,
+      vehicles,
+    );
+  }
+
+  let manualMrrXcd = 0;
+  let nonXcdRecurringSourceCount = 0;
+  for (const schedule of activeStandaloneSchedules) {
+    if (!isXcd(schedule.currency)) {
+      nonXcdRecurringSourceCount += 1;
+      continue;
+    }
+    const cycleTotal = schedule.lineItems.reduce((sum, line) => sum + Number(line.lineTotal), 0);
+    manualMrrXcd += effectiveMonthlyFromScheduleCycle(cycleTotal, schedule.intervalMonths);
+  }
+
+  let canonicalMrrXcd = 0;
+  let canonicalMrrUnavailableCount = 0;
+  for (const subscription of canonicalSubscriptions) {
+    if (!isXcd(subscription.currency)) {
+      nonXcdRecurringSourceCount += 1;
+      continue;
+    }
+    try {
+      const cycle = resolveCanonicalBillingCycle(subscription, dashboardNow);
+      canonicalMrrXcd += Number(cycle.subtotal) / cycle.billingIntervalMonths;
+    } catch (caught) {
+      if (!(caught instanceof CanonicalNativeBillingError)) throw caught;
+      canonicalMrrUnavailableCount += 1;
+    }
+  }
+  const monthlyRecurringRevenueXcd = round2(legacyMrrXcd + manualMrrXcd + canonicalMrrXcd);
+
+  let outstandingBalanceXcd = 0;
+  let outstandingInvoiceCount = 0;
+  let nonXcdOutstandingInvoiceCount = 0;
+  for (const group of outstandingInvoiceGroups) {
+    if (isXcd(group.currency)) {
+      outstandingBalanceXcd += Number(group._sum.amountDue ?? 0);
+      outstandingInvoiceCount += group._count._all;
+    } else {
+      nonXcdOutstandingInvoiceCount += group._count._all;
+    }
+  }
+  outstandingBalanceXcd = round2(outstandingBalanceXcd);
+
+  const serviceTrend = Array.from({ length: MONTHS_IN_TREND }, (_, index) => {
+    const month = new Date(serviceTrendStart);
+    month.setUTCMonth(month.getUTCMonth() + index);
+    return { month, count: 0, label: formatMonthLabel(month) };
+  });
+  for (const row of serviceTrendRows) {
+    const monthIndex = (row.createdAt.getUTCFullYear() - serviceTrendStart.getUTCFullYear()) * 12
+      + row.createdAt.getUTCMonth() - serviceTrendStart.getUTCMonth();
+    if (monthIndex >= 0 && monthIndex < serviceTrend.length) {
+      serviceTrend[monthIndex]!.count += 1;
+    }
+  }
+
   const recentItems: DashboardRecentItem[] = recentCustomers.map((c) => ({
     id: c.id,
     label: `Customer updated — ${displayName(c)}`,
@@ -424,6 +666,21 @@ export async function getDashboardStats() {
     simUsedSumMb,
     simTotalSumMb,
     simCardCount,
+    simsNearDataLimitCount,
+    simsHighUsageCount,
+    simsOverDataLimitCount,
+    availableSimCount,
+    devicesInventoryLow,
+    simsInventoryLow,
+    lowInventoryThreshold: LOW_INVENTORY_THRESHOLD,
+    monthlyRecurringRevenueXcd,
+    canonicalMrrUnavailableCount,
+    nonXcdRecurringSourceCount,
+    outstandingBalanceXcd,
+    outstandingInvoiceCount,
+    overdueInvoiceCount: overdueInvoices.length,
+    nonXcdOutstandingInvoiceCount,
+    serviceTrend: serviceTrend.map(({ label, count }) => ({ label, count })),
     attentionCount,
     attentionItems,
     upcomingBillItems,

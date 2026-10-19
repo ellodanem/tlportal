@@ -6,6 +6,8 @@ import {
   FLEET_SEGMENT_ORDER,
   type FleetSnapshotRow,
 } from "@/components/dashboard/fleet-snapshot";
+import { FleetHealthSummary } from "@/components/dashboard/fleet-health-summary";
+import { ServiceActivationTrend } from "@/components/dashboard/service-activation-trend";
 import { StatCard, type StatBadge } from "@/components/dashboard/stat-card";
 import {
   IconAlert,
@@ -13,357 +15,177 @@ import {
   IconDevice,
   IconLayers,
   IconSearch,
-  IconUsers,
 } from "@/components/dashboard/dashboard-icons";
-import { FleetHealthSummary } from "@/components/dashboard/fleet-health-summary";
 import { getDashboardStats } from "@/lib/admin/dashboard-stats";
-import { reviewReasonLabel } from "@/lib/admin/fleet-health";
+import { formatReportMoney } from "@/lib/domain/billing-reports";
 import { formatMegabytes } from "@/lib/format/mbytes";
 
-function toneRowClass(tone: "urgent" | "warning" | "info") {
+type AttentionTone = "urgent" | "warning" | "info";
+
+function attentionToneClass(tone: AttentionTone) {
   switch (tone) {
     case "urgent":
-      return "border-l-4 border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20";
+      return "border-l-4 border-l-rose-500 bg-rose-50/45 dark:bg-rose-950/20";
     case "warning":
-      return "border-l-4 border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20";
+      return "border-l-4 border-l-amber-500 bg-amber-50/45 dark:bg-amber-950/20";
     default:
-      return "border-l-4 border-l-sky-500 bg-sky-50/40 dark:bg-sky-950/20";
+      return "border-l-4 border-l-sky-500 bg-sky-50/45 dark:bg-sky-950/20";
   }
 }
 
 export default async function AdminPage() {
   const s = await getDashboardStats();
 
-  const assignedBadges: { label: string; variant: "neutral" | "amber" | "rose" }[] = [
-    { label: `In stock · ${s.inStockDeviceCount}`, variant: "neutral" },
-  ];
-  if (s.suspendedDeviceCount > 0) {
-    assignedBadges.push({ label: `Suspended · ${s.suspendedDeviceCount}`, variant: "amber" });
-  }
-
-  const simDataBadges: StatBadge[] = [];
-  if (s.simCardCount > 0) {
-    simDataBadges.push({ label: `${s.simCardCount.toLocaleString()} SIMs`, variant: "emerald" });
-  }
-  if (s.simTotalSumMb > 0) {
-    simDataBadges.push({ label: `Allowance · ${formatMegabytes(s.simTotalSumMb)}`, variant: "sky" });
-  }
-
   const fleetRows: FleetSnapshotRow[] = FLEET_SEGMENT_ORDER.map((key) => ({
     key,
     count: s.fleetSegments[key],
-  })).filter((r) => r.count > 0);
+  })).filter((row) => row.count > 0);
+  const totalDevices = FLEET_SEGMENT_ORDER.reduce((sum, key) => sum + s.fleetSegments[key], 0);
 
-  const totalDevices = FLEET_SEGMENT_ORDER.reduce((sum, k) => sum + s.fleetSegments[k], 0);
-  const upcomingBillingCount = s.upcomingBillItems.length;
-  const upcomingBillingHref = "/admin/customers";
-  const paymentIssueCount = s.paymentIssueCount;
-  const paymentIssueBadges: StatBadge[] = [];
-  if (s.pastDueCount > 0) {
-    paymentIssueBadges.push({
-      label: `Past due · ${s.pastDueCount}`,
-      variant: "rose",
+  const simBadges: StatBadge[] = [];
+  if (s.simsOverDataLimitCount > 0) {
+    simBadges.push({ label: `${s.simsOverDataLimitCount} over limit`, variant: "rose" });
+  }
+  if (s.simCardCount > 0) {
+    simBadges.push({ label: `${s.simCardCount} tracked`, variant: "neutral" });
+  }
+
+  const mrrUnavailable = s.canonicalMrrUnavailableCount > 0 && s.monthlyRecurringRevenueXcd === 0;
+  const mrrBadges: StatBadge[] = [];
+  if (s.canonicalMrrUnavailableCount > 0) {
+    mrrBadges.push({ label: `${s.canonicalMrrUnavailableCount} needs rate review`, variant: "amber" });
+  }
+  if (s.nonXcdRecurringSourceCount > 0) {
+    mrrBadges.push({ label: `${s.nonXcdRecurringSourceCount} non-XCD excluded`, variant: "neutral" });
+  }
+
+  const balanceBadges: StatBadge[] = [];
+  if (s.overdueInvoiceCount > 0) {
+    balanceBadges.push({ label: `${s.overdueInvoiceCount} overdue`, variant: "rose" });
+  }
+  if (s.nonXcdOutstandingInvoiceCount > 0) {
+    balanceBadges.push({ label: `${s.nonXcdOutstandingInvoiceCount} non-XCD excluded`, variant: "neutral" });
+  }
+
+  const operationalAttention: { title: string; detail: string; href: string; tone: AttentionTone }[] = [];
+  if (s.overdueInvoiceCount > 0) {
+    operationalAttention.push({
+      title: `${s.overdueInvoiceCount} overdue invoice${s.overdueInvoiceCount === 1 ? "" : "s"}`,
+      detail: `${formatReportMoney(s.outstandingBalanceXcd)} open XCD balance across ${s.outstandingInvoiceCount} invoice${s.outstandingInvoiceCount === 1 ? "" : "s"}`,
+      href: "/admin/tl-invoices",
+      tone: "urgent",
     });
   }
-  if (s.failedPaymentCount > 0) {
-    paymentIssueBadges.push({
-      label: `Failed · ${s.failedPaymentCount}`,
-      variant: "amber",
+  if (s.simsHighUsageCount > 0) {
+    operationalAttention.push({
+      title: `${s.simsHighUsageCount} SIM${s.simsHighUsageCount === 1 ? "" : "s"} at 90% data use`,
+      detail: `${s.simsNearDataLimitCount} SIM${s.simsNearDataLimitCount === 1 ? "" : "s"} are approaching their allowance`,
+      href: "/admin/sims",
+      tone: s.simsOverDataLimitCount > 0 ? "urgent" : "warning",
+    });
+  }
+  if (s.devicesInventoryLow || s.simsInventoryLow) {
+    operationalAttention.push({
+      title: "Inventory needs replenishment",
+      detail: `${s.inStockDeviceCount} in-stock device${s.inStockDeviceCount === 1 ? "" : "s"} · ${s.availableSimCount} unassigned SIM${s.availableSimCount === 1 ? "" : "s"} (low-stock threshold: ${s.lowInventoryThreshold})`,
+      href: "/admin/devices",
+      tone: "warning",
+    });
+  }
+  if (s.paymentIssueCount > 0 || s.canonicalMrrUnavailableCount > 0) {
+    operationalAttention.push({
+      title: "Billing exceptions need review",
+      detail: [
+        s.paymentIssueCount > 0 ? `${s.paymentIssueCount} payment or past-due signal${s.paymentIssueCount === 1 ? "" : "s"}` : null,
+        s.canonicalMrrUnavailableCount > 0 ? `${s.canonicalMrrUnavailableCount} canonical rate configuration${s.canonicalMrrUnavailableCount === 1 ? "" : "s"}` : null,
+      ].filter(Boolean).join(" · "),
+      href: "/admin/billing-health",
+      tone: "warning",
     });
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Breadcrumb + title */}
-      <div>
-        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          <span className="text-zinc-400 dark:text-zinc-500">Admin</span>
-          <span className="mx-2 text-zinc-300 dark:text-zinc-600">/</span>
-          <span className="text-zinc-700 dark:text-zinc-300">Dashboard</span>
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Operations overview
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Customers, assigned hardware, and billing signals in one place. Tiles link through to detail where routes exist.
-        </p>
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href="/admin/customers"
-          className="flex w-full max-w-md items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-500 shadow-sm transition hover:border-zinc-300 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600 dark:hover:text-zinc-300 sm:w-auto"
-        >
-          <IconSearch className="shrink-0 opacity-60" />
-          <span>Search or browse customers…</span>
-        </Link>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          {s.pendingRegistrationCount > 0 ? (
-            <Link
-              href="/admin/registration-requests"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 font-medium text-amber-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:border-amber-700 dark:hover:bg-amber-950/60"
-            >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
-              {s.pendingRegistrationCount} registration
-              {s.pendingRegistrationCount === 1 ? "" : "s"} to review
-            </Link>
-          ) : null}
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-2.5 py-1 font-medium text-emerald-900 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/35 dark:text-emerald-200">
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40 dark:bg-emerald-500" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
-            </span>
-            Live data
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200/80 bg-sky-50/90 px-2.5 py-1 text-sky-950 shadow-sm dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-100">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500 dark:bg-sky-400" aria-hidden />
-            <span>
-              Device registry live · SIMs on{" "}
-              <Link href="/admin/sims" className="font-medium text-sky-800 underline-offset-2 hover:underline dark:text-sky-300">
-                SIM cards
-              </Link>
-            </span>
-          </span>
-        </div>
-      </div>
-
-      {/* KPI strip */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard
-          label="Customers"
-          value={s.customerCount}
-          href="/admin/customers"
-          accent="emerald"
-          icon={<IconUsers className="h-5 w-5" />}
-          hint="Accounts in TL Portal"
-        />
-        <StatCard
-          label="Assigned devices"
-          value={s.assignedDeviceCount}
-          href="/admin/devices"
-          accent="sky"
-          icon={<IconDevice className="h-5 w-5" />}
-          badges={assignedBadges}
-          hint="In the field vs warehouse (badges)"
-        />
-        <StatCard
-          label="SIM data used"
-          value={formatMegabytes(s.simUsedSumMb)}
-          href="/admin/sims"
-          accent="violet"
-          icon={<IconDataUsage className="h-5 w-5" />}
-          badges={simDataBadges.length > 0 ? simDataBadges : undefined}
-          hint={
-            s.simCardCount === 0
-              ? "No SIM records yet; totals come from synced usage fields"
-              : "Summed usedDataMB across SIMs (where sync populated values)"
-          }
-        />
-        <StatCard
-          label="Active services"
-          value={s.activeServiceCount}
-          href="/admin/customers"
-          accent="cyan"
-          icon={<IconLayers className="h-5 w-5" />}
-          hint="Open assignments (not ended / cancelled)"
-        />
-        <StatCard
-          label="Upcoming billing"
-          value={upcomingBillingCount}
-          href={upcomingBillingHref}
-          accent={upcomingBillingCount > 0 ? "amber" : "zinc"}
-          icon={<IconAlert className="h-5 w-5" />}
-          hint="Services with next due dates to review"
-        />
-        <StatCard
-          label="Payment issues"
-          value={paymentIssueCount}
-          href="/admin/billing-health"
-          accent={paymentIssueCount > 0 ? "rose" : "zinc"}
-          icon={<IconAlert className="h-5 w-5" />}
-          badges={paymentIssueBadges.length > 0 ? paymentIssueBadges : undefined}
-          hint={
-            paymentIssueCount > 0
-              ? "Past due billing and recent card declines"
-              : "No past due or failed payments"
-          }
-        />
-      </section>
-
-      <section className="flex flex-col gap-6">
-        <FleetHealthSummary
-          counts={s.fleetHealth.counts}
-          title="Fleet attention"
-          subtitle="Open service assignments across all customers (TL ops signals, not live GPS telemetry)"
-          generatedAt={new Date()}
-        />
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Devices needing review</h2>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Suspended units, missing SIM/GPS link, or Stripe payment issues
+    <div className="flex flex-col gap-6 lg:gap-8">
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">Track Lucia · business performance</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Operations overview</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+              A live operational view of deployed services, recurring revenue, receivables, SIM consumption, and ready-to-install equipment.
             </p>
-            <ul className="mt-4 space-y-3">
-              {s.fleetHealth.reviewRows.length === 0 ? (
-                <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
-                  No assignments flagged for review.
-                </li>
-              ) : (
-                s.fleetHealth.reviewRows.map((row) => (
-                  <li
-                    key={row.assignmentId}
-                    className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass("warning")}`}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {row.deviceLabel} — {row.customerName}
-                      </p>
-                      <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
-                        IMEI {row.imei} · {row.reasons.map(reviewReasonLabel).join(", ")}
-                      </p>
-                    </div>
-                    <Link
-                      href={row.href}
-                      className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                    >
-                      Open customer
-                    </Link>
-                  </li>
-                ))
-              )}
-            </ul>
           </div>
-
-          <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
-                  <IconAlert className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Overdue services, declined payments, Stripe issues, and Invoiless gaps
-                  </p>
-                </div>
-              </div>
-              {s.attentionCount > 0 ? (
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
-                    {s.attentionCount} open
-                  </span>
-                  <Link
-                    href="/admin/customers"
-                    className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-                  >
-                    Customers →
-                  </Link>
-                </span>
-              ) : (
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
-                  All clear
-                </span>
-              )}
-            </div>
-
-            <ul className="mt-4 space-y-3">
-              {s.attentionItems.length === 0 ? (
-                <li className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950/30 dark:text-zinc-400">
-                  No overdue services or Invoiless gaps surfaced. Data will populate as you add assignments and sync
-                  billing.
-                </li>
-              ) : (
-                s.attentionItems.map((item) => (
-                  <li
-                    key={item.id}
-                    className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
-                      <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p>
-                    </div>
-                    <Link
-                      href={item.href}
-                      className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                    >
-                      Open
-                    </Link>
-                  </li>
-                ))
-              )}
-            </ul>
-
-            {s.upcomingBillItems.length > 0 ? (
-              <>
-                <div className="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-800">
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Upcoming bill dates</h3>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    Active services with a next due date (soonest first). Amounts live in Invoiless when linked.
-                  </p>
-                </div>
-                <ul className="mt-4 space-y-3">
-                  {s.upcomingBillItems.map((item) => (
-                    <li
-                      key={item.id}
-                      className={`flex flex-col gap-3 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800/80 ${toneRowClass(item.tone)}`}
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
-                        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p>
-                      </div>
-                      <Link
-                        href={item.href}
-                        className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                      >
-                        Open
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <span className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900 dark:border-emerald-900/70 dark:bg-emerald-950/35 dark:text-emerald-200">
+              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>
+              Live read-only reporting
+            </span>
+            <Link href="/admin/customers" className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800">
+              <IconSearch className="h-4 w-4" />
+              Browse customers
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Device inventory by fleet segment ({totalDevices.toLocaleString()} total)
-        </p>
-        <FleetSnapshot rows={fleetRows} totalDevices={totalDevices} />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Key performance indicators">
+        <StatCard label="Active GPS services" value={s.activeServiceCount} href="/admin/customers" accent="emerald" icon={<IconLayers className="h-5 w-5" />} hint="Deployed, non-suspended service assignments for active customers" />
+        <StatCard label="Monthly recurring revenue" value={mrrUnavailable ? "—" : formatReportMoney(s.monthlyRecurringRevenueXcd)} href="/admin/billing-health" accent="sky" icon={<IconLayers className="h-5 w-5" />} badges={mrrBadges.length ? mrrBadges : undefined} hint={mrrUnavailable ? "No complete XCD recurring-rate source is available" : "Normalized across legacy, canonical, and standalone recurring schedules"} />
+        <StatCard label="Outstanding invoice balances" value={formatReportMoney(s.outstandingBalanceXcd)} href="/admin/tl-invoices" accent={s.overdueInvoiceCount > 0 ? "rose" : "violet"} icon={<IconAlert className="h-5 w-5" />} badges={balanceBadges.length ? balanceBadges : undefined} hint={`${s.outstandingInvoiceCount} open XCD invoice${s.outstandingInvoiceCount === 1 ? "" : "s"}`} />
+        <StatCard label="SIMs near data limit" value={s.simsNearDataLimitCount} href="/admin/sims" accent={s.simsHighUsageCount > 0 ? "amber" : "cyan"} icon={<IconDataUsage className="h-5 w-5" />} badges={simBadges.length ? simBadges : undefined} hint="Uses synced allowance and usage; approaching starts at 80%" />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-3">
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 xl:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Service activation trend</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">New service-assignment records created each month. This is an operational trend, not an estimated revenue history.</p>
+            </div>
+            <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Last 6 months</span>
+          </div>
+          <div className="mt-5"><ServiceActivationTrend points={s.serviceTrend} /></div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Available equipment</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Ready inventory for the next installation.</p>
+            </div>
+            <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.devicesInventoryLow || s.simsInventoryLow ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"}`}><IconDevice className="h-5 w-5" /></span>
+          </div>
+          <dl className="mt-6 grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-950/40"><dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Devices</dt><dd className="mt-2 text-3xl font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{s.inStockDeviceCount}</dd><dd className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">in stock</dd></div>
+            <div className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-950/40"><dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">SIM cards</dt><dd className="mt-2 text-3xl font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{s.availableSimCount}</dd><dd className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">unassigned</dd></div>
+          </dl>
+          <div className="mt-5 flex flex-wrap gap-3 text-sm font-medium"><Link href="/admin/devices" className="text-emerald-700 hover:underline dark:text-emerald-400">Manage devices →</Link><Link href="/admin/sims" className="text-emerald-700 hover:underline dark:text-emerald-400">Manage SIMs →</Link></div>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recent activity</h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Latest customer record updates</p>
-        <ul className="mt-4 space-y-3">
-          {s.recentItems.length === 0 ? (
-            <li className="text-sm text-zinc-600 dark:text-zinc-400">No customers yet.</li>
-          ) : (
-            s.recentItems.map((r) => (
-              <li key={r.id}>
-                <Link href={r.href} className="group block rounded-lg p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <p className="text-sm font-medium text-zinc-900 group-hover:text-emerald-700 dark:text-zinc-50 dark:group-hover:text-emerald-400">
-                    {r.label}
-                  </p>
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    {r.sub} · {formatDistanceToNow(r.at, { addSuffix: true })}
-                  </p>
-                </Link>
-              </li>
-            ))
-          )}
-        </ul>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Requires attention</h2><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Prioritized operational signals with direct links to the current admin workflows.</p></div>
+          <Link href="/admin/billing-health" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Open billing health →</Link>
+        </div>
+        {operationalAttention.length === 0 && s.attentionItems.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-7 text-center text-sm text-emerald-950 dark:border-emerald-900/70 dark:bg-emerald-950/25 dark:text-emerald-100">No overdue invoices, high SIM usage, low inventory, or billing exceptions are currently surfaced.</div>
+        ) : (
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {operationalAttention.map((item) => <Link key={item.title} href={item.href} className={`rounded-xl border border-zinc-100 p-4 transition hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700 ${attentionToneClass(item.tone)}`}><p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{item.title}</p><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{item.detail}</p><span className="mt-3 inline-block text-xs font-medium text-emerald-700 dark:text-emerald-400">Review →</span></Link>)}
+            {s.attentionItems.slice(0, 4).map((item) => <Link key={item.id} href={item.href} className={`rounded-xl border border-zinc-100 p-4 transition hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700 ${attentionToneClass(item.tone)}`}><p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{item.title}</p><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{item.meta}</p><span className="mt-3 inline-block text-xs font-medium text-emerald-700 dark:text-emerald-400">Open →</span></Link>)}
+          </div>
+        )}
       </section>
 
-      <p className="text-sm text-zinc-500">
-        <Link href="/" className="text-emerald-700 hover:underline dark:text-emerald-400">
-          ← Public home
-        </Link>
-      </p>
+      <FleetHealthSummary counts={s.fleetHealth.counts} title="Fleet health" subtitle="Open service assignments across active customer accounts (operational signals, not live GPS telemetry)" generatedAt={new Date()} />
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Fleet snapshot</h2><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Device inventory by fleet segment ({totalDevices.toLocaleString()} total).</p><FleetSnapshot rows={fleetRows} totalDevices={totalDevices} /></div>
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Recent customer activity</h2><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Latest customer record updates.</p><ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">{s.recentItems.length === 0 ? <li className="py-6 text-sm text-zinc-500 dark:text-zinc-400">No customer activity yet.</li> : s.recentItems.map((item) => <li key={item.id}><Link href={item.href} className="block py-3 transition hover:text-emerald-700 dark:hover:text-emerald-400"><p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{item.label}</p><p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{item.sub} · {formatDistanceToNow(item.at, { addSuffix: true })}</p></Link></li>)}</ul></div>
+      </section>
+
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">SIM usage is based on the last synced 1NCE allowance data: {formatMegabytes(s.simUsedSumMb)} used of {formatMegabytes(s.simTotalSumMb)} reported. <Link href="/" className="text-emerald-700 hover:underline dark:text-emerald-400">Public home →</Link></p>
     </div>
   );
 }
