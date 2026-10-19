@@ -200,6 +200,15 @@ enum InvoiceKind {
   invoiless_import
 }
 
+/// Owner classification for a standalone native invoice during canonical migration.
+/// `unreviewed` invoices are preserved as financial history but never become a
+/// subscription migration source without a deliberate owner decision.
+enum InvoiceMigrationClassification {
+  unreviewed
+  non_subscription
+  recurring_evidence
+}
+
 /// How a recorded payment was received against a native invoice.
 enum PaymentMethod {
   stripe
@@ -463,6 +472,7 @@ model User {
   canonicalSubscriptionActivationsPerformed CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationPerformedBy")
   canonicalMigrationCampaignsCreated  CanonicalMigrationCampaign[] @relation("CanonicalMigrationCampaignCreatedBy")
   canonicalMigrationCampaignsApproved CanonicalMigrationCampaign[] @relation("CanonicalMigrationCampaignApprovedBy")
+  invoiceMigrationClassifications     InvoiceMigrationClassificationAudit[]
 }
 
 // --- Core domain ---
@@ -1638,6 +1648,10 @@ model Invoice {
   id     String        @id @default(uuid())
   status InvoiceStatus @default(draft)
   kind   InvoiceKind   @default(one_off)
+  /// A standalone invoice is excluded from canonical migration until the owner
+  /// explicitly classifies it as recurring subscription evidence.
+  migrationClassification InvoiceMigrationClassification @default(unreviewed)
+  migrationClassificationUpdatedAt DateTime?
 
   /// Customer-facing number `TL-INV-{n}`, allocated from the shared InvoiceSequence on finalize.
   number String? @unique
@@ -1691,6 +1705,7 @@ model Invoice {
   recurringSchedule   RecurringInvoiceSchedule? @relation("ScheduleGeneratedInvoices", fields: [recurringScheduleId], references: [id], onDelete: SetNull)
   /// Immutable source evidence for a pilot that begins from a one-off/manual invoice.
   manualPilotSourceActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotSourceInvoice")
+  migrationClassificationAudits InvoiceMigrationClassificationAudit[]
   /// UTC billing-period day used by recurring generation idempotency.
   recurringPeriodStart       DateTime?
   /// Stable schedule + billing-period key. Null on historical/non-recurring invoices.
@@ -1735,6 +1750,22 @@ model Invoice {
   @@index([updatedAt])
   @@index([recurringScheduleId])
   @@index([archivedAt])
+}
+
+/// Append-only audit trail for owner classification of a standalone invoice.
+/// This never changes the invoice, its payments, or its financial totals.
+model InvoiceMigrationClassificationAudit {
+  id String @id @default(uuid())
+  invoiceId String
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  classification InvoiceMigrationClassification
+  reason String @db.Text
+  classifiedById String
+  classifiedBy User @relation(fields: [classifiedById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId, createdAt])
+  @@index([classifiedById])
 }
 
 /// Staff-scheduled native invoice email (processed by daily cron).

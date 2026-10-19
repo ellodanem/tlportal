@@ -8,6 +8,7 @@ import {
   subscriptionMigrationAnalysisMarkdown,
   type LegacyAssignment,
   type LegacyBillingSnapshot,
+  type LegacyInvoice,
   type LegacyRecurringSchedule,
   type LegacySubscription,
 } from "../lib/domain/subscription-migration-analysis";
@@ -92,6 +93,33 @@ function schedule(overrides: Partial<LegacyRecurringSchedule> = {}): LegacyRecur
       unitPrice: "25.00",
       lineTotal: "25.00",
     }],
+    ...overrides,
+  };
+}
+
+function standaloneInvoice(overrides: Partial<LegacyInvoice> = {}): LegacyInvoice {
+  return {
+    id: "invoice-1",
+    customerId: "customer-1",
+    customerSubscriptionId: null,
+    recurringScheduleId: null,
+    billingInvoiceId: null,
+    status: "paid",
+    kind: "one_off",
+    migrationClassification: "unreviewed",
+    currency: "XCD",
+    subtotal: "25.00",
+    taxLabel: null,
+    taxRatePercent: null,
+    taxTotal: "0.00",
+    total: "25.00",
+    amountPaid: "25.00",
+    amountDue: "0.00",
+    issueDate: "2026-10-15T00:00:00.000Z",
+    archivedAt: null,
+    recurringGenerationKey: null,
+    invoilessInvoiceId: null,
+    lineItems: [{ id: "invoice-line-1", quantity: "1", unitPrice: "25.00", lineTotal: "25.00" }],
     ...overrides,
   };
 }
@@ -195,6 +223,50 @@ test("9: active services without any billing arrangement are exposed", () => {
   const review = analyzeSubscriptionMigration(input).customers[0];
   assert.equal(review.reviewStatus, "conflict");
   assert.ok(issueCodes(review).includes("services_without_billing_arrangement"));
+});
+
+test("9a: an unreviewed hardware or installation invoice never becomes a subscription source", () => {
+  const input = snapshot();
+  input.customers[0].billingMode = "manual_legacy";
+  input.assignments.push(assignment());
+  input.invoices.push(standaloneInvoice());
+  const review = analyzeSubscriptionMigration(input).customers[0];
+  assert.equal(review.proposals.length, 0);
+  assert.ok(issueCodes(review).includes("services_without_billing_arrangement"));
+});
+
+test("9b: only an owner-classified recurring-evidence invoice enters manual migration review", () => {
+  const input = snapshot();
+  input.customers[0].billingMode = "manual_legacy";
+  input.assignments.push(assignment());
+  input.invoices.push(standaloneInvoice({ migrationClassification: "recurring_evidence" }));
+  const proposal = analyzeSubscriptionMigration(input).customers[0].proposals[0];
+  assert.equal(proposal.sourceKind, "manual_invoice");
+  assert.equal(proposal.sourceId, "invoice-1");
+});
+
+test("9b2: a one-off card invoice never creates a second source beside an active Stripe subscription", () => {
+  const input = snapshot();
+  input.subscriptions.push(subscription());
+  input.assignments.push(assignment());
+  input.invoices.push(standaloneInvoice({ migrationClassification: "recurring_evidence" }));
+  const proposals = analyzeSubscriptionMigration(input).customers[0].proposals;
+  assert.deepEqual(proposals.map((proposal) => proposal.sourceKind), ["stripe_subscription"]);
+});
+
+test("9c: classified non-subscription AR remains visible but does not block subscription migration", () => {
+  const input = snapshot();
+  input.customers[0].billingMode = "manual_legacy";
+  input.invoices.push(standaloneInvoice({
+    status: "open",
+    amountPaid: "0.00",
+    amountDue: "25.00",
+    migrationClassification: "non_subscription",
+  }));
+  const review = analyzeSubscriptionMigration(input).customers[0];
+  assert.equal(review.outstandingNativeBalance, "25.00");
+  assert.equal(review.subscriptionOutstandingNativeBalance, "0.00");
+  assert.equal(review.nonSubscriptionOutstandingNativeBalance, "25.00");
 });
 
 test("10: canceled assignment with no end date remains historical", () => {

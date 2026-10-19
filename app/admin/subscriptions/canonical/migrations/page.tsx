@@ -37,7 +37,7 @@ export default async function CanonicalMigrationCampaignPage({ searchParams }: P
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Customer migration campaign</h1>
           <p className="mt-1 max-w-4xl text-sm text-zinc-600 dark:text-zinc-400">Review each legacy arrangement against its services, recurring terms, paid-through evidence, balances, and provider state. Approval creates protected canonical shadows only; legacy billing remains authoritative and no invoice, payment, Stripe change, or notification is created.</p>
         </div>
-        <Link href="/admin/subscriptions" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold dark:border-zinc-700">Legacy operations</Link>
+        <div className="flex flex-wrap gap-2"><Link href="/admin/subscriptions/canonical/migrations/invoices" className="rounded-lg border border-amber-300 px-4 py-2.5 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:text-amber-200">Classify one-off invoices</Link><Link href="/admin/subscriptions" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold dark:border-zinc-700">Legacy operations</Link></div>
       </div>
 
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">{error}</p> : null}

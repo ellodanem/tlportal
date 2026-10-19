@@ -4,6 +4,7 @@ import { after, test } from "node:test";
 
 import { prisma } from "../../lib/db";
 import {
+  classifyStandaloneInvoiceForMigration,
   createOwnerApprovedIndividualMigrationCampaign,
   executeOwnerApprovedMigrationCampaign,
   getCanonicalMigrationCampaignDetail,
@@ -91,6 +92,39 @@ test("campaign review accepts an encoded proposal ID from the individual-review 
   const review = await getCanonicalMigrationProposalReview(encodeURIComponent(proposalId));
   assert.ok(review, "an encoded dynamic route proposal ID should resolve to the source arrangement");
   assert.equal(review.proposal.proposalId, proposalId);
+});
+
+test("one-off invoice classification is audited without changing financial history", async () => {
+  const input = await fixture("campaign-one-off-classification");
+  const invoice = await prisma.invoice.create({
+    data: {
+      customerId: input.customer.id,
+      status: "open",
+      currency: "XCD",
+      subtotal: "125.00",
+      taxTotal: "0.00",
+      total: "125.00",
+      amountPaid: "0.00",
+      amountDue: "125.00",
+      issueDate: new Date("2026-10-01T00:00:00.000Z"),
+      lineItems: { create: { description: "Hardware installation", quantity: "1", unitPrice: "125.00", lineTotal: "125.00" } },
+    },
+  });
+  await classifyStandaloneInvoiceForMigration({
+    invoiceId: invoice.id,
+    classification: "non_subscription",
+    reason: "Synthetic hardware installation charge; it is not recurring service evidence.",
+    ownerUserId: input.owner.id,
+  });
+  const stored = await prisma.invoice.findUniqueOrThrow({
+    where: { id: invoice.id },
+    include: { migrationClassificationAudits: true },
+  });
+  assert.equal(stored.migrationClassification, "non_subscription");
+  assert.equal(stored.total.toFixed(2), "125.00");
+  assert.equal(stored.amountDue.toFixed(2), "125.00");
+  assert.equal(stored.migrationClassificationAudits.length, 1);
+  assert.equal(stored.migrationClassificationAudits[0]!.classification, "non_subscription");
 });
 
 test("campaign: owner-reviewed manual migration creates one shadow and preserves legacy authority", async () => {

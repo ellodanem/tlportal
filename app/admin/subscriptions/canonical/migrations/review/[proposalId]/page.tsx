@@ -53,6 +53,8 @@ export default async function IndividualMigrationReviewPage({ params, searchPara
         <div className="rounded-xl border p-4"><p className="text-xs text-zinc-500">Outstanding balance</p><p className="mt-1 font-semibold tabular-nums">{formatExpenseAmount(Number(candidate.outstandingBalance), candidate.currency)}</p></div>
       </section>
 
+      {candidate.nonSubscriptionOutstandingBalance !== "0.00" ? <section className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"><p className="font-semibold">Separate non-subscription accounts receivable</p><p className="mt-1">{formatExpenseAmount(Number(candidate.nonSubscriptionOutstandingBalance), candidate.currency)} is classified as hardware, installation, or other one-off AR. It remains visible and collectible, but does not set this subscription&apos;s price, coverage, renewal, or migration eligibility.</p></section> : null}
+
       <form action={approveIndividualMigrationAction} className="space-y-6 rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <input type="hidden" name="proposalId" value={proposal.proposalId} />
         <input type="hidden" name="sourceCoverageRequired" value={sourceCoverageRequired ? "yes" : "no"} />

@@ -98,6 +98,7 @@ export type LegacyInvoice = {
   billingInvoiceId: string | null;
   status: string;
   kind: string;
+  migrationClassification?: "unreviewed" | "non_subscription" | "recurring_evidence";
   currency: string;
   subtotal?: string;
   taxLabel?: string | null;
@@ -148,7 +149,8 @@ export type LegacyPayment = {
 };
 
 export type LegacyBillingSnapshot = {
-  schemaVersion: "phase-2a-source-v1";
+  /** v1 snapshots remain readable; live analysis now emits v2 with invoice classification. */
+  schemaVersion: "phase-2a-source-v1" | "phase-2a-source-v2";
   analysisDate: string;
   customers: LegacyCustomer[];
   subscriptions: LegacySubscription[];
@@ -216,6 +218,8 @@ export type CustomerMigrationReview = {
   unmappedAssignmentIds: string[];
   historicalAssignmentIds: string[];
   outstandingNativeBalance: string;
+  subscriptionOutstandingNativeBalance: string;
+  nonSubscriptionOutstandingNativeBalance: string;
   nativeInvoiceIds: string[];
   billingInvoiceIds: string[];
   paymentIds: string[];
@@ -1022,14 +1026,20 @@ export function analyzeSubscriptionMigration(
       || entry.stripeSubscriptionId != null
       || customer.billingMode === "stripe_subscription",
     );
-    const directManualInvoices = customerSchedules.length === 0
+    // A manually-created invoice is not itself evidence of a recurring
+    // agreement. Hardware/install invoices are often indistinguishable from
+    // historical subscription invoices by document fields alone, so only an
+    // explicit owner classification may opt a standalone invoice into review.
+    const hasCurrentSubscription = customerSubscriptions.some((entry) => entry.status !== "canceled");
+    const directManualInvoices = customerSchedules.length === 0 && !hasCurrentSubscription
       ? snapshot.invoices.filter((invoice) =>
         invoice.customerId === customer.id
         && invoice.customerSubscriptionId == null
         && invoice.recurringScheduleId == null
         && invoice.billingInvoiceId == null
         && invoice.archivedAt == null
-        && !["void", "written_off"].includes(invoice.status),
+        && !["void", "written_off"].includes(invoice.status)
+        && invoice.migrationClassification === "recurring_evidence",
       )
       : [];
     const seeds: ProposalSeed[] = [
@@ -1125,6 +1135,12 @@ export function analyzeSubscriptionMigration(
     const outstanding = sumMoney(nativeInvoices
       .filter((entry) => !entry.archivedAt && OPEN_INVOICE_STATUSES.has(entry.status))
       .map((entry) => entry.amountDue));
+    const subscriptionOutstanding = sumMoney(nativeInvoices
+      .filter((entry) => !entry.archivedAt && OPEN_INVOICE_STATUSES.has(entry.status) && entry.migrationClassification !== "non_subscription")
+      .map((entry) => entry.amountDue));
+    const nonSubscriptionOutstanding = sumMoney(nativeInvoices
+      .filter((entry) => !entry.archivedAt && OPEN_INVOICE_STATUSES.has(entry.status) && entry.migrationClassification === "non_subscription")
+      .map((entry) => entry.amountDue));
     const combinedIssues = [...customerIssues, ...proposals.flatMap((entry) => entry.issues)];
     customerReviews.push({
       customerId: customer.id,
@@ -1133,6 +1149,8 @@ export function analyzeSubscriptionMigration(
       unmappedAssignmentIds,
       historicalAssignmentIds: historicalAssignments.map((entry) => entry.id),
       outstandingNativeBalance: outstanding,
+      subscriptionOutstandingNativeBalance: subscriptionOutstanding,
+      nonSubscriptionOutstandingNativeBalance: nonSubscriptionOutstanding,
       nativeInvoiceIds: nativeInvoices.map((entry) => entry.id),
       billingInvoiceIds: billingInvoices.map((entry) => entry.id),
       paymentIds: payments.map((entry) => entry.id),

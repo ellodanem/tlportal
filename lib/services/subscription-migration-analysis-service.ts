@@ -126,6 +126,7 @@ export async function loadLegacyBillingSnapshot(
         billingInvoiceId: true,
         status: true,
         kind: true,
+        migrationClassification: true,
         currency: true,
         subtotal: true,
         taxLabel: true,
@@ -181,7 +182,7 @@ export async function loadLegacyBillingSnapshot(
   ]);
 
   return {
-    schemaVersion: "phase-2a-source-v1",
+    schemaVersion: "phase-2a-source-v2",
     analysisDate,
     customers: customers.map((entry) => ({
       id: entry.id,

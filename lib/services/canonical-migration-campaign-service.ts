@@ -1,6 +1,6 @@
 import "server-only";
 
-import { Prisma } from "@prisma/client";
+import { type InvoiceMigrationClassification, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import {
@@ -43,6 +43,7 @@ export type MigrationCampaignCandidate = {
   nextBillingDate: string | null;
   paidThroughDate: string | null;
   outstandingBalance: string;
+  nonSubscriptionOutstandingBalance: string;
   serviceCount: number;
   cycleAmount: string | null;
   normalizedMonthlyAmount: string | null;
@@ -78,6 +79,26 @@ export type MigrationCampaignDashboard = {
     approvedAt: Date;
     approvedBy: string;
     entryCounts: Record<string, number>;
+  }>;
+};
+
+export type StandaloneInvoiceMigrationReview = {
+  invoiceId: string;
+  customerId: string;
+  customerLabel: string;
+  invoiceNumber: string | null;
+  issueDate: Date;
+  currency: string;
+  total: string;
+  amountDue: string;
+  status: string;
+  classification: InvoiceMigrationClassification;
+  classificationUpdatedAt: Date | null;
+  recentClassifications: Array<{
+    classification: InvoiceMigrationClassification;
+    reason: string;
+    classifiedBy: string;
+    createdAt: Date;
   }>;
 };
 
@@ -126,6 +147,109 @@ function customerLabel(customer: { company: string | null; firstName: string | n
     || "Unnamed customer";
 }
 
+const standaloneInvoiceWhere: Prisma.InvoiceWhereInput = {
+  customerId: { not: null },
+  customerSubscriptionId: null,
+  recurringScheduleId: null,
+  billingInvoiceId: null,
+  archivedAt: null,
+  status: { notIn: ["void", "written_off"] },
+};
+
+/**
+ * A one-off invoice may document hardware, installation, a deposit, or a
+ * historical subscription period. It is deliberately kept out of migration
+ * planning until the billing owner classifies it.
+ */
+export async function listStandaloneInvoiceMigrationReviews(): Promise<StandaloneInvoiceMigrationReview[]> {
+  const invoices = await prisma.invoice.findMany({
+    where: standaloneInvoiceWhere,
+    select: {
+      id: true,
+      number: true,
+      issueDate: true,
+      currency: true,
+      total: true,
+      amountDue: true,
+      status: true,
+      migrationClassification: true,
+      migrationClassificationUpdatedAt: true,
+      customer: { select: { id: true, company: true, firstName: true, lastName: true } },
+      migrationClassificationAudits: {
+        take: 3,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: {
+          classification: true,
+          reason: true,
+          createdAt: true,
+          classifiedBy: { select: { name: true, email: true } },
+        },
+      },
+    },
+    orderBy: [{ issueDate: "desc" }, { id: "desc" }],
+  });
+  return invoices.flatMap((invoice) => invoice.customer ? [{
+    invoiceId: invoice.id,
+    customerId: invoice.customer.id,
+    customerLabel: customerLabel(invoice.customer),
+    invoiceNumber: invoice.number,
+    issueDate: invoice.issueDate,
+    currency: invoice.currency,
+    total: invoice.total.toFixed(2),
+    amountDue: invoice.amountDue.toFixed(2),
+    status: invoice.status,
+    classification: invoice.migrationClassification,
+    classificationUpdatedAt: invoice.migrationClassificationUpdatedAt,
+    recentClassifications: invoice.migrationClassificationAudits.map((audit) => ({
+      classification: audit.classification,
+      reason: audit.reason,
+      classifiedBy: audit.classifiedBy.name?.trim() || audit.classifiedBy.email,
+      createdAt: audit.createdAt,
+    })),
+  }] : []);
+}
+
+export async function classifyStandaloneInvoiceForMigration(input: {
+  invoiceId: string;
+  classification: Extract<InvoiceMigrationClassification, "non_subscription" | "recurring_evidence">;
+  reason: string;
+  ownerUserId: string;
+}) {
+  const reason = input.reason.trim();
+  if (reason.length < 12) {
+    campaignError("CLASSIFICATION_REASON_REQUIRED", "Provide a specific owner reason for this invoice classification.");
+  }
+  if (!["non_subscription", "recurring_evidence"].includes(input.classification)) {
+    campaignError("INVALID_INVOICE_CLASSIFICATION", "Choose either non-subscription history or recurring subscription evidence.");
+  }
+  return prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findFirst({
+      where: { id: input.invoiceId, ...standaloneInvoiceWhere },
+      select: { id: true },
+    });
+    if (!invoice) {
+      campaignError("INVOICE_NOT_CLASSIFIABLE", "This invoice is linked to a subscription, recurring schedule, provider mirror, or no longer available for standalone review.");
+    }
+    const updatedAt = new Date();
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        migrationClassification: input.classification,
+        migrationClassificationUpdatedAt: updatedAt,
+      },
+    });
+    await tx.invoiceMigrationClassificationAudit.create({
+      data: {
+        invoiceId: invoice.id,
+        classification: input.classification,
+        reason,
+        classifiedById: input.ownerUserId,
+      },
+    });
+    return { invoiceId: invoice.id, classification: input.classification, classifiedAt: updatedAt };
+  });
+}
+
 function providerReviewRequired(proposal: SubscriptionMigrationProposal): boolean {
   return proposal.collectionMethod === "stripe_autocharge";
 }
@@ -151,7 +275,7 @@ function candidateBlockers(
     blockers.push("Every active service needs an explicit agreed recurring price.");
   }
   if (!proposal.proposedCycleAmount) blockers.push("The recurring cycle amount is unresolved.");
-  if (customer.outstandingNativeBalance !== "0.00") {
+  if (customer.subscriptionOutstandingNativeBalance !== "0.00") {
     blockers.push("Outstanding native balance requires owner review; migration never rewrites or settles it.");
   }
   if (proposal.sourceKind === "manual_invoice") {
@@ -204,7 +328,8 @@ function candidateFor(
     paidThroughDate: proposal.collectionMethod === "stripe_autocharge"
       ? dateOnly(stripeSubscription?.currentPeriodEnd ?? null)
       : dateOnly(proposal.nextBillingDate),
-    outstandingBalance: customer.outstandingNativeBalance,
+    outstandingBalance: customer.subscriptionOutstandingNativeBalance,
+    nonSubscriptionOutstandingBalance: customer.nonSubscriptionOutstandingNativeBalance,
     serviceCount: proposal.proposedItems.length,
     cycleAmount: proposal.proposedCycleAmount,
     normalizedMonthlyAmount: proposal.normalizedMonthlyAmount,
@@ -546,7 +671,7 @@ export async function createOwnerApprovedIndividualMigrationCampaign(input: {
     select: { id: true },
   });
   if (existingCampaignEntry) campaignError("MIGRATION_ALREADY_APPROVED", "This source arrangement is already present in an approved migration campaign.");
-  if (found.customer.outstandingNativeBalance !== "0.00") {
+  if (found.customer.subscriptionOutstandingNativeBalance !== "0.00") {
     requiredConfirmed(input.confirmations.outstandingBalanceReviewed, "Outstanding balance review");
   }
   if (found.proposal.sourceKind === "manual_invoice") {

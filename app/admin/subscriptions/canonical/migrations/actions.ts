@@ -8,6 +8,7 @@ import { isSuperAdminEmail } from "@/lib/auth/super-admin";
 import { prisma } from "@/lib/db";
 import { canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
 import {
+  classifyStandaloneInvoiceForMigration,
   createOwnerApprovedIndividualMigrationCampaign,
   createOwnerApprovedMigrationCampaign,
   executeOwnerApprovedMigrationCampaign,
@@ -134,6 +135,31 @@ export async function approveIndividualMigrationAction(formData: FormData): Prom
     });
     revalidatePath("/admin/subscriptions/canonical/migrations");
     redirect(`/admin/subscriptions/canonical/migrations/${campaign.id}?approved=1`);
+  } catch (error) {
+    destinationError(returnPath, error);
+  }
+}
+
+export async function classifyStandaloneInvoiceAction(formData: FormData): Promise<void> {
+  const returnPath = "/admin/subscriptions/canonical/migrations/invoices";
+  try {
+    const owner = await requireMigrationOwner();
+    if (text(formData, "confirmNoBillingEffect") !== "yes") {
+      throw new Error("Confirm that classification does not create, change, or settle any invoice, payment, Stripe transaction, or billing authority.");
+    }
+    const classification = text(formData, "classification");
+    if (classification !== "non_subscription" && classification !== "recurring_evidence") {
+      throw new Error("Choose a valid invoice classification.");
+    }
+    await classifyStandaloneInvoiceForMigration({
+      invoiceId: text(formData, "invoiceId"),
+      classification,
+      reason: text(formData, "reason"),
+      ownerUserId: owner.id,
+    });
+    revalidatePath("/admin/subscriptions/canonical/migrations");
+    revalidatePath(returnPath);
+    redirect(`${returnPath}?classified=1`);
   } catch (error) {
     destinationError(returnPath, error);
   }
