@@ -157,6 +157,24 @@ const standaloneInvoiceWhere: Prisma.InvoiceWhereInput = {
 };
 
 /**
+ * The campaign must not infer recurring authority from a one-off document.
+ * A classified invoice also cannot compete with an active schedule or legacy/
+ * Stripe subscription for the same customer.
+ */
+function isCampaignProposal(snapshot: LegacyBillingSnapshot, proposal: SubscriptionMigrationProposal): boolean {
+  if (proposal.sourceKind !== "manual_invoice") return true;
+  const invoice = snapshot.invoices.find((entry) => entry.id === proposal.sourceId);
+  if (invoice?.migrationClassification !== "recurring_evidence") return false;
+  const hasActiveSchedule = snapshot.recurringSchedules.some((schedule) =>
+    schedule.customerId === proposal.customerId && schedule.status === "active",
+  );
+  const hasCurrentSubscription = snapshot.subscriptions.some((subscription) =>
+    subscription.customerId === proposal.customerId && subscription.status !== "canceled",
+  );
+  return !hasActiveSchedule && !hasCurrentSubscription;
+}
+
+/**
  * A one-off invoice may document hardware, installation, a deposit, or a
  * historical subscription period. It is deliberately kept out of migration
  * planning until the billing owner classifies it.
@@ -264,6 +282,9 @@ function candidateBlockers(
     return { eligibility: "migrated", blockers: ["A canonical shadow has already been created for this legacy arrangement."] };
   }
   const blockers: string[] = [];
+  if (!isCampaignProposal(snapshot, proposal)) {
+    blockers.push("Standalone invoices require explicit recurring-evidence classification and cannot compete with an active recurring arrangement.");
+  }
   if (existing) blockers.push(`Previous migration attempt is ${existing.status.replaceAll("_", " ")}; review it before retrying.`);
   if (proposal.reviewStatus !== "ready_for_review") {
     blockers.push("Commercial terms, service mapping, or payment coverage still require review.");
@@ -370,7 +391,9 @@ export async function getCanonicalMigrationCampaignDashboard(): Promise<Migratio
   ]);
   const customerNames = new Map(customers.map((customer) => [customer.id, customerLabel(customer)]));
   const ledgerBySource = new Map(ledgers.map((entry) => [`${entry.sourceKind}:${entry.sourceId}`, entry]));
-  const candidates = analysis.customers.flatMap((customer) => customer.proposals.map((proposal) => candidateFor(
+  const candidates = analysis.customers.flatMap((customer) => customer.proposals
+    .filter((proposal) => isCampaignProposal(snapshot, proposal))
+    .map((proposal) => candidateFor(
     snapshot,
     customer,
     proposal,
@@ -571,7 +594,7 @@ export async function createOwnerApprovedMigrationCampaign(input: {
 export async function getCanonicalMigrationProposalReview(proposalId: string) {
   const { snapshot, analysis } = await snapshotAndAnalysis();
   const found = findProposal(analysis, proposalId);
-  if (!found) return null;
+  if (!found || !isCampaignProposal(snapshot, found.proposal)) return null;
   const customer = await prisma.customer.findUnique({
     where: { id: found.customer.customerId },
     select: { id: true, company: true, firstName: true, lastName: true },
@@ -657,6 +680,9 @@ export async function createOwnerApprovedIndividualMigrationCampaign(input: {
   const { snapshot, analysis } = await snapshotAndAnalysis();
   const found = findProposal(analysis, input.proposalId);
   if (!found) campaignError("PROPOSAL_NOT_FOUND", "This legacy arrangement is no longer available for review.");
+  if (!isCampaignProposal(snapshot, found.proposal)) {
+    campaignError("INVOICE_NOT_APPROVED_AS_RECURRING_EVIDENCE", "This standalone invoice is not approved as recurring subscription evidence for campaign migration.");
+  }
   const existingLedger = await prisma.canonicalMigrationLedger.findUnique({
     where: { sourceKind_sourceId: { sourceKind: found.proposal.sourceKind, sourceId: found.proposal.sourceId } },
     select: { id: true, status: true },

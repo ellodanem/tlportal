@@ -140,28 +140,6 @@ function proposalFromSnapshot(snapshot: LegacyBillingSnapshot, proposalId: strin
     const proposal = customer.proposals.find((entry) => entry.proposalId === proposalId);
     if (proposal) return { analysis, customer, proposal };
   }
-  // The pre-existing, separately authorized manual-pilot workflow accepts one
-  // exact source invoice in its signed authorization. Keep that compatibility
-  // without restoring automatic campaign candidacy for every one-off invoice.
-  // This in-memory classification is scoped to the requested invoice; it does
-  // not write any financial or migration data.
-  if (proposalId.startsWith("manual-invoice:")) {
-    const sourceInvoiceId = proposalId.slice("manual-invoice:".length);
-    const invoice = snapshot.invoices.find((entry) => entry.id === sourceInvoiceId);
-    if (invoice) {
-      const manualPilotSnapshot: LegacyBillingSnapshot = {
-        ...snapshot,
-        invoices: snapshot.invoices.map((entry) => entry.id === sourceInvoiceId
-          ? { ...entry, migrationClassification: "recurring_evidence" }
-          : entry),
-      };
-      const manualPilotAnalysis = analyzeSubscriptionMigration(manualPilotSnapshot);
-      for (const customer of manualPilotAnalysis.customers) {
-        const proposal = customer.proposals.find((entry) => entry.proposalId === proposalId);
-        if (proposal) return { analysis: manualPilotAnalysis, customer, proposal };
-      }
-    }
-  }
   throw new CanonicalManualPilotReviewNotFoundError();
 }
 

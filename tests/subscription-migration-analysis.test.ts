@@ -225,36 +225,7 @@ test("9: active services without any billing arrangement are exposed", () => {
   assert.ok(issueCodes(review).includes("services_without_billing_arrangement"));
 });
 
-test("9a: an unreviewed hardware or installation invoice never becomes a subscription source", () => {
-  const input = snapshot();
-  input.customers[0].billingMode = "manual_legacy";
-  input.assignments.push(assignment());
-  input.invoices.push(standaloneInvoice());
-  const review = analyzeSubscriptionMigration(input).customers[0];
-  assert.equal(review.proposals.length, 0);
-  assert.ok(issueCodes(review).includes("services_without_billing_arrangement"));
-});
-
-test("9b: only an owner-classified recurring-evidence invoice enters manual migration review", () => {
-  const input = snapshot();
-  input.customers[0].billingMode = "manual_legacy";
-  input.assignments.push(assignment());
-  input.invoices.push(standaloneInvoice({ migrationClassification: "recurring_evidence" }));
-  const proposal = analyzeSubscriptionMigration(input).customers[0].proposals[0];
-  assert.equal(proposal.sourceKind, "manual_invoice");
-  assert.equal(proposal.sourceId, "invoice-1");
-});
-
-test("9b2: a one-off card invoice never creates a second source beside an active Stripe subscription", () => {
-  const input = snapshot();
-  input.subscriptions.push(subscription());
-  input.assignments.push(assignment());
-  input.invoices.push(standaloneInvoice({ migrationClassification: "recurring_evidence" }));
-  const proposals = analyzeSubscriptionMigration(input).customers[0].proposals;
-  assert.deepEqual(proposals.map((proposal) => proposal.sourceKind), ["stripe_subscription"]);
-});
-
-test("9c: classified non-subscription AR remains visible but does not block subscription migration", () => {
+test("9a: classified non-subscription AR remains visible but does not block subscription migration", () => {
   const input = snapshot();
   input.customers[0].billingMode = "manual_legacy";
   input.invoices.push(standaloneInvoice({

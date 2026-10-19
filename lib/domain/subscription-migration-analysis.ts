@@ -1026,20 +1026,14 @@ export function analyzeSubscriptionMigration(
       || entry.stripeSubscriptionId != null
       || customer.billingMode === "stripe_subscription",
     );
-    // A manually-created invoice is not itself evidence of a recurring
-    // agreement. Hardware/install invoices are often indistinguishable from
-    // historical subscription invoices by document fields alone, so only an
-    // explicit owner classification may opt a standalone invoice into review.
-    const hasCurrentSubscription = customerSubscriptions.some((entry) => entry.status !== "canceled");
-    const directManualInvoices = customerSchedules.length === 0 && !hasCurrentSubscription
+    const directManualInvoices = customerSchedules.length === 0
       ? snapshot.invoices.filter((invoice) =>
         invoice.customerId === customer.id
         && invoice.customerSubscriptionId == null
         && invoice.recurringScheduleId == null
         && invoice.billingInvoiceId == null
         && invoice.archivedAt == null
-        && !["void", "written_off"].includes(invoice.status)
-        && invoice.migrationClassification === "recurring_evidence",
+        && !["void", "written_off"].includes(invoice.status),
       )
       : [];
     const seeds: ProposalSeed[] = [

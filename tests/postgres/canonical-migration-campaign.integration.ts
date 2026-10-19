@@ -7,6 +7,7 @@ import {
   classifyStandaloneInvoiceForMigration,
   createOwnerApprovedIndividualMigrationCampaign,
   executeOwnerApprovedMigrationCampaign,
+  getCanonicalMigrationCampaignDashboard,
   getCanonicalMigrationCampaignDetail,
   getCanonicalMigrationProposalReview,
 } from "../../lib/services/canonical-migration-campaign-service";
@@ -96,6 +97,7 @@ test("campaign review accepts an encoded proposal ID from the individual-review 
 
 test("one-off invoice classification is audited without changing financial history", async () => {
   const input = await fixture("campaign-one-off-classification");
+  await prisma.recurringInvoiceSchedule.delete({ where: { id: input.schedule.id } });
   const invoice = await prisma.invoice.create({
     data: {
       customerId: input.customer.id,
@@ -125,6 +127,16 @@ test("one-off invoice classification is audited without changing financial histo
   assert.equal(stored.amountDue.toFixed(2), "125.00");
   assert.equal(stored.migrationClassificationAudits.length, 1);
   assert.equal(stored.migrationClassificationAudits[0]!.classification, "non_subscription");
+  const beforeRecurringEvidence = await getCanonicalMigrationCampaignDashboard();
+  assert.equal(beforeRecurringEvidence.candidates.some((candidate) => candidate.sourceId === invoice.id), false);
+  await classifyStandaloneInvoiceForMigration({
+    invoiceId: invoice.id,
+    classification: "recurring_evidence",
+    reason: "Synthetic owner confirms this exact invoice documents recurring tracking service.",
+    ownerUserId: input.owner.id,
+  });
+  const afterRecurringEvidence = await getCanonicalMigrationCampaignDashboard();
+  assert.equal(afterRecurringEvidence.candidates.some((candidate) => candidate.sourceId === invoice.id), true);
 });
 
 test("campaign: owner-reviewed manual migration creates one shadow and preserves legacy authority", async () => {
