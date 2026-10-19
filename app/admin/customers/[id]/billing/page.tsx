@@ -4,14 +4,10 @@ import { notFound } from "next/navigation";
 import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
 import { BillingNotificationHistory } from "@/components/admin/billing-notification-history";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
-import { CustomerBillingStatusStrip } from "@/components/admin/customer-billing-status-strip";
 import { PaymentRemindersSection } from "@/components/admin/payment-reminders-section";
 import { CustomerPaymentDeclineFollowUpCard } from "@/components/admin/customer-payment-decline-follow-up";
-import { CustomerRenewalOpsPanel } from "@/components/admin/customer-renewal-ops-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
-import { ManageSubscriptionTiles } from "@/components/admin/manage-subscription-tiles";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
-import { StripeSyncPanel } from "@/components/admin/stripe-sync-panel";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
 import { formatMoney } from "@/lib/domain/native-billing";
@@ -50,24 +46,13 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     invoilessConfigured,
     stripeConfigured,
     invoilessId,
-    stripeAccount,
-    planOptions,
-    defaultMonthlyRate,
-    savedMonthlyRate,
-    savedPlanTermMonths,
-    defaultVehicleCount,
-    catalogConfigured,
     billingSetup,
     stripeInvoices,
-    subscriptionSummary,
-    stripeSync,
-    renewalAssignments,
     paymentDeclineFollowUp,
     outstandingReminderCandidates,
   } = data;
 
   const title = customerDisplayName(customer);
-  const isManual = customer.billingMode === "manual_legacy";
   const stripeBanner = stripeBannerFromQuery(stripeQuery);
   const declineEmailPreview = paymentDeclineFollowUp
     ? buildPaymentDeclineEmailPreview({
@@ -80,15 +65,6 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
       })
     : null;
 
-  const renewalPanel = (
-    <CustomerRenewalOpsPanel
-      customerId={customer.id}
-      billingMode={customer.billingMode}
-      rows={renewalAssignments}
-      stripePlanTermMonths={savedPlanTermMonths}
-    />
-  );
-
   const billingPanel = (
     <CustomerBillingPanel
       customerId={customer.id}
@@ -99,28 +75,6 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
       billingSetup={billingSetup}
     />
   );
-
-  const manageTiles =
-    !isManual && stripeConfigured ? (
-      <ManageSubscriptionTiles
-        customerId={customer.id}
-        billingMode={customer.billingMode}
-        invoilessConfigured={invoilessConfigured}
-        stripeConfigured={stripeConfigured}
-        hasInvoilessId={Boolean(invoilessId)}
-        billingSetup={billingSetup}
-        planOptions={planOptions}
-        defaultMonthlyRateXcd={defaultMonthlyRate}
-        stripeMonthlyRateXcd={savedMonthlyRate}
-        savedPlanTermMonths={savedPlanTermMonths}
-        defaultVehicleCount={defaultVehicleCount}
-        catalogConfigured={catalogConfigured}
-        stripeFeePassthrough={customer.stripeFeePassthrough}
-        stripeCustomerId={stripeAccount?.externalCustomerId ?? null}
-        renewalRows={renewalAssignments}
-        stripePlanTermMonths={savedPlanTermMonths}
-      />
-    ) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -144,21 +98,12 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         stripeBanner={stripeBanner}
       />
 
-      <CustomerBillingStatusStrip
-        billingMode={customer.billingMode}
-        paymentReminders={customer.paymentReminders}
-        billingSetup={billingSetup}
-        subscription={subscriptionSummary}
-        stripeConfigured={stripeConfigured}
-        invoilessConfigured={invoilessConfigured}
-        stripeSync={stripeSync}
-      />
-
-      {stripeSync?.state === "differs" ? (
-        <StripeSyncPanel customerId={customer.id} sync={stripeSync} />
-      ) : null}
-
-      {manageTiles}
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><h2 className="font-semibold text-emerald-950 dark:text-emerald-100">Subscription operations</h2><p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-200">Service terms, renewals, pause controls, and collection operations are managed from subscriptions—not from this financial-history screen.</p></div>
+          <div className="flex flex-wrap gap-2"><Link href={`/admin/customers/${customer.id}/subscriptions`} className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-zinc-900 dark:text-emerald-200">View subscriptions</Link><Link href={`/admin/subscriptions/${customer.id}/renewals`} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Manage renewals</Link></div>
+        </div>
+      </section>
 
       <PaymentRemindersSection
         customerId={customer.id}
@@ -183,14 +128,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
 
       <BillingNotificationHistory customerId={customer.id} deliveries={notificationDeliveries} />
 
-      {isManual ? (
-        <>
-          <div id="renewal-ops" className="scroll-mt-24">
-            {renewalPanel}
-          </div>
-          {billingPanel}
-        </>
-      ) : null}
+      {billingPanel}
 
       {customer.billingMode === "stripe_subscription" || stripeInvoices.length > 0 ? (
         <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

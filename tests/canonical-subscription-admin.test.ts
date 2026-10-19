@@ -208,6 +208,17 @@ test("UI routes include detail, empty, loading, error and price-history states",
   assert.match(preflight, /btree_gist/);
 });
 
+test("customer billing keeps financial history separate from subscription renewal operations", async () => {
+  const [billing, renewals] = await Promise.all([
+    readFile("app/admin/customers/[id]/billing/page.tsx", "utf8"),
+    readFile("app/admin/subscriptions/[customerId]/renewals/page.tsx", "utf8"),
+  ]);
+  assert.doesNotMatch(billing, /CustomerRenewalOpsPanel/);
+  assert.match(billing, /Manage renewals/);
+  assert.match(renewals, /CustomerRenewalOpsPanel/);
+  assert.match(renewals, /Subscription operations/);
+});
+
 test("canonical actions retain server-side authorization and do not directly invoke billing providers", async () => {
   const actions = await readFile("app/admin/subscriptions/canonical/actions.ts", "utf8");
   assert.match(actions, /createDraftCanonicalSubscription/);
