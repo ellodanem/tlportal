@@ -14,6 +14,10 @@ import {
 } from "@/lib/domain/canonical-manual-pilot";
 import { migrationFingerprint } from "@/lib/domain/canonical-subscription-migration";
 import { resolveCanonicalBillingCycle } from "@/lib/domain/canonical-native-billing";
+import {
+  assertCanonicalSubscriptionActivationEnabled,
+  type CanonicalSubscriptionActivationEnvironment,
+} from "@/lib/domain/canonical-subscription-activation";
 
 export const ACTIVATE_MANUAL_PILOT_CONFIRMATION = "ACTIVATE_ONE_MANUAL_CANONICAL_PILOT" as const;
 
@@ -663,7 +667,7 @@ async function executeActivationTransaction(input: {
     const canonicalSchedule = await tx.recurringInvoiceSchedule.create({
       data: {
         status: "active",
-        name: `${legacySchedule?.name?.trim() || sourceInvoice?.billToName?.trim() || "Tracking services"} · canonical`,
+        name: `${legacySchedule?.name?.trim() || sourceInvoice?.billToName?.trim() || "Tracking services"} - canonical`,
         customerId: input.proposal.customerId,
         customerSubscriptionId: input.proposal.subscriptionId,
         billToName: legacySchedule?.billToName ?? sourceInvoice?.billToName ?? null,
@@ -783,6 +787,134 @@ export async function activateCanonicalManualPilot(input: {
     const code = error instanceof CanonicalManualPilotError
       ? error.code
       : "PILOT_TRANSACTION_FAILED";
+    await prisma.canonicalManualPilotActivation.updateMany({
+      where: { id: activation.id, status: { in: ["approved", "in_progress", "failed_rolled_back"] } },
+      data: {
+        status: "failed_rolled_back",
+        failedAt: new Date(),
+        failureCode: code,
+        failureMessage: message.slice(0, 10_000),
+      },
+    });
+    throw error;
+  }
+}
+
+export type OwnerApprovedManualMigrationActivationInput = {
+  subscriptionId: string;
+  campaignEntryId: string;
+  approvedByEmail: string;
+  approvedAt: Date;
+  approvalReason: string;
+  expectedProposalFingerprint: string;
+  expectedSourceStateFingerprint: string;
+  confirmations: {
+    customerAndServicesConfirmed: boolean;
+    commercialTermsConfirmed: boolean;
+    historicalBalancesConfirmed: boolean;
+    legacyBillingStopConfirmed: boolean;
+    canonicalBillingStartConfirmed: boolean;
+  };
+  environment?: CanonicalSubscriptionActivationEnvironment;
+};
+
+/**
+ * Complete an owner-approved manual migration from inside TL Portal.
+ *
+ * Authentication and owner authorization are enforced by the calling Server
+ * Action. This service binds that approval to the same immutable migration and
+ * source-state fingerprints used by the original pilot mechanism, then reuses
+ * the proven serializable cutover transaction. It never creates an invoice,
+ * payment, notification, or provider operation.
+ */
+export async function activateOwnerApprovedManualMigration(
+  input: OwnerApprovedManualMigrationActivationInput,
+): Promise<CanonicalManualPilotExecutionResult> {
+  const approvalReason = input.approvalReason.trim();
+  if (!input.campaignEntryId.trim() || !input.approvedByEmail.trim() || !approvalReason) {
+    pilotError("OWNER_APPROVAL_INCOMPLETE", "Owner identity, campaign approval, and a review note are required.");
+  }
+  if (!Object.values(input.confirmations).every(Boolean)) {
+    pilotError("OWNER_CONFIRMATIONS_INCOMPLETE", "Confirm the customer, terms, history, and billing-authority transfer.");
+  }
+
+  const review = await getCanonicalManualPilotReview(input.subscriptionId);
+  assertCanonicalSubscriptionActivationEnabled(input.environment, {
+    customerId: review.proposal.customerId,
+    subscriptionId: review.proposal.subscriptionId,
+  });
+  if (review.blockers.length) pilotError("PILOT_REVIEW_BLOCKED", review.blockers.join(" "));
+  const proposalFingerprint = canonicalManualPilotProposalFingerprint(review.proposal);
+  if (
+    proposalFingerprint !== input.expectedProposalFingerprint
+    || review.proposal.sourceStateFingerprint !== input.expectedSourceStateFingerprint
+  ) {
+    pilotError("PILOT_SOURCE_CHANGED", "The migration source changed after the confirmation screen was prepared.");
+  }
+
+  const [ledgerApproval, campaignEntry] = await Promise.all([
+    prisma.canonicalMigrationLedger.findUnique({
+      where: { id: review.proposal.migrationLedgerId },
+      select: { approvedBy: true, approvalReason: true, approvedAt: true },
+    }),
+    prisma.canonicalMigrationCampaignEntry.findUnique({
+      where: { id: input.campaignEntryId },
+      select: {
+        targetSubscriptionId: true,
+        campaign: { select: { approvedBy: { select: { email: true } } } },
+      },
+    }),
+  ]);
+  const normalizedOwner = input.approvedByEmail.trim().toLowerCase();
+  if (
+    !ledgerApproval
+    || !campaignEntry
+    || campaignEntry.targetSubscriptionId !== review.proposal.subscriptionId
+    || campaignEntry.campaign.approvedBy.email.trim().toLowerCase() !== normalizedOwner
+    || ledgerApproval.approvedBy.trim().toLowerCase() !== normalizedOwner
+  ) {
+    pilotError("OWNER_APPROVAL_MISMATCH", "The durable owner approval does not match this migration target.");
+  }
+
+  // The migration ledger is unique per source arrangement, so use its durable
+  // approval identity for retries and concurrent submissions. Identical owner
+  // requests therefore converge on one activation.
+  const issuedAt = ledgerApproval.approvedAt.toISOString();
+  const authorization: CanonicalManualPilotAuthorization = {
+    authorizationId: `owner-ledger:${review.proposal.migrationLedgerId}`,
+    operation: "activate_manual_pilot",
+    proposalFingerprint,
+    approvedByEmail: input.approvedByEmail,
+    customerId: review.proposal.customerId,
+    subscriptionId: review.proposal.subscriptionId,
+    migrationKey: review.proposal.migrationKey,
+    sourceKind: review.proposal.sourceKind,
+    legacyScheduleId: review.proposal.legacyScheduleId,
+    sourceInvoiceId: review.proposal.sourceInvoiceId,
+    sourceStateFingerprint: review.proposal.sourceStateFingerprint,
+    cutoverPeriodStart: review.proposal.cutoverPeriodStart,
+    billingIntervalMonths: review.proposal.billingIntervalMonths,
+    currency: review.proposal.currency,
+    recurringAmount: review.proposal.recurringAmount,
+    approvalReason: ledgerApproval.approvalReason,
+    customerIdentityConfirmed: input.confirmations.customerAndServicesConfirmed,
+    commercialTermsConfirmed: input.confirmations.commercialTermsConfirmed,
+    historicalBalancesConfirmed: input.confirmations.historicalBalancesConfirmed,
+    legacyScheduleStopConfirmed: input.confirmations.legacyBillingStopConfirmed,
+    canonicalScheduleStartConfirmed: input.confirmations.canonicalBillingStartConfirmed,
+    recoveryProcedureConfirmed: true,
+    issuedAt,
+    expiresAt: new Date(input.approvedAt.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+    // Session authorization replaces the old external HMAC. This value is not
+    // used as proof; the durable campaign IDs and fingerprints above are.
+    signature: "authenticated-owner-session",
+  };
+  const activation = await registerApproval({ proposal: review.proposal, authorization });
+  try {
+    return await executeWithRetry({ activationId: activation.id, proposal: review.proposal });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const code = error instanceof CanonicalManualPilotError ? error.code : "PILOT_TRANSACTION_FAILED";
     await prisma.canonicalManualPilotActivation.updateMany({
       where: { id: activation.id, status: { in: ["approved", "in_progress", "failed_rolled_back"] } },
       data: {

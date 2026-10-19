@@ -1,6 +1,7 @@
 import "server-only";
 
 import { type InvoiceMigrationClassification, Prisma } from "@prisma/client";
+import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
 import {
@@ -22,12 +23,43 @@ import {
   CanonicalMigrationExecutionError,
   executeCanonicalMigrationPlan,
 } from "@/lib/services/canonical-subscription-migration-service";
+import { canonicalManualPilotProposalFingerprint } from "@/lib/domain/canonical-manual-pilot";
+import {
+  activateOwnerApprovedManualMigration,
+  getCanonicalManualPilotReview,
+} from "@/lib/services/canonical-manual-pilot-service";
 import { loadLegacyBillingSnapshot } from "@/lib/services/subscription-migration-analysis-service";
+import { getStripeClient, isStripeBillingEnabled } from "@/lib/stripe/config";
 
 export const CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_FLAG = "CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED";
 
 export type CanonicalMigrationCampaignEnvironment = {
   CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED?: string;
+  CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED?: string;
+  NODE_ENV?: string;
+  VERCEL_ENV?: string;
+  CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED?: string;
+};
+
+type ExistingMigration = {
+  status: string;
+  targetSubscriptionId: string | null;
+  targetSubscription: {
+    controlMode: "legacy" | "shadow" | "canonical";
+    collectionMethod: "manual_invoice" | "stripe_autocharge" | null;
+    canonicalManualPilotActivation: { status: string } | null;
+    operationalActivation: { id: string } | null;
+    customerId?: string;
+    customer?: { company: string | null; firstName: string | null; lastName: string | null };
+    billingIntervalMonths?: number | null;
+    currency?: string | null;
+    agreedAmountPerCycle?: Prisma.Decimal | null;
+    billingAnchorDate?: Date | null;
+    nextBillingDate?: Date | null;
+    lifecycleStatus?: string | null;
+    items?: Array<{ id: string; status: string }>;
+    providerLinks?: Array<{ externalSubscriptionId: string }>;
+  } | null;
 };
 
 export type MigrationCampaignCandidate = {
@@ -55,6 +87,7 @@ export type MigrationCampaignCandidate = {
   issueMessages: string[];
   migrationStatus: string | null;
   targetSubscriptionId: string | null;
+  operationalStatus: "not_migrated" | "ready" | "needs_attention" | "migrated" | "blocked";
 };
 
 export type MigrationCampaignDashboard = {
@@ -99,6 +132,27 @@ export type StandaloneInvoiceMigrationReview = {
     reason: string;
     classifiedBy: string;
     createdAt: Date;
+  }>;
+};
+
+export type StripeMigrationEvidence = {
+  available: boolean;
+  reason: string | null;
+  subscriptionId: string | null;
+  status: string | null;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  currency: string | null;
+  recurringTotal: string | null;
+  latestInvoiceStatus: string | null;
+  latestInvoiceAmountDue: string | null;
+  items: Array<{
+    subscriptionItemId: string;
+    priceId: string | null;
+    quantity: number;
+    unitAmount: string | null;
+    intervalMonths: number | null;
   }>;
 };
 
@@ -272,14 +326,95 @@ function providerReviewRequired(proposal: SubscriptionMigrationProposal): boolea
   return proposal.collectionMethod === "stripe_autocharge";
 }
 
+function stripeIntervalMonths(price: Stripe.Price): number | null {
+  const recurring = price.recurring;
+  if (!recurring) return null;
+  if (recurring.interval === "month") return recurring.interval_count;
+  if (recurring.interval === "year") return recurring.interval_count * 12;
+  return null;
+}
+
+async function loadStripeMigrationEvidence(
+  proposal: SubscriptionMigrationProposal,
+): Promise<StripeMigrationEvidence | null> {
+  if (proposal.collectionMethod !== "stripe_autocharge") return null;
+  const subscriptionId = proposal.providerSubscriptionId?.trim() || null;
+  const unavailable = (reason: string): StripeMigrationEvidence => ({
+    available: false,
+    reason,
+    subscriptionId,
+    status: null,
+    cancelAtPeriodEnd: false,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+    currency: null,
+    recurringTotal: null,
+    latestInvoiceStatus: null,
+    latestInvoiceAmountDue: null,
+    items: [],
+  });
+  if (!subscriptionId) return unavailable("No Stripe subscription reference is stored for this arrangement.");
+  if (!isStripeBillingEnabled()) return unavailable("Stripe read-only reconciliation is unavailable because billing is not configured.");
+  try {
+    const subscription = await getStripeClient().subscriptions.retrieve(subscriptionId, {
+      expand: ["items.data.price", "latest_invoice"],
+    });
+    const items = subscription.items.data.map((item) => {
+      const price = typeof item.price === "string" ? null : item.price;
+      return {
+        subscriptionItemId: item.id,
+        priceId: price?.id ?? (typeof item.price === "string" ? item.price : null),
+        quantity: Math.max(0, Math.trunc(item.quantity ?? 0)),
+        unitAmount: price?.unit_amount == null ? null : new Prisma.Decimal(price.unit_amount).div(100).toFixed(2),
+        intervalMonths: price ? stripeIntervalMonths(price) : null,
+      };
+    });
+    const pricedItems = items.filter((item) => item.unitAmount != null);
+    const recurringTotal = pricedItems.length === items.length
+      ? pricedItems.reduce((total, item) => total.plus(new Prisma.Decimal(item.unitAmount!).mul(item.quantity)), new Prisma.Decimal(0)).toFixed(2)
+      : null;
+    const firstPrice = subscription.items.data[0]?.price;
+    const currency = firstPrice && typeof firstPrice !== "string" ? firstPrice.currency.toUpperCase() : null;
+    const latestInvoice = subscription.latest_invoice && typeof subscription.latest_invoice !== "string"
+      ? subscription.latest_invoice
+      : null;
+    return {
+      available: true,
+      reason: null,
+      subscriptionId,
+      status: subscription.status,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      currentPeriodStart: subscription.current_period_start == null ? null : new Date(subscription.current_period_start * 1000).toISOString(),
+      currentPeriodEnd: subscription.current_period_end == null ? null : new Date(subscription.current_period_end * 1000).toISOString(),
+      currency,
+      recurringTotal,
+      latestInvoiceStatus: latestInvoice?.status ?? null,
+      latestInvoiceAmountDue: latestInvoice?.amount_due == null ? null : new Prisma.Decimal(latestInvoice.amount_due).div(100).toFixed(2),
+      items,
+    };
+  } catch (error) {
+    return unavailable(error instanceof Error ? error.message : "Stripe subscription could not be read.");
+  }
+}
+
 function candidateBlockers(
   snapshot: LegacyBillingSnapshot,
   customer: CustomerMigrationReview,
   proposal: SubscriptionMigrationProposal,
-  existing: { status: string; targetSubscriptionId: string | null } | undefined,
+  existing: ExistingMigration | undefined,
 ): { eligibility: MigrationCampaignCandidate["eligibility"]; blockers: string[] } {
   if (existing?.status === "completed") {
-    return { eligibility: "migrated", blockers: ["A canonical shadow has already been created for this legacy arrangement."] };
+    const target = existing.targetSubscription;
+    const manualAuthorityActive = target?.controlMode === "canonical"
+      && target.collectionMethod === "manual_invoice"
+      && (target.canonicalManualPilotActivation?.status === "active" || Boolean(target.operationalActivation));
+    if (manualAuthorityActive) {
+      return { eligibility: "migrated", blockers: [] };
+    }
+    return {
+      eligibility: "review_required",
+      blockers: ["A canonical shadow exists, but legacy billing remains authoritative. Finish the billing-authority transition."],
+    };
   }
   const blockers: string[] = [];
   if (!isCampaignProposal(snapshot, proposal)) {
@@ -331,10 +466,21 @@ function candidateFor(
   customer: CustomerMigrationReview,
   proposal: SubscriptionMigrationProposal,
   customerName: string,
-  existing: { status: string; targetSubscriptionId: string | null } | undefined,
+  existing: ExistingMigration | undefined,
 ): MigrationCampaignCandidate {
   const evaluation = candidateBlockers(snapshot, customer, proposal, existing);
   const stripeSubscription = snapshot.subscriptions.find((entry) => entry.id === proposal.sourceId);
+  const operationalStatus: MigrationCampaignCandidate["operationalStatus"] = evaluation.eligibility === "migrated"
+    ? "migrated"
+    : existing?.status === "completed"
+      ? "needs_attention"
+      : evaluation.eligibility === "eligible"
+        ? "ready"
+        : evaluation.eligibility === "blocked"
+          ? "blocked"
+          : proposal.reviewStatus === "ready_for_review"
+            ? "needs_attention"
+            : "not_migrated";
   return {
     proposalId: proposal.proposalId,
     customerId: proposal.customerId,
@@ -362,6 +508,7 @@ function candidateFor(
     issueMessages: [...customer.issues, ...proposal.issues].map((issue) => issue.message),
     migrationStatus: existing?.status ?? null,
     targetSubscriptionId: existing?.targetSubscriptionId ?? null,
+    operationalStatus,
   };
 }
 
@@ -374,7 +521,34 @@ export async function getCanonicalMigrationCampaignDashboard(): Promise<Migratio
       select: { id: true, company: true, firstName: true, lastName: true },
     }),
     prisma.canonicalMigrationLedger.findMany({
-      select: { sourceKind: true, sourceId: true, status: true, targetSubscriptionId: true },
+      select: {
+        sourceKind: true,
+        sourceId: true,
+        status: true,
+        targetSubscriptionId: true,
+        targetSubscription: {
+          select: {
+            controlMode: true,
+            collectionMethod: true,
+            canonicalManualPilotActivation: { select: { status: true } },
+            operationalActivation: { select: { id: true } },
+            customerId: true,
+            customer: { select: { company: true, firstName: true, lastName: true } },
+            billingIntervalMonths: true,
+            currency: true,
+            agreedAmountPerCycle: true,
+            billingAnchorDate: true,
+            nextBillingDate: true,
+            lifecycleStatus: true,
+            items: { select: { id: true, status: true } },
+            providerLinks: {
+              where: { endedAt: null },
+              select: { externalSubscriptionId: true },
+              take: 1,
+            },
+          },
+        },
+      },
     }),
     prisma.canonicalMigrationCampaign.findMany({
       take: 12,
@@ -399,7 +573,54 @@ export async function getCanonicalMigrationCampaignDashboard(): Promise<Migratio
     proposal,
     customerNames.get(customer.customerId) ?? "Unnamed customer",
     ledgerBySource.get(`${proposal.sourceKind}:${proposal.sourceId}`),
-  ))).sort((left, right) => left.customerLabel.localeCompare(right.customerLabel) || left.proposalId.localeCompare(right.proposalId));
+  )));
+  const representedSources = new Set(candidates.map((candidate) => `${candidate.sourceKind}:${candidate.sourceId}`));
+  const customerReviewById = new Map(analysis.customers.map((customer) => [customer.customerId, customer]));
+  for (const ledger of ledgers) {
+    const target = ledger.targetSubscription;
+    const authorityActive = ledger.status === "completed"
+      && target?.controlMode === "canonical"
+      && (target.canonicalManualPilotActivation?.status === "active" || Boolean(target.operationalActivation));
+    const sourceKey = `${ledger.sourceKind}:${ledger.sourceId}`;
+    if (!authorityActive || !target?.customerId || representedSources.has(sourceKey)) continue;
+    const customerReview = customerReviewById.get(target.customerId);
+    const proposalId = ledger.sourceKind === "manual_schedule"
+      ? `schedule:${ledger.sourceId}`
+      : ledger.sourceKind === "manual_invoice"
+        ? `manual-invoice:${ledger.sourceId}`
+        : `subscription:${ledger.sourceId}`;
+    const cycleAmount = target.agreedAmountPerCycle?.toFixed(2) ?? null;
+    const interval = target.billingIntervalMonths ?? 1;
+    candidates.push({
+      proposalId,
+      customerId: target.customerId,
+      customerLabel: customerNames.get(target.customerId)
+        ?? (target.customer ? customerLabel(target.customer) : "Migrated customer"),
+      sourceKind: ledger.sourceKind as MigrationCampaignCandidate["sourceKind"],
+      sourceId: ledger.sourceId,
+      collectionMethod: target.collectionMethod,
+      billingIntervalMonths: interval,
+      currency: target.currency ?? "XCD",
+      billingAnchorDate: dateOnly(target.billingAnchorDate?.toISOString() ?? null),
+      nextBillingDate: dateOnly(target.nextBillingDate?.toISOString() ?? null),
+      paidThroughDate: dateOnly(target.nextBillingDate?.toISOString() ?? null),
+      outstandingBalance: customerReview?.subscriptionOutstandingNativeBalance ?? "0.00",
+      nonSubscriptionOutstandingBalance: customerReview?.nonSubscriptionOutstandingNativeBalance ?? "0.00",
+      serviceCount: target.items?.filter((item) => item.status === "active").length ?? 0,
+      cycleAmount,
+      normalizedMonthlyAmount: cycleAmount == null ? null : money(Math.round(cents(cycleAmount) / interval)),
+      providerSubscriptionId: target.providerLinks?.[0]?.externalSubscriptionId ?? null,
+      lifecycleStatus: target.lifecycleStatus ?? "active",
+      reviewStatus: "migrated",
+      eligibility: "migrated",
+      blockers: [],
+      issueMessages: [],
+      migrationStatus: ledger.status,
+      targetSubscriptionId: ledger.targetSubscriptionId,
+      operationalStatus: "migrated",
+    });
+  }
+  candidates.sort((left, right) => left.customerLabel.localeCompare(right.customerLabel) || left.proposalId.localeCompare(right.proposalId));
   const count = (predicate: (candidate: MigrationCampaignCandidate) => boolean) => candidates.filter(predicate).length;
   return {
     analysisDate: snapshot.analysisDate,
@@ -533,7 +754,20 @@ export async function createOwnerApprovedMigrationCampaign(input: {
       const found = findProposal(analysis, proposalId);
       return found ? { sourceKind: found.proposal.sourceKind, sourceId: found.proposal.sourceId } : { id: "__missing__" };
     }) },
-    select: { sourceKind: true, sourceId: true, status: true, targetSubscriptionId: true },
+    select: {
+      sourceKind: true,
+      sourceId: true,
+      status: true,
+      targetSubscriptionId: true,
+      targetSubscription: {
+        select: {
+          controlMode: true,
+          collectionMethod: true,
+          canonicalManualPilotActivation: { select: { status: true } },
+          operationalActivation: { select: { id: true } },
+        },
+      },
+    },
   });
   const existingBySource = new Map(existing.map((entry) => [`${entry.sourceKind}:${entry.sourceId}`, entry]));
   const approvedAt = new Date().toISOString();
@@ -595,14 +829,31 @@ export async function getCanonicalMigrationProposalReview(proposalId: string) {
   const { snapshot, analysis } = await snapshotAndAnalysis();
   const found = findProposal(analysis, proposalId);
   if (!found || !isCampaignProposal(snapshot, found.proposal)) return null;
-  const customer = await prisma.customer.findUnique({
-    where: { id: found.customer.customerId },
-    select: { id: true, company: true, firstName: true, lastName: true },
-  });
-  const existing = await prisma.canonicalMigrationLedger.findUnique({
-    where: { sourceKind_sourceId: { sourceKind: found.proposal.sourceKind, sourceId: found.proposal.sourceId } },
-    select: { status: true, targetSubscriptionId: true },
-  });
+  const [customer, existing, stripeEvidence, nativeInvoiceCount, paymentCount, providerInvoiceCount] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id: found.customer.customerId },
+      select: { id: true, company: true, firstName: true, lastName: true },
+    }),
+    prisma.canonicalMigrationLedger.findUnique({
+      where: { sourceKind_sourceId: { sourceKind: found.proposal.sourceKind, sourceId: found.proposal.sourceId } },
+      select: {
+        status: true,
+        targetSubscriptionId: true,
+        targetSubscription: {
+          select: {
+            controlMode: true,
+            collectionMethod: true,
+            canonicalManualPilotActivation: { select: { status: true } },
+            operationalActivation: { select: { id: true } },
+          },
+        },
+      },
+    }),
+    loadStripeMigrationEvidence(found.proposal),
+    prisma.invoice.count({ where: { customerId: found.customer.customerId } }),
+    prisma.payment.count({ where: { customerId: found.customer.customerId, voidedAt: null } }),
+    prisma.billingInvoice.count({ where: { customerId: found.customer.customerId } }),
+  ]);
   const assignments = found.proposal.proposedItems.map((item) => {
     const source = snapshot.assignments.find((assignment) => assignment.id === item.serviceAssignmentId);
     return {
@@ -612,6 +863,11 @@ export async function getCanonicalMigrationProposalReview(proposalId: string) {
     };
   });
   return {
+    reviewFingerprint: migrationFingerprint({
+      customer: found.customer,
+      proposal: found.proposal,
+      assignments,
+    }),
     candidate: candidateFor(
       snapshot,
       found.customer,
@@ -622,6 +878,14 @@ export async function getCanonicalMigrationProposalReview(proposalId: string) {
     customer: found.customer,
     proposal: found.proposal,
     assignments,
+    stripeEvidence,
+    financialHistory: {
+      nativeInvoiceCount,
+      paymentCount,
+      providerInvoiceCount,
+      outstandingSubscriptionBalance: found.customer.subscriptionOutstandingNativeBalance,
+      outstandingNonSubscriptionBalance: found.customer.nonSubscriptionOutstandingNativeBalance,
+    },
     requiredIssues: [...found.customer.issues, ...found.proposal.issues]
       .filter((issue) => issue.severity === "decision" || issue.severity === "conflict")
       .filter((issue, index, values) => values.findIndex((value) => value.code === issue.code) === index),
@@ -858,8 +1122,11 @@ export async function executeOwnerApprovedMigrationCampaign(input: {
   environment?: CanonicalMigrationCampaignEnvironment;
 }): Promise<{ migrated: number; blocked: number; failed: number; skipped: number }> {
   const environment = input.environment ?? process.env;
-  if (environment.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED !== "true") {
-    campaignError("CAMPAIGN_EXECUTION_DISABLED", "Migration execution remains disabled until the owner enables the exact campaign switch.");
+  if (
+    environment.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED !== "true"
+    && environment.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED !== "true"
+  ) {
+    campaignError("CAMPAIGN_EXECUTION_DISABLED", "Migration execution remains disabled until canonical subscription operations are enabled.");
   }
   const campaign = await prisma.canonicalMigrationCampaign.findUnique({
     where: { id: input.campaignId },
@@ -916,6 +1183,234 @@ export async function executeOwnerApprovedMigrationCampaign(input: {
   }
   await refreshCampaignStatus(campaign.id);
   return totals;
+}
+
+export type SimpleIndividualMigrationInput = {
+  proposalId: string;
+  expectedReviewFingerprint: string;
+  ownerUserId: string;
+  ownerEmail: string;
+  approvalReason: string;
+  commercialStartDate: string;
+  billingAnchorDate: string;
+  nextBillingDate: string;
+  gracePeriodDays: number;
+  items: Array<{
+    assignmentId: string;
+    label: string;
+    serviceActivatedDate: string;
+    agreedAmountPerCycle: string;
+    classification: "standard" | "negotiated";
+  }>;
+  sourceInvoiceCoverage?: { periodStart: string; periodEnd: string; explicitlyConfirmed: true } | null;
+  confirmations: {
+    customerAndServicesConfirmed: boolean;
+    commercialTermsConfirmed: boolean;
+    historicalBalancesConfirmed: boolean;
+    billingAuthorityTransferConfirmed: boolean;
+  };
+  environment?: CanonicalMigrationCampaignEnvironment;
+};
+
+export type SimpleIndividualMigrationResult = {
+  status: "migrated";
+  targetSubscriptionId: string;
+  canonicalScheduleId: string;
+  alreadyApplied: boolean;
+};
+
+/**
+ * One owner action prepares the exact shadow and, for a supported manual
+ * arrangement, transfers future billing authority transactionally. A failed
+ * cutover leaves the legacy authority active and the protected shadow available
+ * for a safe retry.
+ */
+export async function executeSimpleIndividualMigration(
+  input: SimpleIndividualMigrationInput,
+): Promise<SimpleIndividualMigrationResult> {
+  if (!Object.values(input.confirmations).every(Boolean)) {
+    campaignError("OWNER_CONFIRMATIONS_REQUIRED", "Confirm the customer, commercial terms, history, and billing-authority transfer.");
+  }
+  const approvalReason = input.approvalReason.trim();
+  if (!approvalReason) campaignError("APPROVAL_DETAILS_REQUIRED", "Record a short owner review note.");
+
+  const completedEntry = await prisma.canonicalMigrationCampaignEntry.findFirst({
+    where: { proposalId: input.proposalId, status: "migrated", targetSubscriptionId: { not: null } },
+    orderBy: [{ completedAt: "desc" }, { id: "desc" }],
+    select: {
+      targetSubscriptionId: true,
+      campaign: { select: { approvedBy: { select: { id: true, email: true } } } },
+    },
+  });
+  const completedTarget = completedEntry?.targetSubscriptionId
+    ? await prisma.customerSubscription.findUnique({
+      where: { id: completedEntry.targetSubscriptionId },
+      select: {
+        controlMode: true,
+        canonicalManualPilotActivation: { select: { status: true, canonicalScheduleId: true } },
+      },
+    })
+    : null;
+  if (
+    completedEntry?.targetSubscriptionId
+    && completedTarget?.controlMode === "canonical"
+    && completedTarget.canonicalManualPilotActivation?.status === "active"
+    && completedTarget.canonicalManualPilotActivation.canonicalScheduleId
+  ) {
+    const approvedOwner = completedEntry.campaign.approvedBy;
+    if (approvedOwner.id !== input.ownerUserId || approvedOwner.email.trim().toLowerCase() !== input.ownerEmail.trim().toLowerCase()) {
+      campaignError("OWNER_APPROVAL_MISMATCH", "Only the owner who approved this migration may resume it.");
+    }
+    return {
+      status: "migrated",
+      targetSubscriptionId: completedEntry.targetSubscriptionId,
+      canonicalScheduleId: completedTarget.canonicalManualPilotActivation.canonicalScheduleId,
+      alreadyApplied: true,
+    };
+  }
+
+  const initialReview = await getCanonicalMigrationProposalReview(input.proposalId);
+  if (!initialReview) campaignError("PROPOSAL_NOT_FOUND", "This legacy arrangement is no longer available for migration.");
+  if (!input.expectedReviewFingerprint || input.expectedReviewFingerprint !== initialReview.reviewFingerprint) {
+    campaignError(
+      "SOURCE_CHANGED_AFTER_REVIEW",
+      "This arrangement changed after the confirmation screen was prepared. Review the refreshed values before migrating.",
+    );
+  }
+  if (initialReview.proposal.collectionMethod === "stripe_autocharge") {
+    campaignError(
+      "STRIPE_AUTHORITY_TRANSFER_UNAVAILABLE",
+      "TL Portal can inspect this Stripe subscription, but production provider adoption is not yet safely supported. Legacy Stripe billing remains active.",
+    );
+  }
+  if (initialReview.proposal.collectionMethod !== "manual_invoice") {
+    campaignError("MANUAL_COLLECTION_REQUIRED", "Only an established manual-invoice arrangement can use the automatic cutover path.");
+  }
+
+  let entry = await prisma.canonicalMigrationCampaignEntry.findFirst({
+    where: { sourceKind: initialReview.proposal.sourceKind, sourceId: initialReview.proposal.sourceId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    include: { campaign: true },
+  });
+  const ledger = await prisma.canonicalMigrationLedger.findUnique({
+    where: { sourceKind_sourceId: { sourceKind: initialReview.proposal.sourceKind, sourceId: initialReview.proposal.sourceId } },
+    select: { status: true, targetSubscriptionId: true },
+  });
+
+  if (!ledger && !entry) {
+    const campaign = await createOwnerApprovedIndividualMigrationCampaign({
+      proposalId: initialReview.proposal.proposalId,
+      title: `Migration — ${initialReview.candidate.customerLabel}`,
+      approvalReason,
+      ownerUserId: input.ownerUserId,
+      ownerEmail: input.ownerEmail,
+      commercialStartDate: input.commercialStartDate,
+      billingAnchorDate: input.billingAnchorDate,
+      nextBillingDate: input.nextBillingDate,
+      gracePeriodDays: input.gracePeriodDays,
+      items: input.items,
+      issueResolutions: initialReview.requiredIssues.map((issue) => ({ code: issue.code, explanation: approvalReason })),
+      sourceInvoiceCoverage: input.sourceInvoiceCoverage ?? null,
+      providerEvidence: null,
+      confirmations: {
+        sourceAndServicesReviewed: input.confirmations.customerAndServicesConfirmed,
+        paidThroughAndRenewalReviewed: input.confirmations.commercialTermsConfirmed,
+        financialHistoryPreserved: input.confirmations.historicalBalancesConfirmed,
+        // Legacy authority remains active until the cutover transaction commits.
+        legacyAuthorityRetained: input.confirmations.billingAuthorityTransferConfirmed,
+        outstandingBalanceReviewed: input.confirmations.historicalBalancesConfirmed,
+        sourceCoverageReviewed: input.sourceInvoiceCoverage?.explicitlyConfirmed === true,
+        stripeProviderReviewed: false,
+        futureStripeCollectionReviewed: false,
+      },
+    });
+    await executeOwnerApprovedMigrationCampaign({
+      campaignId: campaign.id,
+      ownerUserId: input.ownerUserId,
+      ownerEmail: input.ownerEmail,
+      environment: input.environment,
+    });
+    entry = await prisma.canonicalMigrationCampaignEntry.findFirst({
+      where: { campaignId: campaign.id, proposalId: initialReview.proposal.proposalId },
+      include: { campaign: true },
+    });
+  }
+
+  // A retry may arrive after approval was stored but before shadow creation
+  // completed. Resume that same durable campaign instead of creating another.
+  if (entry && !entry.targetSubscriptionId) {
+    await executeOwnerApprovedMigrationCampaign({
+      campaignId: entry.campaignId,
+      ownerUserId: input.ownerUserId,
+      ownerEmail: input.ownerEmail,
+      environment: input.environment,
+    });
+    entry = await prisma.canonicalMigrationCampaignEntry.findUnique({
+      where: { id: entry.id },
+      include: { campaign: true },
+    });
+  }
+
+  if (!entry?.targetSubscriptionId) {
+    const detail = entry?.failureMessage?.trim() || "The protected canonical shadow could not be created.";
+    campaignError(entry?.failureCode || "SHADOW_CREATION_FAILED", detail);
+  }
+  const target = await prisma.customerSubscription.findUnique({
+    where: { id: entry.targetSubscriptionId },
+    select: { id: true, controlMode: true, collectionMethod: true },
+  });
+  if (!target || target.collectionMethod !== "manual_invoice") {
+    campaignError("MIGRATION_TARGET_INVALID", "The migration target is missing or is not a manual-invoice agreement.");
+  }
+
+  const cutoverReview = await getCanonicalManualPilotReview(target.id);
+  try {
+    const cutover = await activateOwnerApprovedManualMigration({
+      subscriptionId: target.id,
+      campaignEntryId: entry.id,
+      approvedByEmail: input.ownerEmail,
+      approvedAt: entry.campaign.approvedAt,
+      approvalReason,
+      expectedProposalFingerprint: canonicalManualPilotProposalFingerprint(cutoverReview.proposal),
+      expectedSourceStateFingerprint: cutoverReview.proposal.sourceStateFingerprint,
+      confirmations: {
+        customerAndServicesConfirmed: input.confirmations.customerAndServicesConfirmed,
+        commercialTermsConfirmed: input.confirmations.commercialTermsConfirmed,
+        historicalBalancesConfirmed: input.confirmations.historicalBalancesConfirmed,
+        legacyBillingStopConfirmed: input.confirmations.billingAuthorityTransferConfirmed,
+        canonicalBillingStartConfirmed: input.confirmations.billingAuthorityTransferConfirmed,
+      },
+      environment: input.environment,
+    });
+    await prisma.canonicalMigrationCampaignEntry.update({
+      where: { id: entry.id },
+      data: {
+        status: "migrated",
+        failureCode: null,
+        failureMessage: null,
+        completedAt: new Date(),
+      },
+    });
+    await refreshCampaignStatus(entry.campaignId);
+    return {
+      status: "migrated",
+      targetSubscriptionId: cutover.targetSubscriptionId,
+      canonicalScheduleId: cutover.canonicalScheduleId,
+      alreadyApplied: cutover.alreadyApplied,
+    };
+  } catch (error) {
+    const details = errorDetails(error);
+    await prisma.canonicalMigrationCampaignEntry.update({
+      where: { id: entry.id },
+      data: {
+        status: "blocked",
+        failureCode: details.code,
+        failureMessage: details.message.slice(0, 10_000),
+      },
+    });
+    await refreshCampaignStatus(entry.campaignId);
+    throw error;
+  }
 }
 
 export async function getCanonicalMigrationCampaignDetail(campaignId: string) {

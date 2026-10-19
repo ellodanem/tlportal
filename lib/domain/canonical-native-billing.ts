@@ -48,7 +48,8 @@ export function canonicalNativeBillingExecutionEnabled(
   if (environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production") {
     return scope != null && (
       canonicalManualPilotBillingAuthorized({ ...scope, environment })
-      || (canonicalSubscriptionOperationsEnabled(environment) && Boolean(scope.operationalActivationId))
+      || (canonicalSubscriptionOperationsEnabled(environment)
+        && (Boolean(scope.operationalActivationId) || scope.activationStatus === "active"))
       || canonicalProductionManualScopeAuthorized({ scope, environment })
     );
   }
@@ -61,7 +62,8 @@ export function assertCanonicalNativeBillingExecutionEnabled(
 ): void {
   if (environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production") {
     if (!scope || (!canonicalManualPilotBillingAuthorized({ ...scope, environment })
-      && !(canonicalSubscriptionOperationsEnabled(environment) && Boolean(scope.operationalActivationId))
+      && !(canonicalSubscriptionOperationsEnabled(environment)
+        && (Boolean(scope.operationalActivationId) || scope.activationStatus === "active"))
       && !canonicalProductionManualScopeAuthorized({ scope, environment }))) {
       billingError(
         "PRODUCTION_EXECUTION_DISABLED",

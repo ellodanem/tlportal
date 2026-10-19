@@ -71,6 +71,10 @@ test("canonical execution is opt-in locally and remains hard-disabled in product
     NODE_ENV: "production",
     CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED: "true",
   }, { customerId: "customer-1", subscriptionId: "subscription-1", activationStatus: null, operationalActivationId: "activation-1" }));
+  assert.doesNotThrow(() => assertCanonicalNativeBillingExecutionEnabled({
+    NODE_ENV: "production",
+    CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED: "true",
+  }, { customerId: "customer-1", subscriptionId: "subscription-1", activationStatus: "active" }));
   assert.throws(
     () => assertCanonicalNativeBillingExecutionEnabled({
       NODE_ENV: "production",

@@ -11,6 +11,7 @@ import {
   classifyStandaloneInvoiceForMigration,
   createOwnerApprovedIndividualMigrationCampaign,
   createOwnerApprovedMigrationCampaign,
+  executeSimpleIndividualMigration,
   executeOwnerApprovedMigrationCampaign,
 } from "@/lib/services/canonical-migration-campaign-service";
 
@@ -135,6 +136,50 @@ export async function approveIndividualMigrationAction(formData: FormData): Prom
     });
     revalidatePath("/admin/subscriptions/canonical/migrations");
     redirect(`/admin/subscriptions/canonical/migrations/${campaign.id}?approved=1`);
+  } catch (error) {
+    destinationError(returnPath, error);
+  }
+}
+
+export async function executeSimpleIndividualMigrationAction(formData: FormData): Promise<void> {
+  const proposalId = text(formData, "proposalId");
+  const returnPath = `/admin/subscriptions/canonical/migrations/review/${encodeURIComponent(proposalId)}`;
+  try {
+    const owner = await requireMigrationOwner();
+    const assignmentIds = formData.getAll("assignmentId").map(String);
+    const sourceCoverageRequired = text(formData, "sourceCoverageRequired") === "yes";
+    const result = await executeSimpleIndividualMigration({
+      proposalId,
+      expectedReviewFingerprint: text(formData, "reviewFingerprint"),
+      ownerUserId: owner.id,
+      ownerEmail: owner.email,
+      approvalReason: text(formData, "approvalReason"),
+      commercialStartDate: text(formData, "commercialStartDate"),
+      billingAnchorDate: text(formData, "billingAnchorDate"),
+      nextBillingDate: text(formData, "nextBillingDate"),
+      gracePeriodDays: Number(text(formData, "gracePeriodDays")),
+      items: assignmentIds.map((assignmentId) => ({
+        assignmentId,
+        label: text(formData, `label:${assignmentId}`),
+        serviceActivatedDate: text(formData, `serviceActivatedDate:${assignmentId}`),
+        agreedAmountPerCycle: text(formData, `amount:${assignmentId}`),
+        classification: text(formData, `classification:${assignmentId}`) === "negotiated" ? "negotiated" : "standard",
+      })),
+      sourceInvoiceCoverage: sourceCoverageRequired ? {
+        periodStart: text(formData, "sourceCoverageStart"),
+        periodEnd: text(formData, "sourceCoverageEnd"),
+        explicitlyConfirmed: true,
+      } : null,
+      confirmations: {
+        customerAndServicesConfirmed: text(formData, "confirmCustomerAndServices") === "yes",
+        commercialTermsConfirmed: text(formData, "confirmCommercialTerms") === "yes",
+        historicalBalancesConfirmed: text(formData, "confirmHistory") === "yes",
+        billingAuthorityTransferConfirmed: text(formData, "confirmAuthorityTransfer") === "yes",
+      },
+    });
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath("/admin/subscriptions/canonical/migrations");
+    redirect(`/admin/subscriptions/canonical/${encodeURIComponent(result.targetSubscriptionId)}?migration=completed`);
   } catch (error) {
     destinationError(returnPath, error);
   }

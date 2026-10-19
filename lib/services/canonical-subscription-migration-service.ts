@@ -28,6 +28,7 @@ export type MigrationExecutionEnvironment = CanonicalManualPilotEnvironment & {
   DATABASE_URL?: string;
   ALLOW_CANONICAL_MIGRATION_EXECUTION?: string;
   CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED?: string;
+  CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED?: string;
 };
 
 export type MigrationExecutionOptions = {
@@ -195,10 +196,13 @@ export function assertCampaignMigrationExecutionGuard(
   if (!input.authorization.campaignEntryId || !input.authorization.approvedBy.trim()) {
     executionError("CAMPAIGN_AUTHORIZATION_INVALID", "A durable owner-approved campaign entry is required.");
   }
-  if (environment.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED !== "true") {
+  if (
+    environment.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED !== "true"
+    && environment.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED !== "true"
+  ) {
     executionError(
       "CAMPAIGN_EXECUTION_DISABLED",
-      "Owner-approved migration execution is disabled until the production campaign switch is explicitly enabled.",
+      "Owner-approved migration execution is disabled until canonical subscription operations are enabled.",
     );
   }
 }
