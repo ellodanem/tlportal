@@ -47,3 +47,19 @@ test("normal production operations use one global default-deny gate, never a cus
   assert.doesNotThrow(() => assertCanonicalSubscriptionActivationEnabled(environment));
   assert.equal(canonicalSubscriptionOperationsEnabled({ NODE_ENV: "production" }), false);
 });
+
+test("migration-only production approval cannot enable a normal activation", () => {
+  const environment = {
+    NODE_ENV: "production",
+    CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED: "true",
+  };
+  assert.throws(
+    () => assertCanonicalSubscriptionActivationEnabled(environment),
+    (error: unknown) => error instanceof CanonicalSubscriptionActivationError,
+  );
+  assert.doesNotThrow(() => assertCanonicalSubscriptionActivationEnabled(
+    environment,
+    { customerId: "customer-1", subscriptionId: "shadow-1" },
+    { migrationPromotion: true },
+  ));
+});

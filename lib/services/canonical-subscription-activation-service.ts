@@ -128,11 +128,16 @@ export async function activateCanonicalManualSubscription(
       },
     });
     if (!subscription) fail("SUBSCRIPTION_NOT_FOUND", "Canonical subscription not found.");
+    const promotingMigrationShadow = input.promoteMigrationShadow === true && subscription.controlMode === "shadow";
+    const requestedInitialBilling = input.initialBilling ?? { mode: "deferred" as const };
+    const migrationPromotion = promotingMigrationShadow
+      && Boolean(input.legacyScheduleId)
+      && requestedInitialBilling.mode === "deferred"
+      && !(requestedInitialBilling.oneTimeCharges?.length);
     assertCanonicalSubscriptionActivationEnabled(input.environment, {
       customerId: subscription.customerId,
       subscriptionId: subscription.id,
-    });
-    const promotingMigrationShadow = input.promoteMigrationShadow === true && subscription.controlMode === "shadow";
+    }, { migrationPromotion });
     if ((!promotingMigrationShadow && subscription.controlMode !== "canonical") || subscription.collectionMethod !== "manual_invoice") {
       fail("MANUAL_CANONICAL_REQUIRED", "Only a canonical manual-invoice subscription can be activated here.");
     }
@@ -179,7 +184,7 @@ export async function activateCanonicalManualSubscription(
       if (!rates.length) fail("ITEM_RATE_AMBIGUOUS", "Every activated service needs an effective cycle rate.");
     }
 
-    const initialBilling = input.initialBilling ?? { mode: "deferred" as const };
+    const initialBilling = requestedInitialBilling;
     const oneTimeCharges = validateInitialCharges(initialBilling.oneTimeCharges);
     if (initialBilling.mode === "deferred" && oneTimeCharges.length) {
       fail("DEFERRED_INITIAL_CHARGES", "One-time installation or hardware charges require an initial invoice.");

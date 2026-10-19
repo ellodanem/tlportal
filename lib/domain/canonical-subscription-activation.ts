@@ -19,6 +19,11 @@ export type CanonicalSubscriptionActivationEnvironment = {
   VERCEL_ENV?: string;
   CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED?: string;
   CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED?: string;
+  /**
+   * Narrow production exception used only to promote a migration shadow with
+   * deferred billing. It never enables normal staff activation or charging.
+   */
+  CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED?: string;
   CANONICAL_PRODUCTION_MANUAL_ENABLED?: string;
   CANONICAL_PRODUCTION_MANUAL_CUSTOMER_ID?: string;
   CANONICAL_PRODUCTION_MANUAL_SUBSCRIPTION_ID?: string;
@@ -50,9 +55,11 @@ export function canonicalProductionManualScopeAuthorized(input: {
 export function assertCanonicalSubscriptionActivationEnabled(
   environment: CanonicalSubscriptionActivationEnvironment = process.env,
   scope?: CanonicalProductionManualScope,
+  options?: { migrationPromotion?: boolean },
 ): void {
   if (environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production") {
     if (canonicalSubscriptionOperationsEnabled(environment)) return;
+    if (options?.migrationPromotion && environment.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED === "true") return;
     // Preserve the existing narrow pilot authorization until it can be retired
     // under its own approved cutover. It is not used by normal onboarding.
     if (scope && canonicalProductionManualScopeAuthorized({ scope, environment })) return;

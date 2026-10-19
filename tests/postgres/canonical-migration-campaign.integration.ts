@@ -236,9 +236,9 @@ test("campaign: owner-reviewed manual migration creates one shadow and preserves
 test("automatic manual migration promotes one complete schedule without issuing an invoice", async () => {
   const input = await fixture("campaign-automatic-manual");
   const beforeInvoices = await prisma.invoice.count({ where: { customerId: input.customer.id } });
-  const previousOperations = process.env.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED;
+  const previousCampaignExecution = process.env.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED;
   const previousActivation = process.env.CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED;
-  process.env.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED = "true";
+  process.env.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED = "true";
   process.env.CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED = "true";
   try {
     const result = await executeAutomaticManualMigration({ ownerUserId: input.owner.id, ownerEmail: input.owner.email });
@@ -246,8 +246,8 @@ test("automatic manual migration promotes one complete schedule without issuing 
     assert.equal(result.migrated, 1);
     assert.equal(result.retainedForFollowUp, 0);
   } finally {
-    if (previousOperations == null) delete process.env.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED;
-    else process.env.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED = previousOperations;
+    if (previousCampaignExecution == null) delete process.env.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED;
+    else process.env.CANONICAL_MIGRATION_CAMPAIGN_EXECUTION_ENABLED = previousCampaignExecution;
     if (previousActivation == null) delete process.env.CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED;
     else process.env.CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED = previousActivation;
   }
