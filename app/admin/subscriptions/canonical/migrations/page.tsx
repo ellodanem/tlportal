@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { approveMigrationCampaignAction } from "@/app/admin/subscriptions/canonical/migrations/actions";
+import { runAutomaticManualMigrationAction } from "@/app/admin/subscriptions/canonical/migrations/actions";
 import { canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
 import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { canonicalSubscriptionUiStaffViewer } from "@/lib/services/canonical-subscription-admin-service";
@@ -10,14 +10,14 @@ import {
   type MigrationCampaignCandidate,
 } from "@/lib/services/canonical-migration-campaign-service";
 
-type Props = { searchParams: Promise<{ collection?: string; view?: string; customer?: string; error?: string }> };
+type Props = { searchParams: Promise<{ collection?: string; view?: string; customer?: string; error?: string; automatic?: string; migrated?: string; followUp?: string; campaign?: string }> };
 
 const STATUS_LABEL = {
-  not_migrated: "Not migrated",
-  ready: "Ready to migrate",
-  needs_attention: "Needs attention",
-  migrated: "Migrated",
-  blocked: "Blocked",
+  not_migrated: "Still legacy",
+  ready: "Ready to move",
+  needs_attention: "Follow-up",
+  migrated: "Moved",
+  blocked: "Unavailable",
 } as const;
 
 function badgeClass(value: keyof typeof STATUS_LABEL) {
@@ -56,7 +56,7 @@ function groupByCustomer(candidates: MigrationCampaignCandidate[]) {
 export default async function CanonicalMigrationCampaignPage({ searchParams }: Props) {
   if (!canonicalSubscriptionUiVisible()) notFound();
   if (!await canonicalSubscriptionUiStaffViewer()) redirect("/login");
-  const { collection = "", view = "all", customer = "", error = "" } = await searchParams;
+  const { collection = "", view = "all", customer = "", error = "", automatic = "", migrated = "0", followUp = "0", campaign = "" } = await searchParams;
   const dashboard = await getCanonicalMigrationCampaignDashboard();
   const candidates = dashboard.candidates.filter((candidate) => {
     if (collection && candidate.collectionMethod !== collection) return false;
@@ -69,7 +69,6 @@ export default async function CanonicalMigrationCampaignPage({ searchParams }: P
   const customerGroups = groupByCustomer(candidates);
   const allCustomerGroups = groupByCustomer(dashboard.candidates);
   const count = (status: keyof typeof STATUS_LABEL) => allCustomerGroups.filter((group) => group.status === status).length;
-  const batchEligible = candidates.filter((candidate) => candidate.eligibility === "eligible");
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -77,21 +76,22 @@ export default async function CanonicalMigrationCampaignPage({ searchParams }: P
         <div>
           <Link href="/admin/subscriptions/canonical" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Back to canonical subscriptions</Link>
           <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Canonical / Customer migration</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Migrate a customer</h1>
-          <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">Select a customer, review the arrangement TL Portal found, then confirm and migrate. Existing financial history remains unchanged.</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Move subscriptions to the new framework</h1>
+          <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">TL Portal uses the live recurring schedule, mapped services, amount, cadence, and next renewal to create canonical agreements automatically. Existing invoices and payments remain unchanged.</p>
         </div>
-        <Link href="/admin/subscriptions/canonical/migrations/invoices" className="rounded-lg border border-amber-300 px-4 py-2.5 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:text-amber-200">Classify one-off invoices</Link>
+        <form action={runAutomaticManualMigrationAction}><button className="rounded-lg bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white">Move ready manual subscriptions</button></form>
       </div>
 
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">{error}</p> : null}
+      {automatic === "1" ? <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"><p className="font-semibold">Automatic migration complete</p><p className="mt-1">{migrated} manual subscription{migrated === "1" ? "" : "s"} moved to canonical billing. {followUp} arrangement{followUp === "1" ? "" : "s"} stayed on the existing path for follow-up. No invoice, payment, Stripe operation, or customer notification was created.</p>{campaign ? <Link href={`/admin/subscriptions/canonical/migrations/${encodeURIComponent(campaign)}`} className="mt-2 inline-block font-semibold underline">Open migration record</Link> : null}</section> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {([
-          ["Ready to migrate", count("ready"), "Complete manual arrangements"],
-          ["Needs attention", count("needs_attention"), "Review a specific discrepancy"],
-          ["Migrated", count("migrated"), "Canonical future billing owns renewal"],
-          ["Blocked", count("blocked"), "Missing or conflicting evidence"],
-          ["Not migrated", count("not_migrated"), "Legacy billing remains active"],
+          ["Ready to move", count("ready"), "Included in the automatic manual move"],
+          ["Follow-up", count("needs_attention"), "Kept on its current path"],
+          ["Moved", count("migrated"), "Canonical schedule owns renewal"],
+          ["Unavailable", count("blocked"), "Source needs a later correction"],
+          ["Still legacy", count("not_migrated"), "No automatic conversion was attempted"],
         ] as const).map(([label, value, detail]) => <div key={label} className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p><p className="mt-1 text-xs text-zinc-500">{detail}</p></div>)}
       </section>
 
@@ -103,7 +103,7 @@ export default async function CanonicalMigrationCampaignPage({ searchParams }: P
       </form>
 
       <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 p-4 sm:p-5 dark:border-zinc-800"><h2 className="font-semibold">Existing customers</h2><p className="mt-1 text-sm text-zinc-500">Each customer appears once. Genuinely separate current arrangements remain listed inside the customer record.</p></div>
+        <div className="border-b border-zinc-200 p-4 sm:p-5 dark:border-zinc-800"><h2 className="font-semibold">Customer subscriptions</h2><p className="mt-1 text-sm text-zinc-500">Each customer appears once. Separate current arrangements remain distinct; canceled and historical records do not compete for services.</p></div>
         {customerGroups.length === 0 ? <p className="p-6 text-sm text-zinc-500">No customers match these filters.</p> : <div className="divide-y divide-zinc-200 dark:divide-zinc-800">{customerGroups.map((group) => (
           <article key={group.customerId} className="p-4 sm:p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -117,23 +117,14 @@ export default async function CanonicalMigrationCampaignPage({ searchParams }: P
                 <div><p className="text-xs text-zinc-500">Recurring</p><p className="font-medium tabular-nums">{candidate.cycleAmount == null ? "Unresolved" : formatExpenseAmount(Number(candidate.cycleAmount), candidate.currency)}</p></div>
                 <div><p className="text-xs text-zinc-500">Next billing</p><p className="font-medium">{candidate.nextBillingDate ?? "Unresolved"}</p></div>
                 <div><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(candidate.operationalStatus)}`}>{STATUS_LABEL[candidate.operationalStatus]}</span>{candidate.blockers[0] ? <p className="mt-2 text-xs text-zinc-500">{candidate.blockers[0]}</p> : null}</div>
-                <Link href={`/admin/subscriptions/canonical/migrations/review/${encodeURIComponent(candidate.proposalId)}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-center font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300">{candidate.operationalStatus === "migrated" ? "View" : "Migrate"}</Link>
+                <Link href={`/admin/subscriptions/canonical/migrations/review/${encodeURIComponent(candidate.proposalId)}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-center font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300">{candidate.operationalStatus === "migrated" ? "Open" : "Details"}</Link>
               </div>
             ))}</div>
           </article>
         ))}</div>}
       </section>
 
-      <details className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <summary className="cursor-pointer font-semibold">Batch migration tools</summary>
-        <p className="mt-2 text-sm text-zinc-500">The existing batch workflow remains available for protected shadow preparation. Individual migrations above are the normal operational path.</p>
-        <form action={approveMigrationCampaignAction} className="mt-5 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium">Campaign title<input required name="title" defaultValue="Legacy customer migration" className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm font-normal dark:bg-zinc-950" /></label><label className="text-sm font-medium">Owner approval reason<textarea required name="approvalReason" rows={2} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm font-normal dark:bg-zinc-950" /></label></div>
-          <div className="grid gap-2 text-sm sm:grid-cols-2">{[["confirmSource", "I reviewed the exact source terms and service assignments."], ["confirmPaidThrough", "I verified paid-through evidence and next renewal."], ["confirmHistory", "Existing financial history remains unchanged."], ["confirmLegacyAuthority", "Legacy billing remains authoritative after batch shadow preparation."]].map(([name, label]) => <label key={name} className="flex items-start gap-2"><input required type="checkbox" name={name} value="yes" className="mt-1" /><span>{label}</span></label>)}</div>
-          <div className="grid gap-2 sm:grid-cols-2">{batchEligible.map((candidate) => <label key={candidate.proposalId} className="flex items-center gap-3 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800"><input type="checkbox" name="proposalId" value={candidate.proposalId} /><span><strong>{candidate.customerLabel}</strong><span className="block text-xs text-zinc-500">{candidate.serviceCount} services · {collectionLabel(candidate.collectionMethod)}</span></span></label>)}</div>
-          <button className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold dark:border-zinc-700">Approve selected shadow migrations</button>
-        </form>
-      </details>
+      <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100"><p className="font-semibold">Automatic migration policy</p><p className="mt-1">Ready manual schedules are converted without worksheet fields. The source schedule is ended only in the same transaction that activates the canonical schedule. One-off invoices remain financial history. Stripe arrangements stay visible but are not collected, changed, charged, or canceled by this process.</p><div className="mt-3 flex flex-wrap gap-3"><Link href="/admin/subscriptions/legacy" className="font-semibold underline">Open legacy operations</Link><Link href="/admin/subscriptions/canonical/migrations/invoices" className="font-semibold underline">Open historical invoice archive</Link></div></section>
 
       {dashboard.campaigns.length ? <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900"><h2 className="font-semibold">Recent migration activity</h2><div className="mt-3 grid gap-2">{dashboard.campaigns.map((campaign) => <Link key={campaign.id} href={`/admin/subscriptions/canonical/migrations/${campaign.id}`} className="rounded-lg border border-zinc-200 p-3 hover:border-emerald-300 dark:border-zinc-800"><div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><span className="font-medium">{campaign.title}</span><span className="text-xs text-zinc-500">{campaign.status.replaceAll("_", " ")} · {campaign.approvedAt.toLocaleDateString()}</span></div></Link>)}</div></section> : null}
     </div>

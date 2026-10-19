@@ -72,6 +72,13 @@ export type ActivateCanonicalManualSubscriptionInput = {
   staffUserId: string;
   confirmationNote: string;
   initialBilling?: CanonicalInitialBillingInput;
+  /**
+   * Internal bulk-migration path. A completed shadow is promoted only inside
+   * this transaction, together with ending the old manual schedule. It never
+   * creates an invoice, payment, provider mutation, or notification.
+   */
+  promoteMigrationShadow?: boolean;
+  legacyScheduleId?: string | null;
   environment?: CanonicalSubscriptionActivationEnvironment;
 };
 
@@ -125,7 +132,8 @@ export async function activateCanonicalManualSubscription(
       customerId: subscription.customerId,
       subscriptionId: subscription.id,
     });
-    if (subscription.controlMode !== "canonical" || subscription.collectionMethod !== "manual_invoice") {
+    const promotingMigrationShadow = input.promoteMigrationShadow === true && subscription.controlMode === "shadow";
+    if ((!promotingMigrationShadow && subscription.controlMode !== "canonical") || subscription.collectionMethod !== "manual_invoice") {
       fail("MANUAL_CANONICAL_REQUIRED", "Only a canonical manual-invoice subscription can be activated here.");
     }
     if (subscription.operationalActivation) {
@@ -136,13 +144,29 @@ export async function activateCanonicalManualSubscription(
         reused: true,
       };
     }
-    if (subscription.lifecycleStatus !== "draft" && subscription.lifecycleStatus !== "pending_activation") {
+    if (!promotingMigrationShadow && subscription.lifecycleStatus !== "draft" && subscription.lifecycleStatus !== "pending_activation") {
       fail("INVALID_LIFECYCLE", "Only a draft or pending canonical subscription can be activated.");
     }
     if (!subscription.nextBillingDate || !subscription.billingIntervalMonths || !subscription.currency) {
       fail("INCOMPLETE_SUBSCRIPTION", "Billing date, interval, and currency are required before activation.");
     }
     if (subscription.recurringSchedules.length > 1) fail("SCHEDULE_OWNERSHIP_AMBIGUOUS", "More than one open recurring schedule owns this subscription.");
+
+    if (input.legacyScheduleId) {
+      const legacySchedule = await tx.recurringInvoiceSchedule.findUnique({
+        where: { id: input.legacyScheduleId },
+        select: { id: true, customerId: true, customerSubscriptionId: true, status: true },
+      });
+      if (!legacySchedule || legacySchedule.customerId !== subscription.customerId) {
+        fail("LEGACY_SCHEDULE_MISMATCH", "The legacy recurring schedule does not belong to this subscription's customer.");
+      }
+      if (legacySchedule.customerSubscriptionId === subscription.id) {
+        fail("LEGACY_SCHEDULE_MISMATCH", "The legacy recurring schedule is already attached to the canonical subscription.");
+      }
+      if (legacySchedule.status === "ended") {
+        fail("LEGACY_SCHEDULE_ENDED", "The legacy recurring schedule was already ended before canonical activation.");
+      }
+    }
 
     const interval = canonicalBillingInterval(subscription.billingIntervalMonths);
     const billable = subscription.items.filter((item) => item.status !== "ended" && item.status !== "canceled");
@@ -303,6 +327,16 @@ export async function activateCanonicalManualSubscription(
       },
     });
     await tx.customerSubscription.update({ where: { id: subscription.id }, data: { lifecycleStatus: "active", status: "active", collectionHealth: "not_started" } });
+    if (promotingMigrationShadow) {
+      await tx.customerSubscription.update({ where: { id: subscription.id }, data: { controlMode: "canonical" } });
+    }
+    if (input.legacyScheduleId) {
+      const ended = await tx.recurringInvoiceSchedule.updateMany({
+        where: { id: input.legacyScheduleId, customerId: subscription.customerId, status: { not: "ended" } },
+        data: { status: "ended" },
+      });
+      if (ended.count !== 1) fail("LEGACY_SCHEDULE_END_FAILED", "The legacy recurring schedule could not be retired.");
+    }
     await tx.subscriptionItem.updateMany({ where: { customerSubscriptionId: subscription.id, status: { in: ["draft", "pending_activation"] } }, data: { status: "active" } });
     return { scheduleId: schedule.id, initialInvoiceId, reused: false };
   });

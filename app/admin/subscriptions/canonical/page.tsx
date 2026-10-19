@@ -92,7 +92,7 @@ export default async function CanonicalSubscriptionsPage({ searchParams }: Props
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/admin/subscriptions" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold dark:border-zinc-700">Legacy operations</Link>
+          <Link href="/admin/subscriptions/legacy" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold dark:border-zinc-700">Legacy archive</Link>
           <Link href="/admin/subscriptions/canonical/migrations" className="rounded-lg border border-violet-300 px-4 py-2.5 text-sm font-semibold text-violet-800 dark:border-violet-800 dark:text-violet-300">Migration campaign</Link>
           <Link href="/admin/subscriptions/canonical/pilot" className="rounded-lg border border-emerald-300 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:text-emerald-300">Manual pilot review</Link>
           <Link href="/admin/subscriptions/canonical/demo" className="rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-semibold text-blue-800 dark:border-blue-800 dark:text-blue-300">View synthetic demo</Link>

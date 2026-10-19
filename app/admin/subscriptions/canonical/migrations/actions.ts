@@ -11,12 +11,32 @@ import {
   classifyStandaloneInvoiceForMigration,
   createOwnerApprovedIndividualMigrationCampaign,
   createOwnerApprovedMigrationCampaign,
+  executeAutomaticManualMigration,
   executeSimpleIndividualMigration,
   executeOwnerApprovedMigrationCampaign,
 } from "@/lib/services/canonical-migration-campaign-service";
 
 function text(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
+}
+
+export async function runAutomaticManualMigrationAction(): Promise<void> {
+  const returnPath = "/admin/subscriptions/canonical/migrations";
+  let result: { campaignId: string | null; migrated: number; retainedForFollowUp: number };
+  try {
+    const owner = await requireMigrationOwner();
+    result = await executeAutomaticManualMigration({
+      ownerUserId: owner.id,
+      ownerEmail: owner.email,
+    });
+  } catch (error) {
+    destinationError(returnPath, error);
+  }
+  revalidatePath("/admin/subscriptions");
+  revalidatePath("/admin/subscriptions/canonical");
+  revalidatePath(returnPath);
+  const campaign = result.campaignId ? `&campaign=${encodeURIComponent(result.campaignId)}` : "";
+  redirect(`${returnPath}?automatic=1&migrated=${result.migrated}&followUp=${result.retainedForFollowUp}${campaign}`);
 }
 
 async function requireMigrationOwner() {

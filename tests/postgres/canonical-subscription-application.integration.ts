@@ -531,6 +531,47 @@ test("manual canonical activation creates one future schedule without issuing or
   assert.equal(await prisma.canonicalSubscriptionOperationalActivation.count({ where: { customerSubscriptionId: subscription.id } }), 1);
 });
 
+test("a migration shadow becomes canonical while ending the old manual schedule without billing", async () => {
+  const customer = await createCustomer("automatic-manual-migration");
+  const staff = await createStaff("automatic-manual-migration");
+  const subscription = await createMonthlySubscription(customer.id, "Automatic migration", [
+    { label: "Mapped service", serviceActivatedDate: "2026-10-01" },
+  ]);
+  await prisma.customerSubscription.update({ where: { id: subscription.id }, data: { controlMode: "shadow" } });
+  const legacySchedule = await prisma.recurringInvoiceSchedule.create({
+    data: {
+      customerId: customer.id,
+      name: "Legacy manual authority",
+      intervalMonths: 1,
+      nextIssueDate: new Date("2026-11-01T00:00:00.000Z"),
+      autoEmail: true,
+    },
+  });
+
+  const result = await activateCanonicalManualSubscription({
+    subscriptionId: subscription.id,
+    staffUserId: staff.id,
+    confirmationNote: "Automatic canonical migration retained the legacy financial history.",
+    initialBilling: { mode: "deferred" },
+    promoteMigrationShadow: true,
+    legacyScheduleId: legacySchedule.id,
+    environment: { NODE_ENV: "test", CANONICAL_SUBSCRIPTION_ACTIVATION_ENABLED: "true" },
+  });
+
+  const [canonical, oldSchedule, newSchedule, invoices] = await Promise.all([
+    prisma.customerSubscription.findUniqueOrThrow({ where: { id: subscription.id } }),
+    prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: legacySchedule.id } }),
+    prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: result.scheduleId } }),
+    prisma.invoice.count({ where: { customerId: customer.id } }),
+  ]);
+  assert.equal(canonical.controlMode, "canonical");
+  assert.equal(canonical.lifecycleStatus, "active");
+  assert.equal(oldSchedule.status, "ended");
+  assert.equal(newSchedule.status, "active");
+  assert.equal(newSchedule.autoEmail, false);
+  assert.equal(invoices, 0);
+});
+
 test("staff activation issues one initial invoice with exact service snapshots and one-time charges", async () => {
   const customer = await createCustomer("initial-invoice");
   const staff = await createStaff("initial-invoice");

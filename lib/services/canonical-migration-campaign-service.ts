@@ -28,6 +28,7 @@ import {
   activateOwnerApprovedManualMigration,
   getCanonicalManualPilotReview,
 } from "@/lib/services/canonical-manual-pilot-service";
+import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
 import { loadLegacyBillingSnapshot } from "@/lib/services/subscription-migration-analysis-service";
 import { getStripeClient, isStripeBillingEnabled } from "@/lib/stripe/config";
 
@@ -432,9 +433,9 @@ function candidateBlockers(
     blockers.push("Every active service needs an explicit agreed recurring price.");
   }
   if (!proposal.proposedCycleAmount) blockers.push("The recurring cycle amount is unresolved.");
-  if (customer.subscriptionOutstandingNativeBalance !== "0.00") {
-    blockers.push("Outstanding native balance requires owner review; migration never rewrites or settles it.");
-  }
+  // Migration retains invoices and balances exactly as they are. An outstanding
+  // balance remains operational work after the cutover, not a reason to leave
+  // an otherwise complete recurring agreement on the legacy data shape.
   if (proposal.sourceKind === "manual_invoice") {
     blockers.push("Standalone invoice coverage needs explicit staff-confirmed start and end dates before it can be migrated.");
   }
@@ -1184,6 +1185,95 @@ export async function executeOwnerApprovedMigrationCampaign(input: {
   }
   await refreshCampaignStatus(campaign.id);
   return totals;
+}
+
+export type AutomaticManualMigrationResult = {
+  campaignId: string | null;
+  selected: number;
+  migrated: number;
+  retainedForFollowUp: number;
+  failures: Array<{ customerId: string; message: string }>;
+};
+
+/**
+ * Converts every complete, currently recurring manual schedule in one owner
+ * action. The normal migration ledger and shadow transaction remain the
+ * source of audit and idempotency; this wrapper removes worksheet fields and
+ * per-customer confirmations. Stripe is deliberately excluded: this flow
+ * never calls Stripe or changes a provider subscription.
+ */
+export async function executeAutomaticManualMigration(input: {
+  ownerUserId: string;
+  ownerEmail: string;
+  environment?: CanonicalMigrationCampaignEnvironment;
+}): Promise<AutomaticManualMigrationResult> {
+  const dashboard = await getCanonicalMigrationCampaignDashboard();
+  const proposalIds = dashboard.candidates
+    .filter((candidate) => candidate.collectionMethod === "manual_invoice"
+      && candidate.sourceKind === "manual_schedule"
+      && candidate.eligibility === "eligible")
+    .map((candidate) => candidate.proposalId)
+    .sort();
+  if (!proposalIds.length) {
+    return { campaignId: null, selected: 0, migrated: 0, retainedForFollowUp: 0, failures: [] };
+  }
+
+  const campaign = await createOwnerApprovedMigrationCampaign({
+    proposalIds,
+    title: `Automatic manual migration ${new Date().toISOString().slice(0, 10)}`,
+    approvalReason: "Automatic canonical conversion using the current recurring schedule, mapped services, preserved cycle amount, and existing renewal date.",
+    ownerUserId: input.ownerUserId,
+    ownerEmail: input.ownerEmail,
+    confirmations: {
+      sourceAndServicesReviewed: true,
+      paidThroughAndRenewalReviewed: true,
+      financialHistoryPreserved: true,
+      legacyAuthorityRetained: true,
+    },
+  });
+  await executeOwnerApprovedMigrationCampaign({
+    campaignId: campaign.id,
+    ownerUserId: input.ownerUserId,
+    ownerEmail: input.ownerEmail,
+    environment: input.environment,
+  });
+
+  const entries = await prisma.canonicalMigrationCampaignEntry.findMany({
+    where: { campaignId: campaign.id },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { customerId: true, sourceKind: true, sourceId: true, targetSubscriptionId: true, status: true },
+  });
+  const failures: AutomaticManualMigrationResult["failures"] = [];
+  let migrated = 0;
+  let retainedForFollowUp = 0;
+  for (const entry of entries) {
+    if (entry.status !== "migrated" || entry.sourceKind !== "manual_schedule" || !entry.targetSubscriptionId) {
+      retainedForFollowUp += 1;
+      continue;
+    }
+    try {
+      await activateCanonicalManualSubscription({
+        subscriptionId: entry.targetSubscriptionId,
+        staffUserId: input.ownerUserId,
+        confirmationNote: "Automatic legacy-to-canonical migration. Existing invoices, payments, and source schedule history were retained; no initial invoice or notification was created.",
+        initialBilling: { mode: "deferred" },
+        promoteMigrationShadow: true,
+        legacyScheduleId: entry.sourceId,
+        environment: input.environment,
+      });
+      migrated += 1;
+    } catch (error) {
+      // The durable shadow remains read-only and the old schedule stays active
+      // when the activation transaction fails, so this entry can be surfaced
+      // without risking duplicate authority or financial changes.
+      retainedForFollowUp += 1;
+      failures.push({
+        customerId: entry.customerId,
+        message: error instanceof Error ? error.message : "Canonical activation could not complete.",
+      });
+    }
+  }
+  return { campaignId: campaign.id, selected: proposalIds.length, migrated, retainedForFollowUp, failures };
 }
 
 export type SimpleIndividualMigrationInput = {
