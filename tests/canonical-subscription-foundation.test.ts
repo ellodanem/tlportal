@@ -22,17 +22,27 @@ const migrationSql = readFileSync(
   "utf8",
 );
 
-test("canonical billing intervals support only 1, 3, 6, and 12 months", () => {
-  for (const interval of [1, 3, 6, 12]) {
+const fourMonthMigrationSql = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../prisma/migrations/20261019173000_four_month_canonical_terms/migration.sql",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+
+test("canonical billing intervals support 1, 3, 4, 6, and 12 months", () => {
+  for (const interval of [1, 3, 4, 6, 12]) {
     assert.equal(isSupportedSubscriptionIntervalMonths(interval), true);
     assert.doesNotThrow(() => assertSupportedSubscriptionIntervalMonths(interval));
   }
 
-  for (const interval of [0, 2, 4, 13, 1.5]) {
+  for (const interval of [0, 2, 5, 13, 1.5]) {
     assert.equal(isSupportedSubscriptionIntervalMonths(interval), false);
     assert.throws(
       () => assertSupportedSubscriptionIntervalMonths(interval),
-      /1, 3, 6, or 12 months/,
+      /1, 3, 4, 6, or 12 months/,
     );
   }
 });
@@ -80,6 +90,14 @@ test("canonical dates, money, and collection dimensions use explicit database ty
     migrationSql,
     /"billingIntervalMonths" IS NULL OR "billingIntervalMonths" IN \(1, 3, 6, 12\)/,
   );
+});
+
+test("four-month support is additive and updates every canonical rate constraint", () => {
+  for (const table of ["CustomerSubscription", "SubscriptionItemRate", "SubscriptionProviderItem", "CanonicalManualPilotActivation"]) {
+    assert.match(fourMonthMigrationSql, new RegExp(`ALTER TABLE "${table}"`));
+  }
+  assert.equal((fourMonthMigrationSql.match(/IN \(1, 3, 4, 6, 12\)/g) ?? []).length, 4);
+  assert.doesNotMatch(fourMonthMigrationSql, /DELETE\s+FROM|UPDATE\s+"(?:CustomerSubscription|SubscriptionItemRate|SubscriptionProviderItem)"/i);
 });
 
 test("historical invoices and recurring schedules remain valid without attribution", () => {

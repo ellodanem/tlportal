@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/lib/auth/get-session";
+import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import { prisma } from "@/lib/db";
 import { createRecurringSchedule } from "@/lib/services/native-recurring-schedule-service";
 import { startStripeCheckout } from "@/lib/services/billing-service";
@@ -57,7 +58,7 @@ export async function createSubscriptionAction(
   const monthlyRateXcd = rateRaw === "default" || !rateRaw ? null : customRate;
 
   if (!customerId) return { error: "Choose a customer." };
-  if (![1, 3, 6, 12].includes(months)) return { error: "Choose a valid term." };
+  if (!isSupportedSubscriptionIntervalMonths(months)) return { error: "Choose a valid term." };
   if (rateRaw && rateRaw !== "default" && customRate == null) return { error: "Enter a valid monthly rate." };
   if (collectionMethod !== "card" && collectionMethod !== "manual") return { error: "Choose a collection method." };
 

@@ -9,11 +9,12 @@ import { SUBSCRIPTION_PLAN_MONTHS } from "./display";
 const DEFAULT_PRICE_XCD: Record<(typeof SUBSCRIPTION_PLAN_MONTHS)[number], number> = {
   1: 30,
   3: 90,
+  4: 120,
   6: 180,
   12: 330,
 };
 
-/** Ensures exactly the four standard tiers exist (e.g. after deploy or migration). */
+/** Ensures the supported standard tiers exist (e.g. after deploy or migration). */
 export async function ensureSubscriptionPlanRows(): Promise<void> {
   for (const months of SUBSCRIPTION_PLAN_MONTHS) {
     const existing = await prisma.subscriptionOption.findUnique({

@@ -1,3 +1,5 @@
+import { isSupportedSubscriptionIntervalMonths } from "./canonical-subscription";
+
 export type MigrationReviewStatus =
   | "ready_for_review"
   | "needs_confirmation"
@@ -277,7 +279,7 @@ function money(value: number): string {
 }
 
 function normalizedMonthly(cycleAmount: string | null, interval: number): string | null {
-  if (!cycleAmount || ![1, 3, 6, 12].includes(interval)) return null;
+  if (!cycleAmount || !isSupportedSubscriptionIntervalMonths(interval)) return null;
   return money(Math.round(cents(cycleAmount) / interval));
 }
 
@@ -383,11 +385,11 @@ function subscriptionSeed(
 ): ProposalSeed {
   const issues: MigrationIssue[] = [];
   const interval = subscription.planTermMonths;
-  if (![1, 3, 6, 12].includes(interval)) {
+  if (!isSupportedSubscriptionIntervalMonths(interval)) {
     issues.push(issue(
       "unsupported_interval",
       "conflict",
-      "The legacy term is not supported by the canonical 1/3/6/12 month cadence.",
+      "The legacy term is not supported by the canonical 1/3/4/6/12 month cadence.",
       [subscription.id],
     ));
   }
@@ -592,11 +594,11 @@ function scheduleSeed(
       [schedule.id],
     ));
   }
-  if (![1, 3, 6, 12].includes(schedule.intervalMonths)) {
+  if (!isSupportedSubscriptionIntervalMonths(schedule.intervalMonths)) {
     issues.push(issue(
       "unsupported_interval",
       "conflict",
-      "The recurring schedule cadence is not supported by the canonical 1/3/6/12 month cadence.",
+      "The recurring schedule cadence is not supported by the canonical 1/3/4/6/12 month cadence.",
       [schedule.id],
     ));
   }
@@ -690,7 +692,7 @@ function manualInvoiceSeed(
   );
   const intervals = [...new Set(activeAssignments
     .flatMap((assignment) => assignment.intervalMonths != null ? [assignment.intervalMonths] : [])
-    .filter((interval) => [1, 3, 6, 12].includes(interval)))];
+    .filter((interval) => isSupportedSubscriptionIntervalMonths(interval)))];
   const interval = intervals.length === 1 ? intervals[0] : 0;
   if (!interval) {
     issues.push(issue(
@@ -961,6 +963,11 @@ export function analyzeSubscriptionMigration(
   ];
 
   const legacySubscriptions = sorted(snapshot.subscriptions.filter((entry) => entry.controlMode === "legacy"));
+  const canonicalSubscriptionIds = new Set(
+    snapshot.subscriptions
+      .filter((entry) => entry.controlMode !== "legacy")
+      .map((entry) => entry.id),
+  );
   const schedules = sorted(snapshot.recurringSchedules);
   const unlinkedSchedules = schedules.filter((entry) => entry.customerId == null);
   if (unlinkedSchedules.length) {
@@ -984,7 +991,13 @@ export function analyzeSubscriptionMigration(
       ));
     }
     const customerSubscriptions = legacySubscriptions.filter((entry) => entry.customerId === customer.id);
-    const customerSchedules = schedules.filter((entry) => entry.customerId === customer.id);
+    // Canonical schedules are already owned by a canonical agreement. They are
+    // retained in the source snapshot for audit/reconciliation, but must never
+    // be rediscovered as a legacy arrangement to migrate.
+    const customerSchedules = schedules.filter((entry) =>
+      entry.customerId === customer.id
+      && !(entry.customerSubscriptionId && canonicalSubscriptionIds.has(entry.customerSubscriptionId)),
+    );
     const customerAssignments = sorted(snapshot.assignments.filter((entry) => entry.customerId === customer.id));
     const activeAssignments = customerAssignments.filter((entry) =>
       entry.endDate == null && ACTIVE_ASSIGNMENT_STATUSES.has(entry.status),

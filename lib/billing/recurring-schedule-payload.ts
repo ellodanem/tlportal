@@ -3,6 +3,7 @@ import "server-only";
 import type { RecurringScheduleStatus } from "@prisma/client";
 
 import type { NativeInvoicePdfLine } from "@/lib/billing/native-invoice-pdf";
+import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 
 export type RecurringScheduleRequestPayload = {
   name: string | null;
@@ -19,8 +20,6 @@ export type RecurringScheduleRequestPayload = {
   serviceAssignmentId: string | null;
   lineItems: NativeInvoicePdfLine[];
 };
-
-const ALLOWED_INTERVALS = new Set([1, 3, 6, 12]);
 
 function parseYmd(raw: string, field: string): Date | { error: string } {
   const s = raw.trim();
@@ -70,8 +69,8 @@ export function parseRecurringScheduleRequestBody(
   if ("error" in lineParsed) return lineParsed;
 
   const intervalMonths = Number(b.intervalMonths ?? 1);
-  if (!ALLOWED_INTERVALS.has(intervalMonths)) {
-    return { error: "Interval must be 1, 3, 6, or 12 months." };
+  if (!isSupportedSubscriptionIntervalMonths(intervalMonths)) {
+    return { error: "Interval must be 1, 3, 4, 6, or 12 months." };
   }
 
   const dueDaysAfterIssue = Number(b.dueDaysAfterIssue ?? 30);

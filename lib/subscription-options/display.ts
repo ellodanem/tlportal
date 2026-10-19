@@ -1,5 +1,7 @@
+import { SUPPORTED_SUBSCRIPTION_INTERVAL_MONTHS } from "@/lib/domain/canonical-subscription";
+
 /** Fixed billing terms on the public registration form (admin edits price only). */
-export const SUBSCRIPTION_PLAN_MONTHS = [1, 3, 6, 12] as const;
+export const SUBSCRIPTION_PLAN_MONTHS = SUPPORTED_SUBSCRIPTION_INTERVAL_MONTHS;
 export type SubscriptionPlanMonths = (typeof SUBSCRIPTION_PLAN_MONTHS)[number];
 
 const PLAN_MONTHS_SET: ReadonlySet<number> = new Set(SUBSCRIPTION_PLAN_MONTHS);
@@ -19,7 +21,7 @@ export function parseSubscriptionIntervalMonths(
   if (!Number.isFinite(n) || !PLAN_MONTHS_SET.has(n)) {
     return {
       ok: false,
-      error: "Choose a billing term of 1, 3, 6, or 12 months, or leave unset.",
+      error: "Choose a billing term of 1, 3, 4, 6, or 12 months, or leave unset.",
     };
   }
   return { ok: true, value: n };

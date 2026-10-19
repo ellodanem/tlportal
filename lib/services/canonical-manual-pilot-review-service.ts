@@ -516,7 +516,7 @@ export async function buildCanonicalManualPilotMigrationPlan(
     reference: input.reference,
     collectionMethod: "manual_invoice",
     lifecycleStatus: "active",
-    billingIntervalMonths: proposal.billingIntervalMonths as 1 | 3 | 6 | 12,
+      billingIntervalMonths: proposal.billingIntervalMonths as 1 | 3 | 4 | 6 | 12,
     currency: proposal.currency,
     commercialStartDate: input.commercialStartDate,
     billingAnchorDate: input.billingAnchorDate,

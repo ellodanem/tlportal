@@ -69,7 +69,7 @@ export type ApprovedArrangementDecision = {
   reference: string;
   collectionMethod: CollectionMethod;
   lifecycleStatus: LifecycleStatus;
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   currency: string;
   commercialStartDate: string;
   billingAnchorDate: string;
@@ -112,7 +112,7 @@ export type CanonicalMigrationPlanEntry = {
     reference: string;
     collectionMethod: CollectionMethod;
     lifecycleStatus: LifecycleStatus;
-    billingIntervalMonths: 1 | 3 | 6 | 12;
+    billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
     currency: string;
     commercialStartDate: string;
     billingAnchorDate: string;
@@ -318,10 +318,10 @@ function normalizeDecision(
   if (!CURRENCY_PATTERN.test(currency)) {
     throw new CanonicalMigrationPlanningError("INVALID_CURRENCY", "currency must be a three-letter code.", proposalId);
   }
-  if (![1, 3, 6, 12].includes(decision.billingIntervalMonths)) {
+  if (![1, 3, 4, 6, 12].includes(decision.billingIntervalMonths)) {
     throw new CanonicalMigrationPlanningError(
       "INVALID_INTERVAL",
-      "billingIntervalMonths must be 1, 3, 6, or 12.",
+      "billingIntervalMonths must be 1, 3, 4, 6, or 12.",
       proposalId,
     );
   }

@@ -22,7 +22,7 @@ function snapshot(): LegacyBillingSnapshot {
     customers: [{ id: "customer-1", billingMode: "stripe_subscription", archivedAt: null }],
     subscriptions: [],
     billingAccounts: [],
-    catalogPrices: [1, 3, 6, 12].map((durationMonths) => ({
+    catalogPrices: [1, 3, 4, 6, 12].map((durationMonths) => ({
       id: `catalog-${durationMonths}`,
       monthlyRateXcd: "25.00",
       durationMonths,
@@ -482,6 +482,15 @@ test("a canceled source with active service assignments is a conflict", () => {
   const proposal = analyzeSubscriptionMigration(input).customers[0].proposals[0];
   assert.equal(proposal.reviewStatus, "conflict");
   assert.ok(issueCodes(proposal).includes("closed_arrangement_has_active_assignments"));
+});
+
+test("17a: four-month arrangements remain supported migration candidates", () => {
+  const input = snapshot();
+  input.subscriptions.push(subscription({ planTermMonths: 4, monthlyRateXcd: "30.00", vehicleCount: 1 }));
+  input.assignments.push(assignment({ intervalMonths: 4 }));
+  const proposal = analyzeSubscriptionMigration(input).customers[0]!.proposals[0]!;
+  assert.equal(issueCodes(proposal).includes("unsupported_interval"), false);
+  assert.equal(proposal.billingIntervalMonths, 4);
 });
 
 test("historical canceled rows do not prevent the current arrangement from owning its services", () => {

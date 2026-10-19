@@ -62,7 +62,7 @@ export function computeNextDueAfterPayment(
 ): { baseDate: Date; newNextDue: Date } | { error: string } {
   const months = assignment.intervalMonths;
   if (months == null || !Number.isFinite(months) || months <= 0) {
-    return { error: "Set a billing term (1, 3, 6, or 12 months) on this assignment before marking paid." };
+    return { error: "Set a billing term (1, 3, 4, 6, or 12 months) on this assignment before marking paid." };
   }
   const baseDate = resolveAdvanceBaseDate(assignment);
   return { baseDate, newNextDue: addCalendarMonths(baseDate, months) };

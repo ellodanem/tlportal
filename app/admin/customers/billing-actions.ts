@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/lib/auth/get-session";
+import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import { prisma } from "@/lib/db";
 import { sendAppEmail } from "@/lib/email/send-mail";
 import {
@@ -120,8 +121,8 @@ async function parseCheckoutForm(formData: FormData): Promise<
   if (!customerId) {
     return { error: "Missing customer id." };
   }
-  if (![1, 3, 6, 12].includes(months)) {
-    return { error: "Choose a valid plan term (1, 3, 6, or 12 months)." };
+  if (!isSupportedSubscriptionIntervalMonths(months)) {
+    return { error: "Choose a valid plan term (1, 3, 4, 6, or 12 months)." };
   }
 
   const vehicleCount = parseVehicleCount(String(formData.get("vehicleCount") ?? "")) ?? 1;
@@ -834,8 +835,8 @@ export async function setStripeMonthlyRateAction(
   }
 
   const months = Number(String(formData.get("durationMonths") ?? ""));
-  if (![1, 3, 6, 12].includes(months)) {
-    return { error: "Choose a valid plan term (1, 3, 6, or 12 months)." };
+  if (!isSupportedSubscriptionIntervalMonths(months)) {
+    return { error: "Choose a valid plan term (1, 3, 4, 6, or 12 months)." };
   }
   const vehicleCount = parseVehicleCount(String(formData.get("vehicleCount") ?? "")) ?? 1;
 

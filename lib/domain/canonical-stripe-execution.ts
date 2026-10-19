@@ -151,7 +151,7 @@ export type CanonicalStripeOperationProposal = {
   billingAnchorDate: Date;
   nextBillingDate: Date;
   currency: string;
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   actions: CanonicalStripeOperationAction[];
   rateGroups: ReturnType<typeof serializedGroups>;
 };

@@ -218,6 +218,25 @@ const standaloneInvoiceWhere: Prisma.InvoiceWhereInput = {
  */
 function isCampaignProposal(snapshot: LegacyBillingSnapshot, proposal: SubscriptionMigrationProposal): boolean {
   if (["canceled", "ended"].includes(proposal.lifecycleStatus)) return false;
+  // A schedule attached to a canonical subscription is a future billing
+  // schedule, not another legacy source. Keep it in the audit snapshot while
+  // excluding it from the migration queue.
+  const sourceSchedule = proposal.sourceKind === "manual_schedule"
+    ? snapshot.recurringSchedules.find((schedule) => schedule.id === proposal.sourceId)
+    : null;
+  if (sourceSchedule?.customerSubscriptionId) {
+    const scheduleSubscription = snapshot.subscriptions.find(
+      (subscription) => subscription.id === sourceSchedule.customerSubscriptionId,
+    );
+    // Retain schedules belonging to a legacy subscription as migration sources.
+    // A canonical (or missing) parent must never be presented as a new legacy
+    // arrangement to migrate.
+    if (!scheduleSubscription || scheduleSubscription.controlMode !== "legacy") return false;
+  }
+  const sourceSubscription = proposal.sourceKind === "legacy_subscription" || proposal.sourceKind === "stripe_subscription"
+    ? snapshot.subscriptions.find((subscription) => subscription.id === proposal.sourceId)
+    : null;
+  if (sourceSubscription && sourceSubscription.controlMode !== "legacy") return false;
   if (proposal.sourceKind !== "manual_invoice") return true;
   const invoice = snapshot.invoices.find((entry) => entry.id === proposal.sourceId);
   if (invoice?.migrationClassification !== "recurring_evidence") return false;
@@ -228,6 +247,24 @@ function isCampaignProposal(snapshot: LegacyBillingSnapshot, proposal: Subscript
     subscription.customerId === proposal.customerId && subscription.status !== "canceled",
   );
   return !hasActiveSchedule && !hasCurrentSubscription;
+}
+
+/**
+ * Prior billing attempts remain historical evidence.  They should not make a
+ * customer appear repeatedly in the actionable migration queue when a richer
+ * current source already owns the customer's services.
+ */
+function isHistoricalDuplicateProposal(snapshot: LegacyBillingSnapshot, proposal: SubscriptionMigrationProposal): boolean {
+  if (proposal.proposedItems.length || proposal.billingAnchorDate || proposal.nextBillingDate) return false;
+  if (proposal.sourceKind === "legacy_subscription" && proposal.collectionMethod == null) return true;
+  if (proposal.sourceKind !== "stripe_subscription" || proposal.providerSubscriptionId) return false;
+  return snapshot.subscriptions.some((subscription) =>
+    subscription.customerId === proposal.customerId
+    && subscription.id !== proposal.sourceId
+    && subscription.controlMode === "legacy"
+    && subscription.status !== "canceled"
+    && Boolean(subscription.stripeSubscriptionId),
+  );
 }
 
 /**
@@ -568,7 +605,7 @@ export async function getCanonicalMigrationCampaignDashboard(): Promise<Migratio
   const customerNames = new Map(customers.map((customer) => [customer.id, customerLabel(customer)]));
   const ledgerBySource = new Map(ledgers.map((entry) => [`${entry.sourceKind}:${entry.sourceId}`, entry]));
   const candidates = analysis.customers.flatMap((customer) => customer.proposals
-    .filter((proposal) => isCampaignProposal(snapshot, proposal))
+    .filter((proposal) => isCampaignProposal(snapshot, proposal) && !isHistoricalDuplicateProposal(snapshot, proposal))
     .map((proposal) => candidateFor(
     snapshot,
     customer,
@@ -684,7 +721,7 @@ function decisionForCandidate(
     reference: `migration-${proposal.sourceKind}-${proposal.sourceId}`,
     collectionMethod: "manual_invoice",
     lifecycleStatus: proposal.lifecycleStatus === "paused" ? "paused" : "active",
-    billingIntervalMonths: proposal.billingIntervalMonths as 1 | 3 | 6 | 12,
+    billingIntervalMonths: proposal.billingIntervalMonths as 1 | 3 | 4 | 6 | 12,
     currency: proposal.currency,
     commercialStartDate: anchor,
     billingAnchorDate: anchor,
@@ -1016,7 +1053,7 @@ export async function createOwnerApprovedIndividualMigrationCampaign(input: {
     reference: `migration-${found.proposal.sourceKind}-${found.proposal.sourceId}`,
     collectionMethod: found.proposal.collectionMethod ?? "manual_invoice",
     lifecycleStatus: found.proposal.lifecycleStatus === "paused" ? "paused" : "active",
-    billingIntervalMonths: found.proposal.billingIntervalMonths as 1 | 3 | 6 | 12,
+    billingIntervalMonths: found.proposal.billingIntervalMonths as 1 | 3 | 4 | 6 | 12,
     currency: found.proposal.currency,
     commercialStartDate: input.commercialStartDate,
     billingAnchorDate: input.billingAnchorDate,

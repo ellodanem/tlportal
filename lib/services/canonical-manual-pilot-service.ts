@@ -413,7 +413,7 @@ async function loadPilotReview(
     migrationPlanFingerprint: ledger.planFingerprint,
     sourceStateFingerprint,
     cutoverPeriodStart: dateOnly(cutoverPeriodStart),
-    billingIntervalMonths: subscription.billingIntervalMonths as 1 | 3 | 6 | 12,
+    billingIntervalMonths: subscription.billingIntervalMonths as 1 | 3 | 4 | 6 | 12,
     currency: (subscription.currency ?? legacySchedule?.currency ?? sourceInvoice?.currency ?? "XCD").toUpperCase(),
     recurringAmount,
     itemCount: cycle?.lines.length ?? 0,

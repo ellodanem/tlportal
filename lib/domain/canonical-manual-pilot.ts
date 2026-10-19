@@ -67,7 +67,7 @@ export type CanonicalManualPilotProposal = {
   migrationPlanFingerprint: string;
   sourceStateFingerprint: string;
   cutoverPeriodStart: string;
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   currency: string;
   recurringAmount: string;
   itemCount: number;

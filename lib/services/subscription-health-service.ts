@@ -302,7 +302,7 @@ export async function getSubscriptionHealthReport() {
     }
   }
 
-  const planMix: SubscriptionHealthPlanMixRow[] = [1, 3, 6, 12].map((months) => ({
+  const planMix: SubscriptionHealthPlanMixRow[] = [1, 3, 4, 6, 12].map((months) => ({
     planTermMonths: months,
     label: months === 1 ? "1 mo" : `${months} mo`,
     count: planMixMap.get(months) ?? 0,

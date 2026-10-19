@@ -118,7 +118,7 @@ export type CanonicalBillingCycleLine = {
 };
 
 export type CanonicalBillingCycle = {
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   currency: string;
   periodStart: Date;
   lines: CanonicalBillingCycleLine[];

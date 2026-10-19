@@ -3,12 +3,13 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { isCatalogRateTier, normalizeRateXcd } from "@/lib/domain/billing-catalog";
+import { SUPPORTED_SUBSCRIPTION_INTERVAL_MONTHS } from "@/lib/domain/canonical-subscription";
 import { prisma } from "@/lib/db";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
 
 import { resolveCatalogStripePriceId } from "./catalog-price-ids";
 
-const PLAN_MONTHS = [1, 3, 6, 12] as const;
+const PLAN_MONTHS = SUPPORTED_SUBSCRIPTION_INTERVAL_MONTHS;
 
 export function stripeCheckoutCurrency(): string {
   return (process.env.STRIPE_CHECKOUT_CURRENCY?.trim() || "xcd").toLowerCase();

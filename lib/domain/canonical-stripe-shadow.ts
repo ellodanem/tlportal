@@ -74,7 +74,7 @@ export type CanonicalStripeConfigurationInput = CanonicalBillingConfigurationInp
 export type CanonicalStripeRateGroup = {
   fingerprint: string;
   currency: string;
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   agreedAmountPerCycle: Prisma.Decimal;
   quantity: number;
   recurringTotal: Prisma.Decimal;
@@ -97,7 +97,7 @@ export type CanonicalStripeRateGroupPlan = {
   billingAnchorDate: Date;
   nextBillingDate: Date;
   currency: string;
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   expectedRecurringTotal: Prisma.Decimal;
   groups: CanonicalStripeRateGroup[];
 };

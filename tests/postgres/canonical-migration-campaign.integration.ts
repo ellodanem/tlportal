@@ -261,6 +261,12 @@ test("automatic manual migration promotes one complete schedule without issuing 
   assert.equal(canonical.recurringSchedules[0]?.status, "active");
   assert.equal(canonical.operationalActivation?.initialInvoiceId, null);
   assert.equal(await prisma.invoice.count({ where: { customerId: input.customer.id } }), beforeInvoices);
+  const dashboard = await getCanonicalMigrationCampaignDashboard();
+  assert.equal(
+    dashboard.candidates.some((candidate) => candidate.sourceId === canonical.recurringSchedules[0]!.id),
+    false,
+    "a canonical future schedule must not be offered as another legacy migration source",
+  );
 });
 
 test("campaign: source changes after owner approval block only that entry without creating billing records", async () => {

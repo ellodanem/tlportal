@@ -17,6 +17,7 @@ import {
 } from "@/lib/billing/recurring-period";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { prisma } from "@/lib/db";
+import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import {
   computeLineTotal,
   toMoneyString,
@@ -56,7 +57,6 @@ export type CreateRecurringScheduleInput = {
   lineItems: RecurringScheduleLineInput[];
 };
 
-const ALLOWED_INTERVALS = new Set([1, 3, 6, 12]);
 const MAX_CATCHUP_PER_RUN = 12;
 const DELIVERY_RETRY_LIMIT = 25;
 const DELIVERY_CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
@@ -74,8 +74,8 @@ function lineCreateData(lines: RecurringScheduleLineInput[]) {
 
 function validateScheduleInput(input: CreateRecurringScheduleInput): void {
   if (!input.lineItems.length) throw new Error("A schedule needs at least one line item.");
-  if (!ALLOWED_INTERVALS.has(input.intervalMonths)) {
-    throw new Error("Interval must be 1, 3, 6, or 12 months.");
+  if (!isSupportedSubscriptionIntervalMonths(input.intervalMonths)) {
+    throw new Error("Interval must be 1, 3, 4, 6, or 12 months.");
   }
   const billTo = input.billToLines ?? [];
   if (!input.customerId && !billTo.length && !input.billToName?.trim()) {

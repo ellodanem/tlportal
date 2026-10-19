@@ -1,4 +1,9 @@
-export const SUPPORTED_SUBSCRIPTION_INTERVAL_MONTHS = [1, 3, 6, 12] as const;
+/**
+ * Commercial cadences supported by canonical billing. Four-month terms are
+ * required for the existing Howard and Autozone agreements; keep this list
+ * shared so validation and UI do not drift from the database constraints.
+ */
+export const SUPPORTED_SUBSCRIPTION_INTERVAL_MONTHS = [1, 3, 4, 6, 12] as const;
 
 export type SupportedSubscriptionIntervalMonths =
   (typeof SUPPORTED_SUBSCRIPTION_INTERVAL_MONTHS)[number];
@@ -15,7 +20,7 @@ export function assertSupportedSubscriptionIntervalMonths(
   value: number,
 ): asserts value is SupportedSubscriptionIntervalMonths {
   if (!isSupportedSubscriptionIntervalMonths(value)) {
-    throw new Error("Billing interval must be 1, 3, 6, or 12 months.");
+    throw new Error("Billing interval must be 1, 3, 4, 6, or 12 months.");
   }
 }
 

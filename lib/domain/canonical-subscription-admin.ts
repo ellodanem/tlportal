@@ -314,6 +314,7 @@ export function filterCanonicalSubscriptionAdminRows(
 export function canonicalIntervalLabel(months: number | null): string {
   if (months === 1) return "Monthly";
   if (months === 3) return "Quarterly";
+  if (months === 4) return "Every 4 months";
   if (months === 6) return "Every 6 months";
   if (months === 12) return "Annual";
   return "Not configured";

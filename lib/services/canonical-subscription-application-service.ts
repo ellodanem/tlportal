@@ -147,7 +147,7 @@ async function requireEditableSubscription(
 
 function requireCanonicalCommercialFields(subscription: EditableSubscription): {
   lifecycleStatus: SubscriptionLifecycleStatus;
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   currency: string;
   agreedAmountPerCycle: Prisma.Decimal;
   nextBillingDate: Date;

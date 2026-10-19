@@ -60,7 +60,7 @@ export type CanonicalStripeShadowReadModel = {
   controlMode: "shadow" | "canonical";
   expectedRecurringTotal: string;
   currency: string;
-  billingIntervalMonths: 1 | 3 | 6 | 12;
+  billingIntervalMonths: 1 | 3 | 4 | 6 | 12;
   billingAnchorDate: Date;
   nextBillingDate: Date;
   rateGroups: {
