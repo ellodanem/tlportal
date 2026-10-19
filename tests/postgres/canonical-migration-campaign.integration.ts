@@ -131,6 +131,27 @@ test("campaign review accepts an encoded proposal ID from the individual-review 
   assert.equal(review.proposal.proposalId, proposalId);
 });
 
+test("campaign dashboard hides canceled historical authorities without hiding the current arrangement", async () => {
+  const input = await fixture("campaign-historical-authority");
+  const canceled = await prisma.customerSubscription.create({
+    data: {
+      customerId: input.customer.id,
+      controlMode: "legacy",
+      status: "canceled",
+      planTermMonths: 1,
+      monthlyRateXcd: "30.00",
+      vehicleCount: 1,
+      currency: "XCD",
+    },
+  });
+  const dashboard = await getCanonicalMigrationCampaignDashboard();
+  const customerCandidates = dashboard.candidates.filter((candidate) => candidate.customerId === input.customer.id);
+  assert.equal(customerCandidates.some((candidate) => candidate.sourceId === canceled.id), false);
+  assert.equal(customerCandidates.some((candidate) => candidate.sourceId === input.schedule.id), true);
+  const current = customerCandidates.find((candidate) => candidate.sourceId === input.schedule.id);
+  assert.equal(current?.serviceCount, 1);
+});
+
 test("one-off invoice classification is audited without changing financial history", async () => {
   const input = await fixture("campaign-one-off-classification");
   await prisma.recurringInvoiceSchedule.delete({ where: { id: input.schedule.id } });

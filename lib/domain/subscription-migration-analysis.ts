@@ -1059,15 +1059,24 @@ export function analyzeSubscriptionMigration(
         snapshot.payments,
       )),
     ];
+    // Historical canceled/ended arrangements remain in the audit analysis, but
+    // they must not compete with a current arrangement for active services.
+    // Otherwise every old checkout/subscription attempt makes the real source
+    // appear to have zero safely attributable services.
+    const currentSeeds = seeds.filter((seed) =>
+      !["canceled", "ended"].includes(seed.proposal.lifecycleStatus),
+    );
     const proposalCounts = new Map<number, number>();
-    for (const seed of seeds) {
+    for (const seed of currentSeeds) {
       const interval = seed.proposal.billingIntervalMonths;
       proposalCounts.set(interval, (proposalCounts.get(interval) ?? 0) + 1);
     }
     let proposals = seeds.map((seed) => allocateItems(
       seed,
       candidateAssignments(snapshot.assignments, customer.id, seed.proposal.billingIntervalMonths),
-      proposalCounts.get(seed.proposal.billingIntervalMonths) ?? 0,
+      ["canceled", "ended"].includes(seed.proposal.lifecycleStatus)
+        ? 1
+        : proposalCounts.get(seed.proposal.billingIntervalMonths) ?? 0,
     ));
     if (customerIssues.some((entry) => entry.severity === "conflict")) {
       proposals = proposals.map((proposal) => ({

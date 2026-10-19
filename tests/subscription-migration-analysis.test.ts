@@ -484,6 +484,22 @@ test("a canceled source with active service assignments is a conflict", () => {
   assert.ok(issueCodes(proposal).includes("closed_arrangement_has_active_assignments"));
 });
 
+test("historical canceled rows do not prevent the current arrangement from owning its services", () => {
+  const input = snapshot();
+  input.subscriptions.push(
+    subscription({ id: "subscription-current" }),
+    subscription({ id: "subscription-canceled", status: "canceled", stripeSubscriptionId: "sub_old" }),
+  );
+  input.assignments.push(assignment());
+  const proposals = analyzeSubscriptionMigration(input).customers[0].proposals;
+  const current = proposals.find((proposal) => proposal.sourceId === "subscription-current");
+  const historical = proposals.find((proposal) => proposal.sourceId === "subscription-canceled");
+  assert.equal(current?.proposedItems.length, 1);
+  assert.equal(current?.reviewStatus, "ready_for_review");
+  assert.equal(historical?.reviewStatus, "conflict");
+  assert.ok(issueCodes(historical!).includes("closed_arrangement_has_active_assignments"));
+});
+
 test("a manual schedule linked to a legacy subscription is one arrangement, not two", () => {
   const input = snapshot();
   input.customers[0].billingMode = "manual_legacy";

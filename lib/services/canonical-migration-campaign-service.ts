@@ -216,6 +216,7 @@ const standaloneInvoiceWhere: Prisma.InvoiceWhereInput = {
  * Stripe subscription for the same customer.
  */
 function isCampaignProposal(snapshot: LegacyBillingSnapshot, proposal: SubscriptionMigrationProposal): boolean {
+  if (["canceled", "ended"].includes(proposal.lifecycleStatus)) return false;
   if (proposal.sourceKind !== "manual_invoice") return true;
   const invoice = snapshot.invoices.find((entry) => entry.id === proposal.sourceId);
   if (invoice?.migrationClassification !== "recurring_evidence") return false;

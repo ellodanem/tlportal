@@ -40,6 +40,7 @@ function destinationError(path: string, error: unknown): never {
 
 export async function approveMigrationCampaignAction(formData: FormData): Promise<void> {
   const returnPath = "/admin/subscriptions/canonical/migrations";
+  let campaignId: string;
   try {
     const owner = await requireMigrationOwner();
     const campaign = await createOwnerApprovedMigrationCampaign({
@@ -55,16 +56,18 @@ export async function approveMigrationCampaignAction(formData: FormData): Promis
         legacyAuthorityRetained: text(formData, "confirmLegacyAuthority") === "yes",
       },
     });
-    revalidatePath(returnPath);
-    redirect(`/admin/subscriptions/canonical/migrations/${campaign.id}?approved=1`);
+    campaignId = campaign.id;
   } catch (error) {
     destinationError(returnPath, error);
   }
+  revalidatePath(returnPath);
+  redirect(`/admin/subscriptions/canonical/migrations/${campaignId}?approved=1`);
 }
 
 export async function executeMigrationCampaignAction(formData: FormData): Promise<void> {
   const campaignId = text(formData, "campaignId");
   const returnPath = `/admin/subscriptions/canonical/migrations/${encodeURIComponent(campaignId)}`;
+  let outcome: { migrated: number; blocked: number; failed: number };
   try {
     const owner = await requireMigrationOwner();
     const result = await executeOwnerApprovedMigrationCampaign({
@@ -72,18 +75,20 @@ export async function executeMigrationCampaignAction(formData: FormData): Promis
       ownerUserId: owner.id,
       ownerEmail: owner.email,
     });
-    revalidatePath("/admin/subscriptions/canonical");
-    revalidatePath("/admin/subscriptions/canonical/migrations");
-    revalidatePath(returnPath);
-    redirect(`${returnPath}?migrated=${result.migrated}&blocked=${result.blocked}&failed=${result.failed}`);
+    outcome = result;
   } catch (error) {
     destinationError(returnPath, error);
   }
+  revalidatePath("/admin/subscriptions/canonical");
+  revalidatePath("/admin/subscriptions/canonical/migrations");
+  revalidatePath(returnPath);
+  redirect(`${returnPath}?migrated=${outcome.migrated}&blocked=${outcome.blocked}&failed=${outcome.failed}`);
 }
 
 export async function approveIndividualMigrationAction(formData: FormData): Promise<void> {
   const proposalId = text(formData, "proposalId");
   const returnPath = `/admin/subscriptions/canonical/migrations/review/${encodeURIComponent(proposalId)}`;
+  let campaignId: string;
   try {
     const owner = await requireMigrationOwner();
     const assignmentIds = formData.getAll("assignmentId").map(String);
@@ -134,16 +139,18 @@ export async function approveIndividualMigrationAction(formData: FormData): Prom
         futureStripeCollectionReviewed: text(formData, "confirmFutureStripe") === "yes",
       },
     });
-    revalidatePath("/admin/subscriptions/canonical/migrations");
-    redirect(`/admin/subscriptions/canonical/migrations/${campaign.id}?approved=1`);
+    campaignId = campaign.id;
   } catch (error) {
     destinationError(returnPath, error);
   }
+  revalidatePath("/admin/subscriptions/canonical/migrations");
+  redirect(`/admin/subscriptions/canonical/migrations/${campaignId}?approved=1`);
 }
 
 export async function executeSimpleIndividualMigrationAction(formData: FormData): Promise<void> {
   const proposalId = text(formData, "proposalId");
   const returnPath = `/admin/subscriptions/canonical/migrations/review/${encodeURIComponent(proposalId)}`;
+  let targetSubscriptionId: string;
   try {
     const owner = await requireMigrationOwner();
     const assignmentIds = formData.getAll("assignmentId").map(String);
@@ -177,12 +184,13 @@ export async function executeSimpleIndividualMigrationAction(formData: FormData)
         billingAuthorityTransferConfirmed: text(formData, "confirmAuthorityTransfer") === "yes",
       },
     });
-    revalidatePath("/admin/subscriptions/canonical");
-    revalidatePath("/admin/subscriptions/canonical/migrations");
-    redirect(`/admin/subscriptions/canonical/${encodeURIComponent(result.targetSubscriptionId)}?migration=completed`);
+    targetSubscriptionId = result.targetSubscriptionId;
   } catch (error) {
     destinationError(returnPath, error);
   }
+  revalidatePath("/admin/subscriptions/canonical");
+  revalidatePath("/admin/subscriptions/canonical/migrations");
+  redirect(`/admin/subscriptions/canonical/${encodeURIComponent(targetSubscriptionId)}?migration=completed`);
 }
 
 export async function classifyStandaloneInvoiceAction(formData: FormData): Promise<void> {
@@ -202,10 +210,10 @@ export async function classifyStandaloneInvoiceAction(formData: FormData): Promi
       reason: text(formData, "reason"),
       ownerUserId: owner.id,
     });
-    revalidatePath("/admin/subscriptions/canonical/migrations");
-    revalidatePath(returnPath);
-    redirect(`${returnPath}?classified=1`);
   } catch (error) {
     destinationError(returnPath, error);
   }
+  revalidatePath("/admin/subscriptions/canonical/migrations");
+  revalidatePath(returnPath);
+  redirect(`${returnPath}?classified=1`);
 }
