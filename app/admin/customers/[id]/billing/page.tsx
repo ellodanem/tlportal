@@ -23,7 +23,6 @@ type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ stripe?:
 function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | null {
   return raw === "success" || raw === "cancel" ? raw : null;
 }
-
 type RecentInvoice = { id: string; number: string | null; status: string; amountDue: unknown; total: unknown; currency: string; issueDate: Date; dueDate: Date | null };
 
 function InvoiceTable({ invoices }: { invoices: RecentInvoice[] }) {

@@ -3921,3 +3921,1047 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-10-14 22:40 UTC — commit `9010ae5`
+
+- feat: harden recurring and Stripe billing operations
+
+
+### 2026-10-14 22:41 UTC — pre-push (`main` → origin) @ `9010ae5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 03:39 UTC — commit `7d5b594`
+
+- feat: add canonical subscription data foundation
+
+
+### 2026-10-15 03:39 UTC — pre-push (`main` → origin) @ `7d5b594`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 03:43 UTC — commit `2ea2e42`
+
+- ci: run PostgreSQL foundation validation
+
+
+### 2026-10-15 03:43 UTC — pre-push (`validation/postgres-foundation` → origin) @ `2ea2e42`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 03:45 UTC — commit `80dc3fb`
+
+- ci: use Node 24 for validation tests
+
+
+### 2026-10-15 03:45 UTC — pre-push (`validation/postgres-foundation` → origin) @ `80dc3fb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 03:47 UTC — commit `d146b03`
+
+- test: recognize PostgreSQL exclusion violations
+
+
+### 2026-10-15 03:47 UTC — pre-push (`validation/postgres-foundation` → origin) @ `d146b03`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 12:54 UTC — commit `f7cc78c`
+
+- feat: add canonical subscription application service
+
+
+### 2026-10-15 12:55 UTC — pre-push (`validation/postgres-foundation` → origin) @ `f7cc78c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 14:36 UTC — commit `9ba64e6`
+
+- feat: add canonical subscription migration tooling
+
+
+### 2026-10-15 14:36 UTC — commit `e9daf0d`
+
+- feat: add canonical subscription migration tooling
+
+
+### 2026-10-15 14:36 UTC — pre-push (`validation/postgres-foundation` → origin) @ `e9daf0d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 14:39 UTC — commit `be7fb8c`
+
+- fix: retry postgres serialization conflicts
+
+
+### 2026-10-15 14:39 UTC — pre-push (`validation/postgres-foundation` → origin) @ `be7fb8c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 14:40 UTC — commit `8cf79d8`
+
+- fix: retry postgres serialization conflicts
+
+
+### 2026-10-15 20:06 UTC — commit `fa24c8f`
+
+- test: protect migrated provider history
+
+
+### 2026-10-15 20:06 UTC — commit `5270884`
+
+- test: protect migrated provider history
+
+
+### 2026-10-15 20:06 UTC — pre-push (`validation/postgres-foundation` → origin) @ `5270884`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 20:48 UTC — commit `a37433d`
+
+- feat: integrate canonical native billing
+
+
+### 2026-10-15 20:48 UTC — commit `cdd29c3`
+
+- feat: integrate canonical native billing
+
+
+### 2026-10-15 20:49 UTC — pre-push (`validation/postgres-foundation` → origin) @ `cdd29c3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-15 21:14 UTC — commit `20de8a2`
+
+- feat: add canonical subscription management UI
+
+
+### 2026-10-15 21:14 UTC — pre-push (`feature/ui-1-canonical-subscription-management` → origin) @ `20de8a2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 05:26 UTC — commit `ebbc262`
+
+- feat: add annual proration adjustments
+
+
+### 2026-10-16 05:27 UTC — commit `f43f7ce`
+
+- feat: add annual proration adjustments
+
+
+### 2026-10-16 05:27 UTC — pre-push (`validation/postgres-foundation` → origin) @ `f43f7ce`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 05:48 UTC — commit `1bfebd1`
+
+- feat(billing): add canonical Stripe shadow planning
+
+
+### 2026-10-16 05:49 UTC — commit `1ea8a43`
+
+- feat: add canonical subscription management UI
+
+
+### 2026-10-16 05:49 UTC — commit `b3b5f93`
+
+- feat(billing): add canonical Stripe shadow planning
+
+
+### 2026-10-16 05:49 UTC — pre-push (`validation/postgres-foundation` → origin) @ `b3b5f93`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 10:18 UTC — commit `844790b`
+
+- feat(billing): add controlled canonical Stripe execution
+
+
+### 2026-10-16 10:33 UTC — commit `e81675c`
+
+- fix(billing): retry wrapped serialization conflicts
+
+
+### 2026-10-16 10:33 UTC — commit `6337c00`
+
+- fix(billing): back off canonical Stripe retries
+
+
+### 2026-10-16 10:33 UTC — commit `7ca63bb`
+
+- fix(billing): serialize canonical provider claims
+
+
+### 2026-10-16 10:33 UTC — commit `53a6801`
+
+- test(billing): model atomic provider idempotency
+
+
+### 2026-10-16 10:33 UTC — commit `f3e413e`
+
+- test(billing): assert durable activation reuse
+
+
+### 2026-10-16 10:18 UTC — commit `acc60a2`
+
+- feat(billing): add controlled canonical Stripe execution
+
+
+### 2026-10-16 10:18 UTC — pre-push (`validation/postgres-foundation` → origin) @ `acc60a2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 10:20 UTC — commit `a0050fe`
+
+- fix(billing): retry wrapped serialization conflicts
+
+
+### 2026-10-16 10:20 UTC — pre-push (`validation/postgres-foundation` → origin) @ `a0050fe`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 10:22 UTC — commit `39005c7`
+
+- fix(billing): back off canonical Stripe retries
+
+
+### 2026-10-16 10:22 UTC — pre-push (`validation/postgres-foundation` → origin) @ `39005c7`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 10:25 UTC — commit `94527b2`
+
+- fix(billing): serialize canonical provider claims
+
+
+### 2026-10-16 10:25 UTC — pre-push (`validation/postgres-foundation` → origin) @ `94527b2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 10:27 UTC — commit `0a533f9`
+
+- test(billing): model atomic provider idempotency
+
+
+### 2026-10-16 10:27 UTC — pre-push (`validation/postgres-foundation` → origin) @ `0a533f9`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 10:30 UTC — commit `8a63f68`
+
+- test(billing): assert durable activation reuse
+
+
+### 2026-10-16 10:30 UTC — pre-push (`validation/postgres-foundation` → origin) @ `8a63f68`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-10-16 11:18 UTC — commit `b54874c`
+
+- feat(ui): add canonical subscription administration
+
+
+### 2026-10-16 11:18 UTC — commit `0ea692d`
+
+- feat(ui): add canonical subscription administration
+
+
+### 2026-10-16 11:18 UTC — pre-push (`validation/postgres-foundation` → origin) @ `0ea692d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 11:40 UTC — commit `57d0f89`
+
+- feat(ui): prepare canonical subscription production preview
+
+
+### 2026-10-16 11:41 UTC — commit `529b979`
+
+- feat(ui): prepare canonical subscription production preview
+
+
+### 2026-10-16 11:41 UTC — pre-push (`validation/postgres-foundation` → origin) @ `529b979`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 17:21 UTC — commit `5e329ad`
+
+- fix(deploy): isolate preview database migrations
+
+
+### 2026-10-16 17:22 UTC — pre-push (`main` → origin) @ `5e329ad`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 18:36 UTC — commit `5b822cb`
+
+- feat(billing): add isolated Stripe test provider
+
+
+### 2026-10-16 18:37 UTC — commit `31dd9e0`
+
+- feat(billing): add isolated Stripe test provider
+
+
+### 2026-10-16 18:38 UTC — pre-push (`validation/postgres-foundation` → origin) @ `31dd9e0`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 22:25 UTC — commit `4b32c9e`
+
+- feat(billing): prepare controlled live Stripe canary
+
+
+### 2026-10-16 22:25 UTC — commit `0a211b1`
+
+- feat(billing): prepare controlled live Stripe canary
+
+
+### 2026-10-16 22:25 UTC — pre-push (`validation/postgres-foundation` → origin) @ `0a211b1`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 22:28 UTC — commit `417d973`
+
+- test(billing): enforce canary webhook isolation
+
+
+### 2026-10-16 22:28 UTC — pre-push (`validation/postgres-foundation` → origin) @ `417d973`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 22:30 UTC — commit `b2d2d01`
+
+- test(billing): enforce canary webhook isolation
+
+
+### 2026-10-16 23:06 UTC — commit `d625535`
+
+- docs(billing): prepare disabled live canary release
+
+
+### 2026-10-16 23:06 UTC — commit `5aa1835`
+
+- docs(billing): prepare disabled live canary release
+
+
+### 2026-10-16 23:07 UTC — pre-push (`validation/postgres-foundation` → origin) @ `5aa1835`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-16 23:41 UTC — pre-push (`main` → origin) @ `b05dfa8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 05:27 UTC — commit `1c56e4b`
+
+- feat(billing): add first manual customer pilot workflow
+
+
+### 2026-10-17 05:27 UTC — commit `0972457`
+
+- feat(billing): add first manual customer pilot workflow
+
+
+### 2026-10-17 05:28 UTC — pre-push (`validation/postgres-foundation` → origin) @ `0972457`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 08:21 UTC — commit `746e923`
+
+- merge: align validation with production baseline
+
+
+### 2026-10-17 08:21 UTC — commit `f8439e5`
+
+- chore(validation): align release environment template
+
+
+### 2026-10-17 08:21 UTC — pre-push (`validation/postgres-foundation` → origin) @ `f8439e5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 08:33 UTC — commit `9dd7c3b`
+
+- release: deploy disabled manual pilot infrastructure
+
+
+### 2026-10-17 08:34 UTC — pre-push (`main` → origin) @ `9dd7c3b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 09:15 UTC — commit `1a72647`
+
+- feat(billing): support established manual invoice pilots
+
+
+### 2026-10-17 09:15 UTC — commit `ea0d555`
+
+- feat(billing): support established manual invoice pilots
+
+
+### 2026-10-17 09:15 UTC — pre-push (`validation/postgres-foundation` → origin) @ `ea0d555`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 09:19 UTC — commit `9d38d7a`
+
+- fix(billing): require exact manual invoice service evidence
+
+
+### 2026-10-17 09:19 UTC — commit `0221a01`
+
+- fix(billing): require exact manual invoice service evidence
+
+
+### 2026-10-17 09:19 UTC — pre-push (`validation/postgres-foundation` → origin) @ `9d38d7a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 09:21 UTC — commit `c8a9a0d`
+
+- test(billing): assert manual invoice evidence safeguards
+
+
+### 2026-10-17 09:21 UTC — commit `23c5d32`
+
+- test(billing): assert manual invoice evidence safeguards
+
+
+### 2026-10-17 09:21 UTC — pre-push (`validation/postgres-foundation` → origin) @ `c8a9a0d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 09:44 UTC — pre-push (`main` → origin) @ `3fea30b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 10:07 UTC — commit `7eca464`
+
+- fix(subscriptions): keep conflicting pilots reviewable
+
+
+### 2026-10-17 10:07 UTC — commit `c06cdee`
+
+- fix(subscriptions): keep conflicting pilots reviewable
+
+
+### 2026-10-17 10:07 UTC — pre-push (`validation/postgres-foundation` → origin) @ `c06cdee`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 10:46 UTC — pre-push (`main` → origin) @ `00891ab`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 11:19 UTC — commit `6c2604c`
+
+- feat(billing): add invoice notification delivery
+
+
+### 2026-10-17 12:15 UTC — commit `98d2bbf`
+
+- fix(billing): validate aggregate manual pilot invoices
+
+
+### 2026-10-17 12:15 UTC — commit `224c9b6`
+
+- fix(billing): validate aggregate manual pilot invoices
+
+
+### 2026-10-17 12:15 UTC — pre-push (`validation/postgres-foundation` → origin) @ `224c9b6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 12:19 UTC — commit `b5110e5`
+
+- fix(billing): normalize manual pilot renewal dates
+
+
+### 2026-10-17 12:19 UTC — pre-push (`validation/postgres-foundation` → origin) @ `b5110e5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 12:21 UTC — commit `ed59751`
+
+- fix(billing): normalize manual invoice renewal dates
+
+
+### 2026-10-17 12:21 UTC — pre-push (`validation/postgres-foundation` → origin) @ `ed59751`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 12:23 UTC — commit `13973c3`
+
+- test(billing): cover aggregate service price mismatch
+
+
+### 2026-10-17 12:23 UTC — pre-push (`validation/postgres-foundation` → origin) @ `13973c3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 12:27 UTC — commit `6120d30`
+
+- test(stripe): refresh live canary adapter approval
+
+
+### 2026-10-17 12:27 UTC — pre-push (`validation/postgres-foundation` → origin) @ `6120d30`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 12:29 UTC — commit `24e5507`
+
+- fix(billing): validate aggregate manual pilot invoices
+
+
+### 2026-10-17 12:29 UTC — commit `3bdc72d`
+
+- fix(billing): normalize manual pilot renewal dates
+
+
+### 2026-10-17 12:29 UTC — commit `e7ab040`
+
+- fix(billing): normalize manual invoice renewal dates
+
+
+### 2026-10-17 12:29 UTC — commit `5778c05`
+
+- test(billing): cover aggregate service price mismatch
+
+
+### 2026-10-17 12:29 UTC — commit `918de58`
+
+- fix(billing): normalize manual pilot renewal dates
+
+
+### 2026-10-17 12:29 UTC — commit `b0d6ca3`
+
+- fix(billing): normalize manual invoice renewal dates
+
+
+### 2026-10-17 12:29 UTC — commit `5a18a36`
+
+- test(billing): cover aggregate service price mismatch
+
+
+### 2026-10-17 12:29 UTC — commit `2c74b15`
+
+- test(stripe): refresh live canary adapter approval
+
+
+### 2026-10-17 12:52 UTC — commit `e19ce65`
+
+- fix(billing): separate invoice issue and coverage dates
+
+
+### 2026-10-17 12:52 UTC — commit `50be8ff`
+
+- fix(billing): separate invoice issue and coverage dates
+
+
+### 2026-10-17 12:52 UTC — pre-push (`validation/postgres-foundation` → origin) @ `50be8ff`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 15:12 UTC — commit `fadeb43`
+
+- test(billing): expect explicit coverage confirmation
+
+
+### 2026-10-17 15:12 UTC — pre-push (`validation/postgres-foundation` → origin) @ `fadeb43`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 15:14 UTC — commit `6e4caf4`
+
+- test(billing): expect explicit coverage confirmation
+
+
+### 2026-10-17 16:36 UTC — pre-push (`main` → origin) @ `6e4caf4`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 16:58 UTC — commit `9686b59`
+
+- fix(billing): accept confirmed manual coverage boundaries
+
+
+### 2026-10-17 16:58 UTC — pre-push (`main` → origin) @ `9686b59`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 20:29 UTC — commit `cc7e3f5`
+
+- feat(subscriptions): add canonical customer onboarding
+
+
+### 2026-10-17 21:57 UTC — pre-push (`main` → origin) @ `cc7e3f5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 22:11 UTC — commit `7672818`
+
+- feat(subscriptions): add canonical activation workflow
+
+
+### 2026-10-17 22:11 UTC — pre-push (`main` → origin) @ `7672818`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-17 22:29 UTC — commit `24e23dc`
+
+- feat(billing): gate canonical manual production activation
+
+
+### 2026-10-17 22:51 UTC — pre-push (`main` → origin) @ `24e23dc`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-18 08:53 UTC — commit `49c8965`
+
+- feat(billing): complete canonical subscription operations
+
+
+### 2026-10-18 08:53 UTC — pre-push (`main` → origin) @ `49c8965`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-18 09:10 UTC — commit `9bb0dc2`
+
+- feat(subscriptions): complete canonical staff operations
+
+
+### 2026-10-18 09:10 UTC — pre-push (`main` → origin) @ `9bb0dc2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-18 09:49 UTC — commit `b644bf3`
+
+- feat(billing): add owner-approved migration campaigns
+
+
+### 2026-10-18 09:49 UTC — pre-push (`main` → origin) @ `b644bf3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-18 10:15 UTC — commit `d25424f`
+
+- fix(billing): resolve encoded migration review IDs
+
+
+### 2026-10-18 10:15 UTC — pre-push (`main` → origin) @ `d25424f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 00:02 UTC — commit `8042eb6`
+
+- fix(billing): classify one-off migration invoices
+
+
+### 2026-10-19 00:02 UTC — pre-push (`main` → origin) @ `8042eb6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 00:05 UTC — commit `244b15b`
+
+- fix(billing): retain signed manual pilot review
+
+
+### 2026-10-19 00:05 UTC — pre-push (`main` → origin) @ `244b15b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 00:11 UTC — commit `5d8d657`
+
+- fix(billing): filter one-off invoice campaign sources
+
+
+### 2026-10-19 00:11 UTC — pre-push (`main` → origin) @ `5d8d657`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 10:38 UTC — commit `3c1ac25`
+
+- feat: simplify individual customer migration
+
+
+### 2026-10-19 10:38 UTC — pre-push (`main` → origin) @ `3c1ac25`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 15:19 UTC — commit `26c3e14`
+
+- fix: simplify canonical migration candidates
+
+
+### 2026-10-19 15:19 UTC — pre-push (`main` → origin) @ `26c3e14`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 15:22 UTC — commit `cf1cde9`
+
+- test: cover canceled migration history
+
+
+### 2026-10-19 15:22 UTC — pre-push (`main` → origin) @ `cf1cde9`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 15:25 UTC — commit `517cc07`
+
+- fix: exclude closed authorities from service mapping
+
+
+### 2026-10-19 15:25 UTC — pre-push (`main` → origin) @ `517cc07`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 15:32 UTC — commit `833d96d`
+
+- test: verify historical manual review mapping
+
+
+### 2026-10-19 15:32 UTC — pre-push (`main` → origin) @ `833d96d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 15:56 UTC — commit `1f28a4d`
+
+- feat: automate manual subscription migration
+
+
+### 2026-10-19 15:57 UTC — pre-push (`main` → origin) @ `1f28a4d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 16:13 UTC — commit `6dd7ce6`
+
+- fix: scope canonical migration activation
+
+
+### 2026-10-19 16:13 UTC — pre-push (`main` → origin) @ `6dd7ce6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 16:37 UTC — commit `073cad2`
+
+- feat: improve operations dashboard
+
+
+### 2026-10-19 16:37 UTC — pre-push (`main` → origin) @ `073cad2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 20:36 UTC — commit `2d12594`
+
+- fix: promote invoice-backed migration shadows
+
+
+### 2026-10-19 20:36 UTC — pre-push (`main` → origin) @ `2d12594`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 22:07 UTC — commit `3a6ae1d`
+
+- feat: support four-month migration terms
+
+
+### 2026-10-19 22:07 UTC — pre-push (`main` → origin) @ `3a6ae1d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 23:26 UTC — commit `5c75bef`
+
+- feat: simplify subscription operations ui
+
+
+### 2026-10-19 23:26 UTC — pre-push (`main` → origin) @ `5c75bef`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 23:46 UTC — commit `5939638`
+
+- feat: refine subscription operations dashboard
+
+
+### 2026-10-19 23:46 UTC — pre-push (`main` → origin) @ `5939638`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-19 23:50 UTC — commit `1a1611f`
+
+- feat: move renewal operations into subscriptions
+
+
+### 2026-10-19 23:50 UTC — pre-push (`main` → origin) @ `1a1611f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 00:08 UTC — commit `36ee730`
+
+- feat: build customer subscription workspace
+
+
+### 2026-10-20 00:08 UTC — pre-push (`main` → origin) @ `36ee730`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 00:11 UTC — commit `b0f2110`
+
+- chore: simplify staff subscription language
+
+
+### 2026-10-20 00:11 UTC — pre-push (`main` → origin) @ `b0f2110`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 00:19 UTC — commit `e0b549f`
+
+- feat: make subscription detail actionable
+
+
+### 2026-10-20 00:19 UTC — pre-push (`main` → origin) @ `e0b549f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 00:30 UTC — commit `d14837a`
+
+- Polish customer subscriptions page
+
+
+### 2026-10-20 00:30 UTC — pre-push (`main` → origin) @ `d14837a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 00:34 UTC — commit `0873341`
+
+- feat: adopt existing Stripe subscriptions
+
+
+### 2026-10-20 00:34 UTC — pre-push (`main` → origin) @ `0873341`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 01:09 UTC — commit `e09c469`
+
+- Simplify subscription detail navigation
+
+
+### 2026-10-20 01:18 UTC — pre-push (`main` → origin) @ `e09c469`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 01:38 UTC — commit `0f52100`
+
+- Add service management modal
+
+
+### 2026-10-20 01:38 UTC — pre-push (`main` → origin) @ `0f52100`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 01:59 UTC — commit `1b58498`
+
+- Add per-service pause controls
+
+
+### 2026-10-20 01:59 UTC — pre-push (`main` → origin) @ `1b58498`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 02:05 UTC — commit `84ecf8f`
+
+- Show paused legacy device assignments
+
+
+### 2026-10-20 02:05 UTC — pre-push (`main` → origin) @ `84ecf8f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 10:01 UTC — commit `1605634`
+
+- Rename paused device assignment text
+
+
+### 2026-10-20 10:01 UTC — pre-push (`main` → origin) @ `1605634`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 10:48 UTC — commit `277baf1`
+
+- Remove redundant customer subscription actions
+
+
+### 2026-10-20 10:48 UTC — pre-push (`main` → origin) @ `277baf1`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 10:49 UTC — commit `e2f7c6e`
+
+- Clarify subscription asset naming
+
+
+### 2026-10-20 10:49 UTC — pre-push (`main` → origin) @ `e2f7c6e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 11:40 UTC — commit `1f50221`
+
+- Clarify customer payment and invoice status
+
+
+### 2026-10-20 11:40 UTC — pre-push (`main` → origin) @ `1f50221`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 13:23 UTC — commit `89a464a`
+
+- feat(billing): add unified financial workspace
+
+
+### 2026-10-20 13:23 UTC — pre-push (`main` → origin) @ `89a464a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 13:28 UTC — commit `e90396f`
+
+- fix(billing): include draft invoice filtering
+
+
+### 2026-10-20 13:28 UTC — pre-push (`main` → origin) @ `e90396f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 15:01 UTC — commit `5c50fa6`
+
+- feat(customers): refine billing activity view
+
+
+### 2026-10-20 15:02 UTC — pre-push (`main` → origin) @ `5c50fa6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 15:11 UTC — commit `5c7723e`
+
+- fix(billing): restore recurring invoice workspace access
+
+
+### 2026-10-20 15:11 UTC — pre-push (`main` → origin) @ `5c7723e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 19:03 UTC — commit `9582b41`
+
+- fix(billing): ignore stale service due dates in overdue status
+
+
+### 2026-10-20 19:03 UTC — pre-push (`main` → origin) @ `9582b41`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 21:11 UTC — commit `aab7611`
+
+- fix(billing): reconcile latest Stripe invoice automatically
+
+
+### 2026-10-20 21:11 UTC — pre-push (`main` → origin) @ `aab7611`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-20 21:17 UTC — commit `73affc5`
+
+- Improve recent payment reference display
+
+
+### 2026-10-20 21:22 UTC — pre-push (`main` → origin) @ `73affc5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
