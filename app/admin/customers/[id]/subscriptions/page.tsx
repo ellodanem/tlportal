@@ -82,7 +82,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   });
   if (!customer) notFound();
 
-  const [loadedSubscriptions, pausedLegacyAssignments] = await Promise.all([
+  const [loadedSubscriptions, pausedAssignments] = await Promise.all([
     Promise.all(customer.customerSubscriptions.map((subscription) => getCanonicalSubscriptionAdminDetail(subscription.id))),
     prisma.serviceAssignment.findMany({
       where: {
@@ -191,15 +191,15 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
         </article>;
       })}</div> : <section className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900"><h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">No subscriptions have been set up</h2><p className="mt-1 text-sm text-zinc-500">Create the customer’s first agreement, then add each billable tracking service to it.</p><Link href={`/admin/subscriptions/canonical/new?customerId=${customer.id}`} className="mt-4 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900">Add subscription</Link></section>}
 
-      {pausedLegacyAssignments.length ? <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm sm:p-6 dark:border-amber-900/60 dark:bg-amber-950/15">
+      {pausedAssignments.length ? <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm sm:p-6 dark:border-amber-900/60 dark:bg-amber-950/15">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Paused legacy device assignments</h2>
-          <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">These older assignments are not linked to a current billable GPS service, but remain visible here so staff can review or resume them.</p>
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Paused device assignments</h2>
+          <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">These paused assignments are not linked to a current billable GPS service, but remain visible here so staff can review or resume them.</p>
         </div>
-        <div className="mt-5 space-y-3">{pausedLegacyAssignments.map((assignment) => {
+        <div className="mt-5 space-y-3">{pausedAssignments.map((assignment) => {
           const deviceLabel = assignment.device.label?.trim() || assignment.device.deviceModel.name;
           return <div key={assignment.id} className="grid gap-4 rounded-xl border border-amber-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,.9fr)_minmax(0,.8fr)_auto] lg:items-center lg:gap-0 dark:border-amber-900/60 dark:bg-zinc-900">
-            <div className="min-w-0 lg:pr-5"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-zinc-950 dark:text-zinc-50">{deviceLabel}</p><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">Paused</span></div><p className="mt-1 text-xs text-zinc-500">Legacy device assignment</p></div>
+            <div className="min-w-0 lg:pr-5"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-zinc-950 dark:text-zinc-50">{deviceLabel}</p><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">Paused</span></div><p className="mt-1 text-xs text-zinc-500">Device assignment</p></div>
             <div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:border-r sm:pr-5 lg:border-l lg:border-r-0 lg:pl-5 lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Device state</p><p className="mt-1 text-sm font-medium capitalize text-zinc-900 dark:text-zinc-100">{assignment.device.status.replaceAll("_", " ")}</p><Link href={`/admin/devices/${assignment.device.id}/edit?tab=assignment`} className="mt-1 inline-block text-xs font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">View assignment</Link></div>
             <div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:pl-5 lg:border-l lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Pause details</p><p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{date(assignment.pausedAt)}</p>{assignment.pauseReason ? <p className="mt-1 text-xs capitalize text-zinc-500">{assignment.pauseReason.replaceAll("_", " ")}</p> : null}</div>
             <div className="border-t border-zinc-100 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-zinc-800"><CustomerAssignmentServiceActions assignmentId={assignment.id} deviceId={assignment.device.id} billingMode={customer.billingMode} status={assignment.status} open /></div>
