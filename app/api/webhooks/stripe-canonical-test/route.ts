@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         "TEST_CURRENCY_REQUIRED",
         "TEST_CURRENCY_PRECISION_REQUIRED",
       ].includes(caught.code);
-      return new Response(unavailable ? "Canonical Stripe test endpoint is disabled" : "Invalid test-mode Stripe event", {
+      return new Response(unavailable ? "Stripe test endpoint is disabled" : "Invalid test-mode Stripe event", {
         status: unavailable ? 503 : 400,
       });
     }
@@ -64,6 +64,6 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, duplicate: result.duplicate, handled });
   } catch (caught) {
     console.error("[canonical Stripe test webhook] fulfillment failed", caught);
-    return new Response("Canonical Stripe test fulfillment failed", { status: 500 });
+    return new Response("Stripe test fulfillment failed", { status: 500 });
   }
 }

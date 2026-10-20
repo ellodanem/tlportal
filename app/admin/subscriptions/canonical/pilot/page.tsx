@@ -24,9 +24,9 @@ export default async function CanonicalManualPilotCandidatesPage() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <div>
         <Link href="/admin/subscriptions/canonical" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
-          Back to canonical subscriptions
+          Back to subscriptions
         </Link>
-        <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Canonical / First customer pilot</p>
+        <p className="mt-4 text-xs font-medium text-zinc-500">Billing / First customer pilot</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Manual-billing pilot review</h1>
         <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">
           Review one legacy recurring arrangement at a time. Listing and previewing are read-only; ambiguous records remain blocked until their terms are explicitly confirmed.

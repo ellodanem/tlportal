@@ -74,22 +74,22 @@ export default async function CanonicalMigrationCampaignPage({ searchParams }: P
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Link href="/admin/subscriptions/canonical" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Back to canonical subscriptions</Link>
-          <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Canonical / Customer migration</p>
+          <Link href="/admin/subscriptions/canonical" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Back to subscriptions</Link>
+          <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Customer migration</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Move subscriptions to the new framework</h1>
-          <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">TL Portal uses the live recurring schedule, mapped services, amount, cadence, and next renewal to create canonical agreements automatically. Existing invoices and payments remain unchanged.</p>
+          <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">TL Portal uses the live recurring schedule, mapped services, amount, cadence, and next renewal to create subscription agreements automatically. Existing invoices and payments remain unchanged.</p>
         </div>
         <form action={runAutomaticManualMigrationAction}><button className="rounded-lg bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white">Move ready manual subscriptions</button></form>
       </div>
 
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">{error}</p> : null}
-      {automatic === "1" ? <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"><p className="font-semibold">Automatic migration complete</p><p className="mt-1">{migrated} manual subscription{migrated === "1" ? "" : "s"} moved to canonical billing. {followUp} arrangement{followUp === "1" ? "" : "s"} stayed on the existing path for follow-up. No invoice, payment, Stripe operation, or customer notification was created.</p>{campaign ? <Link href={`/admin/subscriptions/canonical/migrations/${encodeURIComponent(campaign)}`} className="mt-2 inline-block font-semibold underline">Open migration record</Link> : null}</section> : null}
+      {automatic === "1" ? <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"><p className="font-semibold">Automatic migration complete</p><p className="mt-1">{migrated} manual subscription{migrated === "1" ? "" : "s"} moved to subscription billing. {followUp} arrangement{followUp === "1" ? "" : "s"} stayed on the existing path for follow-up. No invoice, payment, Stripe operation, or customer notification was created.</p>{campaign ? <Link href={`/admin/subscriptions/canonical/migrations/${encodeURIComponent(campaign)}`} className="mt-2 inline-block font-semibold underline">Open migration record</Link> : null}</section> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {([
           ["Ready to move", count("ready"), "Included in the automatic manual move"],
           ["Follow-up", count("needs_attention"), "Kept on its current path"],
-          ["Moved", count("migrated"), "Canonical schedule owns renewal"],
+          ["Moved", count("migrated"), "Subscription schedule owns renewal"],
           ["Unavailable", count("blocked"), "Source needs a later correction"],
           ["Still legacy", count("not_migrated"), "No automatic conversion was attempted"],
         ] as const).map(([label, value, detail]) => <div key={label} className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p><p className="mt-1 text-xs text-zinc-500">{detail}</p></div>)}

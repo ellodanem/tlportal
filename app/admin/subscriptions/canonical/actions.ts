@@ -63,7 +63,7 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
 }
 
 async function requireStaff() {
-  if (!canonicalSubscriptionUiVisible()) throw new CanonicalSubscriptionUiError("FEATURE_DISABLED", "Canonical onboarding is unavailable.");
+  if (!canonicalSubscriptionUiVisible()) throw new CanonicalSubscriptionUiError("FEATURE_DISABLED", "Subscription onboarding is unavailable.");
   const session = await getSession();
   if (!session) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "You must be signed in.");
   const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { id: true } });
@@ -224,7 +224,7 @@ export async function createCanonicalDraftAction(
   try {
     const session = await requireStaff();
     if (process.env.NODE_ENV === "production") {
-      return { error: "Use canonical customer onboarding for new production subscriptions." };
+      return { error: "Use subscription onboarding for new production subscriptions." };
     }
     const interval = Number(text(formData, "billingIntervalMonths"));
     const defaultAmount = text(formData, "defaultAgreedAmountPerCycle");
@@ -320,7 +320,7 @@ export async function createCanonicalOnboardingAction(
     revalidatePath("/admin/devices");
     revalidatePath("/admin/subscriptions/canonical");
     return {
-      message: "Canonical customer onboarding draft created. Billing remains inactive until a later explicit activation.",
+      message: "Customer onboarding draft created. Billing remains inactive until a later explicit activation.",
       next: `/admin/subscriptions/canonical/${result.subscription.id}`,
     };
   } catch (error) {
@@ -348,7 +348,7 @@ export async function addCanonicalDraftItemAction(
     });
     await recordOperationalEvent({
       category: "subscription.service_added",
-      summary: "Canonical service added by staff.",
+      summary: "Subscription service added by staff.",
       customerId: subscription.customerId,
       actorUserId: session.sub,
       payload: { subscriptionId },
@@ -402,7 +402,7 @@ export async function scheduleCanonicalDraftRateAction(
     });
     await recordOperationalEvent({
       category: "subscription.rate_scheduled",
-      summary: "Canonical service rate change scheduled by staff.",
+      summary: "Subscription service rate change scheduled by staff.",
       customerId: subscription.customerId,
       actorUserId: session.sub,
       payload: { subscriptionId, subscriptionItemId, effectiveFrom: text(formData, "effectiveFrom") },
@@ -429,7 +429,7 @@ export async function scheduleCanonicalDraftItemEndAction(
     });
     await recordOperationalEvent({
       category: "subscription.service_end_scheduled",
-      summary: "Canonical service end scheduled by staff.",
+      summary: "Subscription service end scheduled by staff.",
       customerId: subscription.customerId,
       actorUserId: session.sub,
       payload: { subscriptionId, subscriptionItemId, effectiveUntil: text(formData, "effectiveUntil") },
@@ -457,7 +457,7 @@ export async function replaceCanonicalServiceHardwareAction(
     });
     await recordOperationalEvent({
       category: "subscription.hardware_replaced",
-      summary: "Canonical service hardware replacement recorded by staff.",
+      summary: "Service hardware replacement recorded by staff.",
       customerId: subscription.customerId,
       actorUserId: session.sub,
       payload: { subscriptionId, subscriptionItemId, replacementAssignmentId: text(formData, "replacementAssignmentId"), replacedOn: text(formData, "replacedOn") },
@@ -492,7 +492,7 @@ export async function transferCanonicalServiceAction(
     });
     await recordOperationalEvent({
       category: "subscription.service_transferred",
-      summary: "Canonical service transferred between customer agreements by staff.",
+      summary: "Service transferred between customer agreements by staff.",
       customerId: subscription.customerId,
       actorUserId: session.sub,
       payload: { subscriptionId, subscriptionItemId, targetSubscriptionId, transferDate: text(formData, "transferDate") },
@@ -522,7 +522,7 @@ export async function transitionCanonicalSubscriptionLifecycleAction(
     await transitionCanonicalSubscriptionLifecycle(subscriptionId, target as "active" | "paused" | "ended" | "canceled");
     await recordOperationalEvent({
       category: "subscription.lifecycle_changed",
-      summary: `Canonical subscription lifecycle changed to ${target}.`,
+      summary: `Subscription lifecycle changed to ${target}.`,
       customerId: subscription.customerId,
       actorUserId: session.sub,
       payload: { subscriptionId, from: subscription.lifecycleStatus, to: target, confirmationNote: note },

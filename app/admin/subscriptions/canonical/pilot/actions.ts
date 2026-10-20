@@ -82,7 +82,7 @@ export async function migrateManualPilotShadowAction(formData: FormData): Promis
       confirmation: APPLY_MIGRATION_CONFIRMATION,
     });
     targetSubscriptionId = result.entries[0].targetSubscriptionId ?? "";
-    if (!targetSubscriptionId) throw new Error("The migration completed without a canonical subscription reference.");
+    if (!targetSubscriptionId) throw new Error("The migration completed without a subscription reference.");
     revalidatePath("/admin/subscriptions/canonical");
     revalidatePath("/admin/subscriptions/canonical/pilot");
   } catch (error) {

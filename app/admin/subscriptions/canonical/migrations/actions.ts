@@ -40,7 +40,7 @@ export async function runAutomaticManualMigrationAction(): Promise<void> {
 }
 
 async function requireMigrationOwner() {
-  if (!canonicalSubscriptionUiVisible()) throw new Error("Canonical migration review is unavailable.");
+  if (!canonicalSubscriptionUiVisible()) throw new Error("Migration review is unavailable.");
   const session = await getSession();
   if (!session) throw new Error("You must be signed in.");
   const user = await prisma.user.findUnique({

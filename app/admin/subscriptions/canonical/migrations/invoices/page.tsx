@@ -25,7 +25,7 @@ export default async function StandaloneInvoiceMigrationReviewPage({ searchParam
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <div>
         <Link href="/admin/subscriptions/canonical/migrations" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Back to migration campaign</Link>
-        <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Canonical / Standalone invoice classification</p>
+        <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Standalone invoice classification</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Classify one-off invoices</h1>
         <p className="mt-1 max-w-4xl text-sm text-zinc-600 dark:text-zinc-400">Hardware, installation, deposit, and other one-time invoices remain financial history only. They do not create subscriptions, change payments, or affect a renewal unless the billing owner explicitly classifies the exact invoice as recurring subscription evidence.</p>
       </div>
@@ -51,7 +51,7 @@ export default async function StandaloneInvoiceMigrationReviewPage({ searchParam
             </div>
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Open balance: {formatExpenseAmount(Number(invoice.amountDue), invoice.currency)}. Classification does not settle, hide, or alter this balance.</p>
             <label className="mt-4 block text-sm font-medium">Owner classification reason<textarea required name="reason" minLength={12} rows={2} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm font-normal dark:border-zinc-700 dark:bg-zinc-950" placeholder="For example: GPS installation and hardware charge only; not recurring service." /></label>
-            <label className="mt-3 flex items-start gap-2 text-sm"><input required type="checkbox" name="confirmNoBillingEffect" value="yes" className="mt-1" /><span>I confirm this only classifies migration evidence. It does not change the invoice, payment, Stripe activity, legacy billing, or canonical billing authority.</span></label>
+            <label className="mt-3 flex items-start gap-2 text-sm"><input required type="checkbox" name="confirmNoBillingEffect" value="yes" className="mt-1" /><span>I confirm this only classifies migration evidence. It does not change the invoice, payment, Stripe activity, legacy billing, or subscription billing authority.</span></label>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <button name="classification" value="non_subscription" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold dark:border-zinc-700">Mark not subscription-related</button>
               <button name="classification" value="recurring_evidence" className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Use as recurring evidence</button>

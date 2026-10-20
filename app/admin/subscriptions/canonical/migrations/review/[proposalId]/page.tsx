@@ -38,13 +38,13 @@ export default async function IndividualMigrationReviewPage({ params, searchPara
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <div>
         <Link href="/admin/subscriptions/canonical/migrations" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Back to customer migration</Link>
-        <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Canonical / Confirm migration</p>
+        <p className="mt-4 text-xs font-medium text-zinc-500">Billing / Confirm migration</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Migrate {candidate.customerLabel}</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">TL Portal prepared this arrangement from the customer’s existing billing and service records.</p>
       </div>
 
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">{error}</p> : null}
-      {migrated ? <section className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"><p className="font-semibold">Migration complete</p><p className="mt-1 text-sm">Canonical billing owns the next renewal and the competing legacy authority has been retired.</p>{candidate.targetSubscriptionId ? <Link href={`/admin/subscriptions/canonical/${candidate.targetSubscriptionId}`} className="mt-3 inline-block text-sm font-semibold underline">Open canonical subscription</Link> : null}</section> : null}
+      {migrated ? <section className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"><p className="font-semibold">Migration complete</p><p className="mt-1 text-sm">Subscription billing owns the next renewal and the competing legacy authority has been retired.</p>{candidate.targetSubscriptionId ? <Link href={`/admin/subscriptions/canonical/${candidate.targetSubscriptionId}`} className="mt-3 inline-block text-sm font-semibold underline">Open subscription</Link> : null}</section> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">Tracking services</p><p className="mt-2 text-xl font-semibold tabular-nums">{candidate.serviceCount}</p></div>
@@ -74,7 +74,7 @@ export default async function IndividualMigrationReviewPage({ params, searchPara
         <input type="hidden" name="proposalId" value={proposal.proposalId} />
         <input type="hidden" name="reviewFingerprint" value={review.reviewFingerprint} />
         <input type="hidden" name="sourceCoverageRequired" value={sourceCoverageRequired ? "yes" : "no"} />
-        <div><h2 className="font-semibold">Confirm and migrate</h2><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This will create the canonical agreement, move future manual invoicing to it, and end the matching legacy schedule in one protected workflow. It will not issue today’s invoice.</p></div>
+        <div><h2 className="font-semibold">Confirm and migrate</h2><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This will create the subscription agreement, move future manual invoicing to it, and end the matching legacy schedule in one protected workflow. It will not issue today’s invoice.</p></div>
 
         {!valuesComplete ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">Migration is blocked because the current records do not establish complete dates, services, and pricing.</p> : null}
         {requiredIssues.length ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p className="font-semibold">Review these specific exceptions</p><ul className="mt-2 list-disc space-y-1 pl-5">{requiredIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}</ul></div> : null}
@@ -93,13 +93,13 @@ export default async function IndividualMigrationReviewPage({ params, searchPara
         </details>
 
         <label className="block text-sm font-medium">Owner review note<textarea required name="approvalReason" rows={3} placeholder="Confirmed current services, recurring price, paid-through period, and next renewal." className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 font-normal dark:border-zinc-700 dark:bg-zinc-900" /></label>
-        <div className="grid gap-2 text-sm sm:grid-cols-2">{[["confirmCustomerAndServices", "The customer and active tracking services are correct."], ["confirmCommercialTerms", "The price, frequency, paid-through period, and next billing date are correct."], ["confirmHistory", "Existing invoices, payments, and balances must remain unchanged."], ["confirmAuthorityTransfer", "After success, canonical billing becomes the only authority for the next renewal."]].map(([name, label]) => <label key={name} className="flex items-start gap-2"><input required type="checkbox" name={name} value="yes" className="mt-1 h-4 w-4" /><span>{label}</span></label>)}</div>
+        <div className="grid gap-2 text-sm sm:grid-cols-2">{[["confirmCustomerAndServices", "The customer and active tracking services are correct."], ["confirmCommercialTerms", "The price, frequency, paid-through period, and next billing date are correct."], ["confirmHistory", "Existing invoices, payments, and balances must remain unchanged."], ["confirmAuthorityTransfer", "After success, subscription billing becomes the only authority for the next renewal."]].map(([name, label]) => <label key={name} className="flex items-start gap-2"><input required type="checkbox" name={name} value="yes" className="mt-1 h-4 w-4" /><span>{label}</span></label>)}</div>
         <button disabled={!canExecute} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-zinc-400 sm:w-auto">Confirm and migrate</button>
       </form> : null}
 
       <details className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
         <summary className="cursor-pointer font-semibold">Technical reconciliation details</summary>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2"><div><dt className="text-zinc-500">Source type</dt><dd className="font-mono text-xs">{proposal.sourceKind}</dd></div><div><dt className="text-zinc-500">Source reference</dt><dd className="break-all font-mono text-xs">{proposal.sourceId}</dd></div><div><dt className="text-zinc-500">Proposal reference</dt><dd className="break-all font-mono text-xs">{proposal.proposalId}</dd></div><div><dt className="text-zinc-500">Canonical target</dt><dd className="break-all font-mono text-xs">{candidate.targetSubscriptionId ?? "Not created"}</dd></div>{stripeEvidence?.subscriptionId ? <div><dt className="text-zinc-500">Stripe subscription</dt><dd className="break-all font-mono text-xs">{stripeEvidence.subscriptionId}</dd></div> : null}</dl>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2"><div><dt className="text-zinc-500">Source type</dt><dd className="font-mono text-xs">{proposal.sourceKind}</dd></div><div><dt className="text-zinc-500">Source reference</dt><dd className="break-all font-mono text-xs">{proposal.sourceId}</dd></div><div><dt className="text-zinc-500">Proposal reference</dt><dd className="break-all font-mono text-xs">{proposal.proposalId}</dd></div><div><dt className="text-zinc-500">Subscription target</dt><dd className="break-all font-mono text-xs">{candidate.targetSubscriptionId ?? "Not created"}</dd></div>{stripeEvidence?.subscriptionId ? <div><dt className="text-zinc-500">Stripe subscription</dt><dd className="break-all font-mono text-xs">{stripeEvidence.subscriptionId}</dd></div> : null}</dl>
       </details>
     </div>
   );

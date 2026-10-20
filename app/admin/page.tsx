@@ -97,7 +97,7 @@ export default async function AdminPage() {
       title: "Billing exceptions need review",
       detail: [
         s.paymentIssueCount > 0 ? `${s.paymentIssueCount} payment or past-due signal${s.paymentIssueCount === 1 ? "" : "s"}` : null,
-        s.canonicalMrrUnavailableCount > 0 ? `${s.canonicalMrrUnavailableCount} canonical rate configuration${s.canonicalMrrUnavailableCount === 1 ? "" : "s"}` : null,
+        s.canonicalMrrUnavailableCount > 0 ? `${s.canonicalMrrUnavailableCount} subscription rate configuration${s.canonicalMrrUnavailableCount === 1 ? "" : "s"}` : null,
       ].filter(Boolean).join(" · "),
       href: "/admin/billing-health",
       tone: "warning",
@@ -130,7 +130,7 @@ export default async function AdminPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Key performance indicators">
         <StatCard label="Active GPS services" value={s.activeServiceCount} href="/admin/customers" accent="emerald" icon={<IconLayers className="h-5 w-5" />} hint="Deployed, non-suspended service assignments for active customers" />
-        <StatCard label="Monthly recurring revenue" value={mrrUnavailable ? "—" : formatReportMoney(s.monthlyRecurringRevenueXcd)} href="/admin/billing-health" accent="sky" icon={<IconLayers className="h-5 w-5" />} badges={mrrBadges.length ? mrrBadges : undefined} hint={mrrUnavailable ? "No complete XCD recurring-rate source is available" : "Normalized across legacy, canonical, and standalone recurring schedules"} />
+        <StatCard label="Monthly recurring revenue" value={mrrUnavailable ? "—" : formatReportMoney(s.monthlyRecurringRevenueXcd)} href="/admin/billing-health" accent="sky" icon={<IconLayers className="h-5 w-5" />} badges={mrrBadges.length ? mrrBadges : undefined} hint={mrrUnavailable ? "No complete XCD recurring-rate source is available" : "Normalized across legacy, subscription, and standalone recurring schedules"} />
         <StatCard label="Outstanding invoice balances" value={formatReportMoney(s.outstandingBalanceXcd)} href="/admin/tl-invoices" accent={s.overdueInvoiceCount > 0 ? "rose" : "violet"} icon={<IconAlert className="h-5 w-5" />} badges={balanceBadges.length ? balanceBadges : undefined} hint={`${s.outstandingInvoiceCount} open XCD invoice${s.outstandingInvoiceCount === 1 ? "" : "s"}`} />
         <StatCard label="SIMs near data limit" value={s.simsNearDataLimitCount} href="/admin/sims" accent={s.simsHighUsageCount > 0 ? "amber" : "cyan"} icon={<IconDataUsage className="h-5 w-5" />} badges={simBadges.length ? simBadges : undefined} hint="Uses synced allowance and usage; approaching starts at 80%" />
       </section>

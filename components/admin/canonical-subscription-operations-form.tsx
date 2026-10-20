@@ -82,7 +82,7 @@ export function CanonicalServiceTransferForm({
 }) {
   const [state, action, pending] = useActionState(transferCanonicalServiceAction, initialState);
   useRefreshOnSuccess(state);
-  if (!targetSubscriptions.length) return <p className="mt-3 text-xs text-zinc-500">No other manageable canonical agreement exists for this customer.</p>;
+  if (!targetSubscriptions.length) return <p className="mt-3 text-xs text-zinc-500">No other manageable subscription agreement exists for this customer.</p>;
   return <form action={action} className="mt-3 grid gap-3 rounded-lg border border-zinc-200 p-3 sm:grid-cols-2 dark:border-zinc-700">
     <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} />
     <label className="text-sm font-medium">Transfer to agreement<select required name="targetSubscriptionId" className={inputClass}><option value="">Choose agreement</option>{targetSubscriptions.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>
