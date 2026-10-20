@@ -17,6 +17,7 @@ import {
 import { activateManualPilotLocallyAction } from "@/app/admin/subscriptions/canonical/pilot/actions";
 import {
   canonicalIntervalLabel,
+  canonicalSubscriptionDisplayName,
   canonicalProviderStatusLabel,
   canonicalSubscriptionUiEnabled,
   canonicalSubscriptionUiVisible,
@@ -98,7 +99,7 @@ export default async function CanonicalSubscriptionDetailPage({ params, searchPa
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <div>
         <Link href="/admin/subscriptions/canonical" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Back to subscriptions</Link>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><Link href={`/admin/customers/${subscription.customerId}/subscriptions`} className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400">{subscription.customerLabel}</Link><h1 className="mt-1 text-2xl font-semibold tracking-tight">{subscription.name ?? "Subscription"}</h1><p className="mt-1 text-sm text-zinc-500">{subscription.reference || "No commercial reference"}</p></div><div className="flex flex-wrap gap-2"><span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{collectionLabel(subscription.collectionMethod)}</span><span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold capitalize text-blue-800 dark:bg-blue-950 dark:text-blue-200">{(subscription.lifecycleStatus ?? subscription.status).replaceAll("_", " ")}</span></div></div>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><Link href={`/admin/customers/${subscription.customerId}/subscriptions`} className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400">{subscription.customerLabel}</Link><h1 className="mt-1 text-2xl font-semibold tracking-tight">{canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths)}</h1><p className="mt-1 text-sm text-zinc-500">{subscription.reference || "No commercial reference"}</p></div><div className="flex flex-wrap gap-2"><span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{collectionLabel(subscription.collectionMethod)}</span><span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold capitalize text-blue-800 dark:bg-blue-950 dark:text-blue-200">{(subscription.lifecycleStatus ?? subscription.status).replaceAll("_", " ")}</span></div></div>
       </div>
 
       {previewQuery.error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{previewQuery.error}</p> : null}

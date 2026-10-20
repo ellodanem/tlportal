@@ -23,7 +23,7 @@ export function CustomerOverviewBillingRibbon({
   invoilessCustomerId: string | null;
   nextDue: Date | null | undefined;
 }) {
-  const billingHref = `/admin/customers/${customerId}/billing`;
+  const subscriptionsHref = `/admin/customers/${customerId}/subscriptions`;
   const modeLabel = billingMode === "stripe_subscription" ? "Card (Stripe)" : "Manual / cash";
 
   return (
@@ -41,7 +41,7 @@ export function CustomerOverviewBillingRibbon({
           </div>
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Subscription
+              Account status
             </dt>
             <dd className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">{subscriptionStatusLabel}</dd>
           </div>
@@ -60,20 +60,20 @@ export function CustomerOverviewBillingRibbon({
           </div>
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Next due
+              Earliest renewal
             </dt>
             <dd className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">{formatDate(nextDue)}</dd>
           </div>
         </dl>
         <Link
-          href={billingHref}
+          href={subscriptionsHref}
           className="inline-flex shrink-0 items-center justify-center text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
         >
-          Manage billing →
+          View subscriptions →
         </Link>
       </div>
       <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-        Earliest next billing date across open services · full billing on the Billing tab
+        Account-level summary · commercial terms and service pricing are managed in Subscriptions
       </p>
     </section>
   );

@@ -320,6 +320,18 @@ export function canonicalIntervalLabel(months: number | null): string {
   return "Not configured";
 }
 
+export function canonicalSubscriptionDisplayName(
+  name: string | null | undefined,
+  billingIntervalMonths: number | null,
+): string {
+  const trimmed = name?.trim() ?? "";
+  const isInternalMigrationName = /^(canonical\s+)?migration\b/i.test(trimmed)
+    || /\bshadow\b/i.test(trimmed);
+  if (trimmed && !isInternalMigrationName) return trimmed;
+  const interval = canonicalIntervalLabel(billingIntervalMonths);
+  return interval === "Not configured" ? "GPS tracking subscription" : `${interval} GPS tracking`;
+}
+
 export function canonicalControlLabel(access: CanonicalSubscriptionUiAccess): string {
   switch (access) {
     case "editable_draft": return "Shadow draft";

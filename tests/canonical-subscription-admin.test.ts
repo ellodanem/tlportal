@@ -8,6 +8,7 @@ import {
   assertCanonicalSubscriptionOnboardingAllowed,
   buildCanonicalSubscriptionAdminRow,
   canonicalProviderStatusLabel,
+  canonicalSubscriptionDisplayName,
   canonicalSubscriptionUiAccess,
   canonicalSubscriptionUiEnabled,
   canonicalSubscriptionUiVisible,
@@ -70,6 +71,11 @@ test("only unmigrated shadow drafts are editable", () => {
 test("active canonical arrangements have staff operational access while legacy stays read-only", () => {
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "legacy", lifecycleStatus: null, hasMigrationLedger: false }), "legacy_read_only");
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "canonical", lifecycleStatus: "active", hasMigrationLedger: false }), "canonical_operational");
+});
+
+test("internal migration names are replaced with customer-facing subscription names", () => {
+  assert.equal(canonicalSubscriptionDisplayName("Canonical migration stripe subscription 1-month", 1), "Monthly GPS tracking");
+  assert.equal(canonicalSubscriptionDisplayName("Tour fleet", 3), "Tour fleet");
 });
 
 test("canonical operational administration permits only normal canonical agreements", () => {
@@ -209,14 +215,20 @@ test("UI routes include detail, empty, loading, error and price-history states",
 });
 
 test("customer billing keeps financial history separate from subscription renewal operations", async () => {
-  const [billing, renewals] = await Promise.all([
+  const [billing, renewals, customerSubscriptions, accountRibbon] = await Promise.all([
     readFile("app/admin/customers/[id]/billing/page.tsx", "utf8"),
     readFile("app/admin/subscriptions/[customerId]/renewals/page.tsx", "utf8"),
+    readFile("app/admin/customers/[id]/subscriptions/page.tsx", "utf8"),
+    readFile("components/admin/customer-overview-billing-ribbon.tsx", "utf8"),
   ]);
   assert.doesNotMatch(billing, /CustomerRenewalOpsPanel/);
   assert.match(billing, /Manage renewals/);
   assert.match(renewals, /CustomerRenewalOpsPanel/);
   assert.match(renewals, /Subscription operations/);
+  assert.match(customerSubscriptions, /Billable GPS services/);
+  assert.match(customerSubscriptions, /Current price/);
+  assert.match(customerSubscriptions, /Device \/ SIM assignment/);
+  assert.match(accountRibbon, /commercial terms and service pricing are managed in Subscriptions/);
 });
 
 test("canonical actions retain server-side authorization and do not directly invoke billing providers", async () => {
