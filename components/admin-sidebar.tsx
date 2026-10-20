@@ -49,15 +49,11 @@ const overviewLinks: NavLink[] = [
 ];
 
 function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyUi: boolean }): NavSection[] {
-  const invoiceLabel = ctx.nativeBillingPrimary ? "Invoices" : "TL invoices";
   const salesLinks: NavLink[] = [
     { href: "/admin/customers", label: "Customers", Icon: IconUsers },
     { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
-    { href: "/admin/quotes", label: "Quotes", Icon: IconNavInvoice },
-    { href: "/admin/tl-invoices", label: invoiceLabel, Icon: IconNavInvoice },
-    { href: "/admin/recurring-invoices", label: "Recurring", Icon: IconNavRecurring },
+    { href: "/admin/billing", label: "Billing", Icon: IconNavInvoice },
     { href: "/admin/subscriptions", label: "Subscriptions", Icon: IconNavRecurring },
-    { href: "/admin/statements", label: "Statements", Icon: IconNavReports },
     { href: "/admin/billing-health", label: "Health", Icon: IconNavHealth },
   ];
   if (ctx.invoilessLegacyUi) {
@@ -247,6 +243,45 @@ export function AdminSidebar({
               <span>Device models</span>
             </Link>
           ) : null}
+        </div>
+      );
+    }
+
+    if (href === "/admin/billing") {
+      const billingParentActive =
+        pathname.startsWith("/admin/billing") ||
+        pathname.startsWith("/admin/tl-invoices") ||
+        pathname.startsWith("/admin/quotes") ||
+        pathname.startsWith("/admin/statements");
+      const showSub = billingParentActive && !collapsed;
+      return (
+        <div key={href} className="flex flex-col gap-0.5">
+          <Link href={href} className={navClass(billingParentActive, collapsed)} title={collapsed ? label : undefined}>
+            <NavIcon Icon={Icon} />
+            <span className={collapsed ? "sr-only" : ""}>{label}</span>
+          </Link>
+          {showSub ? (
+            <>
+              <Link href="/admin/billing" className={subNavClass(pathname === "/admin/billing")}><IconNavInvoice className="h-4 w-4 shrink-0 opacity-80" /><span>Invoices</span></Link>
+              <Link href="/admin/billing/quotations" className={subNavClass(pathname.startsWith("/admin/billing/quotations") || pathname.startsWith("/admin/quotes"))}><IconNavProposal className="h-4 w-4 shrink-0 opacity-80" /><span>Quotations</span></Link>
+              <Link href="/admin/billing/reminders" className={subNavClass(pathname.startsWith("/admin/billing/reminders"))}><IconNavInbox className="h-4 w-4 shrink-0 opacity-80" /><span>Reminders</span></Link>
+              <Link href="/admin/billing/statements" className={subNavClass(pathname.startsWith("/admin/billing/statements") || pathname.startsWith("/admin/statements"))}><IconNavReports className="h-4 w-4 shrink-0 opacity-80" /><span>Statements</span></Link>
+            </>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (href === "/admin/subscriptions") {
+      const subscriptionsActive = pathname.startsWith("/admin/subscriptions") || pathname.startsWith("/admin/recurring-invoices");
+      const showSub = subscriptionsActive && !collapsed;
+      return (
+        <div key={href} className="flex flex-col gap-0.5">
+          <Link href={href} className={navClass(subscriptionsActive, collapsed)} title={collapsed ? label : undefined}>
+            <NavIcon Icon={Icon} />
+            <span className={collapsed ? "sr-only" : ""}>{label}</span>
+          </Link>
+          {showSub ? <Link href="/admin/recurring-invoices" className={subNavClass(pathname.startsWith("/admin/recurring-invoices"))}><IconNavRecurring className="h-4 w-4 shrink-0 opacity-80" /><span>Billing schedules</span></Link> : null}
         </div>
       );
     }
