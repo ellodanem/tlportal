@@ -14,7 +14,7 @@ import {
 import { displayInvoiceNumber } from "@/lib/domain/native-billing-cutover";
 import { summarizeBillingWorkspace, type WorkspaceNativeInvoice } from "@/lib/billing/billing-workspace-read-model";
 
-export type BillingWorkspaceView = "invoices" | "quotations" | "reminders" | "statements";
+export type BillingWorkspaceView = "invoices" | "quotations" | "recurring" | "reminders" | "statements";
 type SearchParams = { view?: string; q?: string; currency?: string };
 
 const ACTIVE_STATUSES: InvoiceStatus[] = ["open", "partially_paid", "paid", "overdue"];
@@ -38,6 +38,7 @@ function Tabs({ active }: { active: BillingWorkspaceView }) {
   const tabs = [
     ["/admin/billing", "Invoices", "invoices"],
     ["/admin/billing/quotations", "Quotations", "quotations"],
+    ["/admin/recurring-invoices", "Recurring invoices", "recurring"],
     ["/admin/billing/reminders", "Reminders", "reminders"],
     ["/admin/billing/statements", "Statements", "statements"],
   ] as const;
