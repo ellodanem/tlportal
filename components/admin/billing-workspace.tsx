@@ -89,7 +89,7 @@ export async function BillingWorkspace({ view, searchParams = {} }: { view: Excl
 
 async function InvoicesWorkspace({ searchParams }: { searchParams: SearchParams }) {
   const query = searchParams.q?.trim() ?? "";
-  const selectedView = ["all", "unpaid", "open", "partially_paid", "overdue", "paid"].includes(searchParams.view ?? "") ? searchParams.view ?? "all" : "all";
+  const selectedView = ["all", "unpaid", "draft", "open", "partially_paid", "overdue", "paid"].includes(searchParams.view ?? "") ? searchParams.view ?? "all" : "all";
   const match = query ? { OR: [
     { number: { contains: query, mode: "insensitive" as const } },
     { legacyInvoiceNumber: { contains: query, mode: "insensitive" as const } },
@@ -100,23 +100,24 @@ async function InvoicesWorkspace({ searchParams }: { searchParams: SearchParams 
     { customer: { is: { lastName: { contains: query, mode: "insensitive" as const } } } },
   ] } : {};
   const [nativeInvoices, providerInvoices, payments] = await Promise.all([
-    prisma.invoice.findMany({ where: { archivedAt: null, status: { in: ACTIVE_STATUSES }, ...match }, orderBy: { updatedAt: "desc" }, take: 250, select: { id: true, number: true, legacyInvoiceNumber: true, kind: true, status: true, billToName: true, total: true, amountDue: true, amountPaid: true, currency: true, dueDate: true, customer: { select: { id: true, company: true, firstName: true, lastName: true } } } }),
+    prisma.invoice.findMany({ where: { archivedAt: null, status: { in: [...ACTIVE_STATUSES, "draft"] }, ...match }, orderBy: { updatedAt: "desc" }, take: 250, select: { id: true, number: true, legacyInvoiceNumber: true, kind: true, status: true, billToName: true, total: true, amountDue: true, amountPaid: true, currency: true, dueDate: true, customer: { select: { id: true, company: true, firstName: true, lastName: true } } } }),
     prisma.billingInvoice.findMany({ where: { nativeMirror: { is: null } }, orderBy: { updatedAt: "desc" }, take: 250, select: { id: true, displayNumber: true, providerInvoiceNumber: true, externalInvoiceId: true, status: true, amountXcd: true, currency: true, hostedInvoiceUrl: true, customer: { select: { id: true, company: true, firstName: true, lastName: true } } } }),
     prisma.payment.findMany({ where: { voidedAt: null }, orderBy: { receivedAt: "desc" }, take: 5, select: { id: true, amount: true, currency: true, method: true, receivedAt: true, invoice: { select: { id: true, number: true, legacyInvoiceNumber: true } }, customer: { select: { company: true, firstName: true, lastName: true } } } }),
   ]);
   const currencies = Array.from(new Set([...nativeInvoices.map((row) => row.currency.toUpperCase()), ...providerInvoices.map((row) => row.currency.toUpperCase())])).sort();
   const selectedCurrency = currencies.includes((searchParams.currency ?? "").toUpperCase()) ? (searchParams.currency ?? "").toUpperCase() : currencies[0] ?? "XCD";
   const native = nativeInvoices.filter((row) => row.currency.toUpperCase() === selectedCurrency);
+  const nativeFinancial = native.filter((row) => row.status !== "draft");
   const providers = providerInvoices.filter((row) => row.currency.toUpperCase() === selectedCurrency);
   const rows = native.filter((row) => selectedView === "all" || (selectedView === "unpaid" ? ["open", "partially_paid", "overdue"].includes(row.status) : row.status === selectedView));
   const summary = summarizeBillingWorkspace({
     currency: selectedCurrency,
-    nativeInvoices: native.map((row) => ({ currency: row.currency, status: row.status as WorkspaceNativeInvoice["status"], total: Number(row.total), amountPaid: Number(row.amountPaid), amountDue: Number(row.amountDue) })),
+    nativeInvoices: nativeFinancial.map((row) => ({ currency: row.currency, status: row.status as WorkspaceNativeInvoice["status"], total: Number(row.total), amountPaid: Number(row.amountPaid), amountDue: Number(row.amountDue) })),
     providerInvoices: providers.map((row) => ({ currency: row.currency, status: row.status, amount: Number(row.amountXcd) })),
   });
   const outstandingRows = native.filter((row) => ["open", "partially_paid", "overdue"].includes(row.status));
   const overdueRows = native.filter((row) => row.status === "overdue");
-  const filterCounts = { all: native.length, unpaid: outstandingRows.length, open: native.filter((row) => row.status === "open").length, partially_paid: native.filter((row) => row.status === "partially_paid").length, overdue: overdueRows.length, paid: native.filter((row) => row.status === "paid").length };
+  const filterCounts = { all: native.length, unpaid: outstandingRows.length, draft: native.filter((row) => row.status === "draft").length, open: native.filter((row) => row.status === "open").length, partially_paid: native.filter((row) => row.status === "partially_paid").length, overdue: overdueRows.length, paid: native.filter((row) => row.status === "paid").length };
 
   return <div className="flex flex-col gap-6">
     <BillingWorkspaceHeader active="invoices" title="Billing" subtitle="Manage invoices, payments and collections." primaryHref="/admin/tl-invoices/new" primaryLabel="New invoice" />
