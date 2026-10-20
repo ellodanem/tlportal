@@ -229,6 +229,7 @@ test("customer billing keeps financial history separate from subscription renewa
   assert.match(customerSubscriptions, /Billable GPS services/);
   assert.match(customerSubscriptions, /Current price/);
   assert.match(customerSubscriptions, /Device \/ SIM assignment/);
+  assert.match(customerSubscriptions, /CustomerServiceManagementModal/);
   assert.match(accountRibbon, /commercial terms and service pricing are managed in Subscriptions/);
 });
 

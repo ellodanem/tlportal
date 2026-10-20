@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
+import { CustomerServiceManagementModal } from "@/components/admin/customer-service-management-modal";
 import {
   canonicalIntervalLabel,
   canonicalSubscriptionDisplayName,
@@ -101,6 +102,17 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
     .filter((value): value is Date => value != null)
     .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
   const attentionCount = currentSubscriptions.filter((subscription) => subscription.summary?.attentionRequired).length;
+  const servicesCanBeManaged = currentSubscriptions.some((subscription) => subscription.controlMode === "canonical" && ["editable_draft", "canonical_operational"].includes(subscription.access) && subscription.items.some((item) => !["ended", "canceled"].includes(item.status)));
+  const replacementAssignments = servicesCanBeManaged ? await prisma.serviceAssignment.findMany({
+    where: {
+      customerId: customer.id,
+      subscriptionItemId: null,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    orderBy: [{ startDate: "asc" }, { id: "asc" }],
+    select: { id: true, device: { select: { label: true, deviceModel: { select: { name: true } } } } },
+  }) : [];
   const today = new Date();
 
   return (
@@ -147,7 +159,14 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
               const rate = currentRate(item, today);
               const assignment = currentAssignment(item);
               const deviceLabel = assignment?.device.label?.trim() || assignment?.device.deviceModel.name || "No device assigned";
-              return <div key={item.id} className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,.9fr)_auto] lg:items-center lg:gap-0 dark:border-zinc-700 dark:bg-zinc-900"><div className="min-w-0 lg:pr-5"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-zinc-950 dark:text-zinc-50">{item.label?.trim() || "GPS tracking service"}</p><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${serviceStatusClass(item.status)}`}>{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-zinc-500">Service since {date(item.serviceActivatedDate ?? item.billingEffectiveFrom)}</p></div><div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:border-r sm:pr-5 lg:border-l lg:border-r-0 lg:pl-5 lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Device / SIM assignment</p><p className="mt-1 truncate text-sm font-medium text-zinc-900 dark:text-zinc-100" title={deviceLabel}>{deviceLabel}</p>{assignment ? <Link href={`/admin/devices/${assignment.device.id}/edit?tab=assignment`} className="mt-1 inline-block text-xs font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">View assignment</Link> : null}</div><div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:pl-5 lg:border-l lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Current price</p><p className="mt-1 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{rate ? money(rate.agreedAmountPerCycle.toString(), rate.currency) : "Not set"}</p>{rate ? <p className="mt-1 text-xs capitalize text-zinc-500">{rate.classification} / {canonicalIntervalLabel(rate.billingIntervalMonths).toLowerCase()}</p> : null}</div><Link href={`/admin/subscriptions/canonical/${subscription.id}#services`} className="w-fit rounded-lg border border-emerald-300 px-3 py-2 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30 dark:focus-visible:ring-offset-zinc-900">Manage</Link></div>;
+              const canManage = subscription.controlMode === "canonical" && ["editable_draft", "canonical_operational"].includes(subscription.access) && !["ended", "canceled"].includes(item.status);
+              const serviceLabel = item.label?.trim() || "GPS tracking service";
+              const currentAmount = rate?.agreedAmountPerCycle.toString() ?? subscription.agreedAmountPerCycle?.toString() ?? "0.00";
+              const nextBillingDate = subscription.nextBillingDate?.toISOString().slice(0, 10) ?? "";
+              const transferTargets = currentSubscriptions
+                .filter((target) => target.id !== subscription.id && target.controlMode === "canonical" && target.canonicalMigrationLedger == null && ["draft", "pending_activation", "active", "paused"].includes(target.lifecycleStatus ?? ""))
+                .map((target) => ({ id: target.id, label: target.name?.trim() || target.reference || "Subscription agreement" }));
+              return <div key={item.id} className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,.9fr)_auto] lg:items-center lg:gap-0 dark:border-zinc-700 dark:bg-zinc-900"><div className="min-w-0 lg:pr-5"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-zinc-950 dark:text-zinc-50">{serviceLabel}</p><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${serviceStatusClass(item.status)}`}>{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-zinc-500">Service since {date(item.serviceActivatedDate ?? item.billingEffectiveFrom)}</p></div><div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:border-r sm:pr-5 lg:border-l lg:border-r-0 lg:pl-5 lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Device / SIM assignment</p><p className="mt-1 truncate text-sm font-medium text-zinc-900 dark:text-zinc-100" title={deviceLabel}>{deviceLabel}</p>{assignment ? <Link href={`/admin/devices/${assignment.device.id}/edit?tab=assignment`} className="mt-1 inline-block text-xs font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">View assignment</Link> : null}</div><div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:pl-5 lg:border-l lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Current price</p><p className="mt-1 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{rate ? money(rate.agreedAmountPerCycle.toString(), rate.currency) : "Not set"}</p>{rate ? <p className="mt-1 text-xs capitalize text-zinc-500">{rate.classification} / {canonicalIntervalLabel(rate.billingIntervalMonths).toLowerCase()}</p> : null}</div>{canManage ? <CustomerServiceManagementModal subscriptionId={subscription.id} subscriptionItemId={item.id} serviceLabel={serviceLabel} nextBillingDate={nextBillingDate} currentAmount={currentAmount} replacementAssignments={replacementAssignments.map((replacement) => ({ id: replacement.id, label: replacement.device.label?.trim() || replacement.device.deviceModel.name }))} targetSubscriptions={transferTargets} /> : <Link href={`/admin/subscriptions/canonical/${subscription.id}#services`} className="w-fit rounded-lg border border-emerald-300 px-3 py-2 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30 dark:focus-visible:ring-offset-zinc-900">View</Link>}</div>;
             })}</div> : <div className="mt-4 rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">No billable services have been added to this agreement.</div>}
           </section>
         </article>;
