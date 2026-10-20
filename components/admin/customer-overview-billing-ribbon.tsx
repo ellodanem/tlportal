@@ -41,7 +41,7 @@ export function CustomerOverviewBillingRibbon({
           </div>
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Account status
+              Subscription state
             </dt>
             <dd className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">{subscriptionStatusLabel}</dd>
           </div>
@@ -73,7 +73,7 @@ export function CustomerOverviewBillingRibbon({
         </Link>
       </div>
       <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-        Account-level summary · commercial terms and service pricing are managed in Subscriptions
+        Subscription state describes service setup; payment status is shown separately below. Account-level commercial terms and service pricing are managed in Subscriptions.
       </p>
     </section>
   );

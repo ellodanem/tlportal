@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db";
 import { buildInvoilessBillToAddress } from "@/lib/invoiless/customer-sync";
 import { fetchInvoicesForInvoilessCustomerId, isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
 import { customerDisplayName } from "@/lib/admin/customer-display";
+import { loadCustomerCollectionSummary } from "@/lib/admin/load-customer-collection-summary";
 import { displayAssignmentOpsStatus } from "@/lib/admin/assignment-ops-urgency";
 import {
   classifyCustomerAssignments,
@@ -24,6 +25,7 @@ import { CustomerActivityEvent, CustomerActivityEventTime } from "@/components/a
 import { CustomerPortalUsersPanel } from "@/components/admin/customer-portal-users-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CustomerFinancialSummary } from "@/components/admin/customer-financial-summary";
+import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
 import { CustomerWorkspaceHeader } from "@/components/admin/customer-workspace-header";
 import { UnarchiveCustomerButton } from "@/components/archive-customer-button";
 import {
@@ -171,7 +173,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   const invoilessAddressPreview = buildInvoilessBillToAddress(customer);
   const invoilessApi = isInvoilessConfigured();
   let recentInvoices: Awaited<ReturnType<typeof fetchInvoicesForInvoilessCustomerId>> = [];
-  const [activityEvents, invoiceSummary, recentNativeInvoices, quoteCount, activeScheduleCount] = await Promise.all([
+  const [activityEvents, invoiceSummary, recentNativeInvoices, quoteCount, activeScheduleCount, collectionSummary] = await Promise.all([
     listOperationalEventsForCustomer(id, 12),
     prisma.invoice.aggregate({
       where: { customerId: id, status: { in: ["open", "partially_paid", "overdue"] } },
@@ -186,6 +188,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
     }),
     prisma.quote.count({ where: { customerId: id } }),
     prisma.recurringInvoiceSchedule.count({ where: { customerId: id, status: "active" } }),
+    loadCustomerCollectionSummary(id),
   ]);
 
   if (invoilessApi && invoilessCustomerId) {
@@ -284,6 +287,8 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
         invoilessCustomerId={invoilessCustomerId}
         nextDue={nextDue}
       />
+
+      {collectionSummary ? <CustomerCollectionSummary customerId={customer.id} summary={collectionSummary} /> : null}
 
       <CustomerFinancialSummary
         customerId={customer.id}

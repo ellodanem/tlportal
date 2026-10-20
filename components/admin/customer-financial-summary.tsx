@@ -33,17 +33,17 @@ export function CustomerFinancialSummary({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Financial snapshot</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">TL Portal invoices, quotes, and recurring billing activity.</p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Recorded TL Portal invoices only. A zero here does not confirm that the current renewal was paid.</p>
         </div>
         <Link href={`/admin/customers/${customerId}/billing`} className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Open billing →</Link>
       </div>
       <dl className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-950/60">
-          <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Balance due</dt>
-          <dd className={`mt-1 text-xl font-semibold tabular-nums ${amountDue > 0 ? "text-rose-700 dark:text-rose-300" : "text-emerald-700 dark:text-emerald-300"}`}>{formatMoney(amountDue)}</dd>
+          <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Recorded balance due</dt>
+          <dd className={`mt-1 text-xl font-semibold tabular-nums ${amountDue > 0 ? "text-rose-700 dark:text-rose-300" : "text-zinc-900 dark:text-zinc-50"}`}>{formatMoney(amountDue)}</dd>
         </div>
         <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-950/60">
-          <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Open invoices</dt>
+          <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Recorded open invoices</dt>
           <dd className="mt-1 text-xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{openInvoiceCount}</dd>
         </div>
         <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-950/60">

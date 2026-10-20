@@ -124,6 +124,12 @@ function InvoicePdfActions({
           Emailed {formatDate(inv.receiptEmailedAt)}
         </span>
       ) : null}
+      {isPaid && !inv.receiptEmailedAt ? (
+        <span className="text-xs text-amber-700 dark:text-amber-400">TL receipt email not recorded</span>
+      ) : null}
+      {!isPaid && (inv.hostedInvoiceUrl || inv.invoicePdfUrl) ? (
+        <span className="text-xs text-amber-700 dark:text-amber-400">Customer delivery not tracked</span>
+      ) : null}
     </div>
   );
 }
@@ -201,7 +207,7 @@ export function StripeInvoicesList({
             <th className="px-4 py-3 text-left">Period</th>
             <th className="px-4 py-3 text-left">Paid</th>
             <th className="px-4 py-3 text-left">Invoiless</th>
-            <th className="px-4 py-3 text-left">Receipt</th>
+            <th className="px-4 py-3 text-left">Delivery / receipt</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100 bg-white dark:divide-zinc-800 dark:bg-zinc-900">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
+import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
 import { BillingNotificationHistory } from "@/components/admin/billing-notification-history";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
 import { PaymentRemindersSection } from "@/components/admin/payment-reminders-section";
@@ -10,6 +11,7 @@ import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { StripeInvoicesList } from "@/components/admin/stripe-invoices-list";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { loadCustomerBillingPageData } from "@/lib/admin/load-customer-billing";
+import { loadCustomerCollectionSummary } from "@/lib/admin/load-customer-collection-summary";
 import { formatMoney } from "@/lib/domain/native-billing";
 import { buildPaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-messaging";
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
@@ -34,12 +36,15 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
   if (!data) {
     notFound();
   }
-  const notificationDeliveries = await prisma.billingNotificationDelivery.findMany({
-    where: { customerId: id },
-    orderBy: { createdAt: "desc" },
-    take: 30,
-    select: { id: true, eventKind: true, channel: true, status: true, destination: true, attempts: true, lastError: true },
-  });
+  const [notificationDeliveries, collectionSummary] = await Promise.all([
+    prisma.billingNotificationDelivery.findMany({
+      where: { customerId: id },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      select: { id: true, eventKind: true, channel: true, status: true, destination: true, attempts: true, lastError: true, sentAt: true, createdAt: true },
+    }),
+    loadCustomerCollectionSummary(id),
+  ]);
 
   const {
     customer,
@@ -97,6 +102,8 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
         setupWarning={setupWarning}
         stripeBanner={stripeBanner}
       />
+
+      {collectionSummary ? <CustomerCollectionSummary customerId={customer.id} summary={collectionSummary} /> : null}
 
       <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
