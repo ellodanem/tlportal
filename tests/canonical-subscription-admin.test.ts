@@ -269,6 +269,9 @@ test("canonical workflow confirms commercial changes and never adds direct billi
   assert.match(create, /does not activate billing/);
   assert.doesNotMatch(create, /stripe\.subscriptions\.create|generateRecurringInvoice|createInvoice/);
   assert.match(onboarding, /Choose an existing customer or create a new one/);
+  assert.match(onboarding, /Vehicle \/ asset name/);
+  assert.match(onboarding, /selectServiceDevice/);
+  assert.match(onboarding, /labelTouched/);
   assert.match(onboarding, /Available device \/ SIM/);
   assert.match(onboarding, /does not activate billing or create financial records/);
   assert.doesNotMatch(onboarding, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
