@@ -32,6 +32,8 @@ export type CustomerCollectionSummary = {
   headline: string;
   detail: string;
   outstandingAmount: number;
+  /** A provider signal exists, but TL Portal cannot confirm its remaining balance. */
+  providerBalanceRequiresReview: boolean;
   currency: string;
   latestInvoice: CustomerCollectionInvoice | null;
   lastPaymentAt: Date | null;
@@ -120,9 +122,11 @@ export function deriveCustomerCollectionSummary(input: {
   const latestInvoice = invoices[0] ?? null;
   const nativeOpen = invoices.filter((invoice) => invoice.source === "native" && NATIVE_OPEN.has(invoice.status.toLowerCase()) && invoice.amountDue > 0);
   const providerOpen = invoices.filter((invoice) => invoice.source === "stripe" && PROVIDER_OPEN.has(invoice.status.toLowerCase()));
-  const openInvoices = [...nativeOpen, ...providerOpen];
-  const outstandingAmount = openInvoices.reduce((total, invoice) => total + (invoice.source === "stripe" ? invoice.amount : invoice.amountDue), 0);
-  const currency = openInvoices[0]?.currency ?? latestInvoice?.currency ?? "XCD";
+  // Provider invoices expose their billed total, not a verified remaining balance. Never
+  // turn that into accounts-receivable in the customer summary.
+  const outstandingAmount = nativeOpen.reduce((total, invoice) => total + invoice.amountDue, 0);
+  const providerBalanceRequiresReview = providerOpen.length > 0;
+  const currency = nativeOpen[0]?.currency ?? latestInvoice?.currency ?? "XCD";
   const lastPaymentAt = latestDate(invoices.map((invoice) => invoice.paidAt));
   const paidThrough = latestDate(invoices.filter((invoice) => invoice.paidAt).map((invoice) => invoice.periodEnd));
   const statusSignals = [...input.subscriptionStatuses, input.billingAccountStatus ?? ""].map((status) => status.toLowerCase());
@@ -140,17 +144,18 @@ export function deriveCustomerCollectionSummary(input: {
   const renewalDatesDisagree = input.serviceRenewalDueDate != null
     && input.subscriptionRenewalDate != null
     && day(input.serviceRenewalDueDate) !== day(input.subscriptionRenewalDate);
-  const delivery = deliveryForInvoice(openInvoices.sort((a, b) => b.invoiceDate.getTime() - a.invoiceDate.getTime())[0] ?? latestInvoice, input.deliveries);
+  const delivery = deliveryForInvoice(nativeOpen.sort((a, b) => b.invoiceDate.getTime() - a.invoiceDate.getTime())[0] ?? latestInvoice, input.deliveries);
 
   if (failed) {
     return {
       state: "failed",
       tone: "danger",
-      headline: "Payment failed",
+      headline: outstandingAmount > 0 ? "Payment failed" : "Subscription requires billing review",
       detail: outstandingAmount > 0
         ? `${money(outstandingAmount, currency)} remains outstanding. Review the failed card payment or invoice.`
         : "The billing provider reports a past-due or unpaid subscription. The exact balance is not recorded here.",
       outstandingAmount,
+      providerBalanceRequiresReview,
       currency,
       latestInvoice,
       lastPaymentAt,
@@ -163,7 +168,7 @@ export function deriveCustomerCollectionSummary(input: {
   }
 
   if (nativeOverdue || renewalUnpaid || collectionPastDue) {
-    const noOpenInvoice = openInvoices.length === 0;
+    const noOpenInvoice = nativeOpen.length === 0;
     return {
       state: "overdue",
       tone: "danger",
@@ -174,6 +179,7 @@ export function deriveCustomerCollectionSummary(input: {
           : "Collection records are past due, but no current unpaid invoice is recorded. The exact balance still needs to be reconciled."
         : `${money(outstandingAmount, currency)} is overdue.`,
       outstandingAmount,
+      providerBalanceRequiresReview,
       currency,
       latestInvoice,
       lastPaymentAt,
@@ -185,13 +191,14 @@ export function deriveCustomerCollectionSummary(input: {
     };
   }
 
-  if (openInvoices.length > 0) {
+  if (nativeOpen.length > 0) {
     return {
       state: "outstanding",
       tone: "warning",
       headline: "Payment outstanding",
       detail: `${money(outstandingAmount, currency)} is awaiting payment.`,
       outstandingAmount,
+      providerBalanceRequiresReview,
       currency,
       latestInvoice,
       lastPaymentAt,
@@ -210,6 +217,7 @@ export function deriveCustomerCollectionSummary(input: {
       headline: paidThrough ? `Paid through ${paidThrough.toLocaleDateString(undefined, { dateStyle: "medium" })}` : "Latest invoice paid",
       detail: `The most recent recorded payment was ${lastPaymentAt.toLocaleDateString(undefined, { dateStyle: "medium" })}.`,
       outstandingAmount: 0,
+      providerBalanceRequiresReview,
       currency,
       latestInvoice,
       lastPaymentAt,
@@ -230,6 +238,7 @@ export function deriveCustomerCollectionSummary(input: {
       ? `The next recorded renewal is ${futureRenewal.toLocaleDateString(undefined, { dateStyle: "medium" })}.`
       : "No invoice or payment has been recorded for this customer.",
     outstandingAmount: 0,
+    providerBalanceRequiresReview,
     currency,
     latestInvoice,
     lastPaymentAt,

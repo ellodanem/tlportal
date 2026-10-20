@@ -58,25 +58,26 @@ test("an overdue renewal without a current invoice is not reported as a zero pai
   assert.equal(result.paidThrough?.toISOString(), "2026-10-15T00:00:00.000Z");
 });
 
-test("a provider past-due signal takes priority and preserves the recorded balance", () => {
+test("a provider past-due signal requires review instead of assuming its billed total is unpaid", () => {
   const result = derive({
     subscriptionStatuses: ["past_due"],
     invoices: [stripeInvoice({ status: "open", paidAt: null, amountDue: 125 })],
   });
 
   assert.equal(result.state, "failed");
-  assert.equal(result.outstandingAmount, 125);
-  assert.match(result.detail, /EC\$125\.00 remains outstanding/);
+  assert.equal(result.outstandingAmount, 0);
+  assert.equal(result.providerBalanceRequiresReview, true);
+  assert.match(result.detail, /exact balance is not recorded/i);
 });
 
 test("an open invoice is clearly outstanding even before its due date", () => {
   const result = derive({
-    invoices: [stripeInvoice({ status: "open", paidAt: null, amountDue: 125 })],
+    invoices: [stripeInvoice({ source: "native", status: "open", paidAt: null, amountDue: 125, dueDate: new Date("2026-10-25T00:00:00.000Z"), hostedInvoiceUrl: null })],
   });
 
   assert.equal(result.state, "outstanding");
   assert.equal(result.headline, "Payment outstanding");
-  assert.equal(result.deliveryLabel, "Delivery not tracked");
+  assert.equal(result.deliveryLabel, "Not recorded");
 });
 
 test("a payment covering the overdue service date remains current", () => {

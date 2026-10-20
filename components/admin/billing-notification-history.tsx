@@ -23,14 +23,14 @@ function formatDate(value: Date) {
   return value.toLocaleDateString(undefined, { dateStyle: "medium" });
 }
 
-export function BillingNotificationHistory({ customerId, deliveries }: { customerId: string; deliveries: Delivery[] }) {
+export function BillingNotificationHistory({ customerId, deliveries, embedded = false }: { customerId: string; deliveries: Delivery[]; embedded?: boolean }) {
   const router = useRouter();
   const [state, action] = useActionState(retryBillingNotificationAction, initial);
   useEffect(() => { if (state.ok) router.refresh(); }, [state.ok, router]);
 
-  return <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-    <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Billing notification history</h2>
-    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Automatic email and WhatsApp invoice notices. Failed messages can be retried after the invoice is rechecked.</p>
+  const content = <>
+    {!embedded ? <><h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Billing notification history</h2>
+    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Automatic email and WhatsApp invoice notices. Failed messages can be retried after the invoice is rechecked.</p></> : null}
     {deliveries.length === 0 ? <p className="mt-3 text-sm text-zinc-500">No automatic billing notifications yet.</p> : <ul className="mt-3 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
       {deliveries.map((delivery) => <li key={delivery.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -49,5 +49,6 @@ export function BillingNotificationHistory({ customerId, deliveries }: { custome
     </ul>}
     {state.error ? <p className="mt-3 text-sm text-rose-700" role="alert">{state.error}</p> : null}
     {state.ok ? <p className="mt-3 text-sm text-emerald-700" role="status">{state.message}</p> : null}
-  </section>;
+  </>;
+  return embedded ? <div>{content}</div> : <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">{content}</section>;
 }

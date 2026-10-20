@@ -4,9 +4,12 @@ import { useState, type ReactNode } from "react";
 
 import { PaymentRemindersPreferenceForm } from "@/components/admin/payment-reminders-preference-form";
 import { OutstandingInvoiceReminderPanel } from "@/components/admin/outstanding-invoice-reminder-panel";
+import { BillingNotificationHistory } from "@/components/admin/billing-notification-history";
 import { customerReceivesPaymentReminders } from "@/lib/domain/payment-reminders";
 import type { OutstandingInvoiceReminderCandidate } from "@/lib/billing/outstanding-invoice-reminder";
 import type { CustomerBillingMode, PaymentRemindersPreference } from "@prisma/client";
+
+type Delivery = { id: string; eventKind: string; channel: "email" | "whatsapp"; status: "pending" | "sending" | "sent" | "failed" | "suppressed"; destination: string | null; attempts: number; lastError: string | null; sentAt: Date | null; createdAt: Date };
 
 function ReminderModal({
   open,
@@ -77,6 +80,7 @@ export function PaymentRemindersSection({
   customerPhone,
   whatsAppConfigured,
   candidates,
+  deliveries,
 }: {
   customerId: string;
   customerName: string;
@@ -87,6 +91,7 @@ export function PaymentRemindersSection({
   customerPhone: string | null;
   whatsAppConfigured: boolean;
   candidates: OutstandingInvoiceReminderCandidate[];
+  deliveries: Delivery[];
 }) {
   const [preferenceOpen, setPreferenceOpen] = useState(false);
   const [outstandingOpen, setOutstandingOpen] = useState(false);
@@ -103,18 +108,18 @@ export function PaymentRemindersSection({
     <>
       <section
         className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-        aria-label="Payment reminders"
+        id="collection-notifications"
+        aria-label="Collection and notifications"
       >
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payment reminders</h2>
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Collection &amp; notifications</h2>
         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-          Scheduled due/overdue nudges (WhatsApp today; same setting for all channels). Stripe card failures use the
-          decline follow-up series instead. You can also send a one-off reminder for multiple outstanding invoices.
+          Manage reminder preferences and send a one-off nudge only for an eligible invoice.
         </p>
 
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Scheduled reminders
+              Automatic reminders
             </dt>
             <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
               {preferenceLabel} —{" "}
@@ -126,7 +131,7 @@ export function PaymentRemindersSection({
           </div>
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Outstanding invoices
+              Eligible invoices
             </dt>
             <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
               {candidates.length === 0
@@ -142,21 +147,21 @@ export function PaymentRemindersSection({
             onClick={() => setPreferenceOpen(true)}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
           >
-            Reminder preference
+            Reminder preferences
           </button>
-          <button
+          {candidates.length > 0 ? <button
             type="button"
             onClick={() => setOutstandingOpen(true)}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
           >
-            Outstanding invoices
-            {candidates.length > 0 ? (
-              <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
-                {candidates.length}
-              </span>
-            ) : null}
-          </button>
+            Send reminder
+            <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">{candidates.length}</span>
+          </button> : null}
         </div>
+        <details className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <summary className="cursor-pointer text-sm font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white">Delivery history</summary>
+          <div className="pt-2"><BillingNotificationHistory customerId={customerId} deliveries={deliveries} embedded /></div>
+        </details>
       </section>
 
       <ReminderModal

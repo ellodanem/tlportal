@@ -50,7 +50,7 @@ export function InvoicePaymentForm({
   }));
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+    <div id="record-payment" className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
       <p className="text-sm font-medium">Record payment</p>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Cash, cheque, or bank — {currency} {amountDue.toFixed(2)} due.

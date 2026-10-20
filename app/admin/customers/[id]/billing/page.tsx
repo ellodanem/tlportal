@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 
 import { CustomerBillingAlerts } from "@/components/admin/customer-billing-alerts";
 import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
-import { BillingNotificationHistory } from "@/components/admin/billing-notification-history";
 import { CustomerBillingPanel } from "@/components/admin/customer-billing-panel";
 import { PaymentRemindersSection } from "@/components/admin/payment-reminders-section";
 import { CustomerPaymentDeclineFollowUpCard } from "@/components/admin/customer-payment-decline-follow-up";
@@ -17,172 +16,43 @@ import { buildPaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-me
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { prisma } from "@/lib/db";
 
-type Props = {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ stripe?: string; setup?: string; warn?: string }>;
-};
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ stripe?: string; setup?: string; warn?: string }> };
 
 function stripeBannerFromQuery(raw: string | undefined): "success" | "cancel" | null {
-  if (raw === "success") return "success";
-  if (raw === "cancel") return "cancel";
-  return null;
+  return raw === "success" || raw === "cancel" ? raw : null;
+}
+
+type RecentInvoice = { id: string; number: string | null; status: string; amountDue: unknown; total: unknown; currency: string; issueDate: Date; dueDate: Date | null };
+
+function InvoiceTable({ invoices }: { invoices: RecentInvoice[] }) {
+  if (invoices.length === 0) return <p className="mt-4 text-sm text-zinc-500">No invoices have been recorded for this customer.</p>;
+  return <div className="mt-3 overflow-x-auto"><table className="min-w-full text-sm"><thead className="border-b border-zinc-100 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800"><tr><th className="px-2 py-2">Invoice</th><th className="px-2 py-2">Date</th><th className="px-2 py-2">Due</th><th className="px-2 py-2">Amount</th><th className="px-2 py-2">Status</th></tr></thead><tbody>{invoices.map((invoice) => <tr key={invoice.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"><td className="px-2 py-3 font-medium text-emerald-700"><Link href={`/admin/tl-invoices/${invoice.id}`} className="hover:underline">{invoice.number ?? "Draft invoice"}</Link></td><td className="whitespace-nowrap px-2 py-3">{invoice.issueDate.toLocaleDateString(undefined, { dateStyle: "medium" })}</td><td className="whitespace-nowrap px-2 py-3">{invoice.dueDate?.toLocaleDateString(undefined, { dateStyle: "medium" }) ?? "—"}</td><td className="px-2 py-3 tabular-nums">{formatMoney(Number(invoice.total), invoice.currency)}</td><td className="px-2 py-3 capitalize">{invoice.status.replaceAll("_", " ")}</td></tr>)}</tbody></table></div>;
 }
 
 export default async function CustomerBillingPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { stripe: stripeQuery, setup: setupQuery, warn: warnQuery } = await searchParams;
-  const setupWarning = warnQuery ? decodeURIComponent(warnQuery) : null;
   const data = await loadCustomerBillingPageData(id);
-  if (!data) {
-    notFound();
-  }
-  const [notificationDeliveries, collectionSummary] = await Promise.all([
-    prisma.billingNotificationDelivery.findMany({
-      where: { customerId: id },
-      orderBy: { createdAt: "desc" },
-      take: 30,
-      select: { id: true, eventKind: true, channel: true, status: true, destination: true, attempts: true, lastError: true, sentAt: true, createdAt: true },
-    }),
+  if (!data) notFound();
+
+  const [notificationDeliveries, collectionSummary, recentInvoices, recentPayments] = await Promise.all([
+    prisma.billingNotificationDelivery.findMany({ where: { customerId: id }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, eventKind: true, channel: true, status: true, destination: true, attempts: true, lastError: true, sentAt: true, createdAt: true } }),
     loadCustomerCollectionSummary(id),
+    prisma.invoice.findMany({ where: { customerId: id, archivedAt: null, billingInvoiceId: null }, orderBy: { issueDate: "desc" }, take: 5, select: { id: true, number: true, status: true, amountDue: true, total: true, currency: true, issueDate: true, dueDate: true } }),
+    prisma.payment.findMany({ where: { customerId: id, voidedAt: null }, orderBy: { receivedAt: "desc" }, take: 5, select: { id: true, amount: true, currency: true, method: true, reference: true, receivedAt: true, invoice: { select: { id: true, number: true } } } }),
   ]);
-
-  const {
-    customer,
-    invoilessConfigured,
-    stripeConfigured,
-    invoilessId,
-    billingSetup,
-    stripeInvoices,
-    paymentDeclineFollowUp,
-    outstandingReminderCandidates,
-  } = data;
-
+  const { customer, invoilessConfigured, stripeConfigured, invoilessId, billingSetup, stripeInvoices, paymentDeclineFollowUp, outstandingReminderCandidates, subscriptionSummary, renewalAssignments } = data;
   const title = customerDisplayName(customer);
-  const stripeBanner = stripeBannerFromQuery(stripeQuery);
-  const declineEmailPreview = paymentDeclineFollowUp
-    ? buildPaymentDeclineEmailPreview({
-        greetingName: title,
-        amountLabel: formatMoney(paymentDeclineFollowUp.amount, paymentDeclineFollowUp.currency),
-        kind: paymentDeclineFollowUp.kind,
-        invoiceNumber: paymentDeclineFollowUp.invoiceNumber,
-        payUrl: paymentDeclineFollowUp.payUrl,
-        declineCode: paymentDeclineFollowUp.declineCode,
-      })
-    : null;
+  const primaryInvoice = recentInvoices.find((invoice) => ["open", "partially_paid", "overdue"].includes(invoice.status)) ?? recentInvoices[0] ?? null;
+  const hasSubscriptions = Boolean(subscriptionSummary) || renewalAssignments.length > 0;
+  const declineEmailPreview = paymentDeclineFollowUp ? buildPaymentDeclineEmailPreview({ greetingName: customer.firstName?.trim() || customer.company?.trim() || title, amountLabel: formatMoney(paymentDeclineFollowUp.amount, paymentDeclineFollowUp.currency), kind: paymentDeclineFollowUp.kind, invoiceNumber: paymentDeclineFollowUp.invoiceNumber, payUrl: paymentDeclineFollowUp.payUrl, declineCode: paymentDeclineFollowUp.declineCode }) : null;
 
-  const billingPanel = (
-    <CustomerBillingPanel
-      customerId={customer.id}
-      billingMode={customer.billingMode}
-      invoilessConfigured={invoilessConfigured}
-      stripeConfigured={stripeConfigured}
-      hasInvoilessId={Boolean(invoilessId)}
-      billingSetup={billingSetup}
-    />
-  );
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Link
-          href="/admin/customers"
-          className="text-sm text-emerald-700 hover:underline dark:text-emerald-400"
-        >
-          ← Customers
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{title}</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Billing</p>
-      </div>
-
-      <CustomerSubnav customerId={customer.id} active="billing" />
-
-      <CustomerBillingAlerts
-        billingMode={customer.billingMode}
-        setupBanner={setupQuery === "1"}
-        setupWarning={setupWarning}
-        stripeBanner={stripeBanner}
-      />
-
-      {collectionSummary ? <CustomerCollectionSummary customerId={customer.id} summary={collectionSummary} /> : null}
-
-      <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="font-semibold text-emerald-950 dark:text-emerald-100">Subscription operations</h2><p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-200">Service terms, renewals, pause controls, and collection operations are managed from subscriptions—not from this financial-history screen.</p></div>
-          <div className="flex flex-wrap gap-2"><Link href={`/admin/customers/${customer.id}/subscriptions`} className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-zinc-900 dark:text-emerald-200">View subscriptions</Link><Link href={`/admin/subscriptions/${customer.id}/renewals`} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Manage renewals</Link></div>
-        </div>
-      </section>
-
-      <PaymentRemindersSection
-        customerId={customer.id}
-        customerName={title}
-        greetingName={customer.firstName?.trim() || customer.company?.trim() || title}
-        billingMode={customer.billingMode}
-        paymentReminders={customer.paymentReminders}
-        customerEmail={customer.email}
-        customerPhone={customer.phone}
-        whatsAppConfigured={isTwilioWhatsAppConfigured()}
-        candidates={outstandingReminderCandidates}
-      />
-
-      {paymentDeclineFollowUp ? (
-        <CustomerPaymentDeclineFollowUpCard
-          followUp={paymentDeclineFollowUp}
-          customerId={customer.id}
-          emailPreview={declineEmailPreview}
-          whatsAppConfigured={isTwilioWhatsAppConfigured()}
-        />
-      ) : null}
-
-      <BillingNotificationHistory customerId={customer.id} deliveries={notificationDeliveries} />
-
-      {billingPanel}
-
-      {customer.billingMode === "stripe_subscription" || stripeInvoices.length > 0 ? (
-        <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Stripe invoices</h2>
-          <details className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            <summary className="cursor-pointer font-medium text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">
-              About mirrored invoices
-            </summary>
-            <p className="mt-2">
-              Mirrored from Stripe webhooks (and <strong>Sync from Stripe</strong> if a webhook was
-              missed). Amounts use Stripe’s billed total (not amount paid, so failed cards do not
-              appear as EC$0). Only paid rows get a{" "}
-              <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code> number and
-              TL receipt PDF when Vercel Blob is configured. Paid receipts are emailed to the
-              customer automatically when SMTP and Settings allow. Invoiless Paid mirror runs when
-              the customer is linked there.
-            </p>
-          </details>
-          <div className="mt-4">
-            <StripeInvoicesList
-              invoices={stripeInvoices}
-              customerId={customer.id}
-              customerEmail={customer.email}
-            />
-          </div>
-        </section>
-      ) : null}
-
-      <p className="text-sm text-zinc-500">
-        <Link
-          href={`/admin/customers/${customer.id}/statements`}
-          className="text-emerald-700 hover:underline dark:text-emerald-400"
-        >
-          Generate statement
-        </Link>
-        {" · "}
-        <Link
-          href={`/admin/customers/${customer.id}/edit`}
-          className="text-emerald-700 hover:underline dark:text-emerald-400"
-        >
-          Edit profile &amp; address
-        </Link>
-        {" · "}
-        <Link href={`/admin/customers/${customer.id}`} className="hover:underline">
-          Customer overview
-        </Link>
-      </p>
-    </div>
-  );
+  return <div className="flex flex-col gap-5">
+    <header className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:px-6"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{title}</h1><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Customer · Financial activity and collection information.</p></div><Link href={`/admin/customers/${customer.id}`} className="inline-flex min-h-10 items-center justify-center rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800">View customer →</Link></div><div className="mt-4"><CustomerSubnav customerId={customer.id} active="billing" /></div></header>
+    <CustomerBillingAlerts billingMode={customer.billingMode} setupBanner={setupQuery === "1"} setupWarning={warnQuery ? decodeURIComponent(warnQuery) : null} stripeBanner={stripeBannerFromQuery(stripeQuery)} />
+    {collectionSummary ? <CustomerCollectionSummary customerId={customer.id} summary={collectionSummary} primaryInvoice={primaryInvoice} hasSubscriptions={hasSubscriptions} reminderAvailable={outstandingReminderCandidates.length > 0} /> : null}
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(19rem,0.85fr)]"><div className="space-y-4"><section id="recent-invoices" className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Recent invoices</h2><InvoiceTable invoices={recentInvoices} /></section><section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Recent payments</h2>{recentPayments.length === 0 ? <p className="mt-4 text-sm text-zinc-500">No payments recorded yet.</p> : <div className="mt-3 overflow-x-auto"><table className="min-w-full text-sm"><thead className="border-b border-zinc-100 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800"><tr><th className="px-2 py-2">Date</th><th className="px-2 py-2">Invoice</th><th className="px-2 py-2">Amount</th><th className="px-2 py-2">Method</th><th className="px-2 py-2">Reference</th></tr></thead><tbody>{recentPayments.map((payment) => <tr key={payment.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"><td className="whitespace-nowrap px-2 py-3">{payment.receivedAt.toLocaleDateString(undefined, { dateStyle: "medium" })}</td><td className="px-2 py-3">{payment.invoice.number ?? "—"}</td><td className="px-2 py-3 tabular-nums">{formatMoney(Number(payment.amount), payment.currency)}</td><td className="px-2 py-3 capitalize">{payment.method.replaceAll("_", " ")}</td><td className="px-2 py-3">{payment.reference ?? "—"}</td></tr>)}</tbody></table></div>}</section></div><div className="space-y-4"><PaymentRemindersSection customerId={customer.id} customerName={title} greetingName={customer.firstName?.trim() || customer.company?.trim() || title} billingMode={customer.billingMode} paymentReminders={customer.paymentReminders} customerEmail={customer.email} customerPhone={customer.phone} whatsAppConfigured={isTwilioWhatsAppConfigured()} candidates={outstandingReminderCandidates} deliveries={notificationDeliveries} />{paymentDeclineFollowUp ? <CustomerPaymentDeclineFollowUpCard followUp={paymentDeclineFollowUp} customerId={customer.id} emailPreview={declineEmailPreview} whatsAppConfigured={isTwilioWhatsAppConfigured()} /> : null}</div></div>
+    {hasSubscriptions ? <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Subscription billing</h2><p className="mt-1 text-sm text-zinc-500">{subscriptionSummary?.periodEndLabel ? `Current period ends ${subscriptionSummary.periodEndLabel}` : "Subscription and renewal details are managed separately."}</p></div><Link href={`/admin/customers/${customer.id}/subscriptions`} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800">View subscriptions →</Link></div></section> : null}
+    <details className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><summary className="cursor-pointer text-base font-semibold text-zinc-900 dark:text-zinc-50">Advanced billing settings &amp; provider details</summary><div className="mt-4 space-y-4 border-t border-zinc-100 pt-4 dark:border-zinc-800"><CustomerBillingPanel customerId={customer.id} billingMode={customer.billingMode} invoilessConfigured={invoilessConfigured} stripeConfigured={stripeConfigured} hasInvoilessId={Boolean(invoilessId)} billingSetup={billingSetup} />{customer.billingMode === "stripe_subscription" || stripeInvoices.length > 0 ? <section><h2 className="text-sm font-semibold">Provider invoices</h2><div className="mt-3"><StripeInvoicesList invoices={stripeInvoices} customerId={customer.id} customerEmail={customer.email} /></div></section> : null}</div></details>
+  </div>;
 }
