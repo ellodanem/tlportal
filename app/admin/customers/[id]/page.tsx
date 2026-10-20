@@ -39,6 +39,7 @@ import {
 import { resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
+import { reconcileLatestStripeInvoiceForCustomer } from "@/lib/services/stripe-invoice-backfill-service";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -90,6 +91,8 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   const { id } = await params;
   const { fleet: fleetParam, archived, unarchived, unarchiveError } = await searchParams;
   const fleetFilter = parseFleetFilter(fleetParam);
+
+  await reconcileLatestStripeInvoiceForCustomer(id);
 
   const customer = await prisma.customer.findUnique({
     where: { id },

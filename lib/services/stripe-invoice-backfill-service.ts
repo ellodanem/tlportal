@@ -14,6 +14,7 @@ import {
   resolveStripeCustomerIdForTlCustomer,
   syncStripeInvoiceToDatabase,
 } from "@/lib/stripe/invoice-sync";
+import { advanceAssignmentsOnStripeInvoicePaid } from "@/lib/services/assignment-renewal-service";
 
 const MAX_INVOICES_PER_CUSTOMER = 100;
 const RECENT_PAID_LOOKBACK_SECONDS = 90 * 24 * 60 * 60;
@@ -30,17 +31,45 @@ export type SyncStripeInvoicesForCustomerResult =
 
 async function listStripeInvoicesForStripeCustomer(
   stripeCustomerId: string,
+  limit = MAX_INVOICES_PER_CUSTOMER,
 ): Promise<Stripe.Invoice[]> {
   const stripe = getStripeClient();
   const out: Stripe.Invoice[] = [];
   for await (const invoice of stripe.invoices.list({
     customer: stripeCustomerId,
-    limit: 100,
+    limit: Math.min(limit, 100),
   })) {
     out.push(invoice);
-    if (out.length >= MAX_INVOICES_PER_CUSTOMER) break;
+    if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * Read the newest provider invoice when staff open a Stripe customer record.
+ * Webhooks remain the primary path, but this small reconciliation closes the
+ * gap immediately when a provider delivery was missed instead of requiring a
+ * staff member to press Sync from Stripe.
+ */
+export async function reconcileLatestStripeInvoiceForCustomer(customerId: string): Promise<void> {
+  if (!isStripeBillingEnabled()) return;
+
+  try {
+    const stripeCustomerId = await resolveStripeCustomerIdForTlCustomer(customerId);
+    if (!stripeCustomerId) return;
+
+    const latest = (await listStripeInvoicesForStripeCustomer(stripeCustomerId, 1))[0];
+    if (!latest) return;
+
+    await syncStripeInvoiceToDatabase(latest);
+
+    if (latest.status === "paid" && latest.id) {
+      await advanceAssignmentsOnStripeInvoicePaid(customerId, latest.id);
+    }
+  } catch (error) {
+    // A stale provider read must never prevent the staff workspace from loading.
+    console.error("[stripe invoice reconciliation] latest invoice sync failed", { customerId, error });
+  }
 }
 
 /**

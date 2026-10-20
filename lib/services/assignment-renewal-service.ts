@@ -286,24 +286,28 @@ async function resolveStripePlanTermMonths(customerId: string): Promise<number |
   const withStripeId = await prisma.customerSubscription.findFirst({
     where: {
       customerId,
-      controlMode: "legacy",
       stripeSubscriptionId: { not: null },
       status: { in: ["active", "trialing", "past_due", "unpaid", "pending_payment"] },
     },
     orderBy: { updatedAt: "desc" },
-    select: { planTermMonths: true },
+    select: { billingIntervalMonths: true, planTermMonths: true },
   });
-  if (withStripeId?.planTermMonths != null && withStripeId.planTermMonths > 0) {
-    return withStripeId.planTermMonths;
+  const linkedInterval = withStripeId?.billingIntervalMonths ?? withStripeId?.planTermMonths ?? null;
+  if (linkedInterval != null && linkedInterval > 0) {
+    return linkedInterval;
   }
 
   const anySub = await prisma.customerSubscription.findFirst({
-    where: { customerId, controlMode: "legacy" },
+    where: {
+      customerId,
+      status: { in: ["active", "trialing", "past_due", "unpaid", "pending_payment"] },
+    },
     orderBy: { updatedAt: "desc" },
-    select: { planTermMonths: true },
+    select: { billingIntervalMonths: true, planTermMonths: true },
   });
-  if (anySub?.planTermMonths != null && anySub.planTermMonths > 0) {
-    return anySub.planTermMonths;
+  const anyInterval = anySub?.billingIntervalMonths ?? anySub?.planTermMonths ?? null;
+  if (anyInterval != null && anyInterval > 0) {
+    return anyInterval;
   }
   return null;
 }

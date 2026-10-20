@@ -172,8 +172,8 @@ export function StripeInvoicesList({
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          No Stripe invoices mirrored yet. They appear after Checkout and subscription renewals, or
-          use <strong>Sync from Stripe</strong> if a payment succeeded in Stripe but is missing here.
+          No Stripe invoices mirrored yet. The latest Stripe invoice is checked automatically when this
+          customer workspace opens. Use <strong>Sync from Stripe</strong> to backfill older invoices.
           Paid invoices receive a TL-branded PDF and{" "}
           <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TL-INV-…</code> number when Blob
           storage is configured; paid receipts are emailed automatically for recent payments when SMTP and

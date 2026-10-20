@@ -117,6 +117,30 @@ export async function syncStripeInvoiceToDatabase(
       : (invoice.total ?? invoice.amount_due ?? 0);
   const stripeSubscriptionId = stripeInvoiceSubscriptionId(invoice);
 
+  // Keep provider invoices attached to the current commercial agreement. Older
+  // migrated/canonical agreements do not always carry Stripe metadata, so use
+  // both the legacy subscription id and the canonical provider link.
+  const [subscription, providerLink] = stripeSubscriptionId
+    ? await Promise.all([
+      prisma.customerSubscription.findUnique({
+        where: { stripeSubscriptionId },
+        select: { id: true, customerId: true },
+      }),
+      prisma.subscriptionProviderLink.findUnique({
+        where: {
+          provider_externalSubscriptionId: {
+            provider: "stripe",
+            externalSubscriptionId: stripeSubscriptionId,
+          },
+        },
+        select: { id: true, customerSubscriptionId: true },
+      }),
+    ])
+    : [null, null];
+  const customerSubscriptionId = subscription?.customerId === customerId
+    ? subscription.id
+    : providerLink?.customerSubscriptionId ?? null;
+
   const kind: BillingInvoiceKind =
     stripeSubscriptionId != null ? "subscription" : "one_time";
 
@@ -146,6 +170,8 @@ export async function syncStripeInvoiceToDatabase(
       amountXcd: amountFromStripeMinor(amountMinor, currency),
       currency,
       providerInvoiceNumber: invoice.number ?? null,
+      customerSubscriptionId,
+      subscriptionProviderLinkId: providerLink?.id ?? null,
       periodStart,
       periodEnd,
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
@@ -158,6 +184,8 @@ export async function syncStripeInvoiceToDatabase(
       amountXcd: amountFromStripeMinor(amountMinor, currency),
       currency,
       providerInvoiceNumber: invoice.number ?? null,
+      customerSubscriptionId,
+      subscriptionProviderLinkId: providerLink?.id ?? null,
       periodStart,
       periodEnd,
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,

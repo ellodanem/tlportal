@@ -15,6 +15,7 @@ import { formatMoney } from "@/lib/domain/native-billing";
 import { buildPaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-messaging";
 import { isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { prisma } from "@/lib/db";
+import { reconcileLatestStripeInvoiceForCustomer } from "@/lib/services/stripe-invoice-backfill-service";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ stripe?: string; setup?: string; warn?: string }> };
 
@@ -32,6 +33,7 @@ function InvoiceTable({ invoices }: { invoices: RecentInvoice[] }) {
 export default async function CustomerBillingPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { stripe: stripeQuery, setup: setupQuery, warn: warnQuery } = await searchParams;
+  await reconcileLatestStripeInvoiceForCustomer(id);
   const data = await loadCustomerBillingPageData(id);
   if (!data) notFound();
 

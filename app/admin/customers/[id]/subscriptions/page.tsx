@@ -17,6 +17,7 @@ import {
   canonicalSubscriptionUiStaffViewer,
   getCanonicalSubscriptionAdminDetail,
 } from "@/lib/services/canonical-subscription-admin-service";
+import { reconcileLatestStripeInvoiceForCustomer } from "@/lib/services/stripe-invoice-backfill-service";
 
 type Props = { params: Promise<{ id: string }> };
 type SubscriptionDetail = NonNullable<Awaited<ReturnType<typeof getCanonicalSubscriptionAdminDetail>>>;
@@ -67,6 +68,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   if (!canonicalSubscriptionUiVisible()) notFound();
   if (!await canonicalSubscriptionUiStaffViewer()) redirect("/login");
   const { id } = await params;
+  await reconcileLatestStripeInvoiceForCustomer(id);
   const customer = await prisma.customer.findUnique({
     where: { id },
     select: {
