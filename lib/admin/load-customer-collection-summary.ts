@@ -4,13 +4,8 @@ import { prisma } from "@/lib/db";
 import { deriveCustomerCollectionSummary } from "@/lib/domain/customer-collection-summary";
 
 export async function loadCustomerCollectionSummary(customerId: string, asOf = new Date()) {
-  const [customer, serviceRenewal, subscriptions, billingAccount, billingInvoices, nativeInvoices, deliveries] = await Promise.all([
+  const [customer, subscriptions, billingAccount, billingInvoices, nativeInvoices, deliveries] = await Promise.all([
     prisma.customer.findUnique({ where: { id: customerId }, select: { id: true } }),
-    prisma.serviceAssignment.findFirst({
-      where: { customerId, endDate: null, status: "active", nextDueDate: { not: null } },
-      orderBy: { nextDueDate: "asc" },
-      select: { nextDueDate: true },
-    }),
     prisma.customerSubscription.findMany({
       where: {
         customerId,
@@ -81,7 +76,9 @@ export async function loadCustomerCollectionSummary(customerId: string, asOf = n
 
   return deriveCustomerCollectionSummary({
     asOf,
-    serviceRenewalDueDate: serviceRenewal?.nextDueDate ?? null,
+    // Device-assignment due dates are operational history, not receivables. Only
+    // an invoice or a subscription collection signal can put an account overdue.
+    serviceRenewalDueDate: null,
     subscriptionRenewalDate,
     subscriptionStatuses: subscriptions.map((subscription) => subscription.status),
     collectionHealthStatuses: subscriptions.map((subscription) => subscription.collectionHealth ?? ""),

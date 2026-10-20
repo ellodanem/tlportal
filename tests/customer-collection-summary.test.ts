@@ -43,17 +43,16 @@ function derive(overrides: Partial<Parameters<typeof deriveCustomerCollectionSum
   });
 }
 
-test("an overdue renewal without a current invoice is not reported as a zero paid balance", () => {
+test("a stale service-assignment renewal does not mark a current subscription payment overdue", () => {
   const result = derive({
     serviceRenewalDueDate: new Date("2026-10-15T00:00:00.000Z"),
     subscriptionRenewalDate: new Date("2026-11-15T00:00:00.000Z"),
     invoices: [stripeInvoice()],
   });
 
-  assert.equal(result.state, "overdue");
-  assert.equal(result.headline, "Payment overdue");
+  assert.equal(result.state, "paid");
+  assert.match(result.headline, /Paid through/);
   assert.equal(result.outstandingAmount, 0);
-  assert.match(result.detail, /no current unpaid invoice is recorded/i);
   assert.equal(result.renewalDatesDisagree, true);
   assert.equal(result.paidThrough?.toISOString(), "2026-10-15T00:00:00.000Z");
 });

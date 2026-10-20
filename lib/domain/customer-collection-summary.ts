@@ -134,13 +134,6 @@ export function deriveCustomerCollectionSummary(input: {
   const failed = statusSignals.some((status) => FAILED_SUBSCRIPTION.has(status))
     || providerOpen.some((invoice) => invoice.status.toLowerCase() === "uncollectible");
   const nativeOverdue = nativeOpen.some((invoice) => invoice.status.toLowerCase() === "overdue" || (invoice.dueDate != null && day(invoice.dueDate) < day(input.asOf)));
-  const serviceRenewalOverdue = input.serviceRenewalDueDate != null && day(input.serviceRenewalDueDate) < day(input.asOf);
-  const serviceRenewalDueToday = input.serviceRenewalDueDate != null && day(input.serviceRenewalDueDate) === day(input.asOf);
-  const paymentCoversServiceRenewal = input.serviceRenewalDueDate != null && invoices.some((invoice) =>
-    invoice.paidAt != null
-    && ((invoice.periodEnd != null && day(invoice.periodEnd) > day(input.serviceRenewalDueDate!))
-      || (invoice.periodStart != null && day(invoice.periodStart) >= day(input.serviceRenewalDueDate!))));
-  const renewalUnpaid = (serviceRenewalOverdue || serviceRenewalDueToday) && !paymentCoversServiceRenewal;
   const renewalDatesDisagree = input.serviceRenewalDueDate != null
     && input.subscriptionRenewalDate != null
     && day(input.serviceRenewalDueDate) !== day(input.subscriptionRenewalDate);
@@ -167,16 +160,14 @@ export function deriveCustomerCollectionSummary(input: {
     };
   }
 
-  if (nativeOverdue || renewalUnpaid || collectionPastDue) {
+  if (nativeOverdue || collectionPastDue) {
     const noOpenInvoice = nativeOpen.length === 0;
     return {
       state: "overdue",
       tone: "danger",
       headline: "Payment overdue",
       detail: noOpenInvoice
-        ? renewalUnpaid
-          ? "A service renewal is overdue, but no current unpaid invoice is recorded. EC$0 would not mean paid in this case."
-          : "Collection records are past due, but no current unpaid invoice is recorded. The exact balance still needs to be reconciled."
+        ? "Collection records are past due, but no current unpaid invoice is recorded. The exact balance still needs to be reconciled."
         : `${money(outstandingAmount, currency)} is overdue.`,
       outstandingAmount,
       providerBalanceRequiresReview,
@@ -229,7 +220,7 @@ export function deriveCustomerCollectionSummary(input: {
     };
   }
 
-  const futureRenewal = input.serviceRenewalDueDate ?? input.subscriptionRenewalDate;
+  const futureRenewal = input.subscriptionRenewalDate ?? input.serviceRenewalDueDate;
   return {
     state: futureRenewal ? "upcoming" : "no_activity",
     tone: "neutral",

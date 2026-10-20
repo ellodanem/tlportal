@@ -91,7 +91,7 @@ export function CustomerCollectionSummary({
         </div>
         <div className="p-3">
           <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Next renewal</dt>
-          <dd className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">{formatDate(summary.serviceRenewalDueDate ?? summary.subscriptionRenewalDate)}</dd>
+          <dd className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">{formatDate(summary.subscriptionRenewalDate ?? summary.serviceRenewalDueDate)}</dd>
           <p className="mt-1 text-xs text-zinc-500">{summary.renewalDatesDisagree ? "Billing dates need review" : "Subscription renewal context"}</p>
         </div>
       </dl>
