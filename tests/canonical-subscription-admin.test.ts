@@ -230,6 +230,7 @@ test("customer billing keeps financial history separate from subscription renewa
   assert.match(customerSubscriptions, /Current price/);
   assert.match(customerSubscriptions, /Device \/ SIM assignment/);
   assert.match(customerSubscriptions, /CustomerServiceManagementModal/);
+  assert.match(customerSubscriptions, /CustomerAssignmentServiceActions/);
   assert.match(accountRibbon, /commercial terms and service pricing are managed in Subscriptions/);
 });
 

@@ -36,14 +36,14 @@ export function CustomerAssignmentServiceActions({
     );
   }
 
-  if (status !== "active") {
+  if (!["active", "due_soon", "overdue"].includes(status)) {
     return <span className="text-xs text-zinc-400">—</span>;
   }
 
   if (layout === "inline") {
     return (
       <details className="group text-xs">
-        <summary className="cursor-pointer list-none font-medium text-amber-900 hover:underline dark:text-amber-200 [&::-webkit-details-marker]:hidden">
+        <summary className="cursor-pointer list-none rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/30 dark:focus-visible:ring-offset-zinc-900 [&::-webkit-details-marker]:hidden">
           Pause service…
         </summary>
         <div className="mt-2 min-w-[12rem] rounded-md border border-zinc-200 bg-zinc-50/90 p-2 dark:border-zinc-700 dark:bg-zinc-950/80">

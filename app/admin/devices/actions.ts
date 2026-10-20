@@ -725,6 +725,7 @@ function revalidateAfterServicePause(customerId: string, deviceId: string, simCa
   revalidatePath("/admin/devices");
   revalidatePath(`/admin/devices/${deviceId}/edit`);
   revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/subscriptions`);
   revalidatePath(`/admin/customers/${customerId}/billing`);
   if (simCardId) {
     revalidatePath(`/admin/sims/${simCardId}`);
