@@ -28,6 +28,7 @@ import {
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
 import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import { adoptExistingStripeSubscription, CanonicalStripeAdoptionError } from "@/lib/services/canonical-stripe-adoption-service";
 
 export type CanonicalSubscriptionFormState = {
   error?: string;
@@ -56,6 +57,7 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
     error instanceof CanonicalSubscriptionValidationError
     || error instanceof CanonicalSubscriptionUiError
     || error instanceof CanonicalSubscriptionActivationError
+    || error instanceof CanonicalStripeAdoptionError
   ) {
     return { error: error.message };
   }
@@ -69,6 +71,40 @@ async function requireStaff() {
   const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { id: true } });
   if (!user) throw new CanonicalSubscriptionUiError("UNAUTHORIZED", "A staff account is required.");
   return session;
+}
+
+export async function adoptExistingStripeSubscriptionAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    if (text(formData, "confirmExistingStripe") !== "yes") {
+      return { error: "Confirm that this is a read-only reconciliation of the existing Stripe subscription." };
+    }
+    const session = await requireStaff();
+    const subscription = await prisma.customerSubscription.findUnique({
+      where: { id: subscriptionId },
+      select: { id: true, customerId: true, controlMode: true, collectionMethod: true },
+    });
+    if (!subscription || subscription.controlMode !== "shadow" || subscription.collectionMethod !== "stripe_autocharge") {
+      return { error: "Only a pending Stripe migration record can be connected to existing Stripe billing." };
+    }
+    const result = await adoptExistingStripeSubscription({ subscriptionId, adoptedById: session.sub });
+    await recordOperationalEvent({
+      category: "subscription.stripe_existing_billing_adopted",
+      summary: "Existing Stripe subscription reconciled and adopted without a provider mutation.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, externalSubscriptionId: result.externalSubscriptionId, mappedRateGroups: result.mappingCount },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
+    return { message: `Existing Stripe billing is connected with ${result.mappingCount} exact rate mapping${result.mappingCount === 1 ? "" : "s"}. No Stripe subscription, charge, invoice, payment, or notification was created.` };
+  } catch (error) {
+    return actionError(error);
+  }
 }
 
 export async function activateCanonicalManualSubscriptionAction(

@@ -122,11 +122,13 @@ export function canonicalSubscriptionUiAccess(input: {
   hasMigrationLedger: boolean;
 }): CanonicalSubscriptionUiAccess {
   if (input.controlMode === "legacy") return "legacy_read_only";
-  if (input.hasMigrationLedger) return "migrated_shadow_read_only";
   if (input.controlMode === "canonical" && input.lifecycleStatus === "draft") return "editable_draft";
   if (input.controlMode === "canonical" && ["pending_activation", "active", "paused"].includes(input.lifecycleStatus ?? "")) {
     return "canonical_operational";
   }
+  // A completed migration ledger is audit history, not a permanent lock once
+  // the agreement has safely adopted canonical billing authority.
+  if (input.hasMigrationLedger) return "migrated_shadow_read_only";
   if (input.controlMode === "canonical") return "canonical_read_only";
   if (input.lifecycleStatus === "draft") return "editable_draft";
   return "shadow_read_only";

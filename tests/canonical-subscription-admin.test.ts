@@ -71,6 +71,7 @@ test("only unmigrated shadow drafts are editable", () => {
 test("active canonical arrangements have staff operational access while legacy stays read-only", () => {
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "legacy", lifecycleStatus: null, hasMigrationLedger: false }), "legacy_read_only");
   assert.equal(canonicalSubscriptionUiAccess({ controlMode: "canonical", lifecycleStatus: "active", hasMigrationLedger: false }), "canonical_operational");
+  assert.equal(canonicalSubscriptionUiAccess({ controlMode: "canonical", lifecycleStatus: "active", hasMigrationLedger: true }), "canonical_operational");
 });
 
 test("internal migration names are replaced with customer-facing subscription names", () => {
