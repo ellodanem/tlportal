@@ -37,7 +37,6 @@ import {
 import { resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
-import { canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -272,8 +271,6 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
       </div>
 
       <CustomerSubnav customerId={customer.id} active="overview" />
-
-      {canonicalSubscriptionUiVisible() ? <div className="flex flex-wrap justify-end gap-2"><Link href={`/admin/customers/${customer.id}/subscriptions`} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold dark:border-zinc-700">View subscriptions</Link><Link href={`/admin/subscriptions/canonical/new?customerId=${customer.id}`} className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:text-emerald-300">Add subscription</Link></div> : null}
 
       <CustomerOverviewBillingRibbon
         customerId={customer.id}
