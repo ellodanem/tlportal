@@ -5,7 +5,6 @@ import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { SimSyncButton } from "@/components/admin/sim/sim-sync-button";
 import { SimUsageRangeControls } from "@/components/admin/sim/sim-usage-range-controls";
-import { DataUsageDonut } from "@/components/admin/sim/data-usage-donut";
 import { UsageLineChart } from "@/components/admin/sim/usage-line-chart";
 import { customerDisplayName } from "@/lib/admin/customer-list";
 import { formatMegabytes } from "@/lib/format/mbytes";
@@ -113,6 +112,15 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
 
   const displayTotalMb = liveTotalMb ?? sim.totalDataMB;
   const displayUsedMb = liveUsedMb ?? sim.usedDataMB;
+  const quotaPercent =
+    displayUsedMb != null && displayTotalMb != null && displayTotalMb > 0
+      ? Math.min(100, Math.max(0, (displayUsedMb / displayTotalMb) * 100))
+      : null;
+  const quotaRemaining =
+    displayUsedMb != null && displayTotalMb != null && displayTotalMb > 0
+      ? Math.max(0, displayTotalMb - displayUsedMb)
+      : null;
+  const providerLabel = sim.source === "manual" ? sim.providerName ?? "Manual provider" : "1NCE";
   const usageSummary = summarizeUsageSeries(usagePoints);
 
   const title = sim.label?.trim() || sim.iccid;
@@ -145,6 +153,11 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
           {sim.label?.trim() ? (
             <p className="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{sim.iccid}</p>
           ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-zinc-600 dark:text-zinc-400">{providerLabel}</span>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">{sim.status || "Unknown"} · provider status</span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sim.device ? "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-200" : "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200"}`}>{sim.device ? "Linked to device" : "Unlinked"}</span>
+          </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
           {isOneNce ? <SimSyncButton simId={sim.id} /> : null}
@@ -158,6 +171,10 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
           </a> : null}
         </div>
       </div>
+
+      <nav className="-mt-2 flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800" aria-label="SIM detail sections">
+        {[['overview', 'Overview'], ['usage', 'Usage'], ['assignments', 'Assignments'], ['history', 'History']].map(([id, label]) => <a key={id} href={`#${id}`} className="shrink-0 border-b-2 border-transparent px-3 py-2.5 text-sm font-medium text-zinc-600 hover:border-emerald-300 hover:text-emerald-800 dark:text-zinc-400 dark:hover:text-emerald-300">{label}</a>)}
+      </nav>
 
       {sim.device ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50/90 px-4 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
@@ -182,15 +199,13 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
         </div>
       ) : null}
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section id="overview" className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Provider-reported quota snapshot</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Not necessarily a monthly plan; reset period is unknown unless stored by the provider.</p>
-          <div className="mt-4">
-            <DataUsageDonut usedMb={displayUsedMb} totalMb={displayTotalMb} />
-          </div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Provider-reported data allowance</h2>
+          {quotaPercent != null ? <><p className="mt-5 text-3xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">{formatMegabytes(displayUsedMb, 2)} <span className="text-xl text-zinc-400">/ {formatMegabytes(displayTotalMb, 0)}</span></p><div className="mt-3 h-2.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${quotaPercent}%` }} /></div><dl className="mt-4 divide-y divide-zinc-100 text-sm dark:divide-zinc-800"><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Used · reported quota</dt><dd className="font-medium tabular-nums">{quotaPercent.toFixed(1)}%</dd></div><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Remaining · reported quota</dt><dd className="font-medium tabular-nums">{formatMegabytes(quotaRemaining, 2)}</dd></div><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Last successful snapshot</dt><dd className="font-medium">{formatDateTime(sim.lastSyncedAt)}</dd></div><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Plan reset period</dt><dd className="font-medium">Not recorded</dd></div></dl></> : <p className="mt-5 rounded-lg bg-zinc-50 px-4 py-5 text-sm text-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400">No provider quota snapshot is available for this SIM.</p>}
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">This is a provider quota snapshot. It is not labelled monthly usage without verified plan or reset metadata.</p>
         </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div id="usage" className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Usage over time</h2>
           {oneNceConfigured ? (
             <>
@@ -224,7 +239,7 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">SIM and network</h2>
           <dl className="mt-4 space-y-3 text-sm">
@@ -273,9 +288,9 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
           ) : null}
         </div>
 
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Assignments</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Services tied to this SIM.</p>
+        <div id="assignments" className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Current device &amp; history</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Current links and recorded service associations.</p>
           <ul className="mt-4 space-y-3">
             {sim.serviceAssignments.length === 0 ? (
               <li className="text-sm text-zinc-500 dark:text-zinc-400">No assignments.</li>
@@ -308,6 +323,7 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
                       {assignmentStatusPill(a.status)}
                     </div>
                     <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{dev}</p>
+                    <div className="mt-3 flex flex-wrap gap-2"><Link href={`/admin/devices/${a.device.id}/edit`} className="rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-800 hover:bg-white dark:border-zinc-700 dark:text-zinc-100">View device →</Link><Link href={`/admin/customers/${a.customerId}`} className="rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-800 hover:bg-white dark:border-zinc-700 dark:text-zinc-100">View customer →</Link></div>
                     <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
                       <span className="font-medium text-zinc-700 dark:text-zinc-300">Term:</span>{" "}
                       {a.intervalMonths != null ? formatPlanTerm(a.intervalMonths) : "—"}
@@ -327,8 +343,8 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
           </ul>
         </div>
 
-        <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-          <h2 className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">1NCE portal</h2>
+        <div id="history" className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <h2 className="text-base font-semibold text-emerald-950 dark:text-emerald-100">Provider &amp; history</h2>
           <p className="mt-2 text-sm leading-relaxed text-emerald-900/90 dark:text-emerald-200/90">
             Manage SIM lifecycle, data plans, and organization settings in the 1NCE customer portal.
           </p>
