@@ -140,7 +140,7 @@ export async function loadLegacyBillingSnapshot(
         recurringGenerationKey: true,
         invoilessInvoiceId: true,
         lineItems: {
-          select: { id: true, quantity: true, unitPrice: true, lineTotal: true },
+          select: { id: true, description: true, quantity: true, unitPrice: true, lineTotal: true },
           orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
         },
       },

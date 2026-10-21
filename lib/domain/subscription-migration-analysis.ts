@@ -115,6 +115,8 @@ export type LegacyInvoice = {
   invoilessInvoiceId: string | null;
   lineItems?: Array<{
     id: string;
+    /** Present for live snapshots; absent in older exported fixtures. */
+    description?: string;
     quantity: string;
     unitPrice: string;
     lineTotal: string;
@@ -690,10 +692,29 @@ function manualInvoiceSeed(
     && ACTIVE_ASSIGNMENT_STATUSES.has(assignment.status)
     && assignment.subscriptionItemId == null,
   );
-  const intervals = [...new Set(activeAssignments
+  const assignmentIntervals = [...new Set(activeAssignments
     .flatMap((assignment) => assignment.intervalMonths != null ? [assignment.intervalMonths] : [])
     .filter((interval) => isSupportedSubscriptionIntervalMonths(interval)))];
-  const interval = intervals.length === 1 ? intervals[0] : 0;
+  const invoiceLines = invoice.lineItems ?? [];
+  const lineInterval = (line: typeof invoiceLines[number]): number | null => {
+    const match = line.description?.match(/\b(1|3|4|6|12)\s*[- ]?\s*months?\b/i);
+    return match ? Number(match[1]) : null;
+  };
+  const explicitlyTermedLines = invoiceLines.filter((line) => lineInterval(line) != null);
+  const invoiceIntervals = [...new Set(explicitlyTermedLines.flatMap((line) => {
+    const detected = lineInterval(line);
+    return detected == null ? [] : [detected];
+  }))];
+  const explicitInvoiceInterval = invoiceIntervals.length === 1 ? invoiceIntervals[0]! : 0;
+  const interval = explicitInvoiceInterval || (assignmentIntervals.length === 1 ? assignmentIntervals[0]! : 0);
+  if (explicitInvoiceInterval && assignmentIntervals.length === 1 && assignmentIntervals[0] !== explicitInvoiceInterval) {
+    issues.push(issue(
+      "manual_invoice_cadence_conflicts_assignment",
+      "decision",
+      "The invoice names a different billing cadence than the active service assignments; correct the legacy service cadence before migration.",
+      [invoice.id, ...activeAssignments.map((assignment) => assignment.id)],
+    ));
+  }
   if (!interval) {
     issues.push(issue(
       "manual_invoice_interval_unresolved",
@@ -714,10 +735,21 @@ function manualInvoiceSeed(
       [invoice.id, ...activeAssignments.map((assignment) => assignment.id)],
     ));
   }
-  const invoiceLines = invoice.lineItems ?? [];
+  // A clearly term-labelled subset is recurring-service evidence; unlabelled
+  // lines (for example, hardware) remain historical one-off charges. This is
+  // deliberately review-only evidence, never automatic authority to bill.
+  const recurringLines = explicitInvoiceInterval ? explicitlyTermedLines : invoiceLines;
+  if (explicitInvoiceInterval && recurringLines.length !== invoiceLines.length) {
+    issues.push(issue(
+      "manual_invoice_mixed_charges",
+      "decision",
+      "The invoice includes one-time charges alongside an explicitly term-labelled service line. Only the service-line subtotal is proposed for recurrence.",
+      [invoice.id, ...invoiceLines.map((line) => line.id)],
+    ));
+  }
   const subtotal = invoice.subtotal ?? invoice.total;
   const taxTotal = invoice.taxTotal ?? "0.00";
-  const sourceQuantity = invoiceLines.reduce((total, line) => {
+  const sourceQuantity = recurringLines.reduce((total, line) => {
     const quantity = Number(line.quantity);
     return Number.isInteger(quantity) && quantity > 0 ? total + quantity : total;
   }, 0) || null;
@@ -746,14 +778,15 @@ function manualInvoiceSeed(
       [invoice.id],
     ));
   }
-  const unitPrices = new Set(invoiceLines.map((line) => money(cents(line.unitPrice))));
+  const recurringSubtotal = recurringLines.reduce((total, line) => total + cents(line.lineTotal), 0);
+  const unitPrices = new Set(recurringLines.map((line) => money(cents(line.unitPrice))));
   const uniformItemCycleAmount = unitPrices.size === 1 ? [...unitPrices][0] : null;
   const durationAggregateInvoice = Boolean(
     interval
-    && invoiceLines.length === 1
+    && recurringLines.length === 1
     && sourceQuantity === interval
-    && lineSubtotal === cents(subtotal)
-    && cents(invoiceLines[0].unitPrice) > 0,
+    && recurringSubtotal > 0
+    && cents(recurringLines[0]!.unitPrice) > 0,
   );
   const assignmentQuantity = durationAggregateInvoice
     ? activeAssignments.filter((assignment) => assignment.intervalMonths === interval).length
@@ -794,9 +827,9 @@ function manualInvoiceSeed(
       nextBillingDate,
       sourceQuantity,
       assignmentQuantity,
-      sourceCycleAmount: subtotal,
-      proposedCycleAmount: subtotal,
-      normalizedMonthlyAmount: interval ? normalizedMonthly(subtotal, interval) : null,
+      sourceCycleAmount: money(recurringSubtotal),
+      proposedCycleAmount: money(recurringSubtotal),
+      normalizedMonthlyAmount: interval ? normalizedMonthly(money(recurringSubtotal), interval) : null,
       pricingAssessment,
       billingAccountId: null,
       providerCustomerId: null,

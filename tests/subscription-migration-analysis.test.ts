@@ -119,7 +119,7 @@ function standaloneInvoice(overrides: Partial<LegacyInvoice> = {}): LegacyInvoic
     archivedAt: null,
     recurringGenerationKey: null,
     invoilessInvoiceId: null,
-    lineItems: [{ id: "invoice-line-1", quantity: "1", unitPrice: "25.00", lineTotal: "25.00" }],
+    lineItems: [{ id: "invoice-line-1", description: "Tracking service", quantity: "1", unitPrice: "25.00", lineTotal: "25.00" }],
     ...overrides,
   };
 }
@@ -491,6 +491,30 @@ test("17a: four-month arrangements remain supported migration candidates", () =>
   const proposal = analyzeSubscriptionMigration(input).customers[0]!.proposals[0]!;
   assert.equal(issueCodes(proposal).includes("unsupported_interval"), false);
   assert.equal(proposal.billingIntervalMonths, 4);
+});
+
+test("a term-labelled invoice isolates recurring service from hardware and detects four-month cadence", () => {
+  const input = snapshot();
+  input.customers[0].billingMode = "manual_legacy";
+  input.assignments.push(
+    assignment({ id: "assignment-1", intervalMonths: 4, nextDueDate: "2026-12-24T00:00:00.000Z" }),
+    assignment({ id: "assignment-2", deviceId: "device-2", simCardId: "sim-2", intervalMonths: 4, nextDueDate: "2026-12-24T00:00:00.000Z" }),
+  );
+  input.invoices.push(standaloneInvoice({
+    subtotal: "500.00",
+    total: "500.00",
+    lineItems: [
+      { id: "hardware", description: "Wired GPS tracker", quantity: "2", unitPrice: "150.00", lineTotal: "300.00" },
+      { id: "service", description: "4 Month Trial", quantity: "2", unitPrice: "100.00", lineTotal: "200.00" },
+    ],
+  }));
+
+  const proposal = analyzeSubscriptionMigration(input).customers[0]!.proposals[0]!;
+  assert.equal(proposal.billingIntervalMonths, 4);
+  assert.equal(proposal.sourceQuantity, 2);
+  assert.equal(proposal.proposedCycleAmount, "200.00");
+  assert.equal(proposal.proposedItems.length, 2);
+  assert.ok(issueCodes(proposal).includes("manual_invoice_mixed_charges"));
 });
 
 test("historical canceled rows do not prevent the current arrangement from owning its services", () => {
