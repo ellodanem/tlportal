@@ -30,10 +30,11 @@ type Props = {
   searchParams: Promise<{ tab?: string }>;
 };
 
-const DEVICE_EDIT_TABS = ["assignment", "details", "sim", "gps", "setup"] as const;
+const DEVICE_EDIT_TABS = ["overview", "assignment", "details", "sim", "gps", "setup"] as const;
 type DeviceEditTab = (typeof DEVICE_EDIT_TABS)[number];
 
 const DEVICE_EDIT_TAB_ITEMS: { id: DeviceEditTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
   { id: "assignment", label: "Assignment" },
   { id: "details", label: "Details" },
   { id: "sim", label: "SIM" },
@@ -70,7 +71,7 @@ function deviceStatusPillClass(status: DeviceStatus): string {
 export default async function EditDeviceCommercialPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { tab: tabParam } = await searchParams;
-  const activeTab = parseQueryTab(tabParam, DEVICE_EDIT_TABS, "assignment");
+  const activeTab = parseQueryTab(tabParam, DEVICE_EDIT_TABS, "overview");
   const [device, customerRows, openAssignment, simsForSwap, gpsLink] = await Promise.all([
     prisma.device.findUnique({
       where: { id },
@@ -182,6 +183,30 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
         hrefFor={(tabId) => `/admin/devices/${device.id}/edit?tab=${tabId}`}
         ariaLabel="Device sections"
       />
+
+      {activeTab === "overview" ? (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-2">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Installation overview</h2>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2 text-sm">
+              <div><dt className="text-zinc-500 dark:text-zinc-400">Model / IMEI</dt><dd className="mt-1 font-medium text-zinc-900 dark:text-zinc-50">{device.deviceModel.name} · <span className="font-mono">{device.imei}</span></dd></div>
+              <div><dt className="text-zinc-500 dark:text-zinc-400">Inventory / condition</dt><dd className="mt-1 font-medium capitalize text-zinc-900 dark:text-zinc-50">{DEVICE_STATUS_LABEL[device.status]} · {device.condition}</dd></div>
+              <div><dt className="text-zinc-500 dark:text-zinc-400">Current customer</dt><dd className="mt-1 font-medium text-zinc-900 dark:text-zinc-50">{openAssignment ? <Link href={`/admin/customers/${openAssignment.customerId}`} className="text-emerald-700 hover:underline dark:text-emerald-400">{customerDisplayName(openAssignment.customer)}</Link> : "No active service assignment"}</dd></div>
+              <div><dt className="text-zinc-500 dark:text-zinc-400">Linked SIM</dt><dd className="mt-1 font-medium text-zinc-900 dark:text-zinc-50">{device.simCard ? <Link href={`/admin/sims/${device.simCard.id}`} className="font-mono text-emerald-700 hover:underline dark:text-emerald-400">{device.simCard.iccid}</Link> : "No SIM linked"}</dd></div>
+            </dl>
+            <p className="mt-5 rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400">Hardware assignment is separate from commercial service. Billing and subscription controls remain in their authorized service workflow.</p>
+          </section>
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Quick actions</h2>
+            <div className="mt-4 flex flex-col items-stretch gap-2 text-sm font-medium">
+              <Link href={`/admin/devices/${device.id}/edit?tab=assignment`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">Edit assignment</Link>
+              <Link href={`/admin/devices/${device.id}/edit?tab=sim`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">{device.simCard ? "Swap SIM" : "Link SIM"}</Link>
+              <Link href={`/admin/devices/${device.id}/edit?tab=gps`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">Open GPS</Link>
+              <Link href={`/admin/devices/${device.id}/edit?tab=setup`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">Open setup</Link>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {activeTab === "assignment" ? (
         <div className="flex flex-col gap-6">

@@ -12,6 +12,7 @@ export type DeviceListRow = {
   serialNumber: string | null;
   firmwareVersion: string | null;
   status: DeviceStatus;
+  condition: "new" | "refurbished" | "faulty";
   usagePurpose: DeviceUsagePurpose;
   objectType: DeviceObjectType | null;
   tags: string[];
@@ -70,6 +71,7 @@ export function mapDeviceToListRow(device: {
   serialNumber: string | null;
   firmwareVersion: string | null;
   status: DeviceStatus;
+  condition: "new" | "refurbished" | "faulty";
   usagePurpose: DeviceUsagePurpose;
   objectType: DeviceObjectType | null;
   tags: string[];
@@ -98,6 +100,7 @@ export function mapDeviceToListRow(device: {
     serialNumber: device.serialNumber,
     firmwareVersion: device.firmwareVersion,
     status: device.status,
+    condition: device.condition,
     usagePurpose: device.usagePurpose,
     objectType: device.objectType ?? null,
     tags: device.tags ?? [],

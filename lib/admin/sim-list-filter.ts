@@ -8,6 +8,9 @@ export type SimListRow = {
   iccid: string;
   label: string | null;
   status: string | null;
+  providerName: string | null;
+  source: string;
+  lastSyncedAt: Date | null;
   usedDataMB: number | null;
   totalDataMB: number | null;
   /** Inherited from linked device; null if SIM is not linked. */
@@ -26,6 +29,7 @@ export function simMatchesSearchQuery(row: SimListRow, query: string): boolean {
 
   if (row.iccid.toLowerCase().includes(q)) return true;
   if (row.label?.trim() && row.label.toLowerCase().includes(q)) return true;
+  if (row.providerName?.trim() && row.providerName.toLowerCase().includes(q)) return true;
 
   const d = row.device;
   if (d) {

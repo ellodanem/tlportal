@@ -781,6 +781,11 @@ model SimCard {
   msisdn         String?
   imsi           String?
   label          String?
+  /// Carrier or operator supplied by the import source or entered by an operator.
+  providerName   String?
+  /// `1nce` records may use the provider API; `manual` records are operator-maintained.
+  source         String    @default("1nce")
+  notes          String?   @db.Text
   status         String    @default("Active")
   totalDataMB    Float?
   usedDataMB     Float?

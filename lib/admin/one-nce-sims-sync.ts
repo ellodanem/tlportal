@@ -36,6 +36,13 @@ export async function executeOneNceSimsInventoryImport(): Promise<
       const iccid = iccidFromSimPayload(row);
       if (!iccid) continue;
       const p = parseSimDetailPayload(row);
+      const existing = await prisma.simCard.findUnique({
+        where: { iccid },
+        select: { source: true },
+      });
+      // A manually maintained record is operator-owned metadata. Do not make an
+      // import silently turn it into a provider-managed record.
+      if (existing?.source === "manual") continue;
       await prisma.simCard.upsert({
         where: { iccid },
         create: {
@@ -43,6 +50,8 @@ export async function executeOneNceSimsInventoryImport(): Promise<
           msisdn: p.msisdn,
           imsi: p.imsi,
           label: p.label,
+          providerName: "1NCE",
+          source: "1nce",
           status: p.status ?? "Active",
           totalDataMB: p.totalDataMB,
           usedDataMB: p.usedDataMB,
@@ -106,6 +115,9 @@ export async function executeSyncSingleSimFromOneNce(
   const sim = await prisma.simCard.findUnique({ where: { id: simId } });
   if (!sim) {
     return { ok: false, error: "SIM not found." };
+  }
+  if (sim.source !== "1nce") {
+    return { ok: false, error: "This manually maintained SIM cannot be synced with the 1NCE API." };
   }
   if (!process.env.ONCE_CLIENT_ID?.trim() || !process.env.ONCE_CLIENT_SECRET?.trim()) {
     return { ok: false, error: "1NCE is not configured (ONCE_CLIENT_ID / ONCE_CLIENT_SECRET)." };

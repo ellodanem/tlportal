@@ -80,6 +80,7 @@ type Props = {
 export function DevicesTableClient({ rows }: Props) {
   const [query, setQuery] = useState("");
   const [purposeScope, setPurposeScope] = useState<DevicePurposeScope>("customer_only");
+  const [quickFilter, setQuickFilter] = useState<"all" | "ready" | "assigned" | "no_sim" | "attention">("all");
   const [sortCol, setSortCol] = useState<SortCol | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const deferredQuery = useDeferredValue(query);
@@ -96,15 +97,19 @@ export function DevicesTableClient({ rows }: Props) {
   const filtered = useMemo(() => {
     const base = rows
       .filter((r) => devicePurposeMatchesScope(r.usagePurpose, purposeScope))
+      .filter((r) => quickFilter === "all" || (quickFilter === "ready" && r.status === "in_stock" && r.condition !== "faulty" && !r.assignedCustomer) || (quickFilter === "assigned" && Boolean(r.assignedCustomer)) || (quickFilter === "no_sim" && !r.sim) || (quickFilter === "attention" && (r.condition === "faulty" || r.status === "lost" || r.status === "suspended")))
       .filter((r) => deviceMatchesSearchQuery(r, deferredQuery));
     return sortRows(base, sortCol, sortDir);
-  }, [rows, deferredQuery, purposeScope, sortCol, sortDir]);
+  }, [rows, deferredQuery, purposeScope, quickFilter, sortCol, sortDir]);
 
   const qTrim = query.trim();
   const showResultHint = qTrim.length > 0 && rows.length > 0 && filtered.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap gap-2" aria-label="Device quick filters">
+        {[["all", "All devices"], ["ready", "Ready to assign"], ["assigned", "Assigned"], ["no_sim", "No SIM"], ["attention", "Attention"]].map(([id, label]) => <button key={id} type="button" onClick={() => setQuickFilter(id as typeof quickFilter)} className={`rounded-lg border px-3 py-2 text-sm font-medium ${quickFilter === id ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"}`}>{label}</button>)}
+      </div>
       <div className="flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-end">
         <PurposeScopeFilter
           id="device-purpose-scope"
@@ -127,29 +132,6 @@ export function DevicesTableClient({ rows }: Props) {
           />
         </div>
       </div>
-
-      <section
-        className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900/40"
-        aria-label="Tracking platform actions (not connected)"
-      >
-        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Tracking platform</p>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
-          Live location, trips, and alerts will appear here when the tracking API is connected.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {(["Live map", "Trip history", "Alerts"] as const).map((label) => (
-            <button
-              key={label}
-              type="button"
-              disabled
-              title="Available after API integration"
-              className="cursor-not-allowed rounded-lg border border-zinc-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-zinc-400 opacity-70 shadow-sm dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-500"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
 
       {showResultHint ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -179,6 +161,7 @@ export function DevicesTableClient({ rows }: Props) {
               <th className="min-w-[16rem] px-4 py-3">Name &amp; identifiers</th>
               <th className="px-4 py-3 w-24">Manage</th>
               <th className="px-4 py-3">Purpose</th>
+              <th className="px-4 py-3">Condition</th>
               <th className="px-4 py-3">
                 <button
                   type="button"
@@ -206,13 +189,13 @@ export function DevicesTableClient({ rows }: Props) {
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={9} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No devices yet. Register a device to add trackers to the fleet.
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={9} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No devices match your search.{" "}
                   <button
                     type="button"
@@ -244,6 +227,7 @@ export function DevicesTableClient({ rows }: Props) {
                       </div>
                     </div>
                   </td>
+                  <td className="px-4 py-3 align-top"><span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium capitalize text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">{row.condition}</span></td>
                   <td className="min-w-[16rem] px-4 py-3 align-top">
                     <p className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-50">
                       <ObjectTypeIcon type={row.objectType} className="h-5 w-5 text-zinc-500 dark:text-zinc-400" />

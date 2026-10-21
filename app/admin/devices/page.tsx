@@ -32,6 +32,9 @@ export default async function AdminDevicesPage() {
   });
 
   const rows = devices.map((d) => mapDeviceToListRow(d));
+  const assigned = rows.filter((row) => row.assignedCustomer).length;
+  const ready = rows.filter((row) => row.status === "in_stock" && row.condition !== "faulty" && !row.assignedCustomer).length;
+  const attention = rows.filter((row) => row.condition === "faulty" || ["lost", "suspended"].includes(row.status)).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,6 +59,20 @@ export default async function AdminDevicesPage() {
         </Link>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Total registered", rows.length, "Recorded hardware"],
+          ["Ready to assign", ready, "In stock, sound, and unassigned"],
+          ["Assigned", assigned, "Current installations"],
+          ["Needs attention", attention, "Faulty, lost, or suspended"],
+        ].map(([label, value, hint]) => (
+          <section key={String(label)} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">{label}</p>
+            <p className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{value}</p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
+          </section>
+        ))}
+      </div>
       <DevicesTableClient rows={rows} />
     </div>
   );

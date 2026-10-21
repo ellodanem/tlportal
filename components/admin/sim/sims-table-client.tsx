@@ -8,6 +8,7 @@ import { CopyValueButton } from "@/components/admin/copy-value-button";
 import { PurposeScopeFilter } from "@/components/admin/device/purpose-scope-filter";
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
 import { formatMegabytes } from "@/lib/format/mbytes";
+import { formatDistanceToNow } from "date-fns";
 import {
   type DevicePurposeScope,
   simPurposeMatchesScope,
@@ -118,6 +119,7 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
             <tr>
               <th className="px-4 py-3">ICCID / label</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Allocation / source</th>
               <th className="px-4 py-3">Purpose</th>
               <th className="px-4 py-3">Device</th>
               <th
@@ -205,6 +207,11 @@ export function SimsTableClient({ intro, rows, usageLowFirst, avgWindowDays, hea
                       </Link>
                       <CopyValueButton value={sim.iccid} kind="ICCID" className="mt-0.5" />
                     </div>
+                  </td>
+                  <td className="px-4 py-3 align-top text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="font-medium text-zinc-800 dark:text-zinc-200">{sim.device ? "Linked" : "Unlinked"}</p>
+                    <p>{sim.providerName?.trim() || "Provider unknown"} · {sim.source === "manual" ? "Manual" : "1NCE sync"}</p>
+                    <p>{sim.lastSyncedAt ? `Last synced ${formatDistanceToNow(sim.lastSyncedAt, { addSuffix: true })}` : "Never synced"}</p>
                   </td>
                   <td className="px-4 py-3 align-top">
                     <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium capitalize text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">

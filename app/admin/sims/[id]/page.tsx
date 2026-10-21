@@ -84,7 +84,8 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
     notFound();
   }
 
-  const oneNceConfigured = Boolean(
+  const isOneNce = sim.source === "1nce";
+  const oneNceConfigured = isOneNce && Boolean(
     process.env.ONCE_CLIENT_ID?.trim() && process.env.ONCE_CLIENT_SECRET?.trim(),
   );
 
@@ -146,15 +147,15 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
           ) : null}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-          <SimSyncButton simId={sim.id} />
-          <a
+          {isOneNce ? <SimSyncButton simId={sim.id} /> : null}
+          {isOneNce ? <a
             href={ONE_NCE_CUSTOMER_PORTAL_DASHBOARD}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex shrink-0 items-center justify-center rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm transition hover:bg-emerald-50 dark:border-emerald-500 dark:bg-zinc-900 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
           >
             1NCE dashboard ↗
-          </a>
+          </a> : null}
         </div>
       </div>
 
@@ -183,8 +184,8 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Data allowance</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Used vs included quota from the last sync.</p>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Provider-reported quota snapshot</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Not necessarily a monthly plan; reset period is unknown unless stored by the provider.</p>
           <div className="mt-4">
             <DataUsageDonut usedMb={displayUsedMb} totalMb={displayTotalMb} />
           </div>
@@ -227,6 +228,10 @@ export default async function AdminSimDetailPage({ params, searchParams }: Props
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">SIM and network</h2>
           <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-zinc-500 dark:text-zinc-400">Source</dt>
+              <dd className="text-right font-medium text-zinc-900 dark:text-zinc-50">{sim.source === "manual" ? `Manual · ${sim.providerName ?? "provider unknown"}` : "1NCE API"}</dd>
+            </div>
             <div className="flex justify-between gap-4">
               <dt className="text-zinc-500 dark:text-zinc-400">Status</dt>
               <dd className="text-right font-medium text-zinc-900 dark:text-zinc-50">{sim.status}</dd>

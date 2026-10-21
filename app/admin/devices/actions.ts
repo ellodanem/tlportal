@@ -699,6 +699,16 @@ export async function updateDeviceLinkedSim(
           data: { simCardId: simCardIdRaw },
         });
       }
+      await tx.operationalEvent.create({
+        data: {
+          category: "sim.swapped",
+          summary: prevSimId ? "SIM swapped on device" : "SIM linked to device",
+          deviceId,
+          customerId: assignment?.customerId,
+          actorUserId: session.sub,
+          payload: { previousSimId: prevSimId, nextSimId: simCardIdRaw, assignmentId: assignment?.id ?? null },
+        },
+      });
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
