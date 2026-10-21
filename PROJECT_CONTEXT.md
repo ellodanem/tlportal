@@ -5010,3 +5010,18 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - fix(inventory): refine SIM detail operations view
 
+
+### 2026-10-21 02:12 UTC — commit `c92e46c`
+
+- fix: guard device assignment and service workflows
+
+
+### 2026-10-21 02:12 UTC — pre-push (`main` → origin) @ `c92e46c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 02:12 UTC — pre-push (`main` → origin) @ `c92e46c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
