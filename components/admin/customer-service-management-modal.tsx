@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -8,7 +9,9 @@ import {
 } from "@/components/admin/canonical-subscription-draft-forms";
 import {
   CanonicalServiceHardwareReplacementForm,
+  CanonicalServicePauseForm,
   CanonicalServiceTransferForm,
+  CanonicalVehicleSaleRemovalForm,
 } from "@/components/admin/canonical-subscription-operations-form";
 
 type Props = {
@@ -19,6 +22,7 @@ type Props = {
   currentAmount: string;
   replacementAssignments: { id: string; label: string }[];
   targetSubscriptions: { id: string; label: string }[];
+  assignment?: { id: string; deviceId: string; deviceLabel: string; status: string } | null;
 };
 
 export function CustomerServiceManagementModal({
@@ -29,6 +33,7 @@ export function CustomerServiceManagementModal({
   currentAmount,
   replacementAssignments,
   targetSubscriptions,
+  assignment = null,
 }: Props) {
   const [open, setOpen] = useState(false);
   const manageButtonRef = useRef<HTMLButtonElement>(null);
@@ -64,6 +69,10 @@ export function CustomerServiceManagementModal({
             <svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" /></svg>
           </button>
         </div>
+        {assignment ? <section className="mt-5 rounded-xl border border-amber-200 bg-amber-50/40 p-4 dark:border-amber-900/60 dark:bg-amber-950/15">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-semibold">Tracker operations</h3><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{assignment.deviceLabel} · handle the installed tracker and its service together.</p></div><div className="flex flex-wrap gap-2"><Link href={`/admin/devices/${assignment.deviceId}/replace`} className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">Replace tracker</Link><Link href={`/admin/devices/${assignment.deviceId}/swap-sim`} className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">Swap SIM</Link></div></div>
+          {assignment.status === "suspended" ? <p className="mt-4 rounded-lg bg-white p-3 text-sm text-amber-900 dark:bg-zinc-900 dark:text-amber-200">This tracker assignment is already paused. Use the device assignment if it needs to be resumed.</p> : <div className="mt-4 grid gap-4 lg:grid-cols-2"><CanonicalServicePauseForm subscriptionId={subscriptionId} subscriptionItemId={subscriptionItemId} assignmentId={assignment.id} /><CanonicalVehicleSaleRemovalForm subscriptionId={subscriptionId} subscriptionItemId={subscriptionItemId} assignmentId={assignment.id} /></div>}
+        </section> : null}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <ScheduleCanonicalDraftRateForm itemId={subscriptionItemId} subscriptionId={subscriptionId} nextBillingDate={nextBillingDate} currentAmount={currentAmount} />
           <ScheduleCanonicalDraftItemEndForm itemId={subscriptionItemId} subscriptionId={subscriptionId} />

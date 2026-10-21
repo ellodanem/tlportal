@@ -1,14 +1,21 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  pauseCanonicalServiceAssignmentAction,
+  removeCanonicalServiceForVehicleSaleAction,
   replaceCanonicalServiceHardwareAction,
   transferCanonicalServiceAction,
   transitionCanonicalSubscriptionLifecycleAction,
   type CanonicalSubscriptionFormState,
 } from "@/app/admin/subscriptions/canonical/actions";
+import {
+  SERVICE_PAUSE_DISPOSITION_LABEL,
+  SERVICE_PAUSE_REASON_LABEL,
+  SERVICE_PAUSE_REASONS,
+} from "@/lib/domain/service-pause";
 
 const initialState: CanonicalSubscriptionFormState = {};
 const inputClass = "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600 dark:border-zinc-700 dark:bg-zinc-950";
@@ -19,6 +26,11 @@ function Feedback({ state }: { state: CanonicalSubscriptionFormState }) {
   return null;
 }
 
+function confirmServiceOperation(message: string) {
+  return (event: FormEvent<HTMLFormElement>) => {
+    if (!window.confirm(message)) event.preventDefault();
+  };
+}
 function useRefreshOnSuccess(state: CanonicalSubscriptionFormState) {
   const router = useRouter();
   useEffect(() => { if (state.message) router.refresh(); }, [router, state.message]);
@@ -48,6 +60,55 @@ export function CanonicalSubscriptionLifecycleForm({ subscriptionId, lifecycleSt
   </form>;
 }
 
+export function CanonicalServicePauseForm({
+  subscriptionId,
+  subscriptionItemId,
+  assignmentId,
+}: {
+  subscriptionId: string;
+  subscriptionItemId: string;
+  assignmentId: string;
+}) {
+  const [state, action, pending] = useActionState(pauseCanonicalServiceAssignmentAction, initialState);
+  useRefreshOnSuccess(state);
+  return <form action={action} onSubmit={confirmServiceOperation("Pause this service and record the tracker disposition?")} className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+    <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
+    <h3 className="font-semibold">Pause service</h3>
+    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Use for a temporary break. The device is recorded as returned or in stock while the assignment remains available to resume.</p>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <label className="text-sm font-medium">Reason<select required name="pauseReason" defaultValue="no_vehicle" className={inputClass}>{SERVICE_PAUSE_REASONS.map((reason) => <option key={reason} value={reason}>{SERVICE_PAUSE_REASON_LABEL[reason]}</option>)}</select></label>
+      <label className="text-sm font-medium">Tracker disposition<select required name="deviceDisposition" defaultValue="returned" className={inputClass}>{Object.entries(SERVICE_PAUSE_DISPOSITION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label className="text-sm font-medium sm:col-span-2">Note (optional)<input name="pauseNote" className={inputClass} placeholder="Reason or collection note" /></label>
+    </div>
+    <Feedback state={state} />
+    <button disabled={pending} className="mt-4 rounded-lg border border-amber-400 px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50 dark:border-amber-700 dark:text-amber-200">{pending ? "Pausing…" : "Pause service"}</button>
+  </form>;
+}
+
+export function CanonicalVehicleSaleRemovalForm({
+  subscriptionId,
+  subscriptionItemId,
+  assignmentId,
+}: {
+  subscriptionId: string;
+  subscriptionItemId: string;
+  assignmentId: string;
+}) {
+  const [state, action, pending] = useActionState(removeCanonicalServiceForVehicleSaleAction, initialState);
+  useRefreshOnSuccess(state);
+  return <form action={action} onSubmit={confirmServiceOperation("Record this vehicle as sold, end future billing on the chosen date, and remove the tracker?")} className="rounded-lg border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
+    <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
+    <h3 className="font-semibold text-rose-950 dark:text-rose-100">Vehicle sold / remove tracker</h3>
+    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Schedules this service to stop billing and records the tracker’s return. Historical billing and assignment records remain unchanged.</p>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <label className="text-sm font-medium">End billing on<input required type="date" name="effectiveUntil" className={inputClass} /></label>
+      <label className="text-sm font-medium">Tracker disposition<select required name="deviceDisposition" defaultValue="returned" className={inputClass}>{Object.entries(SERVICE_PAUSE_DISPOSITION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label className="text-sm font-medium sm:col-span-2">Removal note (optional)<input name="removalNote" className={inputClass} placeholder="e.g. Vehicle 893 sold; tracker returned to office" /></label>
+    </div>
+    <Feedback state={state} />
+    <button disabled={pending} className="mt-4 rounded-lg border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-800 disabled:opacity-50 dark:border-rose-800 dark:text-rose-200">{pending ? "Recording…" : "End service and remove tracker"}</button>
+  </form>;
+}
 export function CanonicalServiceHardwareReplacementForm({
   subscriptionId,
   subscriptionItemId,

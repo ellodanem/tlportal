@@ -5075,3 +5075,33 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-10-21 10:40 UTC — commit `aa5b4e5`
+
+- fix(customers): show legacy assignments before subscription setup
+
+
+### 2026-10-21 10:40 UTC — pre-push (`main` → origin) @ `aa5b4e5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 11:07 UTC — commit `6496e00`
+
+- fix(subscriptions): deliver canonical detail workspace
+
+
+### 2026-10-21 11:07 UTC — pre-push (`main` → origin) @ `6496e00`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 11:18 UTC — commit `d37316e`
+
+- feat(subscriptions): add global workspace insights
+
+
+### 2026-10-21 11:18 UTC — pre-push (`main` → origin) @ `d37316e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

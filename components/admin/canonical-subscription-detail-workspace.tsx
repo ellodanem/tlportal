@@ -3,6 +3,7 @@ import Link from "next/link";
 import { activateManualPilotLocallyAction } from "@/app/admin/subscriptions/canonical/pilot/actions";
 import { CanonicalManualActivationForm } from "@/components/admin/canonical-subscription-activation-form";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
+import { CustomerServiceManagementModal } from "@/components/admin/customer-service-management-modal";
 import {
   AddCanonicalDraftItemForm,
   EditCanonicalDraftItemForm,
@@ -190,7 +191,7 @@ export function CanonicalSubscriptionDetailWorkspace({
                       <td className="px-4 py-4">{device?.simCard ? <Link href={`/admin/sims/${device.simCard.id}`} className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{device.simCard.label || device.simCard.iccid}</Link> : <span className="text-zinc-500">Not assigned</span>}</td>
                       <td className="px-4 py-4"><p className="font-semibold tabular-nums">{rate ? `${money(rate.agreedAmountPerCycle.toString(), rate.currency)} / ${cycleUnit(rate.billingIntervalMonths)}` : "Not set"}</p>{rate && rate.billingIntervalMonths !== 1 ? <p className="mt-1 text-xs text-zinc-500">{money(Number(rate.agreedAmountPerCycle) / rate.billingIntervalMonths, rate.currency)} / month equivalent</p> : null}</td>
                       <td className="px-4 py-4"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold capitalize text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{item.status.replaceAll("_", " ")}</span></td>
-                      <td className="px-4 py-4 text-right"><a href={canManage ? `#manage-${item.id}` : `#history-${item.id}`} className="inline-flex rounded-lg border border-zinc-300 px-3 py-2 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">{canManage ? "Manage" : "View history"}</a></td>
+                      <td className="px-4 py-4 text-right">{canManage ? <CustomerServiceManagementModal subscriptionId={subscription.id} subscriptionItemId={item.id} serviceLabel={item.label || `Service ${index + 1}`} nextBillingDate={nextBillingDate} currentAmount={rate?.agreedAmountPerCycle.toString() ?? subscription.agreedAmountPerCycle?.toString() ?? "0.00"} replacementAssignments={replacementAssignments.map((candidate) => ({ id: candidate.id, label: candidate.device.label?.trim() || candidate.device.deviceModel.name }))} targetSubscriptions={transferTargets.map((target) => ({ id: target.id, label: target.name?.trim() || target.reference || "Subscription agreement" }))} assignment={assignment && assignment.endDate == null && assignment.status !== "cancelled" && device ? { id: assignment.id, deviceId: device.id, deviceLabel: device.label?.trim() || device.deviceModel.name, status: assignment.status } : null} /> : <a href={`#history-${item.id}`} className="inline-flex rounded-lg border border-zinc-300 px-3 py-2 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">View history</a>}</td>
                     </tr>
                   );
                 })}

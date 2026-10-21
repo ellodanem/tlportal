@@ -12,6 +12,10 @@ import {
   canonicalSubscriptionUiAccess,
   CanonicalSubscriptionUiError,
 } from "@/lib/domain/canonical-subscription-admin";
+import {
+  parseServicePauseDisposition,
+  parseServicePauseReason,
+} from "@/lib/domain/service-pause";
 import { CanonicalSubscriptionValidationError } from "@/lib/domain/canonical-subscription-application";
 import {
   addBillableServiceToSubscription,
@@ -28,6 +32,7 @@ import {
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
 import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import { pauseServiceAssignment } from "@/lib/services/service-pause-service";
 import { adoptExistingStripeSubscription, CanonicalStripeAdoptionError } from "@/lib/services/canonical-stripe-adoption-service";
 
 export type CanonicalSubscriptionFormState = {
@@ -225,6 +230,7 @@ async function requireManageableCanonicalSubscription(subscriptionId: string) {
       customerId: true,
       controlMode: true,
       lifecycleStatus: true,
+      collectionMethod: true,
       canonicalMigrationLedger: { select: { id: true } },
     },
   });
@@ -251,6 +257,28 @@ async function requireManageableCanonicalItem(subscriptionId: string, subscripti
     throw new CanonicalSubscriptionUiError("ITEM_SUBSCRIPTION_MISMATCH", "The service does not belong to this subscription.");
   }
   return context;
+}
+
+function revalidateCanonicalServiceOperation(input: {
+  subscriptionId: string;
+  customerId: string;
+  deviceId: string;
+  simCardId: string | null;
+}) {
+  revalidatePath(`/admin/subscriptions/canonical/${input.subscriptionId}`);
+  revalidatePath("/admin/subscriptions/canonical");
+  revalidatePath(`/admin/customers/${input.customerId}`);
+  revalidatePath(`/admin/customers/${input.customerId}/subscriptions`);
+  revalidatePath(`/admin/customers/${input.customerId}/billing`);
+  revalidatePath("/admin/devices");
+  revalidatePath(`/admin/devices/${input.deviceId}/edit`);
+  if (input.simCardId) revalidatePath(`/admin/sims/${input.simCardId}`);
+}
+
+function pauseBillingNotice(collectionMethod: string | null): string {
+  return collectionMethod === "stripe_autocharge"
+    ? " Review the linked Stripe subscription or vehicle quantity before the next charge."
+    : "";
 }
 
 export async function createCanonicalDraftAction(
@@ -478,6 +506,82 @@ export async function scheduleCanonicalDraftItemEndAction(
   }
 }
 
+async function requireOpenCanonicalServiceAssignment(subscriptionItemId: string, assignmentId: string) {
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: { id: assignmentId, subscriptionItemId, endDate: null, status: { not: "cancelled" } },
+    select: { id: true, customerId: true, deviceId: true, device: { select: { simCardId: true } } },
+  });
+  if (!assignment) throw new CanonicalSubscriptionUiError("ASSIGNMENT_ITEM_MISMATCH", "The tracker assignment is no longer open for this subscription service.");
+  return assignment;
+}
+
+export async function pauseCanonicalServiceAssignmentAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const assignmentId = text(formData, "assignmentId");
+    const reason = parseServicePauseReason(text(formData, "pauseReason"));
+    const deviceDisposition = parseServicePauseDisposition(text(formData, "deviceDisposition"));
+    if (!assignmentId) return { error: "A current tracker assignment is required." };
+    if (!reason) return { error: "Select a pause reason." };
+    if (!deviceDisposition) return { error: "Select a tracker disposition." };
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    const assignment = await requireOpenCanonicalServiceAssignment(subscriptionItemId, assignmentId);
+    const result = await pauseServiceAssignment({ assignmentId, reason, note: optionalText(formData, "pauseNote"), deviceDisposition, actorUserId: session.sub });
+    if (!result.ok) return { error: result.error };
+    await recordOperationalEvent({
+      category: "subscription.service_paused",
+      summary: "Subscription service paused and tracker removal recorded by staff.",
+      customerId: subscription.customerId,
+      deviceId: assignment.deviceId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, assignmentId, reason, deviceDisposition },
+    });
+    revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
+    const scheduleNote = result.pausedRecurringSchedules ? ` Paused ${result.pausedRecurringSchedules} linked recurring invoice schedule${result.pausedRecurringSchedules === 1 ? "" : "s"}.` : "";
+    return { message: `Service paused and tracker marked ${deviceDisposition === "in_stock" ? "in stock" : "returned"}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function removeCanonicalServiceForVehicleSaleAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const assignmentId = text(formData, "assignmentId");
+    const effectiveUntil = text(formData, "effectiveUntil");
+    const deviceDisposition = parseServicePauseDisposition(text(formData, "deviceDisposition"));
+    if (!assignmentId) return { error: "A current tracker assignment is required." };
+    if (!effectiveUntil) return { error: "Choose the date on which billing ends." };
+    if (!deviceDisposition) return { error: "Select a tracker disposition." };
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    const assignment = await requireOpenCanonicalServiceAssignment(subscriptionItemId, assignmentId);
+    await scheduleSubscriptionItemEnd({ subscriptionItemId, effectiveUntil });
+    const note = ["Vehicle sold; tracker removal.", optionalText(formData, "removalNote")].filter(Boolean).join(" ");
+    const result = await pauseServiceAssignment({ assignmentId, reason: "other", note, deviceDisposition, actorUserId: session.sub });
+    if (!result.ok) return { error: result.error };
+    await recordOperationalEvent({
+      category: "subscription.vehicle_sold_tracker_removed",
+      summary: "Vehicle sold — service end scheduled and tracker removal recorded by staff.",
+      customerId: subscription.customerId,
+      deviceId: assignment.deviceId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, assignmentId, effectiveUntil, deviceDisposition, note },
+    });
+    revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
+    const scheduleNote = result.pausedRecurringSchedules ? ` Paused ${result.pausedRecurringSchedules} linked recurring invoice schedule${result.pausedRecurringSchedules === 1 ? "" : "s"}.` : "";
+    return { message: `Billing ends on ${effectiveUntil}; tracker marked ${deviceDisposition === "in_stock" ? "in stock" : "returned"}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
+  } catch (error) {
+    return actionError(error);
+  }
+}
 export async function replaceCanonicalServiceHardwareAction(
   _previous: CanonicalSubscriptionFormState,
   formData: FormData,
