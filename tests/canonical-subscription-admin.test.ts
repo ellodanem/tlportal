@@ -9,6 +9,8 @@ import {
   buildCanonicalSubscriptionAdminRow,
   canonicalProviderStatusLabel,
   canonicalSubscriptionDisplayName,
+  canonicalSubscriptionWorkspacePresentation,
+  isOperationalCanonicalSubscription,
   canonicalSubscriptionUiAccess,
   canonicalSubscriptionUiEnabled,
   canonicalSubscriptionUiVisible,
@@ -174,6 +176,19 @@ test("provider status distinguishes local links from unavailable live observatio
   assert.equal(canonicalProviderStatusLabel("linked_observation_unavailable"), "Linked · observation unavailable");
 });
 
+test("workspace presentation keeps lifecycle, readiness, authority, and collection alerts distinct", () => {
+  const draft = row({ controlMode: "canonical", lifecycleStatus: "draft" });
+  assert.deepEqual(canonicalSubscriptionWorkspacePresentation(draft), {
+    lifecycleLabel: "Draft", issueLabel: "Setup required",
+    issueDetail: "This inactive agreement needs its commercial and activation review completed.", actionLabel: "Continue setup",
+  });
+  const shadow = row({ controlMode: "shadow", lifecycleStatus: "active", attentionRequired: false });
+  assert.equal(canonicalSubscriptionWorkspacePresentation(shadow).issueLabel, "Source-controlled");
+  const alert = row({ controlMode: "canonical", lifecycleStatus: "active", attentionRequired: true });
+  assert.equal(canonicalSubscriptionWorkspacePresentation(alert).issueLabel, "Collection alert");
+  assert.equal(isOperationalCanonicalSubscription(alert), true);
+  assert.equal(isOperationalCanonicalSubscription(draft), false);
+});
 test("overview filters preserve one row per subscription and combine operational filters", () => {
   const monthly = row({ id: "sub-monthly", collectionMethod: "manual_invoice", lifecycleStatus: "active", controlMode: "canonical", providerStatus: "not_applicable" });
   const stripe = row({ id: "sub-stripe", collectionMethod: "stripe_autocharge", lifecycleStatus: "paused", controlMode: "shadow", providerStatus: "attention" });
@@ -207,6 +222,9 @@ test("UI routes include detail, empty, loading, error and price-history states",
   assert.match(loading, /aria-busy/);
   assert.match(error, /No billing action was performed/);
   assert.match(overview, /Billing records and transition history/);
+  assert.match(overview, /Operational MRR/);
+  assert.match(overview, /Collection alerts/);
+  assert.match(overview, /Subscriptions pagination/);
   assert.match(overview, /canonicalSubscriptionUiVisible/);
   assert.match(detail, /canonicalSubscriptionUiEnabled/);
   assert.match(demo, /Synthetic demonstration only/);
@@ -229,7 +247,7 @@ test("customer billing keeps financial history separate from subscription renewa
   assert.match(customerSubscriptions, /Billable GPS services/);
   assert.match(customerSubscriptions, /Current price/);
   assert.match(customerSubscriptions, /Device \/ SIM assignment/);
-  assert.match(customerSubscriptions, /CustomerServiceManagementModal/);
+  assert.match(customerSubscriptions, /#service-management/);
   assert.match(customerSubscriptions, /CustomerAssignmentServiceActions/);
   assert.match(customerSubscriptions, /Paused device assignments/);
   assert.match(accountRibbon, /commercial terms and service pricing are managed in Subscriptions/);

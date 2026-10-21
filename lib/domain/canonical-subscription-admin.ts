@@ -68,6 +68,13 @@ export type CanonicalSubscriptionAdminFilters = {
   providerStatus?: string;
 };
 
+/** Presentation-only state: lifecycle, readiness, collection, and authority stay separate. */
+export type CanonicalSubscriptionWorkspacePresentation = {
+  lifecycleLabel: string;
+  issueLabel: string | null;
+  issueDetail: string | null;
+  actionLabel: "Continue setup" | "Manage" | "Review details" | "View history";
+};
 export class CanonicalSubscriptionUiError extends Error {
   readonly code: string;
 
@@ -311,6 +318,43 @@ export function filterCanonicalSubscriptionAdminRows(
     if (filters.providerStatus && row.providerStatus !== filters.providerStatus) return false;
     return true;
   });
+}
+
+export function canonicalSubscriptionWorkspacePresentation(
+  row: CanonicalSubscriptionAdminRow,
+): CanonicalSubscriptionWorkspacePresentation {
+  const lifecycleLabel = row.lifecycleStatus.replaceAll("_", " ");
+  if (row.historical) return { lifecycleLabel, issueLabel: null, issueDetail: null, actionLabel: "View history" };
+  if (row.controlMode === "shadow" || ["migrated_shadow_read_only", "shadow_read_only"].includes(row.access)) {
+    return {
+      lifecycleLabel: row.lifecycleStatus === "unclassified" ? "Review" : lifecycleLabel,
+      issueLabel: "Source-controlled",
+      issueDetail: "Source billing authority is preserved while this record is reviewed.",
+      actionLabel: "Review details",
+    };
+  }
+  if (row.controlMode === "canonical" && row.access === "editable_draft") {
+    return {
+      lifecycleLabel: "Draft",
+      issueLabel: "Setup required",
+      issueDetail: "This inactive agreement needs its commercial and activation review completed.",
+      actionLabel: "Continue setup",
+    };
+  }
+  if (row.attentionRequired) {
+    return {
+      lifecycleLabel,
+      issueLabel: "Collection alert",
+      issueDetail: "An invoice is beyond its configured grace period or a provider operation needs review.",
+      actionLabel: "Manage",
+    };
+  }
+  if (row.lifecycleStatus === "paused") return { lifecycleLabel: "Paused", issueLabel: null, issueDetail: null, actionLabel: "Manage" };
+  return { lifecycleLabel, issueLabel: null, issueDetail: null, actionLabel: "Manage" };
+}
+
+export function isOperationalCanonicalSubscription(row: CanonicalSubscriptionAdminRow): boolean {
+  return row.controlMode === "canonical" && row.lifecycleStatus === "active";
 }
 
 export function canonicalIntervalLabel(months: number | null): string {
