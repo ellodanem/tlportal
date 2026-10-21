@@ -4965,3 +4965,48 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-10-20 22:08 UTC — commit `f7c14c7`
+
+- feat(billing): complete subscription migration operations
+
+
+### 2026-10-20 22:08 UTC — pre-push (`main` → origin) @ `f7c14c7`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 01:23 UTC — commit `017c629`
+
+- feat(inventory): improve device and SIM workflows
+
+
+### 2026-10-21 01:27 UTC — pre-push (`main` → origin) @ `017c629`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 01:37 UTC — commit `0104770`
+
+- fix(inventory): align device table with operations view
+
+
+### 2026-10-21 01:37 UTC — pre-push (`main` → origin) @ `0104770`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 01:39 UTC — commit `6aced9d`
+
+- fix(inventory): align SIM table with operations view
+
+
+### 2026-10-21 01:39 UTC — pre-push (`main` → origin) @ `6aced9d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 02:08 UTC — commit `b4705b7`
+
+- fix(inventory): refine SIM detail operations view
+

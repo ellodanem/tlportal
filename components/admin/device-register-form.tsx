@@ -229,10 +229,9 @@ export function DeviceRegisterForm({
 
       <section className="space-y-4 border-t border-zinc-200 pt-8 dark:border-zinc-700">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Service assignment (optional)</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Installation intent (optional)</h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Assign to a customer to bill and track service. Leave unassigned to keep the device <strong>in stock</strong>
-            .
+            Registration defaults to <strong>in stock</strong>. Choosing a customer creates an explicit legacy hardware assignment only; it never starts billing or a new commercial service.
           </p>
         </div>
 
@@ -257,6 +256,17 @@ export function DeviceRegisterForm({
               first.
             </p>
           ) : null}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="installIntent">
+            Registration intent
+          </label>
+          <select id="installIntent" name="installIntent" defaultValue="stock" className={inputClass}>
+            <option value="stock">Register in stock only</option>
+            <option value="legacy_existing_service">Install for an existing legacy/manual service</option>
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">Starting a new commercial service is intentionally unavailable here; use the authorized Subscriptions onboarding workflow.</p>
         </div>
 
         <div>

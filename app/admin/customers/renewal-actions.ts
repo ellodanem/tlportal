@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/lib/auth/get-session";
+import { prisma } from "@/lib/db";
 import {
   listBillableAssignmentsForRenewal,
   markAssignmentPeriodPaid,
@@ -236,6 +237,15 @@ export async function markAssignmentPeriodPaidAction(
 
   if (!assignmentId || !customerId) {
     return { error: "Missing assignment or customer." };
+  }
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: { id: assignmentId, customerId, endDate: null, status: { not: "cancelled" } },
+    select: { subscriptionItemId: true },
+  });
+  if (!assignment) return { error: "Active assignment not found." };
+  if (assignment.subscriptionItemId) {
+    return { error: "Canonical services use Billing or Subscriptions for commercial changes. This legacy next-due control is not available." };
   }
 
   const result = await markAssignmentPeriodPaid({

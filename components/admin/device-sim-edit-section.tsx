@@ -47,7 +47,7 @@ export function DeviceSimEditSection({
 }: {
   deviceId: string;
   canEditSim: boolean;
-  currentSim: { id: string; iccid: string; msisdn: string | null; label: string | null } | null;
+  currentSim: { id: string; iccid: string; msisdn: string | null; label: string | null; providerName: string | null; status: string; lastSyncedAt: Date | null } | null;
   swapSims: UnlinkedSimRow[];
 }) {
   const [linkState, linkAction] = useActionState(updateDeviceLinkedSim, deviceFormInitialState);
@@ -82,6 +82,7 @@ export function DeviceSimEditSection({
             {currentSim.label?.trim() ? (
               <span className="block text-xs text-zinc-600 dark:text-zinc-400">Label: {currentSim.label.trim()}</span>
             ) : null}
+            <span className="block text-xs text-zinc-600 dark:text-zinc-400">Provider: {currentSim.providerName?.trim() || "Unknown"} · Network status: {currentSim.status || "Unknown"} · Last usage sync: {currentSim.lastSyncedAt ? currentSim.lastSyncedAt.toLocaleString() : "Not available"}</span>
           </p>
         ) : (
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">No SIM linked.</p>
@@ -117,6 +118,7 @@ export function DeviceSimEditSection({
                 <UnlinkedSimPicker sims={swapSims} availabilityHint={swapAvailabilityHint} />
               )}
               {swapSims.length > 0 ? <PrimarySubmit label="Save linked SIM" /> : null}
+              <p className="text-xs text-amber-800 dark:text-amber-200">A different provider may require manual APN follow-up. GPS setup commands are unchanged.</p>
             </form>
           </div>
 

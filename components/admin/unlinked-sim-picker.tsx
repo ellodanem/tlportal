@@ -13,10 +13,13 @@ const defaultAvailabilityHint =
 export function UnlinkedSimPicker({
   sims,
   availabilityHint = defaultAvailabilityHint,
+  inputName = "simCardId",
 }: {
   sims: UnlinkedSimRow[];
   /** Replaces the default explanation under the filter field (e.g. swap vs new device). */
   availabilityHint?: string;
+  /** Allows a guarded multi-intent form to use a distinct server field. */
+  inputName?: string;
 }) {
   const listId = useId();
   const [query, setQuery] = useState("");
@@ -38,7 +41,7 @@ export function UnlinkedSimPicker({
 
   return (
     <div className="space-y-2">
-      <input type="hidden" name="simCardId" value={selectedId ?? ""} />
+      <input type="hidden" name={inputName} value={selectedId ?? ""} />
 
       {selected ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">

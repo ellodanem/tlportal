@@ -20,7 +20,7 @@ function SubmitButton() {
   );
 }
 
-export function DeviceUnassignForm({ deviceId }: { deviceId: string }) {
+export function DeviceUnassignForm({ deviceId, canonical }: { deviceId: string; canonical: boolean }) {
   const [state, formAction] = useActionState(unassignDeviceFromCustomer, deviceFormInitialState);
   useDeviceFormActionNav(state);
 
@@ -30,11 +30,7 @@ export function DeviceUnassignForm({ deviceId }: { deviceId: string }) {
       <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Remove from customer
       </h3>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Permanently ends service, sets the device to <strong className="font-medium text-zinc-800 dark:text-zinc-200">in stock</strong>, and
-        keeps history on the customer. For a temporary break (accident, no vehicle), use{" "}
-        <strong className="font-medium text-zinc-800 dark:text-zinc-200">Pause service</strong> instead.
-      </p>
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{canonical ? "This canonical service cannot be ended from inventory. Use the authorized subscription service-transfer or lifecycle workflow; hardware-only removal must not silently end billing." : <>Ends this legacy hardware assignment and returns the device to <strong className="font-medium text-zinc-800 dark:text-zinc-200">in stock</strong>. It does not settle invoices, payments, or recurring schedules. For a temporary break, use <strong className="font-medium text-zinc-800 dark:text-zinc-200">Pause service</strong>.</>}</p>
       {state.error ? (
         <p
           className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
@@ -43,9 +39,7 @@ export function DeviceUnassignForm({ deviceId }: { deviceId: string }) {
           {state.error}
         </p>
       ) : null}
-      <div className="mt-3">
-        <SubmitButton />
-      </div>
+      {!canonical ? <div className="mt-3"><SubmitButton /></div> : null}
     </form>
   );
 }

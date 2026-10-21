@@ -6,6 +6,7 @@ import { DeviceAssignToCustomerForm } from "@/components/admin/device-assign-cus
 import { DeviceCommercialEditForm } from "@/components/admin/device-commercial-edit-form";
 import { DeviceGpsLinkForm } from "@/components/admin/device-gps-link-form";
 import { DevicePauseServiceForm } from "@/components/admin/device-pause-service-form";
+import { DeviceReplaceForm } from "@/components/admin/device-replace-form";
 import { DeviceResumeServiceForm } from "@/components/admin/device-resume-service-form";
 import { DeviceSimEditSection } from "@/components/admin/device-sim-edit-section";
 import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge";
@@ -23,6 +24,7 @@ import { parseQueryTab } from "@/lib/admin/query-tab";
 import { SERVICE_PAUSE_REASON_LABEL } from "@/lib/domain/service-pause";
 import { applySetupCommandTokens } from "@/lib/admin/setup-commands";
 import { getGpsLink, resolveGpsPortalUrl } from "@/lib/services/device-link-service";
+import { formatMegabytes } from "@/lib/format/mbytes";
 import { prisma } from "@/lib/db";
 
 type Props = {
@@ -30,7 +32,7 @@ type Props = {
   searchParams: Promise<{ tab?: string }>;
 };
 
-const DEVICE_EDIT_TABS = ["overview", "assignment", "details", "sim", "gps", "setup"] as const;
+const DEVICE_EDIT_TABS = ["overview", "assignment", "details", "sim", "gps", "setup", "history"] as const;
 type DeviceEditTab = (typeof DEVICE_EDIT_TABS)[number];
 
 const DEVICE_EDIT_TAB_ITEMS: { id: DeviceEditTab; label: string }[] = [
@@ -40,6 +42,7 @@ const DEVICE_EDIT_TAB_ITEMS: { id: DeviceEditTab; label: string }[] = [
   { id: "sim", label: "SIM" },
   { id: "gps", label: "GPS" },
   { id: "setup", label: "Setup" },
+  { id: "history", label: "History" },
 ];
 
 function dateInputValue(d: Date | null | undefined): string {
@@ -72,7 +75,7 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
   const { id } = await params;
   const { tab: tabParam } = await searchParams;
   const activeTab = parseQueryTab(tabParam, DEVICE_EDIT_TABS, "overview");
-  const [device, customerRows, openAssignment, simsForSwap, gpsLink] = await Promise.all([
+  const [device, customerRows, openAssignment, simsForSwap, gpsLink, events, replacementDevices] = await Promise.all([
     prisma.device.findUnique({
       where: { id },
       include: {
@@ -107,6 +110,7 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
         pauseReason: true,
         pauseNote: true,
         invoilessRecurringId: true,
+        subscriptionItemId: true,
         updatedAt: true,
         customer: {
           select: {
@@ -122,6 +126,16 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
     }),
     fetchSimsAvailableForDeviceSwap(),
     getGpsLink(id, "traqcare"),
+    prisma.operationalEvent.findMany({
+      where: { deviceId: id },
+      orderBy: { occurredAt: "desc" },
+      take: 12,
+    }),
+    prisma.device.findMany({
+      where: { id: { not: id }, status: "in_stock", condition: { not: "faulty" }, serviceAssignments: { none: { endDate: null, status: { not: "cancelled" } } } },
+      orderBy: [{ deviceModel: { name: "asc" } }, { imei: "asc" }],
+      select: { id: true, imei: true, label: true, deviceModel: { select: { name: true } } },
+    }),
   ]);
 
   if (!device) {
@@ -133,6 +147,7 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
   const canAssign =
     !openAssignment && device.status !== "decommissioned" && device.status !== "lost";
   const isPaused = openAssignment?.status === "suspended";
+  const isCanonicalAssignment = Boolean(openAssignment?.subscriptionItemId);
   const setupCommands = device.deviceModel.setupCommands.map((command) => ({
     id: command.id,
     name: command.name,
@@ -155,7 +170,8 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
         <Link href="/admin/devices" className="text-sm text-emerald-700 hover:underline dark:text-emerald-400">
           ← Devices
         </Link>
@@ -175,6 +191,11 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
             {device.serialNumber ? ` · Serial ${device.serialNumber}` : ""}
           </span>
         </p>
+        </div>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          {gpsLink ? <a href={openTrackingUrl ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">Open GPS portal ↗</a> : null}
+          <Link href={`/admin/devices/${device.id}/edit?tab=assignment`} className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">More actions</Link>
+        </div>
       </div>
 
       <SectionTabs
@@ -185,9 +206,16 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
       />
 
       {activeTab === "overview" ? (
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-5">
+          <section className="grid overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-3">
+            <div className="border-b border-zinc-200 p-5 dark:border-zinc-800 md:border-b-0 md:border-r"><p className="text-xs font-medium text-zinc-500">Current customer</p><p className="mt-1 font-semibold text-emerald-700 dark:text-emerald-400">{openAssignment ? <Link href={`/admin/customers/${openAssignment.customerId}`} className="hover:underline">{customerDisplayName(openAssignment.customer)} ↗</Link> : "Unassigned"}</p><p className="mt-1 text-xs text-zinc-500">{openAssignment ? "Active hardware assignment" : "No active service assignment"}</p></div>
+            <div className="border-b border-zinc-200 p-5 dark:border-zinc-800 md:border-b-0 md:border-r"><p className="text-xs font-medium text-zinc-500">Tracking service</p><p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">{title} {openAssignment ? <span className="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">{isPaused ? "Paused" : "Active"}</span> : null}</p><p className="mt-1 text-xs text-zinc-500">Commercial changes remain in the assignment workflow.</p></div>
+            <div className="p-5"><p className="text-xs font-medium text-zinc-500">Linked SIM</p><p className="mt-1 font-mono font-semibold text-zinc-900 dark:text-zinc-50">{device.simCard ? <Link href={`/admin/sims/${device.simCard.id}`} className="text-emerald-700 hover:underline dark:text-emerald-400">{device.simCard.iccid}</Link> : "No SIM linked"}</p><p className="mt-1 text-xs text-zinc-500">{device.simCard ? `${device.simCard.providerName ?? "Provider unknown"} · ${device.simCard.lastSyncedAt ? "synced" : "not synced"}` : "Link a SIM from the SIM tab."}</p></div>
+          </section>
+          <div className="grid gap-5 xl:grid-cols-2">
           <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-2">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Installation overview</h2>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Current assignment</h2>{openAssignment ? <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-900">{isPaused ? "Paused" : "Active installation"}</span> : null}</div>
+            <dl className="mt-4 divide-y divide-zinc-100 text-sm dark:divide-zinc-800"><div className="flex justify-between gap-4 py-2"><dt className="text-zinc-500">Customer</dt><dd className="font-medium">{openAssignment ? <Link href={`/admin/customers/${openAssignment.customerId}`} className="text-emerald-700 hover:underline dark:text-emerald-400">{customerDisplayName(openAssignment.customer)} ↗</Link> : "—"}</dd></div><div className="flex justify-between gap-4 py-2"><dt className="text-zinc-500">Service start</dt><dd className="font-medium">{openAssignment?.startDate ? openAssignment.startDate.toLocaleDateString() : "Not recorded"}</dd></div><div className="flex justify-between gap-4 py-2"><dt className="text-zinc-500">Commercial relationship</dt><dd><Link href={`/admin/devices/${device.id}/edit?tab=assignment`} className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">View assignment ↗</Link></dd></div></dl>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2 text-sm">
               <div><dt className="text-zinc-500 dark:text-zinc-400">Model / IMEI</dt><dd className="mt-1 font-medium text-zinc-900 dark:text-zinc-50">{device.deviceModel.name} · <span className="font-mono">{device.imei}</span></dd></div>
               <div><dt className="text-zinc-500 dark:text-zinc-400">Inventory / condition</dt><dd className="mt-1 font-medium capitalize text-zinc-900 dark:text-zinc-50">{DEVICE_STATUS_LABEL[device.status]} · {device.condition}</dd></div>
@@ -196,16 +224,20 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
             </dl>
             <p className="mt-5 rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400">Hardware assignment is separate from commercial service. Billing and subscription controls remain in their authorized service workflow.</p>
           </section>
-          <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Quick actions</h2>
-            <div className="mt-4 flex flex-col items-stretch gap-2 text-sm font-medium">
-              <Link href={`/admin/devices/${device.id}/edit?tab=assignment`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">Edit assignment</Link>
-              <Link href={`/admin/devices/${device.id}/edit?tab=sim`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">{device.simCard ? "Swap SIM" : "Link SIM"}</Link>
-              <Link href={`/admin/devices/${device.id}/edit?tab=gps`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">Open GPS</Link>
-              <Link href={`/admin/devices/${device.id}/edit?tab=setup`} className="rounded-lg border border-zinc-200 px-3 py-2 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">Open setup</Link>
-            </div>
-          </section>
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Linked SIM</h2>{device.simCard?.providerName ? <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-900">{device.simCard.providerName}</span> : null}</div>{device.simCard ? <><Link href={`/admin/sims/${device.simCard.id}`} className="mt-4 block break-all font-mono font-semibold text-emerald-700 hover:underline dark:text-emerald-400">{device.simCard.iccid} ↗</Link><p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Provider status: <strong className="text-zinc-900 dark:text-zinc-50">{device.simCard.status}</strong></p><div className="mt-4"><div className="flex justify-between gap-3 text-sm font-medium"><span>Reported quota usage</span><span>{formatMegabytes(device.simCard.usedDataMB)} / {formatMegabytes(device.simCard.totalDataMB)}</span></div>{device.simCard.usedDataMB != null && device.simCard.totalDataMB != null && device.simCard.totalDataMB > 0 ? <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, device.simCard.usedDataMB / device.simCard.totalDataMB * 100)}%` }} /></div> : <p className="mt-2 text-xs text-zinc-500">Quota unknown</p>}</div><dl className="mt-4 divide-y divide-zinc-100 text-sm dark:divide-zinc-800"><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Last synchronized</dt><dd>{device.simCard.lastSyncedAt ? device.simCard.lastSyncedAt.toLocaleString() : "Not synced"}</dd></div><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Quota reset period</dt><dd>Not verified</dd></div></dl><div className="mt-4 flex flex-wrap gap-2"><Link href={`/admin/sims/${device.simCard.id}`} className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100">View SIM details ↗</Link><Link href={`/admin/devices/${device.id}/edit?tab=sim`} className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100">Open SIM tab →</Link></div></> : <p className="mt-4 text-sm text-zinc-500">No SIM is currently linked.</p>}<p className="mt-4 text-xs text-zinc-500">Reported provider quota is not necessarily monthly consumption.</p></section>
+          </div>
+          <section><h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-50">Quick actions</h2><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{openAssignment ? <Link href={`/admin/devices/${device.id}/edit?tab=assignment#replace-device`} className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="font-semibold text-emerald-950 dark:text-emerald-100">Replace device</p><p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">Preserves the existing service and terms.</p></Link> : <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950"><p className="font-semibold">Replace device</p><p className="mt-1 text-xs">No active installation.</p></div>}<Link href={`/admin/devices/${device.id}/edit?tab=sim`} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900"><p className="font-semibold text-zinc-900 dark:text-zinc-50">{device.simCard ? "Swap SIM" : "Link SIM"}</p><p className="mt-1 text-xs text-zinc-500">Choose an eligible SIM.</p></Link>{openAssignment ? <Link href={`/admin/customers/${openAssignment.customerId}`} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900"><p className="font-semibold text-zinc-900 dark:text-zinc-50">View customer</p><p className="mt-1 text-xs text-zinc-500">Open customer record.</p></Link> : <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950"><p className="font-semibold">View customer</p><p className="mt-1 text-xs">No customer assigned.</p></div>}<Link href={`/admin/devices/${device.id}/edit?tab=history`} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900"><p className="font-semibold text-zinc-900 dark:text-zinc-50">View history</p><p className="mt-1 text-xs text-zinc-500">Assignments and recorded changes.</p></Link></div><p className="mt-2 text-xs text-zinc-500">End service remains in its safeguarded assignment workflow.</p></section>
+          {openAssignment ? <section id="replace-device" className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Replace device</h2><p className="mt-1 text-sm text-zinc-500">Safeguarded hardware replacement for this active installation.</p></div>{isCanonicalAssignment ? <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-900">Canonical service safeguards</span> : null}</div><DeviceReplaceForm assignmentId={openAssignment.id} devices={replacementDevices.map((replacement) => ({ id: replacement.id, label: `${replacement.label?.trim() || replacement.deviceModel.name} · ${replacement.imei}` }))} currentSimId={device.simCardId} availableSims={simsForSwap} /></section> : null}
+          <div className="grid gap-5 xl:grid-cols-2"><section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><div className="flex items-center justify-between"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Device details</h2><Link href={`/admin/devices/${device.id}/edit?tab=details`} className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-800 dark:border-zinc-700 dark:text-zinc-100">Edit details →</Link></div><dl className="mt-4 divide-y divide-zinc-100 text-sm dark:divide-zinc-800"><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Model / IMEI</dt><dd className="font-medium">{device.deviceModel.name} · {device.imei}</dd></div><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Inventory status</dt><dd><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${deviceStatusPillClass(device.status)}`}>{DEVICE_STATUS_LABEL[device.status]}</span></dd></div><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Physical condition</dt><dd className="capitalize font-medium">{device.condition}</dd></div><div className="flex justify-between gap-3 py-2"><dt className="text-zinc-500">Purpose</dt><dd className="font-medium">{device.usagePurpose === "customer" ? "Production" : device.usagePurpose.replace(/_/g, " ")}</dd></div></dl></section><section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Operational tools</h2><div className="mt-4 divide-y divide-zinc-100 text-sm dark:divide-zinc-800"><div className="flex items-center justify-between gap-3 py-3"><span>GPS provider configuration</span><Link href={`/admin/devices/${device.id}/edit?tab=gps`} className="rounded-lg border border-zinc-200 px-3 py-2 font-medium text-zinc-800 dark:border-zinc-700 dark:text-zinc-100">Open GPS tab →</Link></div><div className="flex items-center justify-between gap-3 py-3"><span>Device setup commands</span><Link href={`/admin/devices/${device.id}/edit?tab=setup`} className="rounded-lg border border-zinc-200 px-3 py-2 font-medium text-zinc-800 dark:border-zinc-700 dark:text-zinc-100">Open Setup tab →</Link></div><div className="flex items-center justify-between gap-3 py-3"><span>Service and hardware assignment</span><Link href={`/admin/devices/${device.id}/edit?tab=assignment`} className="rounded-lg border border-zinc-200 px-3 py-2 font-medium text-zinc-800 dark:border-zinc-700 dark:text-zinc-100">Open Assignment →</Link></div></div></section></div>
         </div>
+      ) : null}
+
+      {activeTab === "history" ? (
+        <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Device history</h2>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Recorded inventory and SIM changes. Earlier changes are only shown where a record exists.</p>
+          {events.length === 0 ? <p className="mt-6 rounded-lg bg-zinc-50 px-4 py-5 text-sm text-zinc-500 dark:bg-zinc-950/50">No operational events have been recorded for this device yet.</p> : <ol className="mt-5 divide-y divide-zinc-100 dark:divide-zinc-800">{events.map((event) => <li key={event.id} className="flex flex-col gap-1 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6"><div><p className="font-medium text-zinc-900 dark:text-zinc-50">{event.summary}</p><p className="mt-1 text-xs text-zinc-500">{event.category}</p></div><time className="shrink-0 text-sm text-zinc-500" dateTime={event.occurredAt.toISOString()}>{event.occurredAt.toLocaleString()}</time></li>)}</ol>}
+        </section>
       ) : null}
 
       {activeTab === "assignment" ? (
@@ -229,7 +261,7 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
                 {isPaused ? (
                   <>. Service is paused — renewal reminders are off until you resume.</>
                 ) : (
-                  <>. Set billing term and dates for this assignment below.</>
+                  <>. {isCanonicalAssignment ? "Canonical terms stay in the subscription workflow." : "Legacy renewal controls remain available below."}</>
                 )}
               </p>
 
@@ -272,6 +304,9 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
                 </div>
               ) : (
                 <div className="mt-4">
+                  {isCanonicalAssignment ? <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">This is a canonical-controlled service. Hardware replacement is available below; commercial terms, renewal anchors, and payments remain in <Link href="/admin/subscriptions/canonical" className="font-semibold underline">Subscriptions</Link>.</p> : null}
+                  {!isCanonicalAssignment ? <><h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Legacy service &amp; renewal controls</h3><p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">“Mark period paid” advances this legacy assignment’s next due date only. It does not settle an Invoice or create a Payment.</p></> : null}
+                  {!isCanonicalAssignment ? <>
                   <DeviceServiceAssignmentEditForm
                     key={`${openAssignment.id}-${openAssignment.updatedAt.toISOString()}`}
                     deviceId={device.id}
@@ -289,15 +324,17 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
                     intervalMonths={openAssignment.intervalMonths}
                     nextDueDate={openAssignment.nextDueDate}
                   />
+                  </> : null}
                   <DevicePauseServiceForm
                     deviceId={device.id}
                     assignmentId={openAssignment.id}
                     billingMode={openAssignment.customer.billingMode}
                   />
+                  <div id="replace-device" className="scroll-mt-6"><DeviceReplaceForm assignmentId={openAssignment.id} currentSimId={device.simCardId} availableSims={simsForSwap} devices={replacementDevices.map((row) => ({ id: row.id, label: `${row.label?.trim() || row.imei} — ${row.deviceModel.name} · ${row.imei}` }))} /></div>
                 </div>
               )}
               {device.status !== "decommissioned" && device.status !== "lost" ? (
-                <DeviceUnassignForm deviceId={device.id} />
+                <DeviceUnassignForm deviceId={device.id} canonical={isCanonicalAssignment} />
               ) : null}
             </section>
           ) : (
@@ -309,7 +346,7 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
               {canAssign ? (
                 <>
                   <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    Assign when the customer is ready. Status will change to{" "}
+                    Install hardware for an explicit legacy/manual service only. This does not create a subscription, invoice, recurring schedule, or payment. Status will change to{" "}
                     <strong className="font-medium text-zinc-800 dark:text-zinc-200">assigned</strong>.
                   </p>
                   <div className="mt-4">
@@ -356,6 +393,9 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
                   iccid: device.simCard.iccid,
                   msisdn: device.simCard.msisdn,
                   label: device.simCard.label,
+                  providerName: device.simCard.providerName,
+                  status: device.simCard.status,
+                  lastSyncedAt: device.simCard.lastSyncedAt,
                 }
               : null
           }

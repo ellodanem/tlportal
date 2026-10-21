@@ -41,6 +41,7 @@ export function DeviceAssignToCustomerForm({
   return (
     <form action={formAction} className="max-w-xl space-y-4">
       <input type="hidden" name="deviceId" value={deviceId} />
+      <input type="hidden" name="installIntent" value="legacy_existing_service" />
       {state.error ? (
         <p
           className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
@@ -101,7 +102,7 @@ export function DeviceAssignToCustomerForm({
             </option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-zinc-500">How often this device renews. You can change it anytime under Manage device.</p>
+        <p className="mt-1 text-xs text-zinc-500">Legacy assignment context only. This hardware action never creates or changes billing, invoices, schedules, or subscriptions.</p>
       </div>
 
       <SubmitButton disabled={noCustomers} />

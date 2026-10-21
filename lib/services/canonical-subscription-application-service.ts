@@ -862,46 +862,58 @@ export async function scheduleSubscriptionItemRate(input: {
   }
 }
 
+export async function replaceSubscriptionItemHardwareInTransaction(
+  tx: Prisma.TransactionClient,
+  input: {
+  subscriptionItemId: string;
+  replacementAssignmentId: string;
+  replacedOn: string;
+  },
+): Promise<void> {
+  const replacedOn = commercialDate(input.replacedOn, "replacedOn");
+  const item = await tx.subscriptionItem.findUnique({
+    where: { id: input.subscriptionItemId },
+    select: { id: true, customerSubscriptionId: true },
+  });
+  if (!item) validation("ITEM_NOT_FOUND", "Subscription item not found.");
+  const subscription = await requireEditableSubscription(tx, item.customerSubscriptionId);
+  await validateAssignmentForItem(tx, input.replacementAssignmentId, subscription.customerId);
+
+  const current = await tx.serviceAssignment.findFirst({
+    where: {
+      subscriptionItemId: item.id,
+      endDate: null,
+      status: { not: "cancelled" },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (current?.startDate && replacedOn < current.startDate) {
+    validation("INVALID_REPLACEMENT_DATE", "Replacement cannot predate the current assignment.");
+  }
+  if (current) {
+    await tx.serviceAssignment.update({
+      where: { id: current.id },
+      data: { endDate: replacedOn, status: "cancelled" },
+    });
+  }
+  await tx.serviceAssignment.update({
+    where: { id: input.replacementAssignmentId },
+    data: {
+      subscriptionItemId: item.id,
+      startDate: replacedOn,
+    },
+  });
+}
+
 export async function replaceSubscriptionItemHardware(input: {
   subscriptionItemId: string;
   replacementAssignmentId: string;
   replacedOn: string;
 }): Promise<void> {
-  const replacedOn = commercialDate(input.replacedOn, "replacedOn");
-  await prisma.$transaction(async (tx) => {
-    const item = await tx.subscriptionItem.findUnique({
-      where: { id: input.subscriptionItemId },
-      select: { id: true, customerSubscriptionId: true },
-    });
-    if (!item) validation("ITEM_NOT_FOUND", "Subscription item not found.");
-    const subscription = await requireEditableSubscription(tx, item.customerSubscriptionId);
-    await validateAssignmentForItem(tx, input.replacementAssignmentId, subscription.customerId);
-
-    const current = await tx.serviceAssignment.findFirst({
-      where: {
-        subscriptionItemId: item.id,
-        endDate: null,
-        status: { not: "cancelled" },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    if (current?.startDate && replacedOn < current.startDate) {
-      validation("INVALID_REPLACEMENT_DATE", "Replacement cannot predate the current assignment.");
-    }
-    if (current) {
-      await tx.serviceAssignment.update({
-        where: { id: current.id },
-        data: { endDate: replacedOn, status: "cancelled" },
-      });
-    }
-    await tx.serviceAssignment.update({
-      where: { id: input.replacementAssignmentId },
-      data: {
-        subscriptionItemId: item.id,
-        startDate: replacedOn,
-      },
-    });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  await prisma.$transaction(
+    (tx) => replaceSubscriptionItemHardwareInTransaction(tx, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 export async function transferSubscriptionItem(input: {

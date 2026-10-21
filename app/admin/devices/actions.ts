@@ -13,6 +13,10 @@ import {
 } from "@/lib/domain/service-pause";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import {
+  changeDeviceSim,
+  replaceDeviceForExistingAssignment,
+} from "@/lib/services/device-assignment-operation-service";
+import {
   pauseServiceAssignment,
   resumeServiceAssignment,
 } from "@/lib/services/service-pause-service";
@@ -43,32 +47,6 @@ async function simLinkErrorForNewDevice(simCardId: string): Promise<string | nul
   });
   if (openAssignment) {
     return "That SIM is tied to an active service assignment.";
-  }
-  return null;
-}
-
-async function simLinkErrorForExistingDevice(deviceId: string, simCardId: string): Promise<string | null> {
-  const sim = await prisma.simCard.findFirst({
-    where: { id: simCardId },
-    select: { id: true, device: { select: { id: true } } },
-  });
-  if (!sim) {
-    return "Selected SIM was not found.";
-  }
-  if (sim.device && sim.device.id !== deviceId) {
-    return "That SIM is already linked to another device.";
-  }
-  const otherAssignment = await prisma.serviceAssignment.findFirst({
-    where: {
-      simCardId,
-      endDate: null,
-      status: { not: "cancelled" },
-      deviceId: { not: deviceId },
-    },
-    select: { id: true },
-  });
-  if (otherAssignment) {
-    return "That SIM is tied to another active service assignment.";
   }
   return null;
 }
@@ -111,6 +89,7 @@ export async function registerDevice(
 
   const customerIdRaw = String(formData.get("customerId") ?? "").trim();
   const customerId = customerIdRaw.length ? customerIdRaw : null;
+  const installIntent = String(formData.get("installIntent") ?? "stock").trim();
 
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
   const intervalRaw = String(formData.get("intervalMonths") ?? "");
@@ -120,6 +99,12 @@ export async function registerDevice(
   }
   if (!imei || imei.length < 8) {
     return { error: "Enter a valid IMEI (at least 8 characters)." };
+  }
+  if (customerId && installIntent !== "legacy_existing_service") {
+    return { error: "Choose the explicit legacy installation intent, or register this device in stock first." };
+  }
+  if (customerId && condition === "faulty") {
+    return { error: "A faulty device cannot be installed to a customer." };
   }
 
   let startDate: Date | null = null;
@@ -155,9 +140,9 @@ export async function registerDevice(
   if (customerId) {
     const cust = await prisma.customer.findFirst({
       where: { id: customerId },
-      select: { id: true },
+      select: { id: true, archivedAt: true },
     });
-    if (!cust) {
+    if (!cust || cust.archivedAt) {
       return { error: "Selected customer was not found." };
     }
   }
@@ -301,12 +286,16 @@ export async function assignDeviceToCustomer(
   const customerId = String(formData.get("customerId") ?? "").trim();
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
   const intervalRaw = String(formData.get("intervalMonths") ?? "");
+  const installIntent = String(formData.get("installIntent") ?? "").trim();
 
   if (!deviceId) {
     return { error: "Missing device id." };
   }
   if (!customerId) {
     return { error: "Select a customer." };
+  }
+  if (installIntent !== "legacy_existing_service") {
+    return { error: "Choose the explicit legacy installation intent. New commercial services must be started from Subscriptions." };
   }
 
   const intervalParsed = parseSubscriptionIntervalMonths(intervalRaw);
@@ -326,13 +315,13 @@ export async function assignDeviceToCustomer(
 
   const device = await prisma.device.findUnique({
     where: { id: deviceId },
-    select: { id: true, status: true, simCardId: true },
+    select: { id: true, status: true, condition: true, simCardId: true },
   });
   if (!device) {
     return { error: "Device not found." };
   }
-  if (device.status === "decommissioned" || device.status === "lost") {
-    return { error: "Cannot assign a decommissioned or lost device." };
+  if (device.status !== "in_stock" || device.condition === "faulty") {
+    return { error: "Only sound in-stock devices can be installed." };
   }
 
   const existingOpen = await prisma.serviceAssignment.findFirst({
@@ -460,10 +449,13 @@ async function updateServiceAssignmentDatesInner(
       endDate: null,
       status: { not: "cancelled" },
     },
-    select: { id: true, customerId: true },
+    select: { id: true, customerId: true, subscriptionItemId: true },
   });
   if (!assignment) {
     return { error: "Active assignment not found for this device." };
+  }
+  if (assignment.subscriptionItemId) {
+    return { error: "Canonical service dates are managed from Subscriptions, not the hardware assignment." };
   }
 
   try {
@@ -517,10 +509,13 @@ export async function unassignDeviceFromCustomer(
       endDate: null,
       status: { not: "cancelled" },
     },
-    select: { id: true, customerId: true },
+    select: { id: true, customerId: true, subscriptionItemId: true },
   });
   if (!assignment) {
     return { error: "This device has no active assignment to end." };
+  }
+  if (assignment.subscriptionItemId) {
+    return { error: "This device belongs to a canonical commercial service. Use the authorized subscription transfer or lifecycle workflow; inventory cannot end it." };
   }
 
   try {
@@ -559,10 +554,6 @@ export async function unassignDeviceFromCustomer(
   return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }
 
-function deviceBlockedForSimEdit(status: string): boolean {
-  return status === "decommissioned" || status === "lost";
-}
-
 /**
  * Remove the SIM link from a device (and from its active service assignment, if any).
  */
@@ -580,56 +571,13 @@ export async function clearDeviceSimCard(
     return { error: "Missing device id." };
   }
 
-  const device = await prisma.device.findUnique({
-    where: { id: deviceId },
-    select: { id: true, status: true, simCardId: true },
-  });
-  if (!device) {
-    return { error: "Device not found." };
-  }
-  if (deviceBlockedForSimEdit(device.status)) {
-    return { error: "Cannot change SIM on a decommissioned or lost device." };
-  }
-  if (!device.simCardId) {
-    return { error: "This device has no linked SIM to remove." };
-  }
-
-  const prevSimId = device.simCardId;
-
-  const assignment = await prisma.serviceAssignment.findFirst({
-    where: {
-      deviceId,
-      endDate: null,
-      status: { not: "cancelled" },
-    },
-    select: { id: true, customerId: true },
-  });
-
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.device.update({
-        where: { id: deviceId },
-        data: { simCardId: null },
-      });
-      if (assignment) {
-        await tx.serviceAssignment.update({
-          where: { id: assignment.id },
-          data: { simCardId: null },
-        });
-      }
-    });
+    const result = await changeDeviceSim({ deviceId, nextSimCardId: null, actorUserId: session.sub, reason: "Unlinked from Device SIM tab" });
+    if (!result.previousSimId) return { error: "This device has no linked SIM to remove." };
+    revalidateSimChange(deviceId, result.previousSimId, null, result.customerId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg || "Could not remove SIM link." };
-  }
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/devices");
-  revalidatePath(`/admin/devices/${deviceId}/edit`);
-  revalidatePath("/admin/sims");
-  revalidatePath(`/admin/sims/${prevSimId}`);
-  if (assignment) {
-    revalidatePath(`/admin/customers/${assignment.customerId}`);
   }
   return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }
@@ -657,76 +605,61 @@ export async function updateDeviceLinkedSim(
     };
   }
 
-  const device = await prisma.device.findUnique({
-    where: { id: deviceId },
-    select: { id: true, status: true, simCardId: true },
-  });
-  if (!device) {
-    return { error: "Device not found." };
-  }
-  if (deviceBlockedForSimEdit(device.status)) {
-    return { error: "Cannot change SIM on a decommissioned or lost device." };
-  }
-
-  const simErr = await simLinkErrorForExistingDevice(deviceId, simCardIdRaw);
-  if (simErr) {
-    return { error: simErr };
-  }
-
-  if (device.simCardId === simCardIdRaw) {
-    return { error: null, next: `/admin/devices/${deviceId}/edit` };
-  }
-
-  const prevSimId = device.simCardId;
-  const assignment = await prisma.serviceAssignment.findFirst({
-    where: {
-      deviceId,
-      endDate: null,
-      status: { not: "cancelled" },
-    },
-    select: { id: true, customerId: true },
-  });
-
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.device.update({
-        where: { id: deviceId },
-        data: { simCardId: simCardIdRaw },
-      });
-      if (assignment) {
-        await tx.serviceAssignment.update({
-          where: { id: assignment.id },
-          data: { simCardId: simCardIdRaw },
-        });
-      }
-      await tx.operationalEvent.create({
-        data: {
-          category: "sim.swapped",
-          summary: prevSimId ? "SIM swapped on device" : "SIM linked to device",
-          deviceId,
-          customerId: assignment?.customerId,
-          actorUserId: session.sub,
-          payload: { previousSimId: prevSimId, nextSimId: simCardIdRaw, assignmentId: assignment?.id ?? null },
-        },
-      });
-    });
+    const result = await changeDeviceSim({ deviceId, nextSimCardId: simCardIdRaw, actorUserId: session.sub, reason: "Changed from Device SIM tab" });
+    revalidateSimChange(deviceId, result.previousSimId, result.nextSimId, result.customerId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg || "Could not update linked SIM." };
   }
+  return { error: null, next: `/admin/devices/${deviceId}/edit` };
+}
 
+function revalidateSimChange(deviceId: string, previousSimId: string | null, nextSimId: string | null, customerId: string | null) {
   revalidatePath("/admin");
   revalidatePath("/admin/devices");
   revalidatePath(`/admin/devices/${deviceId}/edit`);
   revalidatePath("/admin/sims");
-  if (prevSimId) {
-    revalidatePath(`/admin/sims/${prevSimId}`);
+  if (previousSimId) revalidatePath(`/admin/sims/${previousSimId}`);
+  if (nextSimId) revalidatePath(`/admin/sims/${nextSimId}`);
+  if (customerId) revalidatePath(`/admin/customers/${customerId}`);
+}
+
+export async function replaceDeviceWithinService(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const replacementDeviceId = String(formData.get("replacementDeviceId") ?? "").trim();
+  const effectiveDate = String(formData.get("effectiveDate") ?? "").trim();
+  const simDisposition = String(formData.get("simDisposition") ?? "").trim();
+  const replacementSimCardId = String(formData.get("replacementSimCardId") ?? "").trim() || null;
+  const oldHardwareDisposition = String(formData.get("oldHardwareDisposition") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  if (!assignmentId || !replacementDeviceId || !effectiveDate) return { error: "Choose the installation, replacement device, and effective date." };
+  if (!["move_current", "select", "none"].includes(simDisposition)) return { error: "Choose how the SIM should be handled." };
+  if (!["in_stock", "faulty_returned", "lost"].includes(oldHardwareDisposition)) return { error: "Choose the old hardware disposition." };
+  try {
+    const result = await replaceDeviceForExistingAssignment({
+      assignmentId, replacementDeviceId, effectiveDate,
+      simDisposition: simDisposition as "move_current" | "select" | "none",
+      replacementSimCardId,
+      oldHardwareDisposition: oldHardwareDisposition as "in_stock" | "faulty_returned" | "lost",
+      reason, actorUserId: session.sub,
+    });
+    revalidatePath("/admin");
+    revalidatePath("/admin/devices");
+    revalidatePath(`/admin/devices/${result.previousDeviceId}/edit`);
+    revalidatePath(`/admin/devices/${result.replacementDeviceId}/edit`);
+    revalidatePath(`/admin/customers/${result.customerId}`);
+    revalidateSimChange(result.previousDeviceId, result.previousSimId, result.nextSimId, result.customerId);
+    return { error: null, next: `/admin/devices/${result.replacementDeviceId}/edit`, message: "Hardware replaced. Commercial terms and billing dates were not changed." };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { error: message || "Could not replace hardware." };
   }
-  revalidatePath(`/admin/sims/${simCardIdRaw}`);
-  if (assignment) {
-    revalidatePath(`/admin/customers/${assignment.customerId}`);
-  }
-  return { error: null, next: `/admin/devices/${deviceId}/edit` };
 }
 
 function revalidateAfterServicePause(customerId: string, deviceId: string, simCardId: string | null) {
@@ -784,12 +717,16 @@ export async function pauseServiceAssignmentAction(
   const assignment = await prisma.serviceAssignment.findFirst({
     where: { id: assignmentId, deviceId },
     select: {
+      subscriptionItemId: true,
       customer: { select: { billingMode: true } },
       device: { select: { simCardId: true } },
     },
   });
   if (!assignment) {
     return { error: "Assignment not found for this device." };
+  }
+  if (assignment.subscriptionItemId) {
+    return { error: "Pause or resume canonical services from the authorized subscription workflow." };
   }
 
   const result = await pauseServiceAssignment({
@@ -840,12 +777,16 @@ export async function resumeServiceAssignmentAction(
   const assignment = await prisma.serviceAssignment.findFirst({
     where: { id: assignmentId, deviceId },
     select: {
+      subscriptionItemId: true,
       customer: { select: { billingMode: true } },
       device: { select: { simCardId: true } },
     },
   });
   if (!assignment) {
     return { error: "Assignment not found for this device." };
+  }
+  if (assignment.subscriptionItemId) {
+    return { error: "Pause or resume canonical services from the authorized subscription workflow." };
   }
 
   const result = await resumeServiceAssignment({
