@@ -1,6 +1,8 @@
 export type CustomerCollectionInvoice = {
   id: string;
   source: "native" | "stripe";
+  /** Whether this invoice belongs to the customer's recurring service agreement. */
+  subscriptionInvoice?: boolean;
   status: string;
   number: string | null;
   amount: number;
@@ -117,9 +119,13 @@ export function deriveCustomerCollectionSummary(input: {
   billingAccountStatus: string | null;
   invoices: CustomerCollectionInvoice[];
   deliveries: CustomerCollectionDelivery[];
+  /** Keep subscription payment history separate from hardware and other one-off charges. */
+  hasSubscriptionContext?: boolean;
 }): CustomerCollectionSummary {
   const invoices = [...input.invoices].sort((a, b) => b.invoiceDate.getTime() - a.invoiceDate.getTime());
-  const latestInvoice = invoices[0] ?? null;
+  const subscriptionInvoices = invoices.filter((invoice) => invoice.subscriptionInvoice);
+  const activityInvoices = input.hasSubscriptionContext ? subscriptionInvoices : invoices;
+  const latestInvoice = activityInvoices[0] ?? null;
   const nativeOpen = invoices.filter((invoice) => invoice.source === "native" && NATIVE_OPEN.has(invoice.status.toLowerCase()) && invoice.amountDue > 0);
   const providerOpen = invoices.filter((invoice) => invoice.source === "stripe" && PROVIDER_OPEN.has(invoice.status.toLowerCase()));
   // Provider invoices expose their billed total, not a verified remaining balance. Never
@@ -127,8 +133,8 @@ export function deriveCustomerCollectionSummary(input: {
   const outstandingAmount = nativeOpen.reduce((total, invoice) => total + invoice.amountDue, 0);
   const providerBalanceRequiresReview = providerOpen.length > 0;
   const currency = nativeOpen[0]?.currency ?? latestInvoice?.currency ?? "XCD";
-  const lastPaymentAt = latestDate(invoices.map((invoice) => invoice.paidAt));
-  const paidThrough = latestDate(invoices.filter((invoice) => invoice.paidAt).map((invoice) => invoice.periodEnd));
+  const lastPaymentAt = latestDate(activityInvoices.map((invoice) => invoice.paidAt));
+  const paidThrough = latestDate(activityInvoices.filter((invoice) => invoice.paidAt).map((invoice) => invoice.periodEnd));
   const statusSignals = [...input.subscriptionStatuses, input.billingAccountStatus ?? ""].map((status) => status.toLowerCase());
   const collectionPastDue = input.collectionHealthStatuses.some((status) => ["past_due", "action_required"].includes(status.toLowerCase()));
   const failed = statusSignals.some((status) => FAILED_SUBSCRIPTION.has(status))

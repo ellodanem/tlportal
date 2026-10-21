@@ -46,8 +46,13 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
   ]);
   const { customer, invoilessConfigured, stripeConfigured, invoilessId, billingSetup, stripeInvoices, paymentDeclineFollowUp, outstandingReminderCandidates, subscriptionSummary, renewalAssignments } = data;
   const title = customerDisplayName(customer);
-  const primaryInvoice = recentInvoices.find((invoice) => ["open", "partially_paid", "overdue"].includes(invoice.status)) ?? recentInvoices[0] ?? null;
   const hasSubscriptions = Boolean(subscriptionSummary) || renewalAssignments.length > 0;
+  // A paid one-off (for example, hardware or installation) must not replace
+  // the reconciled Stripe subscription invoice in the collection summary.
+  // Subscription customers keep one-off balances in the invoice list instead.
+  const primaryInvoice = hasSubscriptions
+    ? null
+    : recentInvoices.find((invoice) => ["open", "partially_paid", "overdue"].includes(invoice.status)) ?? null;
   const declineEmailPreview = paymentDeclineFollowUp ? buildPaymentDeclineEmailPreview({ greetingName: customer.firstName?.trim() || customer.company?.trim() || title, amountLabel: formatMoney(paymentDeclineFollowUp.amount, paymentDeclineFollowUp.currency), kind: paymentDeclineFollowUp.kind, invoiceNumber: paymentDeclineFollowUp.invoiceNumber, payUrl: paymentDeclineFollowUp.payUrl, declineCode: paymentDeclineFollowUp.declineCode }) : null;
 
   return <div className="flex flex-col gap-5">

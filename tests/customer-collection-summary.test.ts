@@ -94,6 +94,38 @@ test("a payment covering the overdue service date remains current", () => {
   assert.match(result.headline, /Paid through/);
 });
 
+test("a one-off payment does not replace subscription payment history", () => {
+  const subscriptionInvoice = stripeInvoice({
+    id: "subscription-invoice-940",
+    number: "TL-INV-100940",
+    subscriptionInvoice: true,
+    invoiceDate: new Date("2026-10-15T00:00:00.000Z"),
+    periodStart: new Date("2026-10-15T00:00:00.000Z"),
+    periodEnd: new Date("2026-11-15T00:00:00.000Z"),
+    paidAt: new Date("2026-10-15T02:00:00.000Z"),
+  });
+  const installationInvoice = stripeInvoice({
+    id: "one-off-invoice-936",
+    number: "TL-INV-100936",
+    source: "native",
+    subscriptionInvoice: false,
+    invoiceDate: new Date("2026-10-18T00:00:00.000Z"),
+    periodStart: null,
+    periodEnd: null,
+    paidAt: new Date("2026-10-18T02:00:00.000Z"),
+    hostedInvoiceUrl: null,
+  });
+
+  const result = derive({
+    hasSubscriptionContext: true,
+    invoices: [installationInvoice, subscriptionInvoice],
+  });
+
+  assert.equal(result.latestInvoice?.number, "TL-INV-100940");
+  assert.equal(result.lastPaymentAt?.toISOString(), "2026-10-15T02:00:00.000Z");
+  assert.equal(result.paidThrough?.toISOString(), "2026-11-15T00:00:00.000Z");
+});
+
 test("native invoice delivery timestamps answer whether an invoice was sent", () => {
   const invoice: CustomerCollectionInvoice = {
     ...stripeInvoice(),

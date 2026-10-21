@@ -5040,3 +5040,38 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - docs: record final push context
 
+
+### 2026-10-21 02:26 UTC — commit `95c4f11`
+
+- feat(inventory): add guided replacement and SIM swap flows
+
+
+### 2026-10-21 02:45 UTC — commit `4a801ac`
+
+- Repair four-month legacy subscriptions
+
+
+### 2026-10-21 02:45 UTC — pre-push (`main` → origin) @ `4a801ac`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 03:25 UTC — commit `ef2abff`
+
+- feat(subscriptions): refresh canonical workspace
+
+
+### 2026-10-21 03:25 UTC — pre-push (`main` → origin) @ `ef2abff`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 03:28 UTC — commit `8df3927`
+
+- feat(subscriptions): add service table navigation
+
+
+### 2026-10-21 03:28 UTC — pre-push (`main` → origin) @ `8df3927`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

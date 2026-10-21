@@ -28,6 +28,8 @@ export async function loadCustomerCollectionSummary(customerId: string, asOf = n
       take: 24,
       select: {
         id: true,
+        kind: true,
+        customerSubscriptionId: true,
         status: true,
         displayNumber: true,
         providerInvoiceNumber: true,
@@ -48,6 +50,8 @@ export async function loadCustomerCollectionSummary(customerId: string, asOf = n
       take: 24,
       select: {
         id: true,
+        kind: true,
+        customerSubscriptionId: true,
         status: true,
         number: true,
         total: true,
@@ -83,10 +87,12 @@ export async function loadCustomerCollectionSummary(customerId: string, asOf = n
     subscriptionStatuses: subscriptions.map((subscription) => subscription.status),
     collectionHealthStatuses: subscriptions.map((subscription) => subscription.collectionHealth ?? ""),
     billingAccountStatus: billingAccount?.status ?? null,
+    hasSubscriptionContext: subscriptions.length > 0,
     invoices: [
       ...billingInvoices.map((invoice) => ({
         id: invoice.id,
         source: "stripe" as const,
+        subscriptionInvoice: invoice.kind === "subscription" || invoice.customerSubscriptionId != null,
         status: invoice.status,
         number: invoice.displayNumber ?? invoice.providerInvoiceNumber ?? invoice.externalInvoiceId,
         amount: Number(invoice.amountXcd),
@@ -106,6 +112,7 @@ export async function loadCustomerCollectionSummary(customerId: string, asOf = n
       ...nativeInvoices.map((invoice) => ({
         id: invoice.id,
         source: "native" as const,
+        subscriptionInvoice: invoice.kind === "recurring" || invoice.customerSubscriptionId != null,
         status: invoice.status,
         number: invoice.number,
         amount: Number(invoice.total),

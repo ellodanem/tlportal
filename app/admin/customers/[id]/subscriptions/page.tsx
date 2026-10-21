@@ -85,8 +85,31 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   });
   if (!customer) notFound();
 
-  const [loadedSubscriptions, pausedAssignments, collectionSummary] = await Promise.all([
+  const [loadedSubscriptions, legacyAssignments, pausedAssignments, collectionSummary] = await Promise.all([
     Promise.all(customer.customerSubscriptions.map((subscription) => getCanonicalSubscriptionAdminDetail(subscription.id))),
+    prisma.serviceAssignment.findMany({
+      where: {
+        customerId: customer.id,
+        subscriptionItemId: null,
+        endDate: null,
+        status: { in: ["active", "due_soon", "overdue"] },
+      },
+      orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        startDate: true,
+        intervalMonths: true,
+        device: {
+          select: {
+            id: true,
+            label: true,
+            imei: true,
+            deviceModel: { select: { name: true } },
+            simCard: { select: { iccid: true, label: true } },
+          },
+        },
+      },
+    }),
     prisma.serviceAssignment.findMany({
       where: {
         customerId: customer.id,
@@ -151,6 +174,25 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
         <div className={`min-h-35 rounded-2xl border p-5 shadow-sm ${attentionCount ? "border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/25" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}`}><div className="flex items-start gap-3"><span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${attentionCount ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300" : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"}`}><svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="16" rx="2" /><path strokeLinecap="round" d="M7 3v4M17 3v4M3 10h18" /></svg></span><div><p className={`text-xs font-semibold uppercase tracking-wide ${attentionCount ? "text-amber-800 dark:text-amber-300" : "text-zinc-500"}`}>Next renewal</p><p className="mt-2 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{date(nextRenewal)}</p><p className="mt-1 text-xs leading-5 text-zinc-500">{attentionCount ? `${attentionCount} agreement${attentionCount === 1 ? "" : "s"} need attention` : "Agreement schedule · see collection status above"}</p></div></div></div>
       </section>
 
+      {legacyAssignments.length ? <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm sm:p-6 dark:border-blue-900/60 dark:bg-blue-950/20">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Legacy installation assignments</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">These devices are assigned to the customer outside the subscription workflow. They remain visible while installation is pending, but do not create a billable GPS service, invoice, or subscription.</p>
+          </div>
+          <Link href={`/admin/subscriptions/${customer.id}/renewals`} className="w-fit shrink-0 text-sm font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">Legacy renewal tools</Link>
+        </div>
+        <div className="mt-5 space-y-3">{legacyAssignments.map((assignment) => {
+          const deviceLabel = assignment.device.label?.trim() || assignment.device.deviceModel.name;
+          const simLabel = assignment.device.simCard?.label?.trim() || assignment.device.simCard?.iccid || "No SIM linked";
+          return <div key={assignment.id} className="grid gap-4 rounded-xl border border-blue-200/80 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.9fr)_minmax(0,.8fr)_auto] lg:items-center lg:gap-0 dark:border-blue-900/60 dark:bg-zinc-900">
+            <div className="min-w-0 lg:pr-5"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-zinc-950 dark:text-zinc-50">{deviceLabel}</p><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200">Legacy assignment</span></div><p className="mt-1 truncate text-xs text-zinc-500" title={assignment.device.imei}>{assignment.device.deviceModel.name} / {assignment.device.imei}</p></div>
+            <div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:border-r sm:pr-5 lg:border-l lg:border-r-0 lg:pl-5 lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Installation / service start</p><p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{date(assignment.startDate)}</p><p className="mt-1 text-xs text-zinc-500">{assignment.startDate ? "Confirm completion at the scheduled visit" : "Date not recorded"}</p></div>
+            <div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:pl-5 lg:border-l lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Billing context</p><p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{assignment.intervalMonths ? canonicalIntervalLabel(assignment.intervalMonths) : "Term not set"}</p><p className="mt-1 truncate text-xs text-zinc-500" title={simLabel}>SIM / {simLabel}</p></div>
+            <Link href={`/admin/devices/${assignment.device.id}/edit?tab=assignment`} className="w-fit border-t border-zinc-100 pt-4 text-sm font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-zinc-800 dark:text-emerald-400">View assignment</Link>
+          </div>;
+        })}</div>
+      </section> : null}
       {subscriptions.length ? <div className="space-y-5">{subscriptions.map((subscription) => {
         const currency = subscription.currency ?? "XCD";
         const displayName = canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths);
