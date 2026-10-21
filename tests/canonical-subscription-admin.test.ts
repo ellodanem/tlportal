@@ -236,6 +236,9 @@ test("UI routes include detail, empty, loading, error and price-history states",
   assert.match(overview, /Billing records and transition history/);
   assert.match(overview, /Operational MRR/);
   assert.match(overview, /Collection alerts/);
+  assert.match(overview, /Subscription insights/);
+  assert.match(overview, /Next actions/);
+  assert.match(overview, /Quick links/);
   assert.match(overview, /Subscriptions pagination/);
   assert.match(overview, /canonicalSubscriptionUiVisible/);
   assert.match(detail, /canonicalSubscriptionUiEnabled/);
