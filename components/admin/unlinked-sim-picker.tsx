@@ -14,12 +14,15 @@ export function UnlinkedSimPicker({
   sims,
   availabilityHint = defaultAvailabilityHint,
   inputName = "simCardId",
+  onSelectionChange,
 }: {
   sims: UnlinkedSimRow[];
   /** Replaces the default explanation under the filter field (e.g. swap vs new device). */
   availabilityHint?: string;
   /** Allows a guarded multi-intent form to use a distinct server field. */
   inputName?: string;
+  /** Lets a parent workflow show the selected SIM in its review step. */
+  onSelectionChange?: (sim: UnlinkedSimRow | null) => void;
 }) {
   const listId = useId();
   const [query, setQuery] = useState("");
@@ -61,6 +64,7 @@ export function UnlinkedSimPicker({
             onClick={() => {
               setSelectedId(null);
               setQuery("");
+              onSelectionChange?.(null);
             }}
           >
             Clear SIM
@@ -109,7 +113,10 @@ export function UnlinkedSimPicker({
                   className={`flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm transition hover:bg-white dark:hover:bg-zinc-800 ${
                     selectedId === s.id ? "bg-emerald-100/80 dark:bg-emerald-950/40" : ""
                   }`}
-                  onClick={() => setSelectedId(s.id)}
+                  onClick={() => {
+                    setSelectedId(s.id);
+                    onSelectionChange?.(s);
+                  }}
                 >
                   <span className="font-mono text-xs text-zinc-900 dark:text-zinc-50">{s.iccid}</span>
                   <span className="text-xs text-zinc-600 dark:text-zinc-400">
