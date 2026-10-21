@@ -56,6 +56,16 @@ test("monthly cycle total and normalized MRR are displayed separately", () => {
   assert.equal(monthly.normalizedMrr, "70.00");
 });
 
+test("fourteen quarterly services preserve EC$60 actual rates and normalize to EC$280 MRR", () => {
+  const serviceRate = 60;
+  const serviceCount = 14;
+  const cycleTotal = serviceRate * serviceCount;
+  const quarterly = row({ itemCount: serviceCount, recurringCycleTotal: cycleTotal.toFixed(2), billingIntervalMonths: 3 });
+  assert.equal(cycleTotal, 840);
+  assert.equal(quarterly.recurringCycleTotal, "840.00");
+  assert.equal(quarterly.normalizedMrr, "280.00");
+  assert.equal(normalizedMonthlyAmount("60.00", 3), "20.00");
+});
 test("explicit annual amount is normalized without replacing its cycle total", () => {
   const annual = row({ recurringCycleTotal: "275.00", billingIntervalMonths: 12 });
   assert.equal(annual.recurringCycleTotal, "275.00");
@@ -207,18 +217,20 @@ test("current and history views distinguish terminated arrangements without comb
 });
 
 test("UI routes include detail, empty, loading, error and price-history states", async () => {
-  const [overview, detail, demo, loading, error, preflight] = await Promise.all([
+  const [overview, detailPage, detailWorkspace, demo, loading, error, preflight] = await Promise.all([
     readFile("app/admin/subscriptions/canonical/page.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/[subscriptionId]/page.tsx", "utf8"),
+    readFile("components/admin/canonical-subscription-detail-workspace.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/demo/page.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/loading.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/error.tsx", "utf8"),
     readFile("docs/production-preview-preflight.md", "utf8"),
   ]);
+  const detail = `${detailPage}\n${detailWorkspace}`;
   assert.match(overview, /No subscriptions in this view/);
-  assert.match(detail, /Billing summary/);
+  assert.match(detail, /Billing & renewal/);
   assert.match(detail, /Price history/);
-  assert.match(detail, /Hardware assignment history/);
+  assert.match(detail, /Hardware assignments/);
   assert.match(loading, /aria-busy/);
   assert.match(error, /No billing action was performed/);
   assert.match(overview, /Billing records and transition history/);
@@ -267,14 +279,18 @@ test("canonical actions retain server-side authorization and do not directly inv
   assert.doesNotMatch(actions, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.checkout/);
 });
 
-test("detail presents negotiated classifications and server-backed annual preview", async () => {
-  const detail = await readFile("app/admin/subscriptions/canonical/[subscriptionId]/page.tsx", "utf8");
-  assert.match(detail, /latestRate\.classification/);
+test("detail presents actual cycle prices and server-backed annual preview", async () => {
+  const [detailPage, detailWorkspace] = await Promise.all([
+    readFile("app/admin/subscriptions/canonical/[subscriptionId]/page.tsx", "utf8"),
+    readFile("components/admin/canonical-subscription-detail-workspace.tsx", "utf8"),
+  ]);
+  const detail = `${detailPage}\n${detailWorkspace}`;
+  assert.match(detail, /rate\.classification/);
   assert.match(detail, /previewAnnualSubscriptionAddition/);
-  assert.match(detail, /not an adjustment invoice or payment obligation/);
-  assert.match(detail, /Annual adjustment status/);
-  assert.match(detail, /Provider relationship and reconciliation/);
-  assert.match(detail, /Live provider observation is unavailable/);
+  assert.match(detail, /Preview only/);
+  assert.match(detail, /Annual addition and adjustment preview/);
+  assert.match(detail, /Provider relationship and operations/);
+  assert.match(detail, /does not claim live Stripe state/);
 });
 
 test("canonical workflow confirms commercial changes and never adds direct billing controls", async () => {
