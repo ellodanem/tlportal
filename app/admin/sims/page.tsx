@@ -8,24 +8,13 @@ import { prisma } from "@/lib/db";
 /** Usage totals change after sync/import; avoid serving a stale full-route cache for this page. */
 export const dynamic = "force-dynamic";
 
-type Props = { searchParams: Promise<{ usage?: string; avg?: string }> };
-
-function parseAvgWindowDays(avg: string | undefined): 7 | 30 | 90 {
-  if (avg === "7") return 7;
-  if (avg === "90") return 90;
-  return 30;
-}
-
-export default async function AdminSimsPage({ searchParams }: Props) {
-  const { usage: usageParam, avg: avgParam } = await searchParams;
-  const usageLowFirst = usageParam === "asc";
-  const avgWindowDays = parseAvgWindowDays(avgParam);
+export default async function AdminSimsPage() {
 
   const sims = await prisma.simCard.findMany({
     orderBy: [
       {
         usedDataMB: {
-          sort: usageLowFirst ? "asc" : "desc",
+          sort: "desc",
           nulls: "last",
         },
       },
@@ -70,7 +59,6 @@ export default async function AdminSimsPage({ searchParams }: Props) {
     <SimsTableClient
       intro={
         <>
-          <Link href="/admin/sims/new" className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500">+ Add SIM</Link>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">SIM cards</h1>
           <p className="mt-1 max-w-xl text-sm text-zinc-600 dark:text-zinc-400">
             Use <strong className="font-medium text-zinc-700 dark:text-zinc-300">Import SIMs from 1NCE</strong> to load
@@ -79,11 +67,12 @@ export default async function AdminSimsPage({ searchParams }: Props) {
         </>
       }
       rows={rows}
-      usageLowFirst={usageLowFirst}
-      avgWindowDays={avgWindowDays}
       headerActions={
         <>
           <ImportSimsButton />
+          <Link href="/admin/sims/new" className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500">
+            + Add SIM manually
+          </Link>
           <a
             href={ONE_NCE_CUSTOMER_PORTAL_DASHBOARD}
             target="_blank"
