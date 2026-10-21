@@ -129,7 +129,7 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
           serviceAssignments: {
             orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
             include: {
-              device: { select: { id: true, label: true, deviceModel: { select: { name: true } } } },
+              device: { select: { id: true, label: true, imei: true, simCard: { select: { id: true, iccid: true, label: true } }, deviceModel: { select: { name: true } } } },
             },
           },
         },
