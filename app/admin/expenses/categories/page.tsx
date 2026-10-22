@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 export default async function ExpenseCategoriesPage() {
   const categories = await prisma.expenseCategory.findMany({
     orderBy: { sortOrder: "asc" },
-    include: { _count: { select: { expenses: true } } },
+    include: { _count: { select: { bills: true } } },
   });
 
   const rows = categories.map((c) => ({
@@ -14,13 +14,13 @@ export default async function ExpenseCategoriesPage() {
     name: c.name,
     description: c.description,
     isActive: c.isActive,
-    expenseCount: c._count.expenses,
+    expenseCount: c._count.bills,
   }));
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href="/admin/expenses" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+        <Link href="/admin/bills" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
           ← Expenses
         </Link>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Expense categories</h1>

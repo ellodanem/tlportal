@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
+import { removeExpenseReceipt, uploadExpenseReceipt } from "@/lib/expenses/receipt-storage";
 import { createVendorBill, recordVendorBillPayment, updateVendorBill, voidVendorBill } from "@/lib/services/vendor-bill-service";
 import type { ExpensePaymentMethod } from "@prisma/client";
 
@@ -41,25 +42,55 @@ async function readBill(formData: FormData) {
     billDate,
     dueDate,
     notes: text(formData, "notes"),
-    status: String(formData.get("status") ?? "draft") === "open" ? "open" as const : "draft" as const,
+    categoryId: text(formData, "categoryId"),
+    customerId: text(formData, "customerId"),
+    deviceId: text(formData, "deviceId"),
+    receiptStoragePath: undefined as string | undefined,
+    status: "open" as const,
   };
 }
 
 export async function saveVendorBillAction(_prev: BillActionState, formData: FormData): Promise<BillActionState> {
   const session = await getSession();
   if (!session) return { error: "You must be signed in." };
+  let uploadedReceiptPath: string | null = null;
+  let receiptPersisted = false;
   try {
     const input = await readBill(formData);
     const billId = text(formData, "billId");
-    if (billId) await updateVendorBill(billId, input);
+    const paymentStatus = String(formData.get("paymentStatus") ?? "unpaid") === "paid" ? "paid" : "unpaid";
+    const method = String(formData.get("method") ?? "bank_transfer") as ExpensePaymentMethod;
+    if (!(new Set<ExpensePaymentMethod>(["cash", "bank_transfer", "card", "cheque", "other"])).has(method)) return { error: "Invalid payment method." };
+    const receipt = formData.get("receipt");
+    if (receipt instanceof File && receipt.size > 0) {
+      const uploaded = await uploadExpenseReceipt(receipt);
+      if ("error" in uploaded) return { error: uploaded.error };
+      uploadedReceiptPath = uploaded.path;
+      input.receiptStoragePath = uploaded.path;
+    }
+    if (billId) {
+      const existing = await prisma.vendorBill.findUnique({ where: { id: billId }, select: { receiptStoragePath: true } });
+      await updateVendorBill(billId, input);
+      receiptPersisted = Boolean(uploadedReceiptPath);
+      if (paymentStatus === "paid") {
+        await recordVendorBillPayment({ billId, amount: input.total, method, paidAt: input.billDate, reference: text(formData, "paymentReference"), recordedById: session.sub });
+      }
+      if (uploadedReceiptPath && existing?.receiptStoragePath) await removeExpenseReceipt(existing.receiptStoragePath);
+    }
     else {
-      const id = await createVendorBill({ ...input, createdById: session.sub });
+      const id = await createVendorBill({
+        ...input,
+        createdById: session.sub,
+        initialPayment: paymentStatus === "paid" ? { method, paidAt: input.billDate, reference: text(formData, "paymentReference"), recordedById: session.sub } : null,
+      });
+      receiptPersisted = Boolean(uploadedReceiptPath);
       revalidatePath("/admin/bills");
       return { ok: true, next: `/admin/bills/${id}` };
     }
     revalidateBillPaths(billId);
     return { ok: true, next: `/admin/bills/${billId}` };
   } catch (error) {
+    if (uploadedReceiptPath && !receiptPersisted) await removeExpenseReceipt(uploadedReceiptPath);
     return { error: error instanceof Error ? error.message : "Could not save bill." };
   }
 }
@@ -100,6 +131,7 @@ export async function voidVendorBillAction(_prev: BillActionState, formData: For
 
 function revalidateBillPaths(billId: string) {
   revalidatePath("/admin/bills");
+  revalidatePath("/admin/expenses");
   revalidatePath("/admin/reports");
   revalidatePath(`/admin/bills/${billId}`);
 }

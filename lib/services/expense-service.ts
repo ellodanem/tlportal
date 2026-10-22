@@ -3,74 +3,7 @@ import "server-only";
 import type { ExpensePaymentMethod, Prisma } from "@prisma/client";
 
 import { monthRangeUtc } from "@/lib/domain/expenses";
-import { toMoneyString } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
-
-export type ExpenseInput = {
-  vendor: string;
-  vendorId?: string | null;
-  description?: string | null;
-  amount: number;
-  currency?: string;
-  expenseDate: Date;
-  method?: ExpensePaymentMethod;
-  reference?: string | null;
-  notes?: string | null;
-  categoryId?: string | null;
-  customerId?: string | null;
-  deviceId?: string | null;
-  receiptStoragePath?: string | null;
-  recordedById?: string | null;
-};
-
-export async function createExpense(input: ExpenseInput): Promise<string> {
-  const created = await prisma.expense.create({
-    data: {
-      vendor: input.vendor,
-      vendorId: input.vendorId ?? null,
-      description: input.description ?? null,
-      amount: toMoneyString(input.amount),
-      currency: (input.currency ?? "XCD").toUpperCase(),
-      expenseDate: input.expenseDate,
-      method: input.method ?? "card",
-      reference: input.reference ?? null,
-      notes: input.notes ?? null,
-      categoryId: input.categoryId ?? null,
-      customerId: input.customerId ?? null,
-      deviceId: input.deviceId ?? null,
-      receiptStoragePath: input.receiptStoragePath ?? null,
-      recordedById: input.recordedById ?? null,
-    },
-    select: { id: true },
-  });
-  return created.id;
-}
-
-export async function updateExpense(expenseId: string, input: ExpenseInput): Promise<void> {
-  await prisma.expense.update({
-    where: { id: expenseId },
-    data: {
-      vendor: input.vendor,
-      vendorId: input.vendorId ?? null,
-      description: input.description ?? null,
-      amount: toMoneyString(input.amount),
-      currency: (input.currency ?? "XCD").toUpperCase(),
-      expenseDate: input.expenseDate,
-      method: input.method ?? "card",
-      reference: input.reference ?? null,
-      notes: input.notes ?? null,
-      categoryId: input.categoryId ?? null,
-      customerId: input.customerId ?? null,
-      deviceId: input.deviceId ?? null,
-      recordedById: input.recordedById ?? null,
-      ...(input.receiptStoragePath !== undefined ? { receiptStoragePath: input.receiptStoragePath } : {}),
-    },
-  });
-}
-
-export async function deleteExpense(expenseId: string): Promise<void> {
-  await prisma.expense.delete({ where: { id: expenseId } });
-}
 
 export async function expenseMonthlyTotals(year: number, month: number): Promise<{
   total: number;
@@ -78,10 +11,10 @@ export async function expenseMonthlyTotals(year: number, month: number): Promise
   byCategory: { categoryId: string | null; categoryName: string; total: number; count: number }[];
 }> {
   const { start, end } = monthRangeUtc(year, month);
-  const rows = await prisma.expense.findMany({
-    where: { expenseDate: { gte: start, lt: end } },
+  const rows = await prisma.vendorBill.findMany({
+    where: { billDate: { gte: start, lt: end }, status: { not: "void" } },
     select: {
-      amount: true,
+      total: true,
       categoryId: true,
       category: { select: { name: true } },
     },
@@ -91,7 +24,7 @@ export async function expenseMonthlyTotals(year: number, month: number): Promise
   let total = 0;
 
   for (const row of rows) {
-    const amt = Number(row.amount);
+    const amt = Number(row.total);
     total += amt;
     const key = row.categoryId;
     const existing = byCategoryMap.get(key) ?? {
@@ -120,21 +53,22 @@ export type ExpenseListFilters = {
   method?: ExpensePaymentMethod | null;
 };
 
-export function expenseListWhere(filters: ExpenseListFilters): Prisma.ExpenseWhereInput {
+export function expenseListWhere(filters: ExpenseListFilters): Prisma.VendorBillWhereInput {
   const { start, end } = monthRangeUtc(filters.year, filters.month);
   return {
-    expenseDate: { gte: start, lt: end },
+    billDate: { gte: start, lt: end },
+    status: { not: "void" },
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.receipt === "attached" ? { receiptStoragePath: { not: null } } : {}),
     ...(filters.receipt === "missing" ? { receiptStoragePath: null } : {}),
-    ...(filters.method ? { method: filters.method } : {}),
+    ...(filters.method ? { payments: { some: { method: filters.method, voidedAt: null } } } : {}),
     ...(filters.search
       ? {
           OR: [
-            { vendor: { contains: filters.search, mode: "insensitive" } },
-            { vendorRecord: { is: { name: { contains: filters.search, mode: "insensitive" } } } },
+            { vendor: { is: { name: { contains: filters.search, mode: "insensitive" } } } },
             { description: { contains: filters.search, mode: "insensitive" } },
-            { reference: { contains: filters.search, mode: "insensitive" } },
+            { vendorInvoiceNumber: { contains: filters.search, mode: "insensitive" } },
+            { payments: { some: { reference: { contains: filters.search, mode: "insensitive" }, voidedAt: null } } },
           ],
         }
       : {}),

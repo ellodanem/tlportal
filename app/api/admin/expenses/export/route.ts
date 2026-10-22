@@ -16,13 +16,15 @@ export async function GET(req: Request) {
   const { year, month } = parseYearMonth(url.searchParams.get("ym") ?? undefined);
   const categoryId = url.searchParams.get("category")?.trim() || null;
 
-  const expenses = await prisma.expense.findMany({
+  const expenses = await prisma.vendorBill.findMany({
     where: expenseListWhere({ year, month, categoryId }),
-    orderBy: { expenseDate: "asc" },
+    orderBy: { billDate: "asc" },
     include: {
+      vendor: { select: { name: true } },
       category: { select: { name: true } },
       customer: { select: { company: true, firstName: true, lastName: true } },
       device: { select: { label: true, imei: true } },
+      payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } },
     },
   });
 
@@ -32,7 +34,10 @@ export async function GET(req: Request) {
     "Description",
     "Category",
     "Amount",
+    "Amount paid",
+    "Balance due",
     "Currency",
+    "Status",
     "Method",
     "Reference",
     "Customer",
@@ -47,14 +52,17 @@ export async function GET(req: Request) {
       : "";
     const deviceLabel = e.device?.label?.trim() || e.device?.imei || "";
     const row = [
-      e.expenseDate.toISOString().slice(0, 10),
-      e.vendor,
+      e.billDate.toISOString().slice(0, 10),
+      e.vendor.name,
       e.description ?? "",
       e.category?.name ?? "",
-      Number(e.amount).toFixed(2),
+      Number(e.total).toFixed(2),
+      Number(e.amountPaid).toFixed(2),
+      Number(e.amountDue).toFixed(2),
       e.currency,
-      EXPENSE_PAYMENT_METHOD_LABELS[e.method],
-      e.reference ?? "",
+      e.status.replace("_", " "),
+      [...new Set(e.payments.map((payment) => EXPENSE_PAYMENT_METHOD_LABELS[payment.method]))].join("; "),
+      e.vendorInvoiceNumber ?? e.payments.map((payment) => payment.reference).filter(Boolean).join("; "),
       customerLabel,
       deviceLabel,
       e.notes ?? "",

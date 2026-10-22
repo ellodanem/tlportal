@@ -11,13 +11,13 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
   const vendor = await prisma.vendor.findUnique({
     where: { id },
     include: {
-      expenses: { orderBy: { expenseDate: "desc" }, take: 20, include: { category: { select: { name: true } } } },
+      bills: { where: { status: { not: "void" } }, orderBy: { billDate: "desc" }, take: 20, include: { category: { select: { name: true } }, payments: { where: { voidedAt: null }, orderBy: { paidAt: "desc" }, take: 1 } } },
     },
   });
   if (!vendor) notFound();
 
-  const spendSummary = await prisma.expense.aggregate({ where: { vendorId: vendor.id }, _sum: { amount: true }, _count: { _all: true } });
-  const totalSpend = Number(spendSummary._sum.amount ?? 0);
+  const spendSummary = await prisma.vendorBill.aggregate({ where: { vendorId: vendor.id, status: { not: "void" } }, _sum: { total: true }, _count: { _all: true } });
+  const totalSpend = Number(spendSummary._sum.total ?? 0);
   const initial: VendorFormInitial = { id: vendor.id, name: vendor.name, email: vendor.email ?? "", phone: vendor.phone ?? "", currency: vendor.currency, paymentTerms: vendor.paymentTerms, notes: vendor.notes ?? "" };
 
   return (
@@ -35,7 +35,7 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><h2 className="mb-4 text-sm font-semibold">Vendor details</h2><VendorForm initial={initial} /></section>
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><h2 className="text-sm font-semibold">Recent expenses</h2>{vendor.expenses.length === 0 ? <p className="mt-4 text-sm text-zinc-500">No expenses linked yet.</p> : <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead className="text-left text-xs uppercase text-zinc-500"><tr><th className="px-2 py-2">Date</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">Category</th><th className="px-2 py-2">Method</th><th className="px-2 py-2 text-right">Amount</th></tr></thead><tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">{vendor.expenses.map((expense) => <tr key={expense.id}><td className="px-2 py-2">{expense.expenseDate.toLocaleDateString(undefined, { dateStyle: "medium" })}</td><td className="px-2 py-2"><Link href={`/admin/expenses/${expense.id}`} className="text-emerald-700 hover:underline dark:text-emerald-400">{expense.description || "Expense"}</Link></td><td className="px-2 py-2 text-zinc-500">{expense.category?.name ?? "—"}</td><td className="px-2 py-2">{EXPENSE_PAYMENT_METHOD_LABELS[expense.method]}</td><td className="px-2 py-2 text-right tabular-nums">{formatExpenseAmount(Number(expense.amount), expense.currency)}</td></tr>)}</tbody></table></div>}</section>
+      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><h2 className="text-sm font-semibold">Recent expenses</h2>{vendor.bills.length === 0 ? <p className="mt-4 text-sm text-zinc-500">No expenses linked yet.</p> : <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead className="text-left text-xs uppercase text-zinc-500"><tr><th className="px-2 py-2">Date</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">Category</th><th className="px-2 py-2">Status / method</th><th className="px-2 py-2 text-right">Amount</th></tr></thead><tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">{vendor.bills.map((expense) => <tr key={expense.id}><td className="px-2 py-2">{expense.billDate.toLocaleDateString(undefined, { dateStyle: "medium" })}</td><td className="px-2 py-2"><Link href={`/admin/bills/${expense.id}`} className="text-emerald-700 hover:underline dark:text-emerald-400">{expense.description || "Expense"}</Link></td><td className="px-2 py-2 text-zinc-500">{expense.category?.name ?? "—"}</td><td className="px-2 py-2">{expense.payments[0] ? EXPENSE_PAYMENT_METHOD_LABELS[expense.payments[0].method] : expense.status.replace("_", " ")}</td><td className="px-2 py-2 text-right tabular-nums">{formatExpenseAmount(Number(expense.total), expense.currency)}</td></tr>)}</tbody></table></div>}</section>
     </div>
   );
 }

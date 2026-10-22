@@ -458,27 +458,26 @@ model User {
   proposalsCreated             Proposal[]
 
   // Native billing (Phase 0) — staff authorship / payment recording.
-  quotesCreated                 Quote[]
-  invoicesCreated               Invoice[]
-  scheduledInvoiceEmailsCreated ScheduledInvoiceEmail[]
-  paymentsRecorded              Payment[]
-  recurringSchedulesCreated     RecurringInvoiceSchedule[]
-  billingNotificationRetries    BillingNotificationDelivery[] @relation("BillingNotificationRetriedBy")
-  expensesRecorded              Expense[]
-  vendorBillsCreated            VendorBill[]
-  vendorBillPaymentsRecorded    VendorBillPayment[]
-  subscriptionItemRatesCreated  SubscriptionItemRate[]
-  canonicalSubscriptionActivationsApproved CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationApprovedBy")
+  quotesCreated                             Quote[]
+  invoicesCreated                           Invoice[]
+  scheduledInvoiceEmailsCreated             ScheduledInvoiceEmail[]
+  paymentsRecorded                          Payment[]
+  recurringSchedulesCreated                 RecurringInvoiceSchedule[]
+  billingNotificationRetries                BillingNotificationDelivery[]                @relation("BillingNotificationRetriedBy")
+  vendorBillsCreated                        VendorBill[]
+  vendorBillPaymentsRecorded                VendorBillPayment[]
+  subscriptionItemRatesCreated              SubscriptionItemRate[]
+  canonicalSubscriptionActivationsApproved  CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationApprovedBy")
   canonicalSubscriptionActivationsPerformed CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationPerformedBy")
-  canonicalMigrationCampaignsCreated  CanonicalMigrationCampaign[] @relation("CanonicalMigrationCampaignCreatedBy")
-  canonicalMigrationCampaignsApproved CanonicalMigrationCampaign[] @relation("CanonicalMigrationCampaignApprovedBy")
-  invoiceMigrationClassifications     InvoiceMigrationClassificationAudit[]
+  canonicalMigrationCampaignsCreated        CanonicalMigrationCampaign[]                 @relation("CanonicalMigrationCampaignCreatedBy")
+  canonicalMigrationCampaignsApproved       CanonicalMigrationCampaign[]                 @relation("CanonicalMigrationCampaignApprovedBy")
+  invoiceMigrationClassifications           InvoiceMigrationClassificationAudit[]
 }
 
 // --- Core domain ---
 
 model Customer {
-  id                   String              @id @default(uuid())
+  id                   String                     @id @default(uuid())
   firstName            String?
   lastName             String?
   company              String?
@@ -497,15 +496,15 @@ model Customer {
   /// Comma-separated Bcc emails (Invoiless max 3).
   invoiceBcc           String?
   /// Preferred billing path for new workflows (legacy rows default manual_legacy).
-  billingMode          CustomerBillingMode @default(manual_legacy)
+  billingMode          CustomerBillingMode        @default(manual_legacy)
   /// Scheduled payment reminders (WhatsApp ladder today; all channels later). Default auto.
   paymentReminders     PaymentRemindersPreference @default(auto)
   /// Custom Stripe subscription monthly rate (XCD). Null = default catalog / env Price ids.
-  stripeMonthlyRateXcd Decimal?            @db.Decimal(10, 2)
+  stripeMonthlyRateXcd Decimal?                   @db.Decimal(10, 2)
   /// When true (default), new Checkout links gross up so the customer pays Stripe processing. When false, Track Lucia absorbs the fee and the customer pays the listed rate.
-  stripeFeePassthrough Boolean             @default(true)
+  stripeFeePassthrough Boolean                    @default(true)
   /// @deprecated Prefer BillingAccount — kept for backward compatibility during Phase 1.
-  invoilessCustomerId  String?             @unique
+  invoilessCustomerId  String?                    @unique
   /// @deprecated Prefer CustomerPortalUser — kept for migration backfill / read fallback.
   traqcareUsername     String?
   /// @deprecated Prefer CustomerPortalUser — stored as plain text; restrict DB access.
@@ -515,26 +514,26 @@ model Customer {
   /// Traqcare live API `clientid` — one fleet id per customer (copy from Traqcare platform).
   traqcareClientId     String?
   notes                String?
-  tags                 String[]            @default([])
+  tags                 String[]                   @default([])
   /// Set when staff archives a churned / inactive account — hidden from active lists and billing reminders.
   archivedAt           DateTime?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
 
-  serviceAssignments         ServiceAssignment[]
-  billingAccounts            BillingAccount[]
-  billingInvoices            BillingInvoice[]
-  billingWhatsAppReminders   BillingWhatsAppReminder[]
+  serviceAssignments            ServiceAssignment[]
+  billingAccounts               BillingAccount[]
+  billingInvoices               BillingInvoice[]
+  billingWhatsAppReminders      BillingWhatsAppReminder[]
   billingNotificationDeliveries BillingNotificationDelivery[]
-  billingPayLinkAdminAlerts  BillingPayLinkAdminAlert[]
-  customerWhatsAppDeliveries CustomerWhatsAppDelivery[]
-  whatsappConversations      WhatsAppConversation[]
-  customerSubscriptions      CustomerSubscription[]
-  billingOperations          BillingOperation[]
-  operationalEvents          OperationalEvent[]
-  broadcastDeliveries        BroadcastDelivery[]
-  portalUsers                CustomerPortalUser[]
-  contacts                   CustomerContact[]
+  billingPayLinkAdminAlerts     BillingPayLinkAdminAlert[]
+  customerWhatsAppDeliveries    CustomerWhatsAppDelivery[]
+  whatsappConversations         WhatsAppConversation[]
+  customerSubscriptions         CustomerSubscription[]
+  billingOperations             BillingOperation[]
+  operationalEvents             OperationalEvent[]
+  broadcastDeliveries           BroadcastDelivery[]
+  portalUsers                   CustomerPortalUser[]
+  contacts                      CustomerContact[]
 
   registrationEmailMatches RegistrationRequest[] @relation("RegistrationEmailMatchCustomer")
   createdFromRegistration  RegistrationRequest?  @relation("RegistrationCreatedCustomer")
@@ -542,15 +541,16 @@ model Customer {
   proposals                Proposal[]
 
   // Native billing (Phase 0) — TL-owned quotes, invoices, payments.
-  quotes                  Quote[]
-  invoices                Invoice[]
-  payments                Payment[]
-  recurringInvoiceSchedules RecurringInvoiceSchedule[]
-  expenses                Expense[]
-  canonicalMigrationLedgers CanonicalMigrationLedger[]
+  quotes                            Quote[]
+  invoices                          Invoice[]
+  payments                          Payment[]
+  recurringInvoiceSchedules         RecurringInvoiceSchedule[]
+  vendorBills                       VendorBill[]
+  canonicalMigrationLedgers         CanonicalMigrationLedger[]
   canonicalMigrationCampaignEntries CanonicalMigrationCampaignEntry[]
-  canonicalManualPilotActivations CanonicalManualPilotActivation[]
-  canonicalOperationalActivations CanonicalSubscriptionOperationalActivation[]
+  canonicalManualPilotActivations   CanonicalManualPilotActivation[]
+  canonicalOperationalActivations   CanonicalSubscriptionOperationalActivation[]
+
   @@index([archivedAt])
 }
 
@@ -587,9 +587,9 @@ model CustomerContact {
   role  String?
   notes String? @db.Text
 
-  isBillingContact     Boolean @default(false)
-  isOperationsContact  Boolean @default(false)
-  isMessageContact     Boolean @default(false)
+  isBillingContact    Boolean @default(false)
+  isOperationsContact Boolean @default(false)
+  isMessageContact    Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -767,7 +767,7 @@ model Device {
   serviceAssignments  ServiceAssignment[]
   providerDeviceLinks ProviderDeviceLink[]
   operationalEvents   OperationalEvent[]
-  expenses            Expense[]
+  vendorBills         VendorBill[]
 
   @@index([deviceModelId])
   @@index([status])
@@ -804,10 +804,10 @@ model SimCard {
 }
 
 model ServiceAssignment {
-  id                   String                  @id @default(uuid())
+  id                   String                        @id @default(uuid())
   startDate            DateTime?
   endDate              DateTime?
-  status               ServiceAssignmentStatus @default(active)
+  status               ServiceAssignmentStatus       @default(active)
   invoilessRecurringId String?
   intervalMonths       Int?
   lastInvoiceId        String?
@@ -816,12 +816,12 @@ model ServiceAssignment {
   notes                String?
   pausedAt             DateTime?
   pauseReason          ServiceAssignmentPauseReason?
-  pauseNote            String?                     @db.Text
+  pauseNote            String?                       @db.Text
   /// Snapshot of next due at pause (time-freeze on resume for manual billing).
   frozenNextDueDate    DateTime?
   resumedAt            DateTime?
-  createdAt            DateTime                @default(now())
-  updatedAt            DateTime                @updatedAt
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
 
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -952,41 +952,41 @@ model BillingAccount {
 
 /// Mirrored invoice from a billing provider (Stripe subscription/one-time, future Invoiless).
 model BillingInvoice {
-  id                       String             @id @default(uuid())
-  customerId               String
-  customer                 Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  id                         String                    @id @default(uuid())
+  customerId                 String
+  customer                   Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
   /// Optional canonical attribution; null remains valid for legacy provider invoices.
-  customerSubscriptionId   String?
-  customerSubscription     CustomerSubscription? @relation(fields: [customerSubscriptionId], references: [id], onDelete: SetNull)
+  customerSubscriptionId     String?
+  customerSubscription       CustomerSubscription?     @relation(fields: [customerSubscriptionId], references: [id], onDelete: SetNull)
   subscriptionProviderLinkId String?
   subscriptionProviderLink   SubscriptionProviderLink? @relation(fields: [subscriptionProviderLinkId], references: [id], onDelete: SetNull)
-  provider                 BillingProvider
-  externalInvoiceId        String
-  kind                     BillingInvoiceKind @default(subscription)
-  status                   String
-  amountXcd                Decimal            @db.Decimal(12, 2)
-  currency                 String             @default("xcd")
+  provider                   BillingProvider
+  externalInvoiceId          String
+  kind                       BillingInvoiceKind        @default(subscription)
+  status                     String
+  amountXcd                  Decimal                   @db.Decimal(12, 2)
+  currency                   String                    @default("xcd")
   /// Customer-facing number on PDF and Billing UI (e.g. TL-INV-100837).
-  displayNumber            String?            @unique
+  displayNumber              String?                   @unique
   /// Provider invoice number (Stripe `invoice.number`).
-  providerInvoiceNumber    String?
-  periodStart              DateTime?
-  periodEnd                DateTime?
-  hostedInvoiceUrl         String?
-  invoicePdfUrl            String?
-  stripeSubscriptionId     String?
-  paidAt                   DateTime?
+  providerInvoiceNumber      String?
+  periodStart                DateTime?
+  periodEnd                  DateTime?
+  hostedInvoiceUrl           String?
+  invoicePdfUrl              String?
+  stripeSubscriptionId       String?
+  paidAt                     DateTime?
   /// Stripe event creation time used to reject stale, out-of-order canonical updates.
-  providerEventCreatedAt   DateTime?
+  providerEventCreatedAt     DateTime?
   /// Invoiless invoice id created when mirroring Stripe `invoice.paid` (accounting copy).
-  invoilessMirrorInvoiceId String?
+  invoilessMirrorInvoiceId   String?
   /// Vercel Blob path prefix `private:` + url, or public blob url for TL paid PDF.
-  pdfStoragePath           String?
-  pdfGeneratedAt           DateTime?
+  pdfStoragePath             String?
+  pdfGeneratedAt             DateTime?
   /// When the TL paid receipt PDF was emailed to the customer (auto or manual).
-  receiptEmailedAt         DateTime?
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
+  receiptEmailedAt           DateTime?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
 
   /// Unified AR row in native `Invoice` (Phase 4).
   nativeMirror Invoice?
@@ -1017,26 +1017,26 @@ model BillingWhatsAppReminder {
 
 /// Durable per-channel ledger for automatic and staff-retried billing notices.
 model BillingNotificationDelivery {
-  id                String                    @id @default(uuid())
-  idempotencyKey    String                    @unique
+  id                String                     @id @default(uuid())
+  idempotencyKey    String                     @unique
   customerId        String
-  customer          Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer          Customer                   @relation(fields: [customerId], references: [id], onDelete: Cascade)
   invoiceId         String?
-  invoice           Invoice?                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice           Invoice?                   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   eventKind         String
   channel           BillingNotificationChannel
-  status            BillingNotificationStatus @default(pending)
+  status            BillingNotificationStatus  @default(pending)
   destination       String?
   providerMessageId String?
-  attempts          Int                       @default(0)
-  lastError         String?                   @db.Text
+  attempts          Int                        @default(0)
+  lastError         String?                    @db.Text
   claimedAt         DateTime?
   sentAt            DateTime?
   suppressedAt      DateTime?
   retriedById       String?
-  retriedBy         User?                     @relation("BillingNotificationRetriedBy", fields: [retriedById], references: [id], onDelete: SetNull)
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  retriedBy         User?                      @relation("BillingNotificationRetriedBy", fields: [retriedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
 
   @@index([customerId, status, createdAt(sort: Desc)])
   @@index([invoiceId, eventKind])
@@ -1155,9 +1155,9 @@ model BillingOperation {
 
 /// Customer-level subscription (TL source of truth; Stripe id when linked).
 model CustomerSubscription {
-  id                   String                     @id @default(uuid())
-  customerId           String
-  customer             Customer                   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   // Canonical commercial agreement foundation. Nullable fields intentionally leave legacy rows unclassified.
   name                  String?
@@ -1177,29 +1177,29 @@ model CustomerSubscription {
   controlMode           SubscriptionControlMode       @default(legacy)
 
   // Legacy/provider fields remain authoritative until an explicit later-phase cutover.
-  status               CustomerSubscriptionStatus @default(pending_payment)
+  status                         CustomerSubscriptionStatus                  @default(pending_payment)
   /// Billing term length in months (1, 3, 6, 12).
-  planTermMonths       Int
+  planTermMonths                 Int
   /// Monthly rate in XCD used for this subscription (null = catalog default at checkout).
-  monthlyRateXcd       Decimal?                   @db.Decimal(10, 2)
+  monthlyRateXcd                 Decimal?                                    @db.Decimal(10, 2)
   /// Billed vehicle/device quantity when set; otherwise derived from active assignments in UI.
-  vehicleCount         Int?
-  stripeSubscriptionId String?                    @unique
-  stripeCustomerId     String?
-  currentPeriodStart   DateTime?
-  currentPeriodEnd     DateTime?
-  cancelAt             DateTime?
-  createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @updatedAt
-  billingOperations    BillingOperation[]
-  invoices             Invoice[]
-  recurringSchedules   RecurringInvoiceSchedule[]
-  items                 SubscriptionItem[]
-  providerLinks         SubscriptionProviderLink[]
-  billingInvoices       BillingInvoice[]
-  canonicalMigrationLedger CanonicalMigrationLedger? @relation("CanonicalMigrationTarget")
-  canonicalManualPilotActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotTarget")
-  operationalActivation CanonicalSubscriptionOperationalActivation?
+  vehicleCount                   Int?
+  stripeSubscriptionId           String?                                     @unique
+  stripeCustomerId               String?
+  currentPeriodStart             DateTime?
+  currentPeriodEnd               DateTime?
+  cancelAt                       DateTime?
+  createdAt                      DateTime                                    @default(now())
+  updatedAt                      DateTime                                    @updatedAt
+  billingOperations              BillingOperation[]
+  invoices                       Invoice[]
+  recurringSchedules             RecurringInvoiceSchedule[]
+  items                          SubscriptionItem[]
+  providerLinks                  SubscriptionProviderLink[]
+  billingInvoices                BillingInvoice[]
+  canonicalMigrationLedger       CanonicalMigrationLedger?                   @relation("CanonicalMigrationTarget")
+  canonicalManualPilotActivation CanonicalManualPilotActivation?             @relation("CanonicalManualPilotTarget")
+  operationalActivation          CanonicalSubscriptionOperationalActivation?
 
   @@index([customerId, updatedAt(sort: Desc)])
   @@index([status])
@@ -1209,26 +1209,26 @@ model CustomerSubscription {
 /// This intentionally does not replace the separately authorized legacy/manual
 /// pilot mechanism. One agreement can be operationally activated only once.
 model CanonicalSubscriptionOperationalActivation {
-  id                     String                     @id @default(uuid())
-  customerSubscriptionId String                     @unique
-  customerSubscription   CustomerSubscription       @relation(fields: [customerSubscriptionId], references: [id], onDelete: Restrict)
+  id                     String                      @id @default(uuid())
+  customerSubscriptionId String                      @unique
+  customerSubscription   CustomerSubscription        @relation(fields: [customerSubscriptionId], references: [id], onDelete: Restrict)
   customerId             String
-  customer               Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  activationKey          String                     @unique
+  customer               Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  activationKey          String                      @unique
   initialBillingMode     CanonicalInitialBillingMode
-  initialPeriodStart     DateTime?                  @db.Date
-  initialPeriodEnd       DateTime?                  @db.Date
-  initialInvoiceId       String?                    @unique
-  initialInvoice         Invoice?                   @relation("CanonicalOperationalInitialInvoice", fields: [initialInvoiceId], references: [id], onDelete: Restrict)
+  initialPeriodStart     DateTime?                   @db.Date
+  initialPeriodEnd       DateTime?                   @db.Date
+  initialInvoiceId       String?                     @unique
+  initialInvoice         Invoice?                    @relation("CanonicalOperationalInitialInvoice", fields: [initialInvoiceId], references: [id], onDelete: Restrict)
   approvedById           String
-  approvedBy             User                       @relation("CanonicalActivationApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedBy             User                        @relation("CanonicalActivationApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   approvedAt             DateTime
   performedById          String
-  performedBy            User                       @relation("CanonicalActivationPerformedBy", fields: [performedById], references: [id], onDelete: Restrict)
+  performedBy            User                        @relation("CanonicalActivationPerformedBy", fields: [performedById], references: [id], onDelete: Restrict)
   performedAt            DateTime
-  confirmationNote       String?                    @db.Text
-  createdAt              DateTime                   @default(now())
-  updatedAt              DateTime                   @updatedAt
+  confirmationNote       String?                     @db.Text
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
 
   @@index([customerId, performedAt])
 }
@@ -1247,9 +1247,9 @@ model SubscriptionItem {
   notes                  String?                @db.Text
 
   /// A transfer creates a successor item instead of rewriting historical subscription ownership.
-  predecessorItemId String?             @unique
-  predecessorItem   SubscriptionItem?  @relation("SubscriptionItemTransfer", fields: [predecessorItemId], references: [id], onDelete: Restrict)
-  successorItem     SubscriptionItem?  @relation("SubscriptionItemTransfer")
+  predecessorItemId String?           @unique
+  predecessorItem   SubscriptionItem? @relation("SubscriptionItemTransfer", fields: [predecessorItemId], references: [id], onDelete: Restrict)
+  successorItem     SubscriptionItem? @relation("SubscriptionItemTransfer")
 
   serviceAssignments ServiceAssignment[]
   rates              SubscriptionItemRate[]
@@ -1263,21 +1263,21 @@ model SubscriptionItem {
 
 /// Effective-dated agreed price for one subscription item and billing basis.
 model SubscriptionItemRate {
-  id                     String                         @id @default(uuid())
-  subscriptionItemId     String
-  subscriptionItem       SubscriptionItem               @relation(fields: [subscriptionItemId], references: [id], onDelete: Cascade)
-  billingIntervalMonths  Int
-  agreedAmountPerCycle   Decimal                        @db.Decimal(12, 2)
-  currency               String                         @db.VarChar(3)
-  effectiveFrom          DateTime                       @db.Date
-  effectiveUntil         DateTime?                      @db.Date
-  classification         SubscriptionRateClassification @default(standard)
-  changeReason           String?                        @db.Text
-  createdById            String?
-  createdBy              User?                          @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  invoiceSnapshots       InvoiceServiceSnapshot[]
-  createdAt              DateTime                       @default(now())
-  updatedAt              DateTime                       @updatedAt
+  id                    String                         @id @default(uuid())
+  subscriptionItemId    String
+  subscriptionItem      SubscriptionItem               @relation(fields: [subscriptionItemId], references: [id], onDelete: Cascade)
+  billingIntervalMonths Int
+  agreedAmountPerCycle  Decimal                        @db.Decimal(12, 2)
+  currency              String                         @db.VarChar(3)
+  effectiveFrom         DateTime                       @db.Date
+  effectiveUntil        DateTime?                      @db.Date
+  classification        SubscriptionRateClassification @default(standard)
+  changeReason          String?                        @db.Text
+  createdById           String?
+  createdBy             User?                          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  invoiceSnapshots      InvoiceServiceSnapshot[]
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
 
   @@index([subscriptionItemId, billingIntervalMonths, effectiveFrom])
   @@index([createdById])
@@ -1285,21 +1285,21 @@ model SubscriptionItemRate {
 
 /// Historical relationship between a canonical subscription and an external provider subscription.
 model SubscriptionProviderLink {
-  id                     String               @id @default(uuid())
+  id                     String                     @id @default(uuid())
   customerSubscriptionId String
-  customerSubscription   CustomerSubscription @relation(fields: [customerSubscriptionId], references: [id], onDelete: Restrict)
+  customerSubscription   CustomerSubscription       @relation(fields: [customerSubscriptionId], references: [id], onDelete: Restrict)
   provider               BillingProvider
   externalSubscriptionId String
   providerStatus         String?
-  activatedAt            DateTime             @default(now())
+  activatedAt            DateTime                   @default(now())
   endedAt                DateTime?
   lastSyncedAt           DateTime?
-  lastError              String?              @db.Text
+  lastError              String?                    @db.Text
   metadata               Json?
   providerItems          SubscriptionProviderItem[]
   billingInvoices        BillingInvoice[]
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
 
   @@unique([provider, externalSubscriptionId])
   @@index([customerSubscriptionId, provider])
@@ -1327,30 +1327,30 @@ model SubscriptionProviderItem {
 
 /// Durable audit and idempotency record for one approved Phase 2B shadow migration.
 model CanonicalMigrationLedger {
-  id                    String                   @id @default(uuid())
-  migrationKey          String                   @unique
+  id                    String                          @id @default(uuid())
+  migrationKey          String                          @unique
   sourceKind            String
   sourceId              String
   customerId            String
-  customer              Customer                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customer              Customer                        @relation(fields: [customerId], references: [id], onDelete: Restrict)
   sourceFingerprint     String
   planFingerprint       String
-  status                CanonicalMigrationStatus @default(approved)
+  status                CanonicalMigrationStatus        @default(approved)
   approvedPlan          Json
   approvedBy            String
-  approvalReason        String                   @db.Text
+  approvalReason        String                          @db.Text
   approvedAt            DateTime
-  targetSubscriptionId  String?                  @unique
-  targetSubscription    CustomerSubscription?    @relation("CanonicalMigrationTarget", fields: [targetSubscriptionId], references: [id], onDelete: Restrict)
+  targetSubscriptionId  String?                         @unique
+  targetSubscription    CustomerSubscription?           @relation("CanonicalMigrationTarget", fields: [targetSubscriptionId], references: [id], onDelete: Restrict)
   startedAt             DateTime?
   completedAt           DateTime?
   failedAt              DateTime?
   reversedAt            DateTime?
   failureCode           String?
-  failureMessage        String?                  @db.Text
+  failureMessage        String?                         @db.Text
   reconciliation        Json?
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
   manualPilotActivation CanonicalManualPilotActivation?
 
   @@unique([sourceKind, sourceId])
@@ -1363,23 +1363,23 @@ model CanonicalMigrationLedger {
 /// schedules and provider subscriptions remain authoritative until a separate,
 /// explicitly authorized cutover.
 model CanonicalMigrationCampaign {
-  id                 String                           @id @default(uuid())
+  id                 String                            @id @default(uuid())
   title              String
-  status             CanonicalMigrationCampaignStatus @default(approved)
+  status             CanonicalMigrationCampaignStatus  @default(approved)
   sourceAnalysisDate String
   sourceFingerprint  String
   planFingerprint    String
   ownerConfirmations Json
-  approvalReason     String                           @db.Text
+  approvalReason     String                            @db.Text
   createdById        String
-  createdBy          User                             @relation("CanonicalMigrationCampaignCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy          User                              @relation("CanonicalMigrationCampaignCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   approvedById       String
-  approvedBy         User                             @relation("CanonicalMigrationCampaignApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedBy         User                              @relation("CanonicalMigrationCampaignApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   approvedAt         DateTime
   executionStartedAt DateTime?
   completedAt        DateTime?
-  createdAt          DateTime                         @default(now())
-  updatedAt          DateTime                         @updatedAt
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
   entries            CanonicalMigrationCampaignEntry[]
 
   @@index([status, updatedAt])
@@ -1438,7 +1438,7 @@ model CanonicalManualPilotActivation {
   sourceInvoice          Invoice?                   @relation("CanonicalManualPilotSourceInvoice", fields: [sourceInvoiceId], references: [id], onDelete: Restrict)
   canonicalScheduleId    String?                    @unique
   canonicalSchedule      RecurringInvoiceSchedule?  @relation("CanonicalManualPilotCanonicalSchedule", fields: [canonicalScheduleId], references: [id], onDelete: Restrict)
-  status                 CanonicalManualPilotStatus  @default(approved)
+  status                 CanonicalManualPilotStatus @default(approved)
   sourceStateFingerprint String
   proposalFingerprint    String
   approvalFingerprint    String
@@ -1650,12 +1650,12 @@ model QuoteLineItem {
 /// TL-native invoice — the going-forward AR record (Invoiless replacement).
 /// Separate from `BillingInvoice` (Stripe mirror) for now; may unify in Phase 4.
 model Invoice {
-  id     String        @id @default(uuid())
-  status InvoiceStatus @default(draft)
-  kind   InvoiceKind   @default(one_off)
+  id                               String                         @id @default(uuid())
+  status                           InvoiceStatus                  @default(draft)
+  kind                             InvoiceKind                    @default(one_off)
   /// A standalone invoice is excluded from canonical migration until the owner
   /// explicitly classifies it as recurring subscription evidence.
-  migrationClassification InvoiceMigrationClassification @default(unreviewed)
+  migrationClassification          InvoiceMigrationClassification @default(unreviewed)
   migrationClassificationUpdatedAt DateTime?
 
   /// Customer-facing number `TL-INV-{n}`, allocated from the shared InvoiceSequence on finalize.
@@ -1702,48 +1702,48 @@ model Invoice {
   pdfGeneratedAt DateTime?
 
   /// Quote this invoice was converted from (back-reference; FK lives on Quote.convertedInvoiceId).
-  sourceQuote         Quote?  @relation("QuoteConvertedInvoice")
+  sourceQuote                           Quote?                                      @relation("QuoteConvertedInvoice")
   /// Optional ops link for traceability to a device service assignment.
-  serviceAssignmentId String?
+  serviceAssignmentId                   String?
   /// Recurring schedule that generated this invoice (when kind = recurring).
-  recurringScheduleId String?
-  recurringSchedule   RecurringInvoiceSchedule? @relation("ScheduleGeneratedInvoices", fields: [recurringScheduleId], references: [id], onDelete: SetNull)
+  recurringScheduleId                   String?
+  recurringSchedule                     RecurringInvoiceSchedule?                   @relation("ScheduleGeneratedInvoices", fields: [recurringScheduleId], references: [id], onDelete: SetNull)
   /// Immutable source evidence for a pilot that begins from a one-off/manual invoice.
-  manualPilotSourceActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotSourceInvoice")
-  migrationClassificationAudits InvoiceMigrationClassificationAudit[]
+  manualPilotSourceActivation           CanonicalManualPilotActivation?             @relation("CanonicalManualPilotSourceInvoice")
+  migrationClassificationAudits         InvoiceMigrationClassificationAudit[]
   /// UTC billing-period day used by recurring generation idempotency.
-  recurringPeriodStart       DateTime?
+  recurringPeriodStart                  DateTime?
   /// Stable schedule + billing-period key. Null on historical/non-recurring invoices.
-  recurringGenerationKey     String?                         @unique
+  recurringGenerationKey                String?                                     @unique
   /// Automatic email/PDF delivery state for recurring generation only.
-  recurringDeliveryStatus    RecurringInvoiceDeliveryStatus?
-  recurringDeliveryAttempts  Int                             @default(0)
-  recurringDeliveryClaimedAt DateTime?
-  recurringDeliveryError     String?                         @db.Text
+  recurringDeliveryStatus               RecurringInvoiceDeliveryStatus?
+  recurringDeliveryAttempts             Int                                         @default(0)
+  recurringDeliveryClaimedAt            DateTime?
+  recurringDeliveryError                String?                                     @db.Text
   /// Stable idempotency key for a one-time canonical annual service-addition adjustment.
-  adjustmentGenerationKey    String?                         @unique
+  adjustmentGenerationKey               String?                                     @unique
   /// Stable idempotency key for an activation-time canonical invoice.
-  canonicalInitialGenerationKey String?                      @unique
+  canonicalInitialGenerationKey         String?                                     @unique
   canonicalOperationalInitialActivation CanonicalSubscriptionOperationalActivation? @relation("CanonicalOperationalInitialInvoice")
   /// Stripe `BillingInvoice` mirror row (when kind = subscription_mirror).
-  billingInvoiceId String?        @unique
-  billingInvoice   BillingInvoice? @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)
+  billingInvoiceId                      String?                                     @unique
+  billingInvoice                        BillingInvoice?                             @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)
 
   /// Source Invoiless invoice id when `kind = invoiless_import` (dedup for backfill).
-  invoilessInvoiceId   String?   @unique
+  invoilessInvoiceId  String?   @unique
   /// Original Invoiless invoice number for display on imported rows.
-  legacyInvoiceNumber  String?
-  importedAt           DateTime?
+  legacyInvoiceNumber String?
+  importedAt          DateTime?
 
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  lineItems InvoiceLineItem[]
-  payments  Payment[]
-  serviceSnapshots InvoiceServiceSnapshot[]
-  scheduledEmails ScheduledInvoiceEmail[]
+  lineItems                     InvoiceLineItem[]
+  payments                      Payment[]
+  serviceSnapshots              InvoiceServiceSnapshot[]
+  scheduledEmails               ScheduledInvoiceEmail[]
   billingNotificationDeliveries BillingNotificationDelivery[]
-  lastOnSchedule RecurringInvoiceSchedule? @relation("ScheduleLastInvoice")
+  lastOnSchedule                RecurringInvoiceSchedule?     @relation("ScheduleLastInvoice")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1760,14 +1760,14 @@ model Invoice {
 /// Append-only audit trail for owner classification of a standalone invoice.
 /// This never changes the invoice, its payments, or its financial totals.
 model InvoiceMigrationClassificationAudit {
-  id String @id @default(uuid())
-  invoiceId String
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  id             String                         @id @default(uuid())
+  invoiceId      String
+  invoice        Invoice                        @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   classification InvoiceMigrationClassification
-  reason String @db.Text
+  reason         String                         @db.Text
   classifiedById String
-  classifiedBy User @relation(fields: [classifiedById], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now())
+  classifiedBy   User                           @relation(fields: [classifiedById], references: [id], onDelete: Restrict)
+  createdAt      DateTime                       @default(now())
 
   @@index([invoiceId, createdAt])
   @@index([classifiedById])
@@ -1817,14 +1817,14 @@ model RecurringInvoiceSchedule {
   billToName  String?
   billToLines String[] @default([])
 
-  currency       String   @default("XCD")
-  taxLabel       String?
-  taxRatePercent Decimal? @db.Decimal(5, 2)
-  notes               String? @db.Text
-  paymentInstructions String? @db.Text
+  currency            String   @default("XCD")
+  taxLabel            String?
+  taxRatePercent      Decimal? @db.Decimal(5, 2)
+  notes               String?  @db.Text
+  paymentInstructions String?  @db.Text
 
   /// Billing cadence in months (1, 3, 4, 6, or 12).
-  intervalMonths    Int @default(1)
+  intervalMonths    Int      @default(1)
   /// Next date to issue an invoice (UTC noon semantics in app code).
   nextIssueDate     DateTime
   /// Due date = issue date + this many calendar days.
@@ -1837,15 +1837,15 @@ model RecurringInvoiceSchedule {
   serviceAssignmentId String?
 
   lastGeneratedAt DateTime?
-  lastInvoiceId   String?  @unique
-  lastInvoice     Invoice? @relation("ScheduleLastInvoice", fields: [lastInvoiceId], references: [id], onDelete: SetNull)
+  lastInvoiceId   String?   @unique
+  lastInvoice     Invoice?  @relation("ScheduleLastInvoice", fields: [lastInvoiceId], references: [id], onDelete: SetNull)
 
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  lineItems         RecurringScheduleLineItem[]
-  generatedInvoices Invoice[]                 @relation("ScheduleGeneratedInvoices")
-  legacyManualPilotActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotLegacySchedule")
+  lineItems                      RecurringScheduleLineItem[]
+  generatedInvoices              Invoice[]                       @relation("ScheduleGeneratedInvoices")
+  legacyManualPilotActivation    CanonicalManualPilotActivation? @relation("CanonicalManualPilotLegacySchedule")
   canonicalManualPilotActivation CanonicalManualPilotActivation? @relation("CanonicalManualPilotCanonicalSchedule")
 
   createdAt DateTime @default(now())
@@ -1878,12 +1878,12 @@ model InvoiceLineItem {
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
-  sortOrder   Int     @default(0)
-  description String
-  quantity    Decimal @default(1) @db.Decimal(12, 4)
-  unitLabel   String?
-  unitPrice   Decimal @db.Decimal(12, 2)
-  lineTotal   Decimal @default(0) @db.Decimal(12, 2)
+  sortOrder        Int                      @default(0)
+  description      String
+  quantity         Decimal                  @default(1) @db.Decimal(12, 4)
+  unitLabel        String?
+  unitPrice        Decimal                  @db.Decimal(12, 2)
+  lineTotal        Decimal                  @default(0) @db.Decimal(12, 2)
   serviceSnapshots InvoiceServiceSnapshot[]
 
   @@index([invoiceId])
@@ -1891,25 +1891,25 @@ model InvoiceLineItem {
 
 /// Immutable financial attribution for each commercial service represented in a native invoice.
 model InvoiceServiceSnapshot {
-  id                         String                @id @default(uuid())
-  invoiceId                  String
-  invoice                    Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  invoiceLineItemId          String?
-  invoiceLineItem            InvoiceLineItem?      @relation(fields: [invoiceLineItemId], references: [id], onDelete: SetNull)
-  subscriptionItemId         String?
-  subscriptionItem           SubscriptionItem?     @relation(fields: [subscriptionItemId], references: [id], onDelete: Restrict)
-  subscriptionItemRateId     String?
-  subscriptionItemRate       SubscriptionItemRate? @relation(fields: [subscriptionItemRateId], references: [id], onDelete: Restrict)
-  serviceLabelSnapshot       String?
-  agreedAmountPerCycleSnapshot Decimal?            @db.Decimal(12, 2)
-  billedAmount               Decimal               @db.Decimal(12, 2)
-  currency                   String                @db.VarChar(3)
-  servicePeriodStart         DateTime?             @db.Date
-  servicePeriodEnd           DateTime?             @db.Date
+  id                           String                @id @default(uuid())
+  invoiceId                    String
+  invoice                      Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceLineItemId            String?
+  invoiceLineItem              InvoiceLineItem?      @relation(fields: [invoiceLineItemId], references: [id], onDelete: SetNull)
+  subscriptionItemId           String?
+  subscriptionItem             SubscriptionItem?     @relation(fields: [subscriptionItemId], references: [id], onDelete: Restrict)
+  subscriptionItemRateId       String?
+  subscriptionItemRate         SubscriptionItemRate? @relation(fields: [subscriptionItemRateId], references: [id], onDelete: Restrict)
+  serviceLabelSnapshot         String?
+  agreedAmountPerCycleSnapshot Decimal?              @db.Decimal(12, 2)
+  billedAmount                 Decimal               @db.Decimal(12, 2)
+  currency                     String                @db.VarChar(3)
+  servicePeriodStart           DateTime?             @db.Date
+  servicePeriodEnd             DateTime?             @db.Date
   providerInvoiceLineReference String?
-  quantity                   Decimal               @default(1) @db.Decimal(12, 4)
-  allocationNotes            String?               @db.Text
-  createdAt                  DateTime              @default(now())
+  quantity                     Decimal               @default(1) @db.Decimal(12, 4)
+  allocationNotes              String?               @db.Text
+  createdAt                    DateTime              @default(now())
 
   @@unique([invoiceId, subscriptionItemId])
   @@index([invoiceId])
@@ -1961,7 +1961,7 @@ model ExpenseCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  expenses Expense[]
+  bills VendorBill[]
 
   @@index([sortOrder])
 }
@@ -1979,94 +1979,65 @@ model Vendor {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  expenses Expense[]
-  bills    VendorBill[]
+  bills VendorBill[]
 
   @@index([name])
   @@index([isActive, name])
 }
 
 model VendorBill {
-  id                  String          @id @default(uuid())
-  status              VendorBillStatus @default(draft)
+  id                  String              @id @default(uuid())
+  status              VendorBillStatus    @default(draft)
   vendorId            String
-  vendor              Vendor          @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  vendor              Vendor              @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   vendorInvoiceNumber String?
   description         String?
-  currency            String          @default("XCD")
-  total               Decimal         @db.Decimal(12, 2)
-  amountPaid          Decimal         @default(0) @db.Decimal(12, 2)
-  amountDue           Decimal         @db.Decimal(12, 2)
+  currency            String              @default("XCD")
+  total               Decimal             @db.Decimal(12, 2)
+  amountPaid          Decimal             @default(0) @db.Decimal(12, 2)
+  amountDue           Decimal             @db.Decimal(12, 2)
   billDate            DateTime
   dueDate             DateTime?
-  notes               String?         @db.Text
+  notes               String?             @db.Text
+  categoryId          String?
+  category            ExpenseCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  customerId          String?
+  customer            Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  deviceId            String?
+  device              Device?             @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  /// Vercel Blob url, `private:` prefix, or local `/uploads/expenses/…` path.
+  receiptStoragePath  String?
   createdById         String?
-  createdBy           User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy           User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
   payments            VendorBillPayment[]
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   @@index([vendorId])
+  @@index([categoryId])
+  @@index([customerId])
+  @@index([deviceId])
   @@index([status])
   @@index([dueDate])
   @@index([updatedAt])
 }
 
 model VendorBillPayment {
-  id           String              @id @default(uuid())
+  id           String               @id @default(uuid())
   billId       String
-  bill         VendorBill          @relation(fields: [billId], references: [id], onDelete: Cascade)
-  amount       Decimal             @db.Decimal(12, 2)
-  currency     String              @default("XCD")
+  bill         VendorBill           @relation(fields: [billId], references: [id], onDelete: Cascade)
+  amount       Decimal              @db.Decimal(12, 2)
+  currency     String               @default("XCD")
   method       ExpensePaymentMethod @default(bank_transfer)
   reference    String?
-  paidAt       DateTime            @default(now())
+  paidAt       DateTime             @default(now())
   notes        String?
   recordedById String?
-  recordedBy   User?               @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedBy   User?                @relation(fields: [recordedById], references: [id], onDelete: SetNull)
   voidedAt     DateTime?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
   @@index([billId, paidAt])
   @@index([recordedById])
-}
-
-model Expense {
-  id          String               @id @default(uuid())
-  vendor      String
-  vendorId    String?
-  vendorRecord Vendor?             @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  description String?
-  amount      Decimal              @db.Decimal(12, 2)
-  currency    String               @default("XCD")
-  expenseDate DateTime
-  method      ExpensePaymentMethod @default(card)
-  /// Cheque #, bank ref, card last four, etc.
-  reference   String?
-  notes       String?              @db.Text
-
-  categoryId String?
-  category   ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-
-  deviceId String?
-  device   Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
-
-  /// Vercel Blob url or `private:` prefix, or local `/uploads/expenses/…` path.
-  receiptStoragePath String?
-
-  recordedById String?
-  recordedBy   User?   @relation(fields: [recordedById], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([expenseDate(sort: Desc)])
-  @@index([categoryId])
-  @@index([vendorId])
-  @@index([customerId])
-  @@index([deviceId])
 }

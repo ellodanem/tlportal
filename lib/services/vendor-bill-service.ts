@@ -14,8 +14,18 @@ export type VendorBillInput = {
   billDate: Date;
   dueDate?: Date | null;
   notes?: string | null;
+  categoryId?: string | null;
+  customerId?: string | null;
+  deviceId?: string | null;
+  receiptStoragePath?: string | null;
   createdById?: string | null;
   status?: "draft" | "open";
+  initialPayment?: {
+    method: ExpensePaymentMethod;
+    reference?: string | null;
+    paidAt: Date;
+    recordedById?: string | null;
+  } | null;
 };
 
 export function effectiveVendorBillStatus(bill: { status: VendorBillStatus; amountDue: unknown; dueDate: Date | null }): VendorBillStatus {
@@ -27,6 +37,7 @@ export function effectiveVendorBillStatus(bill: { status: VendorBillStatus; amou
 
 export async function createVendorBill(input: VendorBillInput): Promise<string> {
   if (!(input.total > 0)) throw new Error("Bill total must be greater than zero.");
+  const paidNow = Boolean(input.initialPayment);
   const created = await prisma.vendorBill.create({
     data: {
       vendorId: input.vendorId,
@@ -34,13 +45,29 @@ export async function createVendorBill(input: VendorBillInput): Promise<string> 
       description: input.description ?? null,
       currency: (input.currency ?? "XCD").toUpperCase(),
       total: toMoneyString(input.total),
-      amountPaid: toMoneyString(0),
-      amountDue: toMoneyString(input.total),
+      amountPaid: toMoneyString(paidNow ? input.total : 0),
+      amountDue: toMoneyString(paidNow ? 0 : input.total),
       billDate: input.billDate,
       dueDate: input.dueDate ?? null,
       notes: input.notes ?? null,
+      categoryId: input.categoryId ?? null,
+      customerId: input.customerId ?? null,
+      deviceId: input.deviceId ?? null,
+      receiptStoragePath: input.receiptStoragePath ?? null,
       createdById: input.createdById ?? null,
-      status: input.status ?? "draft",
+      status: paidNow ? "paid" : input.status ?? "open",
+      ...(input.initialPayment ? {
+        payments: {
+          create: {
+            amount: toMoneyString(input.total),
+            currency: (input.currency ?? "XCD").toUpperCase(),
+            method: input.initialPayment.method,
+            reference: input.initialPayment.reference ?? null,
+            paidAt: input.initialPayment.paidAt,
+            recordedById: input.initialPayment.recordedById ?? null,
+          },
+        },
+      } : {}),
     },
     select: { id: true },
   });
@@ -66,6 +93,10 @@ export async function updateVendorBill(billId: string, input: VendorBillInput): 
       billDate: input.billDate,
       dueDate: input.dueDate ?? null,
       notes: input.notes ?? null,
+      categoryId: input.categoryId ?? null,
+      customerId: input.customerId ?? null,
+      deviceId: input.deviceId ?? null,
+      ...(input.receiptStoragePath !== undefined ? { receiptStoragePath: input.receiptStoragePath } : {}),
       status: input.status ?? "draft",
     },
   });

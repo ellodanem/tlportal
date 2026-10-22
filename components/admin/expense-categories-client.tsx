@@ -80,7 +80,7 @@ export function ExpenseCategoriesClient({
         </table>
       </div>
       {toggleState.error ? <p className="text-sm text-red-700">{toggleState.error}</p> : null}
-      <Link href="/admin/expenses" className="text-sm font-medium text-zinc-600 hover:underline">
+      <Link href="/admin/bills" className="text-sm font-medium text-zinc-600 hover:underline">
         ← Expenses
       </Link>
     </div>

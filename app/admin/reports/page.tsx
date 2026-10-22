@@ -43,7 +43,7 @@ export default async function AdminBillingReportsPage({ searchParams }: Props) {
             Billing reports
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-            Cash-basis P&amp;L snapshot, AR aging, and expense breakdown from native TL billing data.
+            Operational revenue, expense, and receivables reporting from native TL billing data.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
@@ -222,7 +222,7 @@ export default async function AdminBillingReportsPage({ searchParams }: Props) {
       </section>
 
       <p className="text-xs text-zinc-500 print:hidden">
-        Revenue uses payment received dates. Expenses use expense date. This is an operational snapshot, not formal
+        Revenue uses payment received dates. Expenses use their recorded expense date, whether paid or unpaid. This is an operational snapshot, not formal
         accounting. Use Export CSV for spreadsheets; use your browser&apos;s Print → Save as PDF for a PDF copy.
       </p>
     </div>

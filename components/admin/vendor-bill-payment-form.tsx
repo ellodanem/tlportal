@@ -13,7 +13,7 @@ export function VendorBillPaymentForm({ billId, amountDue, currency }: { billId:
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const [state, action, pending] = useActionState(recordVendorBillPaymentAction, initialState);
-  useEffect(() => { if (state.ok) { setOpen(false); router.refresh(); } }, [router, state.ok]);
+  useEffect(() => { if (state.ok) router.refresh(); }, [router, state.ok]);
   const methods = Object.keys(EXPENSE_PAYMENT_METHOD_LABELS) as ExpensePaymentMethod[];
   return <>
     <button type="button" onClick={() => setOpen(true)} className="rounded-lg border border-emerald-600 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30">Record payment</button>

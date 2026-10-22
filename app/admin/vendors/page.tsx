@@ -17,7 +17,7 @@ export default async function VendorsPage({ searchParams }: Props) {
       ...(query ? { OR: [{ name: { contains: query, mode: "insensitive" as const } }, { email: { contains: query, mode: "insensitive" as const } }, { phone: { contains: query, mode: "insensitive" as const } }] } : {}),
     },
     orderBy: { name: "asc" },
-    include: { _count: { select: { expenses: true } } },
+    include: { _count: { select: { bills: true } } },
   });
 
   return (
@@ -52,7 +52,7 @@ export default async function VendorsPage({ searchParams }: Props) {
                   <td className="px-4 py-3"><Link href={`/admin/vendors/${vendor.id}`} className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{vendor.name}</Link><p className="text-xs text-zinc-500">{vendor.currency}</p></td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{vendor.email ?? vendor.phone ?? "—"}</td>
                   <td className="px-4 py-3">Net {vendor.paymentTerms}</td>
-                  <td className="px-4 py-3 tabular-nums">{vendor._count.expenses}</td>
+                  <td className="px-4 py-3 tabular-nums">{vendor._count.bills}</td>
                   <td className="px-4 py-3 text-right"><Link href={`/admin/vendors/${vendor.id}`} className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">Open</Link></td>
                 </tr>
               ))}

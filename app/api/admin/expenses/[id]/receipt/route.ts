@@ -12,9 +12,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!session) return new Response("Unauthorized", { status: 401 });
 
   const { id } = await ctx.params;
-  const expense = await prisma.expense.findUnique({
+  const expense = await prisma.vendorBill.findUnique({
     where: { id },
-    select: { receiptStoragePath: true, vendor: true },
+    select: { receiptStoragePath: true, vendor: { select: { name: true } } },
   });
   if (!expense?.receiptStoragePath) return new Response("Not found", { status: 404 });
 
@@ -23,7 +23,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const contentType = expenseReceiptContentType(expense.receiptStoragePath);
   const ext = contentType === "application/pdf" ? "pdf" : contentType.includes("png") ? "png" : "jpg";
-  const slug = expense.vendor.replace(/[^\w.-]+/g, "_").slice(0, 40);
+  const slug = expense.vendor.name.replace(/[^\w.-]+/g, "_").slice(0, 40);
 
   return new Response(new Uint8Array(bytes), {
     headers: {
