@@ -89,38 +89,40 @@ export function CanonicalSubscriptionDetailWorkspace({
   const lifecycle = (subscription.lifecycleStatus ?? subscription.status).replaceAll("_", " ");
   const activeServices = subscription.items.filter((item) => !["ended", "canceled"].includes(item.status));
   const invoiceCount = subscription.invoices.length + subscription.billingInvoices.length;
+  const isActivationDraft = editable && subscription.controlMode === "canonical";
+  const serviceDetailsReady = activeServices.length > 0 && activeServices.every((item) => item.rates.length > 0);
+  const hardwareReady = activeServices.length > 0 && activeServices.every((item) => item.serviceAssignments.some((assignment) => assignment.endDate == null && assignment.status !== "cancelled"));
+  const billingReady = Boolean(subscription.collectionMethod && subscription.nextBillingDate);
+  const readinessComplete = serviceDetailsReady && hardwareReady && billingReady;
+  const readinessItems = [
+    { label: "Service details confirmed", detail: `${activeServices.length} billable service${activeServices.length === 1 ? "" : "s"} with current pricing`, complete: serviceDetailsReady },
+    { label: "Hardware assigned", detail: hardwareReady ? "Every current service has an active device" : "Assign a device to every current service", complete: hardwareReady },
+    { label: "Billing decision selected", detail: billingReady ? `${collectionLabel(subscription.collectionMethod)} · renews ${displayDate(subscription.nextBillingDate)}` : "Choose a collection method and renewal date", complete: billingReady },
+  ];
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 text-zinc-950 dark:text-zinc-50">
       <header>
         <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
           <Link href="/admin/subscriptions/canonical" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">Subscriptions</Link>
           <span aria-hidden="true">/</span>
           <span>{subscription.customerLabel}</span>
         </div>
-        <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{subscription.customerLabel}</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">{canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths)}</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">{subscription.customerLabel}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
-              <span>{subscription.reference || "No commercial reference"}</span>
-              <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-semibold capitalize text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{lifecycle}</span>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-semibold capitalize text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{isActivationDraft ? "Draft" : lifecycle}</span>
               <span className="rounded-full bg-zinc-100 px-2.5 py-1 font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{collectionLabel(subscription.collectionMethod)}</span>
               <span className="rounded-full bg-violet-100 px-2.5 py-1 font-semibold text-violet-800 dark:bg-violet-950 dark:text-violet-200">{authorityLabel(subscription.access)}</span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href={`/admin/customers/${subscription.customerId}/subscriptions`} className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">View customer</Link>
-            <a href="#services" className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">{canManage ? "Manage services" : "View services"}</a>
+            <a href="#services" className="rounded-lg bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-emerald-800">{canManage ? "Manage services" : "View services"}</a>
           </div>
         </div>
       </header>
-
-      <nav aria-label="Subscription sections" className="flex gap-6 overflow-x-auto border-b border-zinc-200 text-sm font-semibold dark:border-zinc-800">
-        {[["overview", "Overview"], ["services", `Services (${subscription.items.length})`], ["billing", "Billing & renewal"], ["invoices", `Invoices (${invoiceCount})`], ["history", "History & details"]].map(([id, label]) => (
-          <a key={id} href={`#${id}`} className="whitespace-nowrap border-b-2 border-transparent px-1 py-3 text-zinc-600 hover:border-emerald-600 hover:text-emerald-700 dark:text-zinc-300">{label}</a>
-        ))}
-      </nav>
 
       {previewQuery.error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{previewQuery.error}</p> : null}
       {previewQuery.pilot === "activated" ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">The test billing transition completed. The prior schedule stopped for the exact source arrangement, and this subscription now owns future billing.</p> : null}
@@ -129,45 +131,39 @@ export function CanonicalSubscriptionDetailWorkspace({
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100"><span className="font-semibold">Next action: review collection.</span> An open balance is beyond grace or a provider operation needs review. <Link href={`/admin/billing?q=${subscription.id}`} className="font-semibold underline">Open billing</Link>.</div>
       ) : subscription.controlMode === "shadow" ? (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100"><span className="font-semibold">Next action: review source authority.</span> This record remains read-only until approved reconciliation or adoption.</div>
-      ) : editable ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"><span className="font-semibold">Next action: complete setup and activation review.</span> This is an inactive draft; editing it does not activate billing or Stripe.</div>
       ) : null}
 
-      <section id="overview" className="grid gap-4 lg:grid-cols-[1.25fr_1fr_1fr]">
-        <article className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="font-semibold">Agreement summary</h2>
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div><dt className="text-zinc-500">Customer</dt><dd className="mt-1 font-medium">{subscription.customerLabel}</dd></div>
-            <div><dt className="text-zinc-500">Billing interval</dt><dd className="mt-1 font-medium">{canonicalIntervalLabel(subscription.billingIntervalMonths)}</dd></div>
-            <div><dt className="text-zinc-500">Start date</dt><dd className="mt-1 font-medium">{displayDate(subscription.commercialStartDate)}</dd></div>
-            <div><dt className="text-zinc-500">Next renewal</dt><dd className="mt-1 font-medium">{displayDate(subscription.nextBillingDate)}</dd></div>
-            <div><dt className="text-zinc-500">Grace period</dt><dd className="mt-1 font-medium">{subscription.gracePeriodDays} days</dd></div>
-            <div><dt className="text-zinc-500">Authority</dt><dd className="mt-1 font-medium">{authorityLabel(subscription.access)}</dd></div>
+      <section id="overview" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <article className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-start gap-3 border-b border-zinc-100 p-5 dark:border-zinc-800">
+            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-700 text-lg font-bold text-white">{isActivationDraft ? "↗" : "✓"}</span>
+            <div><h2 className="text-xl font-semibold">{isActivationDraft ? readinessComplete ? "Ready to activate" : "Finish subscription setup" : canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths)}</h2><p className="mt-1 text-sm leading-6 text-zinc-500">{isActivationDraft ? "Review the agreement below and choose the first billing decision." : `${activeServices.length} current service${activeServices.length === 1 ? "" : "s"} on this agreement.`}</p></div>
+          </div>
+          <dl className="grid gap-x-8 gap-y-5 p-5 text-sm sm:grid-cols-2">
+            <div><dt className="text-zinc-500">Customer</dt><dd className="mt-1 font-semibold">{subscription.customerLabel}</dd></div>
+            <div><dt className="text-zinc-500">Recurring amount</dt><dd className="mt-1 font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)} / {cycleUnit(subscription.billingIntervalMonths)}</dd></div>
+            <div><dt className="text-zinc-500">Agreement</dt><dd className="mt-1 font-semibold">{canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths)}{subscription.reference ? <span className="block text-xs font-normal text-zinc-500">{subscription.reference}</span> : null}</dd></div>
+            <div><dt className="text-zinc-500">Start date</dt><dd className="mt-1 font-semibold">{displayDate(subscription.commercialStartDate)}</dd></div>
+            <div><dt className="text-zinc-500">Billing interval</dt><dd className="mt-1 font-semibold">{canonicalIntervalLabel(subscription.billingIntervalMonths)}</dd></div>
+            <div><dt className="text-zinc-500">Next renewal</dt><dd className="mt-1 font-semibold">{displayDate(subscription.nextBillingDate)}</dd></div>
+            <div><dt className="text-zinc-500">Monthly recurring value</dt><dd className="mt-1 font-semibold tabular-nums">{money(subscription.normalizedMrr, currency)}</dd></div>
+            <div><dt className="text-zinc-500">Collection method</dt><dd className="mt-1 font-semibold">{collectionLabel(subscription.collectionMethod)}</dd></div>
           </dl>
         </article>
 
-        <article className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="font-semibold">Financial summary</h2>
-          <p className="mt-4 text-sm text-zinc-500">Monthly recurring value</p>
-          <p className="mt-1 text-3xl font-semibold tabular-nums">{money(subscription.normalizedMrr, currency)}</p>
-          <p className="mt-1 text-xs text-zinc-500">Normalized from {activeServices.length} current service{activeServices.length === 1 ? "" : "s"}</p>
-          <div className="my-4 border-t border-zinc-100 dark:border-zinc-800" />
-          <p className="text-sm text-zinc-500">Next cycle total</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)}</p>
-          <p className="mt-1 text-xs text-zinc-500">Due {displayDate(subscription.nextBillingDate)}</p>
-          <p className="mt-4 text-sm"><span className="text-zinc-500">Collection health</span><span className="ml-2 rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold capitalize text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{subscription.summary?.collectionHealth.replaceAll("_", " ") ?? "Unknown"}</span></p>
-        </article>
-
-        <article className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="font-semibold">Quick actions</h2>
-          <div className="mt-4 grid gap-2 text-sm">
-            <a href="#services" className="rounded-lg border border-zinc-200 px-3 py-3 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">{canManage ? "+ Add or manage service" : "View billable services"}</a>
-            <Link href={`/admin/billing?q=${subscription.id}`} className="rounded-lg border border-zinc-200 px-3 py-3 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">View billing history</Link>
-            <Link href="/admin/devices" className="rounded-lg border border-zinc-200 px-3 py-3 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Device inventory</Link>
-            <a href="#history" className="rounded-lg border border-zinc-200 px-3 py-3 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Provider and audit details</a>
+        <aside className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-lg font-semibold">Related actions</h2>
+          <div className="mt-3 grid gap-2 text-sm">
+            <Link href={`/admin/customers/${subscription.customerId}/subscriptions`} className="rounded-lg border border-zinc-200 px-3 py-3 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">View customer<span className="mt-1 block text-xs font-normal text-zinc-500">Open the customer profile</span></Link>
+            <Link href={`/admin/billing?q=${subscription.id}`} className="rounded-lg border border-zinc-200 px-3 py-3 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">View billing history<span className="mt-1 block text-xs font-normal text-zinc-500">See invoices and payments</span></Link>
+            <a href="#services" className="rounded-lg border border-zinc-200 px-3 py-3 font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Device details<span className="mt-1 block text-xs font-normal text-zinc-500">View service hardware</span></a>
           </div>
-        </article>
+        </aside>
       </section>
+
+      {isActivationDraft ? <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><div className="flex items-start gap-3"><span aria-hidden="true" className={`grid size-10 shrink-0 place-items-center rounded-full text-lg font-bold text-white ${readinessComplete ? "bg-emerald-700" : "bg-amber-600"}`}>{readinessComplete ? "✓" : "!"}</span><div><h2 className="text-lg font-semibold">Readiness checklist</h2><p className="mt-1 text-sm text-zinc-500">{readinessComplete ? "All required items are complete. You can now activate this subscription." : "Finish the remaining setup before activation."}</p></div></div><ul className="mt-5 grid gap-3">{readinessItems.map((item) => <li key={item.label} className={`flex items-center gap-3 rounded-lg border p-4 ${item.complete ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20" : "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20"}`}><span aria-hidden="true" className={`grid size-7 shrink-0 place-items-center rounded-full text-sm font-bold text-white ${item.complete ? "bg-emerald-700" : "bg-amber-600"}`}>{item.complete ? "✓" : "!"}</span><span className="min-w-0 flex-1"><strong className="block text-sm">{item.label}</strong><span className="mt-0.5 block text-xs text-zinc-500">{item.detail}</span></span><span className={`hidden rounded-full px-2.5 py-1 text-xs font-semibold sm:inline ${item.complete ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"}`}>{item.complete ? "Complete" : "Required"}</span></li>)}</ul></section> : null}
+
+      {isActivationDraft ? <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><div><h2 className="text-lg font-semibold">Initial billing decision</h2><p className="mt-1 text-sm text-zinc-500">Choose how to handle the first service period, then complete the activation review.</p></div>{subscription.collectionMethod === "manual_invoice" ? <CanonicalManualActivationForm subscriptionId={subscription.id} commercialStartDate={iso(subscription.commercialStartDate)} nextBillingDate={nextBillingDate} gracePeriodDays={subscription.gracePeriodDays} cycleTotal={subscription.summary?.recurringCycleTotal ?? null} serviceCount={subscription.items.length} /> : <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-100">Only the isolated test-provider Checkout workflow is available. Live Stripe remains default-deny.</p>}{subscription.collectionMethod ? <details className="mt-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"><summary className="cursor-pointer text-sm font-semibold">Change collection method</summary><CanonicalSubscriptionCollectionForm subscriptionId={subscription.id} value={subscription.collectionMethod} /></details> : null}</section> : null}
 
       <section id="services" className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
@@ -175,7 +171,16 @@ export function CanonicalSubscriptionDetailWorkspace({
           {canManage ? <a href="#service-management" className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Manage services</a> : null}
         </div>
         {subscription.items.length ? (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y divide-zinc-100 md:hidden dark:divide-zinc-800">
+            {subscription.items.map((item, index) => {
+              const rate = item.rates.at(-1);
+              const assignment = item.serviceAssignments.find((entry) => entry.endDate == null && entry.status !== "cancelled") ?? item.serviceAssignments.at(-1);
+              const device = assignment?.device;
+              return <article key={item.id} className="p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="font-semibold">{item.label || `Service ${index + 1}`}</h3><p className="mt-1 text-xs text-zinc-500">Effective {displayDate(item.billingEffectiveFrom)}</p></div><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold capitalize text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{item.status.replaceAll("_", " ")}</span></div><dl className="mt-4 grid grid-cols-2 gap-4 text-sm"><div><dt className="text-xs text-zinc-500">Device</dt><dd className="mt-1 font-medium">{device ? device.label?.trim() || device.deviceModel.name : "Not assigned"}</dd>{device?.imei ? <dd className="mt-0.5 break-all text-xs text-zinc-500">{device.imei}</dd> : null}</div><div><dt className="text-xs text-zinc-500">Actual rate</dt><dd className="mt-1 font-semibold tabular-nums">{rate ? `${money(rate.agreedAmountPerCycle.toString(), rate.currency)} / ${cycleUnit(rate.billingIntervalMonths)}` : "Not set"}</dd></div></dl><div className="mt-4">{canManage ? <CustomerServiceManagementModal subscriptionId={subscription.id} subscriptionItemId={item.id} serviceLabel={item.label || `Service ${index + 1}`} nextBillingDate={nextBillingDate} currentAmount={rate?.agreedAmountPerCycle.toString() ?? subscription.agreedAmountPerCycle?.toString() ?? "0.00"} replacementAssignments={replacementAssignments.map((candidate) => ({ id: candidate.id, label: candidate.device.label?.trim() || candidate.device.deviceModel.name }))} targetSubscriptions={transferTargets.map((target) => ({ id: target.id, label: target.name?.trim() || target.reference || "Subscription agreement" }))} assignment={assignment && assignment.endDate == null && assignment.status !== "cancelled" && device ? { id: assignment.id, deviceId: device.id, deviceLabel: device.label?.trim() || device.deviceModel.name, status: assignment.status } : null} /> : <a href={`#history-${item.id}`} className="inline-flex rounded-lg border border-zinc-300 px-3 py-2 font-semibold">View history</a>}</div></article>;
+            })}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1040px] text-sm">
               <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-950"><tr><th className="px-4 py-3">#</th><th className="px-4 py-3">Service / description</th><th className="px-4 py-3">Device</th><th className="px-4 py-3">SIM</th><th className="px-4 py-3">Actual rate</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Action</th></tr></thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -198,6 +203,7 @@ export function CanonicalSubscriptionDetailWorkspace({
               </tbody>
             </table>
           </div>
+          </>
         ) : <div className="p-10 text-center text-sm text-zinc-500">No billable services have been added.</div>}
       </section>
 
@@ -216,8 +222,9 @@ export function CanonicalSubscriptionDetailWorkspace({
         </details>
       ) : null}
 
-      <section id="billing" className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-lg font-semibold">Billing & renewal</h2><p className="mt-1 text-sm text-zinc-500">Cycle totals come from effective service rates. MRR is shown separately as a normalized comparison.</p></div><Link href={`/admin/billing?q=${subscription.id}`} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open subscription billing</Link></div>
+      <details id="billing" className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <summary className="cursor-pointer text-base font-semibold">Billing & renewal</summary>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><p className="text-sm text-zinc-500">Cycle totals come from effective service rates. MRR is shown separately as a normalized comparison.</p><Link href={`/admin/billing?q=${subscription.id}`} className="rounded-lg border border-zinc-300 px-3 py-2 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open subscription billing</Link></div>
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">Cycle total</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)}</dd></div>
           <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">MRR equivalent</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{money(subscription.normalizedMrr, currency)}</dd></div>
@@ -226,12 +233,13 @@ export function CanonicalSubscriptionDetailWorkspace({
           <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">Outstanding</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{money(subscription.summary?.outstandingBalance, currency)}</dd></div>
         </dl>
         {subscription.summary?.validationIssues.length ? <details className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20"><summary className="cursor-pointer font-semibold text-amber-900 dark:text-amber-200">Billing readiness issues ({subscription.summary.validationIssues.length})</summary><ul className="mt-2 list-disc space-y-1 pl-5 text-amber-900 dark:text-amber-200">{subscription.summary.validationIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}</ul></details> : null}
-      </section>
+      </details>
 
-      <section id="invoices" className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold">Invoices</h2><p className="mt-1 text-sm text-zinc-500">Native and provider references are shown separately to avoid double-counting.</p></div><span className="text-sm font-semibold">{invoiceCount} record{invoiceCount === 1 ? "" : "s"}</span></div>
+      <details id="invoices" className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <summary className="cursor-pointer text-base font-semibold">Invoices <span className="ml-2 text-sm font-normal text-zinc-500">{invoiceCount} record{invoiceCount === 1 ? "" : "s"}</span></summary>
+        <p className="mt-3 text-sm text-zinc-500">Native and provider references are shown separately to avoid double-counting.</p>
         <div className="mt-4 grid gap-5 lg:grid-cols-2"><div><h3 className="text-sm font-semibold">Native invoices</h3>{subscription.invoices.length ? <ul className="mt-2 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">{subscription.invoices.map((invoice) => <li key={invoice.id} className="flex justify-between gap-3 py-2"><span>{invoice.number ?? "Draft/reference pending"} Â· <span className="capitalize">{invoice.status.replaceAll("_", " ")}</span></span><span className="text-right tabular-nums">{money(invoice.total.toString(), currency)}<span className="block text-xs text-zinc-500">Due {money(invoice.amountDue.toString(), currency)}</span></span></li>)}</ul> : <p className="mt-2 text-sm text-zinc-500">No native financial references.</p>}</div><div><h3 className="text-sm font-semibold">Provider invoices</h3>{subscription.billingInvoices.length ? <ul className="mt-2 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">{subscription.billingInvoices.map((invoice) => <li key={invoice.id} className="flex justify-between gap-3 py-2"><span>{invoice.displayNumber ?? invoice.providerInvoiceNumber ?? "Provider invoice"} Â· <span className="capitalize">{invoice.status.replaceAll("_", " ")}</span></span><span className="tabular-nums">{money(invoice.amountXcd.toString(), invoice.provider === "stripe" ? "XCD" : currency)}</span></li>)}</ul> : <p className="mt-2 text-sm text-zinc-500">No provider financial references.</p>}</div></div>
-      </section>
+      </details>
 
       <section id="history" className="space-y-3">
         <h2 className="text-lg font-semibold">History & details</h2>
@@ -240,8 +248,6 @@ export function CanonicalSubscriptionDetailWorkspace({
         <details className="rounded-xl border border-sky-200 bg-sky-50/50 p-5 dark:border-sky-900 dark:bg-sky-950/20"><summary className="cursor-pointer font-semibold">Provider relationship and operations Â· {canonicalProviderStatusLabel(subscription.providerStatus)}</summary><p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">Local relationship and operation history only. This does not claim live Stripe state.</p><div className="mt-4 space-y-2">{subscription.providerLinks.length ? subscription.providerLinks.map((link) => <div key={link.id} className="rounded-lg bg-white p-3 text-sm dark:bg-zinc-900"><div className="flex flex-col justify-between gap-1 sm:flex-row"><span className="font-medium">{String(link.provider).toUpperCase()} Â· {link.externalSubscriptionId}</span><span className="capitalize text-zinc-500">{link.providerStatus || "status not recorded"}{link.endedAt ? " Â· ended" : " Â· open"}</span></div>{link.lastError ? <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">{link.lastError}</p> : null}</div>) : <p className="text-sm text-zinc-500">No provider relationship is recorded.</p>}{subscription.billingOperations.map((operation) => <div key={operation.id} className="rounded-lg bg-white p-3 text-sm dark:bg-zinc-900"><div className="flex justify-between gap-3"><span className="font-medium capitalize">{String(operation.type).replaceAll("_", " ")}</span><span className="capitalize text-zinc-500">{String(operation.status).replaceAll("_", " ")}</span></div>{operation.failureMessage ? <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">{operation.failureMessage}</p> : null}</div>)}</div></details>
 
         {subscription.operationalActivation ? <details className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><summary className="cursor-pointer font-semibold">Activation record</summary><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-zinc-500">First billing</dt><dd className="mt-1 font-medium">{subscription.operationalActivation.initialBillingMode === "advance_invoice" ? "Initial invoice issued" : "Explicitly deferred"}</dd></div><div><dt className="text-zinc-500">First coverage</dt><dd className="mt-1 font-medium">{displayDate(subscription.operationalActivation.initialPeriodStart)} to {displayDate(subscription.operationalActivation.initialPeriodEnd)}</dd></div><div><dt className="text-zinc-500">Approved by</dt><dd className="mt-1 font-medium">{subscription.operationalActivation.approvedBy.name || subscription.operationalActivation.approvedBy.email}</dd></div><div><dt className="text-zinc-500">Activated</dt><dd className="mt-1 font-medium">{displayDate(subscription.operationalActivation.performedAt)}</dd></div></dl></details> : null}
-
-        {editable && subscription.controlMode === "canonical" ? <details open className="rounded-xl border border-amber-200 bg-amber-50/50 p-5 dark:border-amber-900 dark:bg-amber-950/20"><summary className="cursor-pointer font-semibold">Draft activation and collection review</summary><div className="mt-4">{subscription.collectionMethod === "manual_invoice" ? <CanonicalManualActivationForm subscriptionId={subscription.id} commercialStartDate={iso(subscription.commercialStartDate)} nextBillingDate={nextBillingDate} gracePeriodDays={subscription.gracePeriodDays} cycleTotal={subscription.summary?.recurringCycleTotal ?? null} serviceCount={subscription.items.length} /> : <p className="rounded-lg border border-blue-200 bg-white p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-zinc-900 dark:text-blue-100">Only the existing isolated test-provider Checkout workflow is available. Live Stripe remains default-deny.</p>}{subscription.collectionMethod ? <div className="mt-5"><CanonicalSubscriptionCollectionForm subscriptionId={subscription.id} value={subscription.collectionMethod} /></div> : null}</div></details> : null}
 
         {subscription.controlMode === "shadow" && subscription.collectionMethod === "stripe_autocharge" ? <details open className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 dark:border-blue-900 dark:bg-blue-950/20"><summary className="cursor-pointer font-semibold">Stripe adoption review</summary><div className="mt-4"><CanonicalStripeAdoptionForm subscriptionId={subscription.id} serviceCount={subscription.items.length} cycleTotal={subscription.summary?.recurringCycleTotal ?? null} nextBillingDate={displayDate(subscription.nextBillingDate)} /></div></details> : null}
 
