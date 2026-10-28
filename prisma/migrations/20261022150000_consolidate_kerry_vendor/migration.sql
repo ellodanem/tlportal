@@ -8,14 +8,14 @@ WITH canonical AS (
 )
 UPDATE "VendorBill" AS bill
 SET "vendorId" = canonical."id"
-FROM canonical
-JOIN "Vendor" AS source ON source."id" = bill."vendorId"
-WHERE LOWER(TRIM(source."name")) IN (
-  'kerry',
-  'kerry a',
-  'technician - kerry',
-  'technician payment - kerry'
-);
+FROM canonical, "Vendor" AS source
+WHERE source."id" = bill."vendorId"
+  AND LOWER(TRIM(source."name")) IN (
+    'kerry',
+    'kerry a',
+    'technician - kerry',
+    'technician payment - kerry'
+  );
 
 UPDATE "Vendor"
 SET "isActive" = false,
