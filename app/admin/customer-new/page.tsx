@@ -85,7 +85,9 @@ export default async function CustomerNewPage({ searchParams }: Props) {
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   const rows = allRows.slice(0, CUSTOMER_NEW_LIST_LIMIT);
 
-  // Desktop shows the first customer by default; on small screens the list is shown until one is chosen.
+  // The two-pane layout needs `xl` width (the admin sidebar takes 14rem). Below that the list and the
+  // detail are separate screens: the list shows until a customer is chosen, then the detail with a back link.
+  // At `xl` the first customer is selected by default.
   const explicitSelection = Boolean(rawSelected);
   const selectedId = rawSelected ?? rows[0]?.id ?? null;
 
@@ -103,7 +105,9 @@ export default async function CustomerNewPage({ searchParams }: Props) {
   const listHref = customerNewHref({ q, filter });
 
   let detail: React.ReactNode = (
-    <div className="hidden rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 lg:block dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+    <div
+      className={`${explicitSelection ? "" : "hidden xl:block"} rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500 sm:p-10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400`}
+    >
       {selectedId ? "Customer not found." : "No customers to show. Create one with “New customer”."}
     </div>
   );
@@ -141,7 +145,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
 
     detail = (
       <CustomerDetail
-        className={explicitSelection ? "" : "hidden lg:flex"}
+        className={explicitSelection ? "" : "hidden xl:block"}
         listHref={listHref}
         subscriptionsHref={subscriptionsHref}
         createSubscriptionHref={createSubscriptionHref}
@@ -189,9 +193,9 @@ export default async function CustomerNewPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
+    <div className="grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start">
       <CustomerListPane
-        className={explicitSelection ? "hidden lg:flex" : ""}
+        className={explicitSelection ? "hidden xl:block" : ""}
         rows={rows}
         total={allRows.length}
         selectedId={selectedId}
@@ -200,7 +204,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
       />
       {detail}
       {allRows.length > rows.length ? (
-        <p className="text-xs text-zinc-500 lg:col-start-1">
+        <p className={`${explicitSelection ? "hidden xl:block" : ""} text-xs text-zinc-500 xl:col-start-1`}>
           Showing the first {rows.length} of {allRows.length} customers. Use search to narrow the list.
         </p>
       ) : null}

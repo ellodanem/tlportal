@@ -3,7 +3,7 @@
 import type { BrandingLogoSize } from "@prisma/client";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 
 import { AdminCreateMenu, AdminSectionCreateMenu } from "@/components/admin-create-menu";
@@ -29,6 +29,23 @@ import { IconDevice, IconLayers, IconUsers } from "@/components/dashboard/dashbo
 import { brandingLogoHeightClass } from "@/lib/branding/logo-size";
 
 const STORAGE_KEY = "tl-admin-sidebar-collapsed";
+
+/** Below Tailwind's `md` breakpoint the sidebar becomes an off-canvas drawer. */
+const MOBILE_QUERY = "(max-width: 767px)";
+
+function subscribeMobile(onChange: () => void) {
+  const mql = window.matchMedia(MOBILE_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+function useIsMobile() {
+  return useSyncExternalStore(
+    subscribeMobile,
+    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => false,
+  );
+}
 
 type NavLink = {
   href: string;
@@ -185,13 +202,18 @@ export function AdminSidebar({
 }) {
   const pathname = usePathname();
   const navSections = buildNavSections({ nativeBillingPrimary, invoilessLegacyUi });
-  const [collapsed, setCollapsed] = useState(() => {
+  const [collapsedPref, setCollapsed] = useState(() => {
     try {
       return typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY) === "1";
     } catch {
       return false;
     }
   });
+  const isMobile = useIsMobile();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  // The drawer always shows the full labelled menu; the icon-only mode is a desktop preference.
+  const collapsed = collapsedPref && !isMobile;
+  const drawerHidden = isMobile && !mobileOpen;
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -329,10 +351,30 @@ export function AdminSidebar({
   }
 
   return (
+    <>
+    <button
+      type="button"
+      onClick={() => setMobileOpen(true)}
+      className="absolute left-3 top-1.5 z-30 inline-flex size-10 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-700 shadow-sm hover:bg-zinc-50 md:hidden dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      aria-label="Open navigation menu"
+      aria-expanded={mobileOpen}
+    >
+      <svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M4 7h16M4 12h16M4 17h16" />
+      </svg>
+    </button>
+    {mobileOpen ? (
+      <div
+        className="fixed inset-0 z-40 bg-zinc-900/50 md:hidden"
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
+    ) : null}
     <aside
-      className={`flex shrink-0 flex-col border-r border-zinc-200 bg-white transition-[width] duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-900 ${
-        collapsed ? "w-[4.5rem]" : "w-56"
-      }`}
+      inert={drawerHidden}
+      className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shrink-0 flex-col border-r border-zinc-200 bg-white transition-[transform,width] duration-200 ease-out md:static md:z-auto md:max-w-none md:translate-x-0 dark:border-zinc-800 dark:bg-zinc-900 ${
+        mobileOpen ? "translate-x-0 shadow-xl" : "-translate-x-full"
+      } ${collapsed ? "md:w-[4.5rem]" : "md:w-56"}`}
     >
       <div
         className={`flex items-start gap-1 border-b border-zinc-100 dark:border-zinc-800 ${
@@ -378,15 +420,27 @@ export function AdminSidebar({
           )}
         </Link>
         {!collapsed ? (
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            className="mt-0.5 shrink-0 rounded-md p-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-          >
-            <IconNavChevronLeft className="h-5 w-5" />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="-mr-1 mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 md:hidden dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              aria-label="Close navigation menu"
+            >
+              <svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="mt-0.5 hidden shrink-0 rounded-md p-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 md:block dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+            >
+              <IconNavChevronLeft className="h-5 w-5" />
+            </button>
+          </>
         ) : null}
       </div>
 
@@ -408,7 +462,13 @@ export function AdminSidebar({
         <AdminCreateMenu sidebarCollapsed={collapsed} />
       </div>
 
-      <nav className={`flex min-h-0 flex-1 flex-col ${collapsed ? "overflow-y-auto p-2" : "overflow-y-auto p-3"}`}>
+      <nav
+        className={`flex min-h-0 flex-1 flex-col ${collapsed ? "overflow-y-auto p-2" : "overflow-y-auto p-3"}`}
+        onClick={(event) => {
+          // Close the mobile drawer after choosing a destination.
+          if ((event.target as HTMLElement).closest("a")) setMobileOpen(false);
+        }}
+      >
         <div className="flex flex-col gap-1">{overviewLinks.map((link) => renderNavLink(link))}</div>
 
         {navSections.map((section) => (
@@ -423,5 +483,6 @@ export function AdminSidebar({
         </div>
       </nav>
     </aside>
+    </>
   );
 }

@@ -8,7 +8,7 @@ import { customerFormInitialState } from "@/app/admin/customers/customer-form-st
 
 const labelClass = "block text-sm font-medium text-zinc-700 dark:text-zinc-300";
 const inputClass =
-  "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
+  "mt-1 w-full rounded-md border border-zinc-300 bg-white min-h-11 px-3 py-2 text-base text-zinc-900 shadow-sm outline-none focus:border-emerald-500 sm:min-h-10 sm:text-sm focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
 const sectionClass = "text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400";
 
 export function CreateCustomerForm() {
@@ -99,13 +99,13 @@ export function CreateCustomerForm() {
       <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row">
         <Link
           href="/admin/customer-new"
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          className="inline-flex min-h-11 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           Cancel
         </Link>
         <button
           type="submit"
-          className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+          className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
         >
           Create customer
         </button>
