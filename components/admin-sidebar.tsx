@@ -51,6 +51,7 @@ const overviewLinks: NavLink[] = [
 function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyUi: boolean }): NavSection[] {
   const salesLinks: NavLink[] = [
     { href: "/admin/customers", label: "Customers", Icon: IconUsers },
+    { href: "/admin/customer-new", label: "Customer (New)", Icon: IconUsers },
     { href: "/admin/proposals", label: "Proposals", Icon: IconNavProposal },
     { href: "/admin/billing", label: "Billing", Icon: IconNavInvoice },
     { href: "/admin/subscriptions", label: "Subscriptions", Icon: IconNavRecurring },
