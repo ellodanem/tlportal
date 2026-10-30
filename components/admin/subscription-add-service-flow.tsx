@@ -30,6 +30,56 @@ function displayDate(value: string) {
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(undefined, { dateStyle: "medium", timeZone: "UTC" });
 }
 
+/** Searchable, scrollable device list. Posts the selection as `deviceId`. */
+function DevicePicker({
+  devices,
+  value,
+  onChange,
+}: {
+  devices: ServiceAdditionContext["availableDevices"];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? devices.filter((device) => `${device.label} ${device.simLabel ?? ""}`.toLowerCase().includes(needle))
+    : devices;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
+      <input type="hidden" name="deviceId" value={value} />
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}
+        placeholder="Search by name, IMEI or SIM"
+        aria-label="Search available devices"
+        className="min-h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600 dark:border-zinc-700 dark:bg-zinc-950"
+      />
+      <ul role="listbox" aria-label="Available devices" className="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded-md border border-zinc-100 dark:border-zinc-800">
+        {visible.length ? visible.map((device) => {
+          const selected = device.id === value;
+          return (
+            <li key={device.id} role="option" aria-selected={selected}>
+              <button
+                type="button"
+                onClick={() => onChange(device.id)}
+                className={`flex min-h-11 w-full flex-col items-start px-3 py-2 text-left text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${selected ? "bg-emerald-50 font-semibold text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100" : "hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
+              >
+                <span className="min-w-0 break-words">{device.label}</span>
+                <span className="text-xs font-normal text-zinc-500">{device.simLabel ?? "no SIM"}</span>
+              </button>
+            </li>
+          );
+        }) : <li className="px-3 py-4 text-center text-sm text-zinc-500">No devices match “{query}”.</li>}
+      </ul>
+      <p className="mt-2 px-1 text-xs text-zinc-500">{value ? `Selected: ${devices.find((device) => device.id === value)?.label ?? "device"}` : `${visible.length} of ${devices.length} shown`}</p>
+    </div>
+  );
+}
+
 export function SubscriptionAddServiceFlow({
   context,
   creationKey,
@@ -222,10 +272,7 @@ export function SubscriptionAddServiceFlow({
             <input type="radio" name="hardwareChoice" checked={hardwareKind === "device"} onChange={() => setHardwareKind("device")} className="mt-1" /><span><span className="font-medium">Assign an available device</span><span className="block text-xs text-zinc-500">{context.availableDevices.length} unassigned device{context.availableDevices.length === 1 ? "" : "s"} in stock. Its SIM comes with it.</span></span>
           </label>
           {hardwareKind === "device" ? (
-            <select name="deviceId" value={deviceId} onChange={(event) => chooseDevice(event.target.value)} className={inputClass} aria-label="Available device">
-              <option value="">Select a device</option>
-              {context.availableDevices.map((device) => <option key={device.id} value={device.id}>{device.label}{device.simLabel ? ` · ${device.simLabel}` : " · no SIM"}</option>)}
-            </select>
+            <DevicePicker devices={context.availableDevices} value={deviceId} onChange={chooseDevice} />
           ) : null}
           {context.unlinkedAssignments.length ? (
             <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${hardwareKind === "assignment" ? "border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-zinc-200 dark:border-zinc-700"}`}>
