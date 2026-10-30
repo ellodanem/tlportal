@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
-import { CustomerServiceManagementModal } from "@/components/admin/customer-service-management-modal";
+import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
 import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import {
   canonicalIntervalLabel,
@@ -56,12 +56,6 @@ function subscriptionStatusClass(subscription: SubscriptionDetail) {
   if (subscription.lifecycleStatus === "active") return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200";
   if (subscription.lifecycleStatus === "paused") return "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100";
   return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200";
-}
-
-function serviceStatusClass(status: string) {
-  if (status === "active") return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200";
-  if (status === "paused") return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200";
-  return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
 }
 
 export default async function CustomerSubscriptionsPage({ params }: Props) {
@@ -139,20 +133,25 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
     (sum, subscription) => sum + subscription.items.filter((item) => !["ended", "canceled"].includes(item.status)).length,
     0,
   );
-  const monthlyValue = currentSubscriptions.reduce(
-    (sum, subscription) => sum + Number(subscription.normalizedMrr ?? 0),
-    0,
-  );
+  const recurringGroups = (() => {
+    const groups = new Map<string, { key: string; label: string; currency: string; cents: number }>();
+    for (const subscription of currentSubscriptions) {
+      const total = subscription.summary?.recurringCycleTotal;
+      if (total == null || !subscription.billingIntervalMonths) continue;
+      const currency = subscription.currency ?? "XCD";
+      const key = `${subscription.billingIntervalMonths}:${currency}`;
+      const group = groups.get(key) ?? { key, label: `${canonicalIntervalLabel(subscription.billingIntervalMonths)} (${currency})`, currency, cents: 0 };
+      group.cents += Math.round(Number(total) * 100);
+      groups.set(key, group);
+    }
+    return [...groups.values()].sort((left, right) => left.key.localeCompare(right.key, undefined, { numeric: true }));
+  })();
   const nextRenewal = currentSubscriptions
     .map((subscription) => subscription.nextBillingDate)
     .filter((value): value is Date => value != null)
     .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
   const attentionCount = currentSubscriptions.filter((subscription) => subscription.summary?.attentionRequired).length;
   const today = new Date();
-  const replacementAssignments = legacyAssignments.map((assignment) => ({
-    id: assignment.id,
-    label: assignment.device.label?.trim() || assignment.device.deviceModel.name,
-  }));
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 rounded-2xl bg-zinc-50/70 p-1 sm:p-2 dark:bg-zinc-950/40">
@@ -175,7 +174,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="min-h-35 rounded-2xl border border-blue-200/90 bg-blue-50/80 p-5 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/25"><div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"><svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 21h-15a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 4.5 3h9L21 10.5v9a1.5 1.5 0 0 1-1.5 1.5Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13 3v7.5h8M8 15h8M8 18h5" /></svg></span><div><p className="text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300">Current agreements</p><p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-zinc-950 dark:text-zinc-50">{currentSubscriptions.length}</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Independent billing arrangements</p></div></div></div>
         <div className="min-h-35 rounded-2xl border border-emerald-200/90 bg-emerald-50/80 p-5 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/25"><div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"><svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-5.1 7-11a7 7 0 1 0-14 0c0 5.9 7 11 7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg></span><div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Billable services</p><p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-zinc-950 dark:text-zinc-50">{activeServices}</p><p className="mt-1 text-xs leading-5 text-emerald-700 dark:text-emerald-300">Active GPS service identities</p></div></div></div>
-        <div className="min-h-35 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"><svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="5" rx="7" ry="3" /><path strokeLinecap="round" strokeLinejoin="round" d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7" /></svg></span><div><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Monthly value</p><p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-zinc-950 dark:text-zinc-50">{formatExpenseAmount(monthlyValue, "XCD")}</p><p className="mt-1 text-xs leading-5 text-zinc-500">Normalized recurring value</p></div></div></div>
+        <div className="min-h-35 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Recurring by schedule</p>{recurringGroups.length ? <ul className="mt-2 space-y-1">{recurringGroups.map((group) => <li key={group.key} className="flex items-baseline justify-between gap-3 text-sm"><span className="text-zinc-600 dark:text-zinc-400">{group.label}</span><span className="font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{money(group.cents / 100, group.currency)}</span></li>)}</ul> : <p className="mt-2 text-sm text-zinc-500">No recurring billing yet</p>}<p className="mt-2 text-xs leading-5 text-zinc-500">Each schedule is shown separately; different billing cycles are never added together.</p></div>
         <div className={`min-h-35 rounded-2xl border p-5 shadow-sm ${attentionCount ? "border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/25" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}`}><div className="flex items-start gap-3"><span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${attentionCount ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300" : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"}`}><svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="16" rx="2" /><path strokeLinecap="round" d="M7 3v4M17 3v4M3 10h18" /></svg></span><div><p className={`text-xs font-semibold uppercase tracking-wide ${attentionCount ? "text-amber-800 dark:text-amber-300" : "text-zinc-500"}`}>Next renewal</p><p className="mt-2 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{date(nextRenewal)}</p><p className="mt-1 text-xs leading-5 text-zinc-500">{attentionCount ? `${attentionCount} agreement${attentionCount === 1 ? "" : "s"} need attention` : "Agreement schedule · see collection status above"}</p></div></div></div>
       </section>
 
@@ -216,15 +215,14 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
             {subscription.collectionMethod === "stripe_autocharge" ? <p className={`mt-4 text-xs ${providerConnected ? "text-blue-700 dark:text-blue-300" : "text-amber-800 dark:text-amber-300"}`}>{providerConnected ? "Card billing relationship recorded" : "Card billing relationship needs review"}</p> : <p className="mt-4 text-xs text-zinc-500">Manual collection · invoices and payments remain in customer Billing</p>}
           </header>
 
-          <section className="p-5 sm:p-6"><h3 className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Billable GPS services</h3><p className="mt-1 text-sm text-zinc-500">Each service keeps its own price and device-assignment history.</p>
-            {subscription.items.length ? <div className="mt-5 space-y-3">{subscription.items.map((item) => {
+          <section className="p-5 sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><h3 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Services</h3>{subscription.controlMode === "canonical" && ["pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? "") ? <Link href={`/admin/subscriptions/canonical/${subscription.id}/add-service`} className="min-h-11 w-fit rounded-lg border border-emerald-300 px-3 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30">Add service</Link> : null}</div>
+            {subscription.items.length ? <ul className="mt-3 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">{subscription.items.map((item) => {
               const rate = currentRate(item, today);
               const assignment = currentAssignment(item);
-              const deviceLabel = assignment?.device.label?.trim() || assignment?.device.deviceModel.name || "No device assigned";
-              const canManage = subscription.controlMode === "canonical" && ["editable_draft", "canonical_operational"].includes(subscription.access) && !["ended", "canceled"].includes(item.status);
-              const serviceLabel = item.label?.trim() || "GPS tracking service";
-              return <div key={item.id} className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,.9fr)_auto] lg:items-center lg:gap-0 dark:border-zinc-700 dark:bg-zinc-900"><div className="min-w-0 lg:pr-5"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-zinc-950 dark:text-zinc-50">{serviceLabel}</p><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${serviceStatusClass(item.status)}`}>{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-zinc-500">Service since {date(item.serviceActivatedDate ?? item.billingEffectiveFrom)}</p></div><div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:border-r sm:pr-5 lg:border-l lg:border-r-0 lg:pl-5 lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Device / SIM assignment</p><p className="mt-1 truncate text-sm font-medium text-zinc-900 dark:text-zinc-100" title={deviceLabel}>{deviceLabel}</p>{assignment ? <><Link href={`/admin/devices/${assignment.device.id}/edit?tab=assignment`} className="mt-1 inline-block text-xs font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">View assignment</Link>{assignment.status === "suspended" ? <p className="mt-1 text-xs font-semibold text-amber-800 dark:text-amber-300">Assignment paused</p> : null}</> : null}</div><div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:pl-5 lg:border-l lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Current price</p><p className="mt-1 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{rate ? money(rate.agreedAmountPerCycle.toString(), rate.currency) : "Not set"}</p>{rate ? <p className="mt-1 text-xs capitalize text-zinc-500">{rate.classification} / {canonicalIntervalLabel(rate.billingIntervalMonths).toLowerCase()}</p> : null}</div>{canManage ? <CustomerServiceManagementModal subscriptionId={subscription.id} subscriptionItemId={item.id} serviceLabel={serviceLabel} nextBillingDate={subscription.nextBillingDate?.toISOString().slice(0, 10) ?? ""} currentAmount={rate?.agreedAmountPerCycle.toString() ?? subscription.agreedAmountPerCycle?.toString() ?? "0.00"} replacementAssignments={replacementAssignments} targetSubscriptions={currentSubscriptions.filter((target) => target.id !== subscription.id && target.controlMode === "canonical" && ["editable_draft", "canonical_operational"].includes(target.access)).map((target) => ({ id: target.id, label: target.name?.trim() || target.reference || "Subscription agreement" }))} assignment={assignment ? { id: assignment.id, deviceId: assignment.device.id, deviceLabel, status: assignment.status } : null} /> : <Link href={`/admin/subscriptions/canonical/${subscription.id}#services`} className="w-fit rounded-lg border border-emerald-300 px-3 py-2 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30 dark:focus-visible:ring-offset-zinc-900">View</Link>}</div>;
-            })}</div> : <div className="mt-4 rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">No billable services have been added to this agreement.</div>}
+              const deviceLabel = assignment?.device.label?.trim() || assignment?.device.deviceModel.name || "No device";
+              return <li key={item.id} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between"><span className="min-w-0"><span className="font-medium text-zinc-950 dark:text-zinc-50">{item.label?.trim() || "GPS tracking service"}</span><span className="ml-2 text-xs text-zinc-500">{deviceLabel}</span></span><span className="shrink-0 tabular-nums text-zinc-700 dark:text-zinc-300">{rate ? `${money(rate.agreedAmountPerCycle.toString(), rate.currency)} / ${cycleUnitLabel(rate.billingIntervalMonths)}` : "Price not set"}</span></li>;
+            })}</ul> : <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-4 text-center text-sm text-zinc-500 dark:border-zinc-700">No services have been added to this subscription yet.</p>}
           </section>
         </article>;
       })}</div> : <section className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900"><h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">No subscriptions have been set up</h2><p className="mt-1 text-sm text-zinc-500">Create the customer’s first agreement, then add each billable tracking service to it.</p><Link href={`/admin/subscriptions/canonical/new?customerId=${customer.id}`} className="mt-4 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900">Add subscription</Link></section>}

@@ -29,6 +29,10 @@ import {
   updateDraftSubscriptionCollectionMethod,
   updateDraftSubscriptionItemCommercialDetails,
 } from "@/lib/services/canonical-subscription-application-service";
+import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
+import { SubscriptionProrationError } from "@/lib/domain/subscription-proration";
+import { createAnnualServiceAdjustmentInvoice } from "@/lib/services/canonical-annual-adjustment-service";
+import { addServiceToSubscription } from "@/lib/services/subscription-service-addition-service";
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
 import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
@@ -63,6 +67,8 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
     || error instanceof CanonicalSubscriptionUiError
     || error instanceof CanonicalSubscriptionActivationError
     || error instanceof CanonicalStripeAdoptionError
+    || error instanceof CanonicalAnnualAdjustmentError
+    || error instanceof SubscriptionProrationError
   ) {
     return { error: error.message };
   }
@@ -332,8 +338,12 @@ export async function createCanonicalOnboardingAction(
   formData: FormData,
 ): Promise<CanonicalSubscriptionFormState> {
   try {
-    await requireStaff();
+    const staff = await requireStaff();
     const customerMode = text(formData, "customerMode");
+    const aligned = text(formData, "renewalAlignment") === "align_to_renewal";
+    const adjustmentMethods = formData.getAll("serviceAdjustmentMethod").map((value) => String(value));
+    const adjustmentAmounts = formData.getAll("serviceAdjustmentAmount").map((value) => String(value).trim());
+    const adjustmentReasons = formData.getAll("serviceAdjustmentReason").map((value) => String(value).trim());
     const rawPhone = optionalText(formData, "newCustomerPhone");
     const phone = rawPhone ? normalizeWhatsAppPhone(rawPhone) : null;
     if (rawPhone && !phone) return { error: "Enter the new customer phone with a valid country code." };
@@ -371,13 +381,35 @@ export async function createCanonicalOnboardingAction(
       billingAnchorDate: text(formData, "billingAnchorDate"),
       nextBillingDate: text(formData, "nextBillingDate"),
       gracePeriodDays: Number(text(formData, "gracePeriodDays") || "7"),
-      items: labels.map((label, index) => ({
-        label,
-        agreedAmountPerCycle: amounts[index],
-        rateClassification: classifications[index] === "negotiated" ? "negotiated" : "standard",
-        rateChangeReason: classifications[index] === "negotiated" ? "Initial negotiated onboarding rate" : "Initial onboarding rate",
-        deviceId: deviceIds[index] || null,
-      })),
+      creationKey: optionalText(formData, "creationKey"),
+      renewalAlignment: aligned ? "align_to_renewal" : "new_cycle",
+      authorizedById: staff.sub,
+      items: labels.map((label, index) => {
+        const method = adjustmentMethods[index];
+        const hasAdjustment = aligned && (method === "daily_proration" || method === "monthly_rounded" || method === "manual_amount");
+        return {
+          label,
+          agreedAmountPerCycle: amounts[index],
+          rateClassification: classifications[index] === "negotiated" ? "negotiated" as const : "standard" as const,
+          rateChangeReason: classifications[index] === "negotiated" ? "Initial negotiated onboarding rate" : "Initial onboarding rate",
+          deviceId: deviceIds[index] || null,
+          createdById: staff.sub,
+          initialAdjustment: hasAdjustment
+            ? {
+              method: method as "daily_proration" | "monthly_rounded" | "manual_amount",
+              manualAmount: adjustmentAmounts[index] || null,
+              reason: adjustmentReasons[index] || null,
+            }
+            : null,
+        };
+      }),
+    });
+    await recordOperationalEvent({
+      category: "subscription.onboarding_draft_created",
+      summary: "Customer subscription draft created through the onboarding wizard.",
+      customerId: result.customerId,
+      actorUserId: staff.sub,
+      payload: { subscriptionId: result.subscription.id, renewalAlignment: aligned ? "align_to_renewal" : "new_cycle" },
     });
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${result.customerId}`);
@@ -420,6 +452,114 @@ export async function addCanonicalDraftItemAction(
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
     return { message: "Service added. It joins recurring billing on its configured effective date; no invoice or notification was created." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * The single contextual "Add service" flow. Creates the service, its rate, optional
+ * hardware link and optional agreed partial-period record in ONE transaction. It never
+ * creates an invoice, touches Stripe, or notifies the customer. Retries are safe: the
+ * form's creationKey makes a repeated submission return the first result.
+ */
+export async function addServiceAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const { session, subscription } = await requireManageableCanonicalSubscription(subscriptionId);
+    const hardwareKind = text(formData, "hardwareKind");
+    const adjustmentMethod = text(formData, "adjustmentMethod");
+    const result = await addServiceToSubscription({
+      subscriptionId,
+      creationKey: text(formData, "creationKey"),
+      label: text(formData, "label"),
+      startDate: text(formData, "startDate"),
+      agreedAmountPerCycle: text(formData, "agreedAmountPerCycle"),
+      rateClassification: text(formData, "classification") === "negotiated" ? "negotiated" : "standard",
+      notes: optionalText(formData, "notes"),
+      hardware: hardwareKind === "device"
+        ? { kind: "device", deviceId: text(formData, "deviceId") }
+        : hardwareKind === "assignment"
+          ? { kind: "assignment", assignmentId: text(formData, "assignmentId") }
+          : { kind: "none" },
+      adjustment: adjustmentMethod === "daily_proration" || adjustmentMethod === "monthly_rounded" || adjustmentMethod === "manual_amount"
+        ? { method: adjustmentMethod, manualAmount: optionalText(formData, "adjustmentAmount"), reason: optionalText(formData, "adjustmentReason") }
+        : { method: "none" },
+      actorUserId: session.sub,
+    });
+    if (result.created) {
+      await recordOperationalEvent({
+        category: "subscription.service_added",
+        summary: "Service added to an existing subscription through the add-service flow.",
+        customerId: subscription.customerId,
+        actorUserId: session.sub,
+        payload: {
+          subscriptionId,
+          subscriptionItemId: result.subscriptionItemId,
+          hardware: hardwareKind || "none",
+          initialAdjustment: result.proration
+            ? { method: result.proration.method, amountCents: result.proration.amountCents, isOverride: result.proration.isOverride }
+            : null,
+        },
+      });
+    }
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
+    revalidatePath("/admin/devices");
+    return {
+      message: result.created
+        ? "Service added. It joins recurring billing on the next renewal. No invoice, charge or notification was created."
+        : "This service was already added; nothing was duplicated.",
+      next: `/admin/subscriptions/canonical/${subscriptionId}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * Creates the open, unsent invoice for an AGREED partial-period charge. Gated: it is
+ * unavailable in production until the operations flag is enabled, always needs the
+ * reviewed preview token plus an explicit confirmation, and never sends or collects.
+ */
+export async function createServiceAdjustmentInvoiceAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  const subscriptionItemId = text(formData, "subscriptionItemId");
+  try {
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    if (text(formData, "confirmInvoice") !== "yes") {
+      return { error: "Tick the confirmation to create this invoice. It will be created open and will not be sent." };
+    }
+    const result = await createAnnualServiceAdjustmentInvoice({
+      subscriptionItemId,
+      generationKey: text(formData, "generationKey"),
+      confirmationToken: text(formData, "confirmationToken"),
+      confirmed: true,
+      authorizedById: session.sub,
+    });
+    if (result.created) {
+      await recordOperationalEvent({
+        category: "subscription.adjustment_invoice_created",
+        summary: "Invoice created for an agreed partial-period charge. Not sent.",
+        customerId: subscription.customerId,
+        actorUserId: session.sub,
+        payload: { subscriptionId, subscriptionItemId, invoiceId: result.invoice?.invoiceId ?? null },
+      });
+    }
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(`/admin/customers/${subscription.customerId}/billing`);
+    return {
+      message: result.created
+        ? "Invoice created and left open. It has not been sent and nothing was collected."
+        : "An invoice already exists for this charge; nothing was duplicated.",
+    };
   } catch (error) {
     return actionError(error);
   }

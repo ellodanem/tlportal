@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { activateCanonicalManualSubscriptionAction, type CanonicalSubscriptionFormState } from "@/app/admin/subscriptions/canonical/actions";
+import { addMonthsClamped } from "@/lib/domain/subscription-proration";
 
 const initialState: CanonicalSubscriptionFormState = {};
 const inputClass = "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600 dark:border-zinc-700 dark:bg-zinc-950";
@@ -16,6 +17,7 @@ export function CanonicalManualActivationForm({
   gracePeriodDays,
   cycleTotal,
   serviceCount,
+  billingIntervalMonths,
 }: {
   subscriptionId: string;
   commercialStartDate: string;
@@ -23,15 +25,24 @@ export function CanonicalManualActivationForm({
   gracePeriodDays: number;
   cycleTotal: string | null;
   serviceCount: number;
+  billingIntervalMonths?: number | null;
 }) {
   const [state, action, pending] = useActionState(activateCanonicalManualSubscriptionAction, initialState);
-  const [mode, setMode] = useState<"advance_invoice" | "deferred">("advance_invoice");
+  // A subscription aligned to an existing renewal starts part-way through the cycle.
+  // A full-interval advance invoice would over-bill it, so deferral is the safe default;
+  // the agreed partial-period amount is handled on the details screen, never inferred.
+  const partialFirstPeriod = Boolean(
+    billingIntervalMonths && commercialStartDate && nextBillingDate
+    && addMonthsClamped(nextBillingDate, -billingIntervalMonths) < commercialStartDate,
+  );
+  const [mode, setMode] = useState<"advance_invoice" | "deferred">(partialFirstPeriod ? "deferred" : "advance_invoice");
   const [charges, setCharges] = useState<Charge[]>([]);
   const chargeTotal = charges.reduce((total, charge) => total + (Number(charge.quantity) || 0) * (Number(charge.unitPrice) || 0), 0);
 
   return <form action={action} className="mt-5 space-y-5">
     <input type="hidden" name="subscriptionId" value={subscriptionId} />
     <div><h3 className="font-semibold">Activation review</h3><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Activation records staff approval and starts one future recurring schedule. It does not record a payment or contact the customer.</p></div>
+    {partialFirstPeriod ? <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">This subscription starts part-way through its billing cycle, so a full-period invoice would over-bill. Deferral is pre-selected. Any agreed partial-period charge stays on the subscription page and is invoiced separately, only on your explicit confirmation.</p> : null}
     <dl className="grid gap-3 rounded-lg bg-zinc-50 p-3 text-sm sm:grid-cols-3 dark:bg-zinc-950"><div><dt className="text-zinc-500">Services</dt><dd className="mt-1 font-semibold">{serviceCount}</dd></div><div><dt className="text-zinc-500">Recurring cycle</dt><dd className="mt-1 font-semibold tabular-nums">{cycleTotal ? `EC$${cycleTotal}` : "Unavailable"}</dd></div><div><dt className="text-zinc-500">Next renewal</dt><dd className="mt-1 font-semibold">{nextBillingDate || "Required"}</dd></div></dl>
 
     <fieldset className="space-y-3"><legend className="sr-only">Initial billing decision</legend><label className={`flex min-h-20 cursor-pointer gap-3 rounded-lg border p-4 text-sm transition-colors ${mode === "advance_invoice" ? "border-emerald-400 bg-emerald-50/70 dark:border-emerald-700 dark:bg-emerald-950/20" : "border-zinc-200 dark:border-zinc-700"}`}><input className="mt-1 size-5 accent-emerald-700" type="radio" name="initialBillingMode" value="advance_invoice" checked={mode === "advance_invoice"} onChange={() => setMode("advance_invoice")} /><span><strong>Invoice first service period now</strong><br /><span className="mt-1 block text-zinc-500">Creates one open invoice for the coverage period. No delivery or payment is made automatically.</span></span></label><label className={`flex min-h-20 cursor-pointer gap-3 rounded-lg border p-4 text-sm transition-colors ${mode === "deferred" ? "border-emerald-400 bg-emerald-50/70 dark:border-emerald-700 dark:bg-emerald-950/20" : "border-zinc-200 dark:border-zinc-700"}`}><input className="mt-1 size-5 accent-emerald-700" type="radio" name="initialBillingMode" value="deferred" checked={mode === "deferred"} onChange={() => setMode("deferred")} /><span><strong>Defer first invoice until next renewal</strong><br /><span className="mt-1 block text-zinc-500">No invoice is created now. The first invoice is generated on the configured renewal date.</span></span></label></fieldset>

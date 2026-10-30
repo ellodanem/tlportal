@@ -259,10 +259,12 @@ test("customer billing keeps financial history separate from subscription renewa
   assert.match(billing, /Manage renewals/);
   assert.match(renewals, /CustomerRenewalOpsPanel/);
   assert.match(renewals, /Subscription operations/);
-  assert.match(customerSubscriptions, /Billable GPS services/);
-  assert.match(customerSubscriptions, /Current price/);
-  assert.match(customerSubscriptions, /Device \/ SIM assignment/);
-  assert.match(customerSubscriptions, /#service-management/);
+  // One compact card per subscription; per-service management lives only on the single details screen.
+  assert.match(customerSubscriptions, /Recurring by schedule/);
+  assert.match(customerSubscriptions, /different billing cycles are never added together/);
+  assert.match(customerSubscriptions, /\/add-service/);
+  assert.match(customerSubscriptions, /Manage subscription/);
+  assert.doesNotMatch(customerSubscriptions, /CustomerServiceManagementModal/);
   assert.match(customerSubscriptions, /CustomerAssignmentServiceActions/);
   assert.match(customerSubscriptions, /Paused device assignments/);
   assert.match(customerSubscriptions, /Legacy installation assignments/);
@@ -307,12 +309,16 @@ test("canonical workflow confirms commercial changes and never adds direct billi
   assert.match(create, /Review before saving/);
   assert.match(create, /does not activate billing/);
   assert.doesNotMatch(create, /stripe\.subscriptions\.create|generateRecurringInvoice|createInvoice/);
-  assert.match(onboarding, /Choose an existing customer or create a new one/);
+  // Six-step wizard: Customer -> Plan -> Customize -> Hardware -> Billing -> Review.
+  assert.match(onboarding, /\["Customer", "Plan", "Customize", "Hardware", "Billing", "Review"\]/);
+  assert.match(onboarding, /Who is this subscription for\?/);
   assert.match(onboarding, /Vehicle \/ asset name/);
   assert.match(onboarding, /selectServiceDevice/);
   assert.match(onboarding, /labelTouched/);
-  assert.match(onboarding, /Available device \/ SIM/);
-  assert.match(onboarding, /does not activate billing or create financial records/);
+  assert.match(onboarding, /Assign hardware later/);
+  assert.match(onboarding, /name="creationKey"/);
+  assert.match(onboarding, /Create draft/);
+  assert.match(onboarding, /does not activate billing, create an invoice, contact Stripe, or notify anyone/);
   assert.doesNotMatch(onboarding, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
 });
 

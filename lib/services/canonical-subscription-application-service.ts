@@ -24,6 +24,7 @@ import {
   type AnnualProrationPreview,
   type ExactMoneyInput,
 } from "@/lib/domain/canonical-subscription-application";
+import { addMonthsClamped, computeProration, type SubscriptionProrationMethod } from "@/lib/domain/subscription-proration";
 import {
   assertNoOverlappingItemRates,
   assertValidEffectiveRatePeriod,
@@ -77,6 +78,8 @@ export type CreateCanonicalSubscriptionItemInput = {
   rateChangeReason?: string | null;
   serviceAssignmentId?: string | null;
   createdById?: string | null;
+  /** Idempotency key: a retried submission resolves to the already-created service. */
+  creationKey?: string | null;
 };
 
 export type CreateDraftCanonicalSubscriptionInput = {
@@ -218,7 +221,44 @@ async function validateAssignmentForItem(
   }
 }
 
-async function addBillableServiceInTransaction(
+/**
+ * Assign an available device (and the SIM it carries) to a customer. Shared by
+ * onboarding and the add-service flow so both enforce the same availability rules.
+ * Hardware assignment is operational; it never creates or changes a billable rate.
+ */
+export async function createAssignmentForAvailableDeviceInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { customerId: string; deviceId: string; startDate: Date; nextDueDate: Date | null; intervalMonths: number | null },
+): Promise<string> {
+  const device = await tx.device.findUnique({
+    where: { id: input.deviceId },
+    select: { id: true, status: true, simCardId: true },
+  });
+  if (!device || ["decommissioned", "lost"].includes(device.status)) {
+    validation("DEVICE_UNAVAILABLE", "A selected device is unavailable for assignment.");
+  }
+  const openAssignment = await tx.serviceAssignment.findFirst({
+    where: { deviceId: device.id, endDate: null, status: { not: "cancelled" } },
+    select: { id: true },
+  });
+  if (openAssignment) validation("DEVICE_ASSIGNMENT_CONFLICT", "A selected device already has an active service assignment.");
+  const assignment = await tx.serviceAssignment.create({
+    data: {
+      customerId: input.customerId,
+      deviceId: device.id,
+      simCardId: device.simCardId,
+      status: "active",
+      startDate: input.startDate,
+      nextDueDate: input.nextDueDate,
+      intervalMonths: input.intervalMonths,
+    },
+    select: { id: true },
+  });
+  await tx.device.update({ where: { id: device.id }, data: { status: "assigned" } });
+  return assignment.id;
+}
+
+export async function addBillableServiceInTransaction(
   tx: Prisma.TransactionClient,
   subscriptionId: string,
   input: CreateCanonicalSubscriptionItemInput,
@@ -284,6 +324,7 @@ async function addBillableServiceInTransaction(
       customerSubscriptionId: subscription.id,
       label: cleanOptionalText(input.label),
       notes: cleanOptionalText(input.notes),
+      creationKey: cleanOptionalText(input.creationKey),
       status: itemStatusForSubscription(fields.lifecycleStatus),
       serviceActivatedDate,
       billingEffectiveFrom,
@@ -379,11 +420,22 @@ export type CanonicalOnboardingCustomerInput = {
 
 export type CanonicalOnboardingServiceInput = CreateCanonicalSubscriptionItemInput & {
   deviceId?: string | null;
+  /** Agreed partial-period charge for an aligned first renewal. Ignored for a new cycle. */
+  initialAdjustment?: { method: SubscriptionProrationMethod; manualAmount?: string | null; reason?: string | null } | null;
 };
 
 export type CreateCanonicalOnboardingInput = Omit<CreateDraftCanonicalSubscriptionInput, "customerId" | "items" | "controlMode"> & {
   customer: CanonicalOnboardingCustomerInput;
   items: CanonicalOnboardingServiceInput[];
+  /** Idempotency key: a retried wizard submission returns the first result instead of duplicating it. */
+  creationKey?: string | null;
+  /**
+   * `align_to_renewal`: nextBillingDate is an existing renewal date; services start
+   * `commercialStartDate` and join recurring billing on that renewal, with an optional
+   * agreed partial-period charge. `new_cycle` (default): a full interval from the start.
+   */
+  renewalAlignment?: "new_cycle" | "align_to_renewal";
+  authorizedById?: string | null;
 };
 
 /**
@@ -401,8 +453,26 @@ export async function createCanonicalOnboarding(
   const dates = assertSubscriptionDates(input);
   const gracePeriodDays = canonicalGracePeriodDays(input.gracePeriodDays);
   if (!input.items.length) validation("SUBSCRIPTION_HAS_NO_ITEMS", "Add at least one tracking service.");
+  const creationKey = cleanOptionalText(input.creationKey);
+  const aligned = input.renewalAlignment === "align_to_renewal";
+  if (aligned) {
+    if (dates.nextBillingDate <= dates.commercialStartDate) {
+      validation("ALIGNED_RENEWAL_NOT_AFTER_START", "The aligned renewal date must be after the service start date.");
+    }
+    const earliestCycleStart = commercialDate(addMonthsClamped(commercialDateString(dates.nextBillingDate), -billingIntervalMonths), "alignedRenewal");
+    if (dates.commercialStartDate < earliestCycleStart) {
+      validation("ALIGNED_RENEWAL_TOO_FAR", "The aligned renewal must be within one billing interval after the service start date.");
+    }
+  }
 
-  const result = await prisma.$transaction(async (tx) => {
+  if (creationKey) {
+    const existing = await prisma.customerSubscription.findUnique({ where: { creationKey }, select: { id: true, customerId: true } });
+    if (existing) {
+      return { customerId: existing.customerId, subscription: await getCanonicalSubscriptionById(existing.id) };
+    }
+  }
+
+  const onboardInTransaction = (): Promise<{ customerId: string; subscriptionId: string }> => prisma.$transaction(async (tx) => {
     let customerId = cleanOptionalText(input.customer.existingCustomerId);
     if (customerId) {
       const customer = await tx.customer.findUnique({ where: { id: customerId }, select: { id: true, archivedAt: true } });
@@ -457,6 +527,7 @@ export async function createCanonicalOnboarding(
         controlMode: "canonical",
         status: "pending_payment",
         planTermMonths: billingIntervalMonths,
+        creationKey,
       },
       select: { id: true },
     });
@@ -464,48 +535,82 @@ export async function createCanonicalOnboarding(
     for (const [index, service] of input.items.entries()) {
       let serviceAssignmentId: string | null = null;
       if (service.deviceId) {
-        const device = await tx.device.findUnique({
-          where: { id: service.deviceId },
-          select: { id: true, status: true, simCardId: true },
+        serviceAssignmentId = await createAssignmentForAvailableDeviceInTransaction(tx, {
+          customerId: customerId!,
+          deviceId: service.deviceId,
+          startDate: service.serviceActivatedDate ? commercialDate(service.serviceActivatedDate, "serviceActivatedDate") : dates.commercialStartDate,
+          nextDueDate: dates.nextBillingDate,
+          intervalMonths: billingIntervalMonths,
         });
-        if (!device || ["decommissioned", "lost"].includes(device.status)) {
-          validation("DEVICE_UNAVAILABLE", "A selected device is unavailable for assignment.");
-        }
-        const openAssignment = await tx.serviceAssignment.findFirst({
-          where: { deviceId: device.id, endDate: null, status: { not: "cancelled" } },
-          select: { id: true },
-        });
-        if (openAssignment) validation("DEVICE_ASSIGNMENT_CONFLICT", "A selected device already has an active service assignment.");
-        const assignment = await tx.serviceAssignment.create({
-          data: {
-            customerId: customerId!,
-            deviceId: device.id,
-            simCardId: device.simCardId,
-            status: "active",
-            startDate: service.serviceActivatedDate ? commercialDate(service.serviceActivatedDate, "serviceActivatedDate") : dates.commercialStartDate,
-            nextDueDate: dates.nextBillingDate,
-            intervalMonths: billingIntervalMonths,
-          },
-          select: { id: true },
-        });
-        serviceAssignmentId = assignment.id;
-        await tx.device.update({ where: { id: device.id }, data: { status: "assigned" } });
       }
-      await addBillableServiceInTransaction(tx, subscription.id, {
+      const amount = service.agreedAmountPerCycle ?? defaultAmount;
+      const itemId = await addBillableServiceInTransaction(tx, subscription.id, {
         ...service,
         label: cleanOptionalText(service.label) ?? `Tracking service ${index + 1}`,
         serviceActivatedDate: service.serviceActivatedDate ?? commercialDateString(dates.commercialStartDate),
-        // A new agreement's first service period starts at commercial start.
-        // Mid-cycle additions still use the existing default of the next renewal.
-        billingEffectiveFrom: service.billingEffectiveFrom ?? commercialDateString(dates.commercialStartDate),
-        agreedAmountPerCycle: service.agreedAmountPerCycle ?? defaultAmount,
+        // A new-cycle agreement bills from its start. An aligned one joins recurring
+        // billing on the existing renewal; the partial period is a separate, auditable adjustment.
+        billingEffectiveFrom: service.billingEffectiveFrom
+          ?? commercialDateString(aligned ? dates.nextBillingDate : dates.commercialStartDate),
+        agreedAmountPerCycle: amount,
         serviceAssignmentId,
+        createdById: service.createdById ?? input.authorizedById ?? null,
       });
+      if (aligned && service.initialAdjustment) {
+        const proration = computeProration({
+          startDate: service.serviceActivatedDate ?? commercialDateString(dates.commercialStartDate),
+          renewalDate: commercialDateString(dates.nextBillingDate),
+          billingIntervalMonths,
+          cycleAmount: exactCycleAmount(amount).toFixed(2),
+          currency,
+          method: service.initialAdjustment.method,
+          manualAmount: service.initialAdjustment.manualAmount ?? null,
+          reason: service.initialAdjustment.reason ?? null,
+        });
+        if (proration.amountCents > 0) {
+          await recordInitialAdjustment(tx, itemId, proration, input.authorizedById ?? null);
+        }
+      }
     }
     return { customerId: customerId!, subscriptionId: subscription.id };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
+  let result: { customerId: string; subscriptionId: string };
+  try {
+    result = await onboardInTransaction();
+  } catch (error) {
+    // A concurrent identical submission lost the unique-key race: return the winner.
+    if (creationKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const winner = await prisma.customerSubscription.findUnique({ where: { creationKey }, select: { id: true, customerId: true } });
+      if (winner) return { customerId: winner.customerId, subscription: await getCanonicalSubscriptionById(winner.id) };
+    }
+    throw error;
+  }
   return { customerId: result.customerId, subscription: await getCanonicalSubscriptionById(result.subscriptionId) };
+}
+
+/** Persist the agreed partial-period charge exactly as previewed. One per service, ever. */
+export async function recordInitialAdjustment(
+  tx: Prisma.TransactionClient,
+  subscriptionItemId: string,
+  proration: ReturnType<typeof computeProration>,
+  authorizedById: string | null,
+): Promise<void> {
+  await tx.subscriptionItemInitialAdjustment.create({
+    data: {
+      subscriptionItemId,
+      method: proration.method,
+      amount: proration.amount,
+      currency: proration.currency,
+      cycleAmount: proration.cycleAmount,
+      periodStart: commercialDate(proration.startDate, "periodStart"),
+      periodEnd: commercialDate(proration.renewalDate, "periodEnd"),
+      dailyAmount: proration.dailyAmount,
+      roundedMonths: proration.roundedMonths,
+      reason: proration.reason,
+      authorizedById,
+    },
+  });
 }
 
 export async function getCanonicalSubscriptionById(

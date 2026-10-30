@@ -125,6 +125,11 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
       items: {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         include: {
+          initialAdjustment: {
+            include: {
+              invoice: { select: { id: true, number: true, status: true, total: true, amountPaid: true, amountDue: true, dueDate: true } },
+            },
+          },
           rates: { orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }] },
           serviceAssignments: {
             orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
@@ -133,6 +138,11 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
             },
           },
         },
+      },
+      recurringSchedules: {
+        where: { status: { not: "ended" } },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { id: true, status: true, nextIssueDate: true, dueDaysAfterIssue: true, intervalMonths: true },
       },
       providerLinks: {
         orderBy: [{ activatedAt: "desc" }, { id: "asc" }],
@@ -235,15 +245,26 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
     providerLinks: subscription.providerLinks,
     operationStatuses: subscription.billingOperations,
   });
-  const adjustmentStatuses = subscription.controlMode === "legacy" || subscription.billingIntervalMonths !== 12
-    ? subscription.items.map((item) => ({ itemId: item.id, status: "not_applicable" as const, message: "Annual adjustment status applies only to annual canonical arrangements.", proposal: null }))
-    : await Promise.all(subscription.items.map(async (item) => {
+  // Status is computed for every service that carries an agreed partial-period charge,
+  // for any billing cadence. Services without one need no adjustment.
+  const adjustmentStatuses = await Promise.all(subscription.items.map(async (item) => {
+      if (subscription.controlMode === "legacy" || !item.initialAdjustment) {
+        return { itemId: item.id, status: "not_applicable" as const, message: "No agreed partial-period charge for this service.", proposal: null };
+      }
+      if (item.initialAdjustment.invoice) {
+        return {
+          itemId: item.id,
+          status: "issued" as const,
+          message: "An invoice already exists for this agreed charge.",
+          proposal: null,
+        };
+      }
       try {
         const proposal = await getAnnualServiceAdjustmentProposal(item.id);
         return {
           itemId: item.id,
           status: proposal.existingInvoice ? "issued" as const : proposal.invoiceRequired ? "preview_available" as const : "not_required" as const,
-          message: proposal.existingInvoice ? "An adjustment invoice already exists for this annual period." : "A reviewed preview is available; explicit authorization is still required.",
+          message: proposal.existingInvoice ? "An adjustment invoice already exists for this period." : "Agreed, not invoiced. Creating the invoice needs explicit authorization.",
           proposal,
         };
       } catch (error) {
@@ -255,6 +276,34 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
         };
       }
     }));
+  // Other canonical arrangements of the same customer, so one subscription can be
+  // reached from another. Totals are intentionally NOT combined across cadences.
+  const siblingRows = await prisma.customerSubscription.findMany({
+    where: { customerId: subscription.customerId, controlMode: { not: "legacy" } },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      lifecycleStatus: true,
+      billingIntervalMonths: true,
+      currency: true,
+      nextBillingDate: true,
+      collectionMethod: true,
+      _count: { select: { items: { where: { status: { notIn: ["ended", "canceled"] } } } } },
+    },
+  });
+  const siblings = siblingRows.map((sibling) => ({
+    id: sibling.id,
+    name: sibling.name,
+    lifecycleStatus: sibling.lifecycleStatus,
+    billingIntervalMonths: sibling.billingIntervalMonths,
+    currency: sibling.currency,
+    collectionMethod: sibling.collectionMethod,
+    nextBillingDate: sibling.nextBillingDate,
+    serviceCount: sibling._count.items,
+    isCurrent: sibling.id === subscription.id,
+  }));
+
   let manualPilotReview: Awaited<ReturnType<typeof getCanonicalManualPilotReview>> | null = null;
   let manualPilotReviewError: string | null = null;
   if (
@@ -279,6 +328,7 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
     ),
     providerStatus,
     adjustmentStatuses,
+    siblings,
     manualPilotReview,
     manualPilotReviewError,
   };

@@ -10,6 +10,8 @@ export const CANONICAL_ANNUAL_ADJUSTMENTS_FLAG = "CANONICAL_ANNUAL_ADJUSTMENTS_E
 
 export type CanonicalAnnualAdjustmentEnvironment = {
   CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED?: string;
+  /** The single owner-controlled production gate for normal staff billing operations. */
+  CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED?: string;
   NODE_ENV?: string;
   VERCEL_ENV?: string;
 };
@@ -28,21 +30,33 @@ function adjustmentError(code: string, message: string): never {
   throw new CanonicalAnnualAdjustmentError(code, message);
 }
 
+function isProductionEnvironment(environment: CanonicalAnnualAdjustmentEnvironment): boolean {
+  return environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production";
+}
+
+/**
+ * Local/test execution needs CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED. Production stays
+ * default-deny and is enabled only by the same owner-controlled global flag that
+ * governs canonical activation and billing (CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED).
+ * The per-feature adjustment flag alone can never enable production execution.
+ */
 export function canonicalAnnualAdjustmentExecutionEnabled(
   environment: CanonicalAnnualAdjustmentEnvironment = process.env,
 ): boolean {
-  return environment.NODE_ENV !== "production"
-    && environment.VERCEL_ENV !== "production"
-    && environment.CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED === "true";
+  if (isProductionEnvironment(environment)) {
+    return environment.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED === "true";
+  }
+  return environment.CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED === "true";
 }
 
 export function assertCanonicalAnnualAdjustmentExecutionEnabled(
   environment: CanonicalAnnualAdjustmentEnvironment = process.env,
 ): void {
-  if (environment.NODE_ENV === "production" || environment.VERCEL_ENV === "production") {
+  if (isProductionEnvironment(environment)) {
+    if (environment.CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED === "true") return;
     adjustmentError(
       "PRODUCTION_EXECUTION_DISABLED",
-      "Canonical annual adjustment execution is disabled in production during Phase 3P.",
+      "Adjustment invoices are disabled in production until the owner enables normal staff billing operations.",
     );
   }
   if (environment.CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED !== "true") {
@@ -71,7 +85,10 @@ export function annualAdjustmentGenerationKey(
 export function resolveCurrentAnnualPeriod(input: {
   billingAnchorDate: Date;
   nextBillingDate: Date;
+  /** Defaults to the annual cadence; other cadences step by their own interval. */
+  intervalMonths?: number;
 }): { periodStart: Date; periodEnd: Date } {
+  const step = input.intervalMonths ?? 12;
   const anchor = startOfUtcDay(input.billingAnchorDate);
   const periodEnd = startOfUtcDay(input.nextBillingDate);
   if (periodEnd <= anchor) {
@@ -82,11 +99,11 @@ export function resolveCurrentAnnualPeriod(input: {
   }
 
   let periodStart = anchor;
-  let candidate = addUtcMonths(periodStart, 12);
+  let candidate = addUtcMonths(periodStart, step);
   let iterations = 0;
   while (candidate < periodEnd && iterations < 200) {
     periodStart = candidate;
-    candidate = addUtcMonths(periodStart, 12);
+    candidate = addUtcMonths(periodStart, step);
     iterations += 1;
   }
   if (candidate.getTime() !== periodEnd.getTime()) {

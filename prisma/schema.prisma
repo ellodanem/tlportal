@@ -326,6 +326,16 @@ enum SubscriptionRateClassification {
   negotiated
 }
 
+/// How the partial-period charge for a mid-cycle service addition was determined.
+enum SubscriptionAdjustmentMethod {
+  /// Exact calendar-day proration against the agreed cycle price (default engine).
+  daily_proration
+  /// Whole months rounded to the nearest month x (agreed cycle price / cycle months).
+  monthly_rounded
+  /// Staff-entered amount agreed with the customer; requires a recorded reason.
+  manual_amount
+}
+
 /// Lifecycle of one explicitly approved legacy-to-canonical shadow migration.
 enum CanonicalMigrationStatus {
   approved
@@ -467,6 +477,7 @@ model User {
   vendorBillsCreated                        VendorBill[]
   vendorBillPaymentsRecorded                VendorBillPayment[]
   subscriptionItemRatesCreated              SubscriptionItemRate[]
+  subscriptionAdjustmentsAuthorized         SubscriptionItemInitialAdjustment[]
   canonicalSubscriptionActivationsApproved  CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationApprovedBy")
   canonicalSubscriptionActivationsPerformed CanonicalSubscriptionOperationalActivation[] @relation("CanonicalActivationPerformedBy")
   canonicalMigrationCampaignsCreated        CanonicalMigrationCampaign[]                 @relation("CanonicalMigrationCampaignCreatedBy")
@@ -1175,6 +1186,8 @@ model CustomerSubscription {
   nextBillingDate       DateTime?                     @db.Date
   gracePeriodDays       Int                           @default(7)
   controlMode           SubscriptionControlMode       @default(legacy)
+  /// Client-supplied idempotency key for wizard creation; a retried submit returns the same record.
+  creationKey           String?                       @unique
 
   // Legacy/provider fields remain authoritative until an explicit later-phase cutover.
   status                         CustomerSubscriptionStatus                  @default(pending_payment)
@@ -1245,6 +1258,10 @@ model SubscriptionItem {
   billingEffectiveUntil  DateTime?              @db.Date
   endedAt                DateTime?
   notes                  String?                @db.Text
+  /// Client-supplied idempotency key for add-service submissions; a retry returns this item.
+  creationKey            String?                @unique
+  /// Agreed partial-period charge between service start and the inherited renewal.
+  initialAdjustment      SubscriptionItemInitialAdjustment?
 
   /// A transfer creates a successor item instead of rewriting historical subscription ownership.
   predecessorItemId String?           @unique
@@ -1283,6 +1300,36 @@ model SubscriptionItemRate {
   @@index([createdById])
 }
 
+/// Durable, auditable record of the agreed partial-period charge for one service added
+/// between renewals. It stores the method, exact amount, the daily-engine amount for
+/// comparison, and who authorised it. `invoiceId` is set only when a native invoice for
+/// exactly this amount exists, so "agreed" is never confused with "invoiced" or "paid".
+model SubscriptionItemInitialAdjustment {
+  id                 String                       @id @default(uuid())
+  subscriptionItemId String                       @unique
+  subscriptionItem   SubscriptionItem             @relation(fields: [subscriptionItemId], references: [id], onDelete: Restrict)
+  method             SubscriptionAdjustmentMethod
+  amount             Decimal                      @db.Decimal(12, 2)
+  currency           String                       @db.VarChar(3)
+  /// Agreed recurring cycle price the amount was derived from (snapshot).
+  cycleAmount        Decimal                      @db.Decimal(12, 2)
+  /// First day of the partial period (service start).
+  periodStart        DateTime                     @db.Date
+  /// Renewal date on which the service joins the recurring cycle (exclusive end).
+  periodEnd          DateTime                     @db.Date
+  /// Daily-proration amount for the same period, kept so overrides remain explainable.
+  dailyAmount        Decimal                      @db.Decimal(12, 2)
+  roundedMonths      Int?
+  reason             String?                      @db.Text
+  authorizedById     String?
+  authorizedBy       User?                        @relation(fields: [authorizedById], references: [id], onDelete: SetNull)
+  invoiceId          String?                      @unique
+  invoice            Invoice?                     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+
+  @@index([authorizedById])
+}
 /// Historical relationship between a canonical subscription and an external provider subscription.
 model SubscriptionProviderLink {
   id                     String                     @id @default(uuid())
@@ -1722,6 +1769,8 @@ model Invoice {
   recurringDeliveryError                String?                                     @db.Text
   /// Stable idempotency key for a one-time canonical annual service-addition adjustment.
   adjustmentGenerationKey               String?                                     @unique
+  /// Agreed partial-period charge this invoice bills (when kind = annual_adjustment).
+  subscriptionItemInitialAdjustment     SubscriptionItemInitialAdjustment?
   /// Stable idempotency key for an activation-time canonical invoice.
   canonicalInitialGenerationKey         String?                                     @unique
   canonicalOperationalInitialActivation CanonicalSubscriptionOperationalActivation? @relation("CanonicalOperationalInitialInvoice")

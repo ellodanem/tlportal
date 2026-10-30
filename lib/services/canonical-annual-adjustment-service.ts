@@ -1,6 +1,6 @@
 import "server-only";
 
-import { Prisma } from "@prisma/client";
+import { Prisma, type SubscriptionAdjustmentMethod } from "@prisma/client";
 
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
@@ -20,6 +20,7 @@ import {
   normalizeCurrency,
   previewAnnualProration,
 } from "@/lib/domain/canonical-subscription-application";
+import { cycleWindowForRenewal } from "@/lib/domain/subscription-proration";
 import {
   createDraftInvoiceInTransaction,
   finalizeInvoiceInTransaction,
@@ -27,7 +28,7 @@ import {
 
 type AdjustmentDb = Pick<
   Prisma.TransactionClient,
-  "subscriptionItem" | "invoice" | "invoiceLineItem" | "invoiceServiceSnapshot"
+  "subscriptionItem" | "invoice" | "invoiceLineItem" | "invoiceServiceSnapshot" | "subscriptionItemInitialAdjustment"
 >;
 
 export type AnnualAdjustmentInvoiceStatus = {
@@ -62,6 +63,13 @@ export type AnnualServiceAdjustmentProposal = {
   invoiceRequired: boolean;
   executionEnabled: boolean;
   existingInvoice: AnnualAdjustmentInvoiceStatus | null;
+  /** How the amount was determined. Daily proration is used when no agreed adjustment is recorded. */
+  method: SubscriptionAdjustmentMethod;
+  /** Daily-engine amount for the same period, shown so an override stays explainable. */
+  dailyAmount: string;
+  isOverride: boolean;
+  overrideReason: string | null;
+  billingIntervalMonths: number;
 };
 
 export type CreateAnnualAdjustmentInvoiceInput = {
@@ -145,6 +153,7 @@ async function resolveProposal(
   const item = await db.subscriptionItem.findUnique({
     where: { id: subscriptionItemId },
     include: {
+      initialAdjustment: true,
       rates: { orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }] },
       customerSubscription: {
         include: {
@@ -160,14 +169,20 @@ async function resolveProposal(
   if (!item) adjustmentError("ITEM_NOT_FOUND", "Subscription item not found.");
 
   const subscription = item.customerSubscription;
+  const agreed = item.initialAdjustment;
   if (subscription.controlMode === "legacy") {
     adjustmentError("LEGACY_SUBSCRIPTION_PROTECTED", "Legacy subscriptions cannot use canonical annual adjustments.");
   }
-  if (subscription.billingIntervalMonths !== 12) {
-    adjustmentError("NOT_ANNUAL", "Annual adjustments require a 12-month subscription.");
+  const intervalMonths = subscription.billingIntervalMonths;
+  if (intervalMonths == null) {
+    adjustmentError("INCOMPLETE_SUBSCRIPTION", "A billing interval is required for adjustment billing.");
   }
-  if (!subscription.billingAnchorDate || !subscription.nextBillingDate || !subscription.currency) {
-    adjustmentError("INCOMPLETE_SUBSCRIPTION", "Annual anchor, next billing date, and currency are required.");
+  // Without an agreed adjustment the original annual-only daily engine applies unchanged.
+  if (!agreed && intervalMonths !== 12) {
+    adjustmentError("NOT_ANNUAL", "Only an annual service without a recorded agreed adjustment uses the daily engine; record an agreed adjustment for other cadences.");
+  }
+  if (!subscription.nextBillingDate || !subscription.currency || (!agreed && !subscription.billingAnchorDate)) {
+    adjustmentError("INCOMPLETE_SUBSCRIPTION", "Billing anchor, next billing date, and currency are required.");
   }
   if (
     subscription.collectionMethod !== "manual_invoice"
@@ -182,10 +197,25 @@ async function resolveProposal(
     adjustmentError("ITEM_DATES_INCOMPLETE", "Service activation and recurring billing dates are required.");
   }
 
-  const { periodStart, periodEnd } = resolveCurrentAnnualPeriod({
-    billingAnchorDate: subscription.billingAnchorDate,
-    nextBillingDate: subscription.nextBillingDate,
-  });
+  // An agreed adjustment carries its own explicit period, so it also works for a new
+  // subscription whose first renewal was aligned to an earlier cycle. Otherwise the
+  // period is derived from the preserved anniversary cadence as before.
+  const { periodStart, periodEnd } = agreed
+    ? (() => {
+      const end = startOfUtcDay(subscription.nextBillingDate!);
+      const window = cycleWindowForRenewal(commercialDateString(end), intervalMonths);
+      return { periodStart: new Date(`${window.cycleStart}T00:00:00.000Z`), periodEnd: end };
+    })()
+    : resolveCurrentAnnualPeriod({
+      billingAnchorDate: subscription.billingAnchorDate!,
+      nextBillingDate: subscription.nextBillingDate!,
+    });
+  if (agreed && !sameUtcDay(agreed.periodEnd, periodEnd)) {
+    adjustmentError(
+      "AGREED_ADJUSTMENT_RENEWAL_CHANGED",
+      "The renewal date changed after this adjustment was agreed; record a new agreement before invoicing.",
+    );
+  }
   if (!sameUtcDay(item.billingEffectiveFrom, periodEnd)) {
     adjustmentError(
       "RECURRING_EFFECTIVE_DATE_MISMATCH",
@@ -198,24 +228,48 @@ async function resolveProposal(
 
   const currency = normalizeCurrency(subscription.currency);
   const effectiveRates = item.rates.filter((rate) =>
-    rate.billingIntervalMonths === 12
+    rate.billingIntervalMonths === intervalMonths
     && normalizeCurrency(rate.currency) === currency
     && rate.effectiveFrom <= item.serviceActivatedDate!
     && (rate.effectiveUntil == null || item.serviceActivatedDate! < rate.effectiveUntil));
   if (effectiveRates.length !== 1) {
     adjustmentError(
       effectiveRates.length === 0 ? "ITEM_RATE_MISSING" : "ITEM_RATE_AMBIGUOUS",
-      "The added service must have exactly one annual rate effective on its activation date.",
+      "The added service must have exactly one cycle rate effective on its activation date.",
     );
   }
   const rate = effectiveRates[0];
-  const preview = previewAnnualProration({
-    annualPeriodStart: commercialDateString(periodStart),
-    annualPeriodEnd: commercialDateString(periodEnd),
-    serviceActivatedDate: commercialDateString(item.serviceActivatedDate),
-    agreedAnnualAmount: rate.agreedAmountPerCycle,
-    currency,
-  });
+  const dailyPreview = agreed
+    ? null
+    : previewAnnualProration({
+      annualPeriodStart: commercialDateString(periodStart),
+      annualPeriodEnd: commercialDateString(periodEnd),
+      serviceActivatedDate: commercialDateString(item.serviceActivatedDate),
+      agreedAnnualAmount: rate.agreedAmountPerCycle,
+      currency,
+    });
+  const preview = dailyPreview ?? (() => {
+    const activation = startOfUtcDay(item.serviceActivatedDate!);
+    const total = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86_400_000);
+    const remaining = Math.round((periodEnd.getTime() - activation.getTime()) / 86_400_000);
+    if (activation < periodStart || activation > periodEnd) {
+      adjustmentError("ACTIVATION_OUTSIDE_CYCLE", "The service start falls outside the cycle this adjustment covers.");
+    }
+    return {
+      currency,
+      periodStart: commercialDateString(periodStart),
+      periodEnd: commercialDateString(periodEnd),
+      prorationStart: commercialDateString(activation),
+      futureRecurringEffectiveDate: commercialDateString(periodEnd),
+      totalCalendarDays: total,
+      remainingCalendarDays: remaining,
+      agreedAnnualAmount: new Prisma.Decimal(rate.agreedAmountPerCycle),
+      proratedAmount: new Prisma.Decimal(agreed!.amount),
+    };
+  })();
+  const dailyAmount = agreed
+    ? new Prisma.Decimal(agreed.dailyAmount).toFixed(2)
+    : preview.proratedAmount.toFixed(2);
   const generationKey = annualAdjustmentGenerationKey(item.id, periodStart, periodEnd);
   const confirmationToken = annualAdjustmentConfirmationToken({
     subscriptionId: subscription.id,
@@ -248,6 +302,11 @@ async function resolveProposal(
     invoiceRequired: preview.proratedAmount.greaterThan(0),
     executionEnabled: canonicalAnnualAdjustmentExecutionEnabled(environment),
     existingInvoice,
+    method: agreed?.method ?? "daily_proration",
+    dailyAmount,
+    isOverride: agreed ? agreed.method !== "daily_proration" || dailyAmount !== preview.proratedAmount.toFixed(2) : false,
+    overrideReason: agreed?.reason ?? null,
+    billingIntervalMonths: intervalMonths,
   };
 }
 
@@ -384,13 +443,13 @@ async function executeAdjustmentTransaction(
       currency: proposal.currency,
       issueDate,
       dueDate: addUtcDays(issueDate, dueDays),
-      notes: `Prorated annual service addition through ${proposal.periodEnd}.`,
+      notes: `Prorated service addition through ${proposal.periodEnd}${proposal.isOverride ? ` (${proposal.method.replaceAll("_", " ")} adjustment agreed with the customer)` : ""}.`,
       paymentInstructions: schedule?.paymentInstructions ?? null,
       allowOnlinePayment: subscription.collectionMethod === "stripe_autocharge"
         || input.allowOnlinePayment === true,
       createdById: input.authorizedById,
       lineItems: [{
-        description: `${proposal.serviceLabel} — prorated annual adjustment`,
+        description: `${proposal.serviceLabel} — prorated ${proposal.billingIntervalMonths === 12 ? "annual " : ""}adjustment`,
         quantity: 1,
         unitPrice: Number(proposal.proratedAmount),
         unitLabel: "service",
@@ -414,8 +473,16 @@ async function executeAdjustmentTransaction(
         servicePeriodStart: new Date(`${proposal.serviceActivationDate}T00:00:00.000Z`),
         servicePeriodEnd: new Date(`${proposal.periodEnd}T00:00:00.000Z`),
         quantity: "1.0000",
-        allocationNotes: `${proposal.remainingCalendarDays}/${proposal.totalCalendarDays} calendar days in annual period ${proposal.periodStart} to ${proposal.periodEnd}; half-up to 2 decimals.`,
+        allocationNotes: proposal.method === "daily_proration"
+          ? `${proposal.remainingCalendarDays}/${proposal.totalCalendarDays} calendar days in annual period ${proposal.periodStart} to ${proposal.periodEnd}; half-up to 2 decimals.`
+          : `Agreed ${proposal.method.replaceAll("_", " ")} adjustment of ${proposal.proratedAmount} (daily engine: ${proposal.dailyAmount}) for ${proposal.serviceActivationDate} to ${proposal.periodEnd}${proposal.overrideReason ? `; reason: ${proposal.overrideReason}` : ""}.`,
       },
+    });
+    // Link the agreed adjustment to the exact invoice that bills it. The unique
+    // invoiceId makes "invoiced" a stored fact rather than something inferred.
+    await tx.subscriptionItemInitialAdjustment.updateMany({
+      where: { subscriptionItemId: proposal.subscriptionItemId, invoiceId: null },
+      data: { invoiceId },
     });
     await finalizeInvoiceInTransaction(tx, invoiceId);
     const invoiceRow = await tx.invoice.findUniqueOrThrow({
