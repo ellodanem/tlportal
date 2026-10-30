@@ -123,3 +123,18 @@ test("subscription service flows never create invoices, contact Stripe, or notif
   assert.match(source("lib/services/subscription-service-addition-service.ts"), /FOR UPDATE/);
   assert.match(source("lib/services/subscription-service-addition-service.ts"), /creationKey/);
 });
+
+test("agreed-charge invoices are created as drafts so staff can customize before finalizing", () => {
+  const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+  const actions = source("app/admin/subscriptions/canonical/actions.ts");
+  assert.match(actions, /finalize: false/);
+  assert.match(actions, /next: invoiceId \? `\/admin\/tl-invoices\/\$\{invoiceId\}`/);
+  const service = source("lib/services/canonical-annual-adjustment-service.ts");
+  assert.match(service, /if \(input\.finalize !== false\) await finalizeInvoiceInTransaction/);
+  const form = source("components/admin/subscription-adjustment-invoice-form.tsx");
+  assert.match(form, /Create draft invoice/);
+  assert.doesNotMatch(form, /finalizeInvoice|finalizeAndSend/);
+  const migration = source("prisma/migrations/20261030140000_adjustment_invoice_set_null/migration.sql");
+  const executable = migration.split("\n").filter((line) => !line.trim().startsWith("--")).join("\n");
+  assert.doesNotMatch(executable, /\b(DELETE\s+FROM|TRUNCATE|UPDATE\s+"?\w+"?\s+SET|DROP\s+(TABLE|COLUMN))\b/i);
+});

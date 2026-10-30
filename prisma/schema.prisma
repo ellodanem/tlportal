@@ -1324,7 +1324,9 @@ model SubscriptionItemInitialAdjustment {
   authorizedById     String?
   authorizedBy       User?                        @relation(fields: [authorizedById], references: [id], onDelete: SetNull)
   invoiceId          String?                      @unique
-  invoice            Invoice?                     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  /// SetNull: the app only deletes DRAFT invoices, so discarding a draft returns the
+  /// adjustment to "agreed, not invoiced". Finalized invoices cannot be deleted.
+  invoice            Invoice?                     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   createdAt          DateTime                     @default(now())
   updatedAt          DateTime                     @updatedAt
 

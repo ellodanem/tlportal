@@ -522,9 +522,10 @@ export async function addServiceAction(
 }
 
 /**
- * Creates the open, unsent invoice for an AGREED partial-period charge. Gated: it is
- * unavailable in production until the operations flag is enabled, always needs the
- * reviewed preview token plus an explicit confirmation, and never sends or collects.
+ * Creates a DRAFT invoice for an AGREED partial-period charge and sends staff to the
+ * invoice editor to customize it (extra lines such as hardware) before finalizing.
+ * Gated: unavailable in production until the operations flag is enabled, needs the
+ * reviewed preview token plus an explicit confirmation, and never numbers, sends or collects.
  */
 export async function createServiceAdjustmentInvoiceAction(
   _previous: CanonicalSubscriptionFormState,
@@ -543,11 +544,14 @@ export async function createServiceAdjustmentInvoiceAction(
       confirmationToken: text(formData, "confirmationToken"),
       confirmed: true,
       authorizedById: session.sub,
+      // Always a draft first: staff review it, add lines (for example a hardware fee),
+      // then finalize deliberately from the invoice editor.
+      finalize: false,
     });
     if (result.created) {
       await recordOperationalEvent({
         category: "subscription.adjustment_invoice_created",
-        summary: "Invoice created for an agreed partial-period charge. Not sent.",
+        summary: "Draft invoice created for an agreed partial-period charge. Not finalized or sent.",
         customerId: subscription.customerId,
         actorUserId: session.sub,
         payload: { subscriptionId, subscriptionItemId, invoiceId: result.invoice?.invoiceId ?? null },
@@ -555,10 +559,13 @@ export async function createServiceAdjustmentInvoiceAction(
     }
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath(`/admin/customers/${subscription.customerId}/billing`);
+    revalidatePath("/admin/tl-invoices");
+    const invoiceId = result.invoice?.invoiceId ?? null;
     return {
       message: result.created
-        ? "Invoice created and left open. It has not been sent and nothing was collected."
+        ? "Draft invoice created. Add any extra lines, then finalize it when ready. Nothing has been sent or collected."
         : "An invoice already exists for this charge; nothing was duplicated.",
+      next: invoiceId ? `/admin/tl-invoices/${invoiceId}` : undefined,
     };
   } catch (error) {
     return actionError(error);

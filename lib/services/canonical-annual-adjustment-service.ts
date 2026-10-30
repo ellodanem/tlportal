@@ -81,6 +81,12 @@ export type CreateAnnualAdjustmentInvoiceInput = {
   issueDate?: Date;
   dueDaysAfterIssue?: number;
   allowOnlinePayment?: boolean;
+  /**
+   * Default true (number + open). Staff-facing creation passes false so the invoice
+   * stays an unnumbered, unsent DRAFT that can be customized (extra line items such as
+   * a hardware fee, dates, notes) and finalized deliberately from the invoice editor.
+   */
+  finalize?: boolean;
   environment?: CanonicalAnnualAdjustmentEnvironment;
 };
 
@@ -484,7 +490,7 @@ async function executeAdjustmentTransaction(
       where: { subscriptionItemId: proposal.subscriptionItemId, invoiceId: null },
       data: { invoiceId },
     });
-    await finalizeInvoiceInTransaction(tx, invoiceId);
+    if (input.finalize !== false) await finalizeInvoiceInTransaction(tx, invoiceId);
     const invoiceRow = await tx.invoice.findUniqueOrThrow({
       where: { id: invoiceId },
       select: adjustmentInvoiceSelect,

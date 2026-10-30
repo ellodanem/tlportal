@@ -78,7 +78,7 @@ function ServiceTiming({ item }: { item: Subscription["items"][number] }) {
   return (
     <p className="mt-1 text-xs text-zinc-500">
       {item.serviceActivatedDate ? `Started ${displayDate(item.serviceActivatedDate)} · ` : ""}bills from {displayDate(item.billingEffectiveFrom)}
-      {item.initialAdjustment ? <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">{item.initialAdjustment.invoice ? "partial period invoiced" : "partial period agreed, not invoiced"}</span> : null}
+      {item.initialAdjustment ? <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">{item.initialAdjustment.invoice ? item.initialAdjustment.invoice.status === "draft" ? "partial period: draft invoice" : "partial period invoiced" : "partial period agreed, not invoiced"}</span> : null}
     </p>
   );
 }
@@ -259,15 +259,19 @@ export function CanonicalSubscriptionDetailWorkspace({
                       {adjustment.roundedMonths != null && monthlyEquivalent != null ? <p className="mt-1 text-xs text-zinc-500">{adjustment.roundedMonths} month{adjustment.roundedMonths === 1 ? "" : "s"} × {money(monthlyEquivalent, adjustmentCurrency)}</p> : null}
                       {adjustment.method === "manual_amount" || (adjustment.method === "monthly_rounded" && Number(adjustment.dailyAmount) !== Number(adjustment.amount)) ? <p className="mt-1 text-xs text-zinc-500">Daily formula would be {money(adjustment.dailyAmount.toString(), adjustmentCurrency)}. The agreed amount is a deliberate override{adjustment.reason ? `: ${adjustment.reason}` : "."}</p> : null}
                     </div>
-                    <span className={`mt-2 shrink-0 self-start rounded-full px-2.5 py-1 text-xs font-semibold sm:mt-0 ${invoice ? "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200" : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"}`}>{invoice ? "Invoiced" : "Agreed · not invoiced"}</span>
+                    <span className={`mt-2 shrink-0 self-start rounded-full px-2.5 py-1 text-xs font-semibold sm:mt-0 ${invoice ? "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200" : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"}`}>{invoice ? invoice.status === "draft" ? "Draft invoice" : "Invoiced" : "Agreed · not invoiced"}</span>
                   </div>
                   {invoice ? (
-                    <p className="mt-3 text-sm"><Link href={`/admin/invoices/${invoice.id}`} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">{invoice.number ?? "Invoice"}</Link> · <span className="capitalize">{invoice.status.replaceAll("_", " ")}</span> · paid {money(invoice.amountPaid.toString(), adjustmentCurrency)} · due {money(invoice.amountDue.toString(), adjustmentCurrency)}</p>
+                    invoice.status === "draft" ? (
+                      <p className="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">A draft invoice exists but is not finalized, so nothing has been billed. <Link href={`/admin/tl-invoices/${invoice.id}`} className="font-semibold underline">Open the draft to add lines or finalize it</Link>.</p>
+                    ) : (
+                      <p className="mt-3 text-sm"><Link href={`/admin/tl-invoices/${invoice.id}`} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">{invoice.number ?? "Invoice"}</Link> · <span className="capitalize">{invoice.status.replaceAll("_", " ")}</span> · paid {money(invoice.amountPaid.toString(), adjustmentCurrency)} · due {money(invoice.amountDue.toString(), adjustmentCurrency)}</p>
+                    )
                   ) : canManage && status?.proposal && status.status === "preview_available" ? (
                     adjustmentExecutionEnabled ? (
                       <SubscriptionAdjustmentInvoiceForm subscriptionId={subscription.id} subscriptionItemId={item.id} generationKey={status.proposal.generationKey} confirmationToken={status.proposal.confirmationToken} amountLabel={amountLabel} />
                     ) : (
-                      <p className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300">No invoice exists for this charge. Creating invoices from here is not enabled in this environment, so nothing has been billed.</p>
+                      <p className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300">No invoice exists for this charge. Creating draft invoices from here is not enabled in this environment, so nothing has been billed.</p>
                     )
                   ) : status && status.status === "blocked" ? (
                     <p className="mt-3 text-sm text-amber-800 dark:text-amber-200">{status.message}</p>
