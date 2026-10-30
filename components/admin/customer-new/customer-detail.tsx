@@ -14,6 +14,8 @@ export type SnapshotSubscription = {
   statusLabel: string;
   tone: "emerald" | "amber" | "zinc" | "blue";
   detail: string;
+  /** The subscription's own management page. */
+  href: string;
 };
 
 export type CustomerDetailData = {
@@ -413,7 +415,7 @@ export function CustomerDetail({
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <Pill tone={sub.tone}>{sub.statusLabel}</Pill>
-                          <Link href={subscriptionsHref} className={`${linkClass} inline-flex min-h-10 items-center`}>
+                          <Link href={sub.href} className={`${linkClass} inline-flex min-h-10 items-center`}>
                             View →
                           </Link>
                         </div>
