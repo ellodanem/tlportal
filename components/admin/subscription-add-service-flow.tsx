@@ -48,6 +48,17 @@ function DevicePicker({
 
   return (
     <div className="rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
+      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <span className="text-xs text-zinc-500">Choose from available hardware</span>
+        <a
+          href="/admin/devices"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 text-xs font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+        >
+          Open Devices ↗
+        </a>
+      </div>
       <input type="hidden" name="deviceId" value={value} />
       <input
         type="search"
