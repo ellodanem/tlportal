@@ -7,9 +7,9 @@ import {
   canonicalSubscriptionUiAccess,
   deriveCanonicalProviderStatus,
   normalizedMonthlyAmount,
-  isOperationalCanonicalSubscription,
   type CanonicalSubscriptionAdminRow,
 } from "@/lib/domain/canonical-subscription-admin";
+import { buildSubscriptionWorkspace, type WorkspaceQuery } from "@/lib/domain/canonical-subscription-workspace";
 import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
 import { getAnnualServiceAdjustmentProposal } from "@/lib/services/canonical-annual-adjustment-service";
 import { getCanonicalSubscriptionBillingSummary } from "@/lib/services/canonical-native-billing-service";
@@ -23,6 +23,21 @@ function customerLabel(customer: {
   return customer.company?.trim()
     || [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim()
     || "Unnamed customer";
+}
+
+/**
+ * Billable services on a subscription. Ended or canceled services are not counted
+ * for a current subscription (matching the subscription details sibling list);
+ * a subscription that has itself ended keeps its full historical service count.
+ */
+function billableServiceCount(subscription: {
+  lifecycleStatus: string | null;
+  items: { status: string }[];
+}): number {
+  if (subscription.lifecycleStatus === "ended" || subscription.lifecycleStatus === "canceled") {
+    return subscription.items.length;
+  }
+  return subscription.items.filter((item) => item.status !== "ended" && item.status !== "canceled").length;
 }
 
 export type { CanonicalSubscriptionAdminRow } from "@/lib/domain/canonical-subscription-admin";
@@ -43,7 +58,7 @@ export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSub
       canonicalMigrationLedger: { select: { id: true } },
       providerLinks: { select: { provider: true, endedAt: true, lastError: true } },
       billingOperations: { select: { status: true, failureMessage: true } },
-      _count: { select: { items: true } },
+      items: { select: { status: true } },
     },
   });
 
@@ -91,7 +106,7 @@ export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSub
       hasMigrationLedger: Boolean(subscription.canonicalMigrationLedger),
       billingIntervalMonths: subscription.billingIntervalMonths,
       currency: subscription.currency ?? "XCD",
-      itemCount: subscription._count.items,
+      itemCount: billableServiceCount(subscription),
       recurringCycleTotal: summary.recurringCycleTotal,
       nextBillingDate: subscription.nextBillingDate,
       collectionHealth: summary.collectionHealth,
@@ -334,66 +349,10 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
   };
 }
 
-export type CanonicalSubscriptionWorkspaceQuery = {
-  query?: string;
-  view?: "current" | "active" | "setup" | "review" | "alerts" | "paused" | "history";
-  collectionMethod?: string;
-  cadence?: number | null;
-  currency?: string;
-  sort?: "renewal" | "updated" | "mrr";
-  page?: number;
-  pageSize?: number;
-};
-
-function workspaceRows(rows: CanonicalSubscriptionAdminRow[], query: CanonicalSubscriptionWorkspaceQuery) {
-  const text = query.query?.trim().toLowerCase() ?? "";
-  return rows.filter((row) => {
-    if (text && !`${row.customer} ${row.name} ${row.reference ?? ""}`.toLowerCase().includes(text)) return false;
-    if (query.view === "current" && row.historical) return false;
-    if (query.view === "active" && row.lifecycleStatus !== "active") return false;
-    if (query.view === "setup" && !(row.controlMode === "canonical" && row.access === "editable_draft")) return false;
-    if (query.view === "review" && !(row.controlMode === "shadow" || ["migrated_shadow_read_only", "shadow_read_only"].includes(row.access))) return false;
-    if (query.view === "alerts" && !row.attentionRequired) return false;
-    if (query.view === "paused" && row.lifecycleStatus !== "paused") return false;
-    if (query.view === "history" && !row.historical) return false;
-    if (query.collectionMethod && row.collectionMethod !== query.collectionMethod) return false;
-    if (query.cadence && row.billingIntervalMonths !== query.cadence) return false;
-    if (query.currency && row.currency !== query.currency) return false;
-    return true;
-  });
-}
-
-export async function getCanonicalSubscriptionWorkspace(query: CanonicalSubscriptionWorkspaceQuery = {}) {
-  const allRows = (await listCanonicalSubscriptionAdminRows()).filter((row) => row.controlMode !== "legacy");
-  const currentRows = allRows.filter((row) => !row.historical);
-  const operationalRows = currentRows.filter(isOperationalCanonicalSubscription);
-  const currencies = [...new Set(operationalRows.map((row) => row.currency).filter(Boolean))].sort();
-  const operationalMrr = currencies.length === 1
-    ? operationalRows.reduce((sum, row) => sum + Number(row.normalizedMrr ?? 0), 0)
-    : null;
-  const metrics = {
-    activeCount: operationalRows.length,
-    setupCount: currentRows.filter((row) => row.controlMode === "canonical" && row.access === "editable_draft").length,
-    alertCount: currentRows.filter((row) => row.attentionRequired).length,
-    reviewCount: currentRows.filter((row) => row.controlMode === "shadow" || ["migrated_shadow_read_only", "shadow_read_only"].includes(row.access)).length,
-    pausedCount: currentRows.filter((row) => row.lifecycleStatus === "paused").length,
-    historyCount: allRows.filter((row) => row.historical).length,
-    operationalMrr,
-    operationalMrrCurrency: currencies.length === 1 ? currencies[0] : null,
-    currencyCount: currencies.length,
-    cardCount: currentRows.filter((row) => row.collectionMethod === "stripe_autocharge").length,
-    manualCount: currentRows.filter((row) => row.collectionMethod === "manual_invoice").length,
-    currentCount: currentRows.length,
-  };
-  const filtered = workspaceRows(allRows, query);
-  const sort = query.sort ?? "renewal";
-  const sorted = [...filtered].sort((left, right) => {
-    if (sort === "mrr") return Number(right.normalizedMrr ?? -1) - Number(left.normalizedMrr ?? -1) || left.id.localeCompare(right.id);
-    if (sort === "updated") return (right.nextBillingDate?.getTime() ?? 0) - (left.nextBillingDate?.getTime() ?? 0) || left.id.localeCompare(right.id);
-    return (left.nextBillingDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (right.nextBillingDate?.getTime() ?? Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id);
-  });
-  const pageSize = Math.min(Math.max(query.pageSize ?? 25, 10), 100);
-  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const page = Math.min(Math.max(query.page ?? 1, 1), pageCount);
-  return { rows: sorted.slice((page - 1) * pageSize, page * pageSize), metrics, total: sorted.length, page, pageSize, pageCount };
+/**
+ * Read-only workspace for the main Subscriptions page: every canonical subscription
+ * grouped under its customer id, with summary figures computed from the same rows.
+ */
+export async function getCanonicalSubscriptionWorkspace(query: WorkspaceQuery = {}) {
+  return buildSubscriptionWorkspace(await listCanonicalSubscriptionAdminRows(), query);
 }

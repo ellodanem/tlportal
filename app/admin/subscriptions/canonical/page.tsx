@@ -1,96 +1,160 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { formatExpenseAmount } from "@/lib/domain/expenses";
+import { SubscriptionsWorkspace } from "@/components/admin/subscriptions-workspace";
+import { canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
 import {
-  canonicalIntervalLabel,
-  canonicalSubscriptionDisplayName,
-  canonicalSubscriptionUiVisible,
-  canonicalSubscriptionWorkspacePresentation,
-} from "@/lib/domain/canonical-subscription-admin";
+  customerGroupView,
+  parseWorkspaceSearchParams,
+  WORKSPACE_DEFAULT_PAGE_SIZE,
+  WORKSPACE_STATUS_FILTERS,
+  WORKSPACE_STATUS_LABELS,
+  type WorkspaceSortDirection,
+  type WorkspaceSortKey,
+} from "@/lib/domain/canonical-subscription-workspace";
+import { formatMoney } from "@/lib/domain/native-billing";
 import {
   canonicalSubscriptionUiStaffViewer,
   getCanonicalSubscriptionWorkspace,
 } from "@/lib/services/canonical-subscription-admin-service";
 
-type Props = { searchParams: Promise<{ q?: string; view?: string; collection?: string; cadence?: string; currency?: string; sort?: string; page?: string }> };
-const views = [
-  ["current", "All current"], ["active", "Active"], ["setup", "Setup required"], ["review", "Billing review"],
-  ["alerts", "Collection alerts"], ["paused", "Paused"], ["history", "Ended / history"],
-] as const;
+type Props = {
+  searchParams: Promise<{ q?: string; status?: string; view?: string; cadence?: string; sort?: string; dir?: string; page?: string }>;
+};
 
-function money(value: string | number | null, currency: string) { return value == null ? "â€”" : formatExpenseAmount(Number(value), currency); }
-function date(value: Date | null, fallback = "Not scheduled") { return value?.toLocaleDateString(undefined, { dateStyle: "medium" }) ?? fallback; }
-function collectionLabel(value: string | null) { return value === "stripe_autocharge" ? "Card billing" : value === "manual_invoice" ? "Manual invoice" : "Not configured"; }
-function tone(label: string | null) {
-  if (label === "Collection alert") return "bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200";
-  if (label === "Setup required") return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200";
-  if (label === "Source-controlled") return "bg-violet-100 text-violet-900 dark:bg-violet-950 dark:text-violet-200";
-  return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
-}
-function href(params: Record<string, string | undefined>) {
+const BASE_PATH = "/admin/subscriptions/canonical";
+
+/** First click on a column sorts the useful way round: biggest / most urgent first for numbers. */
+const DEFAULT_DIRECTION: Record<WorkspaceSortKey, WorkspaceSortDirection> = {
+  customer: "asc", services: "desc", recurring: "desc", renewal: "asc", status: "asc",
+};
+
+function href(params: Record<string, string | number | null | undefined>) {
   const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => { if (value) search.set(key, value); });
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== "") search.set(key, String(value));
+  });
   const value = search.toString();
-  return `/admin/subscriptions/canonical${value ? `?${value}` : ""}`;
+  return value ? `${BASE_PATH}?${value}` : BASE_PATH;
 }
+
+function SummaryIcon({ path, tone }: { path: string; tone: string }) {
+  return (
+    <span aria-hidden="true" className={`grid size-10 shrink-0 place-items-center rounded-full ${tone}`}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
+        <path d={path} />
+      </svg>
+    </span>
+  );
+}
+
+const TILE = "flex items-center gap-3 bg-white px-5 py-4 dark:bg-zinc-900";
+const TILE_LINK = `${TILE} transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600 dark:hover:bg-zinc-800/40`;
+const LABEL = "text-xs font-medium text-zinc-500 dark:text-zinc-400";
+const VALUE = "mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50";
 
 export default async function SubscriptionsPage({ searchParams }: Props) {
   if (!canonicalSubscriptionUiVisible()) notFound();
   if (!await canonicalSubscriptionUiStaffViewer()) redirect("/login");
-  const raw = await searchParams;
-  const view = views.some(([value]) => value === raw.view) ? raw.view as typeof views[number][0] : "current";
-  const sort = ["renewal", "updated", "mrr"].includes(raw.sort ?? "") ? raw.sort as "renewal" | "updated" | "mrr" : "renewal";
-  const page = Math.max(1, Number(raw.page) || 1);
+
+  const parsed = parseWorkspaceSearchParams(await searchParams);
   const workspace = await getCanonicalSubscriptionWorkspace({
-    query: raw.q ?? "", view, collectionMethod: raw.collection || undefined,
-    cadence: raw.cadence ? Number(raw.cadence) : null, currency: raw.currency || undefined, sort, page,
+    query: parsed.query,
+    status: parsed.status,
+    cadence: parsed.cadence,
+    sort: parsed.sort,
+    direction: parsed.direction,
+    page: parsed.page,
+    pageSize: WORKSPACE_DEFAULT_PAGE_SIZE,
   });
-  const base = { q: raw.q, view, collection: raw.collection, cadence: raw.cadence, currency: raw.currency, sort };
-  const mrrNote = workspace.metrics.operationalMrr == null
-    ? "Multiple currencies â€” filter to view a total"
-    : "Active canonical agreements only";  const collectionTotal = workspace.metrics.cardCount + workspace.metrics.manualCount;
-  const cardPercent = collectionTotal === 0 ? 0 : Math.round((workspace.metrics.cardCount / collectionTotal) * 100);
-  const nextActionCount = workspace.metrics.setupCount + workspace.metrics.reviewCount + workspace.metrics.alertCount;
+  const { metrics } = workspace;
+
+  const groups = workspace.groups.map((group) => customerGroupView(group, { money: formatMoney }));
+  const cadenceValue = parsed.cadence == null ? "" : String(parsed.cadence);
+  const filtered = Boolean(parsed.query) || parsed.status !== "all" || parsed.cadence != null;
+
+  const filterParams = { q: parsed.query, status: parsed.status === "all" ? null : parsed.status, cadence: cadenceValue };
+  const sortParams = (key: WorkspaceSortKey, direction: WorkspaceSortDirection) =>
+    key === "customer" && direction === "asc" ? {} : { sort: key, dir: direction === "desc" ? "desc" : null };
+  const sortLinks = Object.fromEntries((["customer", "services", "recurring", "renewal", "status"] as const).map((key) => {
+    const active = parsed.sort === key;
+    const next = active ? (parsed.direction === "asc" ? "desc" : "asc") : DEFAULT_DIRECTION[key];
+    return [key, { href: href({ ...filterParams, ...sortParams(key, next) }), direction: active ? parsed.direction : null }];
+  })) as Record<WorkspaceSortKey, { href: string; direction: WorkspaceSortDirection | null }>;
+  const pageParams = { ...filterParams, ...sortParams(parsed.sort, parsed.direction) };
+
+  const from = groups.length ? (workspace.page - 1) * workspace.pageSize + 1 : 0;
+  const mrrValue = metrics.operationalMrr == null
+    ? "\u2014"
+    : formatMoney(metrics.operationalMrr, metrics.operationalMrrCurrency ?? "XCD");
 
   return <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-<div className="flex items-start gap-3"><span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-700 text-xl font-bold text-white shadow-sm">$</span><div><p className="text-xs font-medium text-zinc-500">Billing / Subscriptions</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Subscriptions</h1><p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Manage customer agreements and billable services.</p></div></div>
-      <div className="flex flex-wrap gap-2"><Link href="/admin/subscriptions/attention" className="rounded-lg border border-amber-300 px-4 py-2.5 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:text-amber-300">Attention queue</Link><Link href="/admin/subscriptions/canonical/new" className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Add subscription</Link></div>
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Subscriptions</h1>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Manage customer subscriptions and recurring services.</p>
+      </div>
+      <Link
+        href="/admin/subscriptions/canonical/new"
+        className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="size-4"><path d="M12 5v14M5 12h14" /></svg>
+        Add subscription
+      </Link>
     </header>
 
-    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
-      <main className="min-w-0 space-y-5">
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Subscription summary">
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/25"><p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Operational MRR</p><p className="mt-2 text-2xl font-semibold tabular-nums">{workspace.metrics.operationalMrr == null ? "â€”" : money(workspace.metrics.operationalMrr, workspace.metrics.operationalMrrCurrency ?? "XCD")}</p><p title="Normalized monthly value from current effective service prices on active canonical agreements. Drafts, paused, shadows, and legacy records are excluded." className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">{mrrNote}</p></div>
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Active subscriptions</p><p className="mt-2 text-2xl font-semibold tabular-nums">{workspace.metrics.activeCount}</p><p className="mt-1 text-xs text-zinc-500">Operational canonical agreements</p></div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/25"><p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">Setup required</p><p className="mt-2 text-2xl font-semibold tabular-nums">{workspace.metrics.setupCount}</p><p className="mt-1 text-xs text-amber-800 dark:text-amber-300">Editable inactive drafts</p></div>
-      <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/60 dark:bg-rose-950/25"><p className="text-xs font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300">Collection alerts</p><p className="mt-2 text-2xl font-semibold tabular-nums">{workspace.metrics.alertCount}</p><p className="mt-1 text-xs text-rose-800 dark:text-rose-300">Past grace or provider exception</p></div>
+    <section aria-label="Subscription summary" className="grid gap-px overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 shadow-sm sm:grid-cols-2 lg:grid-cols-4 dark:border-zinc-800 dark:bg-zinc-800">
+      <Link href={href({})} className={`${TILE_LINK}`} title="Subscription records, not customers or services. Click to clear filters.">
+        <SummaryIcon tone="bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" path="M7 3h8l4 4v14H7zM14 3v5h5M10 13h6M10 17h6" />
+        <div><p className={LABEL}>Total subscriptions</p><p className={VALUE}>{metrics.totalCount}</p></div>
+      </Link>
+      <Link href={href({ status: "active" })} className={`${TILE_LINK}`} title="Show active subscriptions">
+        <SummaryIcon tone="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" path="M5 12l4.5 4.5L19 7" />
+        <div><p className={LABEL}>Active</p><p className={VALUE}>{metrics.activeCount}</p></div>
+      </Link>
+      <div className={`${TILE}`} title={metrics.operationalMrr == null
+        ? "Active subscriptions span more than one currency, so no single total is shown."
+        : "Normalized monthly value of active canonical subscriptions."}>
+        <SummaryIcon tone="bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" path="M12 3v18M16 7.5c0-1.7-1.8-3-4-3s-4 1.3-4 3 1.8 2.8 4 3 4 1.3 4 3-1.8 3-4 3-4-1.3-4-3" />
+        <div><p className={LABEL}>Operational MRR</p><p className={VALUE}>{mrrValue}</p></div>
+      </div>
+      <Link href={href({ status: "attention" })} className={TILE_LINK} title="Show subscriptions that need setup, review, or collection follow-up">
+        <SummaryIcon
+          tone={metrics.needsAttentionCount > 0 ? "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}
+          path="M12 4l9 16H3zM12 10v4M12 17h.01"
+        />
+        <div><p className={LABEL}>Needs attention</p><p className={VALUE}>{metrics.needsAttentionCount}</p></div>
+      </Link>
     </section>
-    <p className="-mt-2 text-xs text-zinc-500">Collection mix: {workspace.metrics.cardCount} card / {workspace.metrics.manualCount} manual across {workspace.metrics.currentCount} current agreements â€” not only active subscriptions.</p>
 
-    <section className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-      <form className="grid gap-2 md:grid-cols-[minmax(0,1fr)_150px_150px_auto]"><input name="q" defaultValue={raw.q} placeholder="Search customer, agreement or reference" className="min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-950" /><select name="collection" defaultValue={raw.collection ?? ""} className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"><option value="">All collection</option><option value="manual_invoice">Manual invoice</option><option value="stripe_autocharge">Card billing</option></select><select name="cadence" defaultValue={raw.cadence ?? ""} className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"><option value="">All cadences</option><option value="1">Monthly</option><option value="3">Quarterly</option><option value="6">6 months</option><option value="12">Annual</option></select><input type="hidden" name="view" value={view} /><input type="hidden" name="sort" value={sort} /><button className="rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">Apply</button></form>
-      <div className="mt-3 flex flex-wrap gap-2">{views.map(([value, label]) => <Link key={value} href={href({ ...base, view: value, page: undefined })} className={`rounded-full px-3 py-1.5 text-xs font-medium ${view === value ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"}`}>{label}</Link>)}</div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="font-medium text-zinc-500">Sort</span>{([ ["renewal", "Renewal"], ["updated", "Updated"], ["mrr", "MRR"] ] as const).map(([value, label]) => <Link key={value} href={href({ ...base, sort: value, page: undefined })} className={`rounded-lg px-2.5 py-1.5 ${sort === value ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"}`}>{label}</Link>)}</div>
-    </section>
+    <SubscriptionsWorkspace
+      groups={groups}
+      filters={{ query: parsed.query, status: parsed.status, cadence: cadenceValue, sort: parsed.sort, dir: parsed.direction }}
+      statusOptions={WORKSPACE_STATUS_FILTERS.map((value) => ({ value, label: WORKSPACE_STATUS_LABELS[value] }))}
+      cadenceOptions={workspace.cadenceOptions}
+      filtered={filtered}
+      isEmpty={workspace.isEmpty}
+      counts={{ subscriptions: workspace.subscriptionTotal, customers: workspace.groupTotal }}
+      sortLinks={sortLinks}
+      pagination={{
+        page: workspace.page,
+        pageCount: workspace.pageCount,
+        from,
+        to: from ? from + groups.length - 1 : 0,
+        previousHref: workspace.page > 1 ? href({ ...pageParams, page: workspace.page - 1 }) : null,
+        nextHref: workspace.page < workspace.pageCount ? href({ ...pageParams, page: workspace.page + 1 }) : null,
+      }}
+    />
 
-    <div className="flex items-center justify-between gap-3 text-sm"><p className="text-zinc-500">{workspace.total} agreement{workspace.total === 1 ? "" : "s"} in this view</p><p className="text-xs text-zinc-500">Lifecycle, setup, collection, and authority are shown separately.</p></div>
-    {workspace.rows.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-5 py-12 text-center dark:border-zinc-700 dark:bg-zinc-900"><h2 className="font-semibold">No subscriptions in this view</h2><p className="mt-1 text-sm text-zinc-500">Adjust the search or filters, or add a customer subscription.</p></div> : <><div className="grid gap-3 md:hidden">{workspace.rows.map((row) => { const status = canonicalSubscriptionWorkspacePresentation(row); return <article key={row.id} className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-emerald-700 dark:text-emerald-400">{row.customer}</p><p className="text-sm text-zinc-500">{canonicalSubscriptionDisplayName(row.name, row.billingIntervalMonths)} Â· {canonicalIntervalLabel(row.billingIntervalMonths)}</p></div><span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium capitalize dark:bg-zinc-800">{status.lifecycleLabel}</span></div>{status.issueLabel ? <p title={status.issueDetail ?? undefined} className={`mt-3 w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${tone(status.issueLabel)}`}>{status.issueLabel}</p> : null}<dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-zinc-500">Services</dt><dd className="mt-1 font-medium">{row.itemCount}</dd></div><div><dt className="text-xs text-zinc-500">MRR equivalent</dt><dd className="mt-1 font-medium tabular-nums">{money(row.normalizedMrr, row.currency)}</dd></div><div className="col-span-2"><dt className="text-xs text-zinc-500">Next renewal</dt><dd className="mt-1 font-medium">{row.access === "editable_draft" && !row.nextBillingDate ? "Not scheduled" : date(row.nextBillingDate)}</dd></div></dl><Link href={`/admin/subscriptions/canonical/${row.id}`} className="mt-4 inline-block text-sm font-semibold text-emerald-700 hover:underline dark:text-emerald-400">{status.actionLabel}</Link></article>; })}</div>
-      <div className="hidden overflow-x-auto rounded-xl border border-zinc-200 bg-white md:block dark:border-zinc-800 dark:bg-zinc-900"><table className="min-w-[980px] w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800"><thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-950 dark:text-zinc-400"><tr><th className="px-4 py-3">Customer / agreement</th><th className="px-4 py-3">Services</th><th className="px-4 py-3">Collection</th><th className="px-4 py-3">Lifecycle / needs action</th><th className="px-4 py-3">Next renewal</th><th className="px-4 py-3 text-right">MRR equivalent</th><th className="px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">{workspace.rows.map((row) => { const status = canonicalSubscriptionWorkspacePresentation(row); return <tr key={row.id} className={row.attentionRequired ? "bg-rose-50/40 dark:bg-rose-950/10" : ""}><td className="px-4 py-3"><p className="font-medium text-emerald-700 dark:text-emerald-400">{row.customer}</p><p className="max-w-72 truncate text-xs text-zinc-500" title={row.reference ?? undefined}>{canonicalSubscriptionDisplayName(row.name, row.billingIntervalMonths)} Â· {canonicalIntervalLabel(row.billingIntervalMonths)}{row.reference ? ` Â· ${row.reference}` : ""}</p></td><td className="px-4 py-3">{row.itemCount} service{row.itemCount === 1 ? "" : "s"}</td><td className="px-4 py-3">{collectionLabel(row.collectionMethod)}</td><td className="px-4 py-3"><div className="flex flex-wrap gap-1.5"><span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium capitalize dark:bg-zinc-800">{status.lifecycleLabel}</span>{status.issueLabel ? <span title={status.issueDetail ?? undefined} className={`rounded-full px-2.5 py-1 text-xs font-medium ${tone(status.issueLabel)}`}>{status.issueLabel}</span> : null}</div></td><td className="px-4 py-3">{row.access === "editable_draft" && !row.nextBillingDate ? "Not scheduled" : date(row.nextBillingDate)}</td><td className="px-4 py-3 text-right tabular-nums">{money(row.normalizedMrr, row.currency)}</td><td className="px-4 py-3 text-right"><Link href={`/admin/subscriptions/canonical/${row.id}`} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">{status.actionLabel}</Link></td></tr>; })}</tbody></table></div></>}
-    {workspace.pageCount > 1 ? <nav aria-label="Subscriptions pagination" className="flex items-center justify-between gap-3"><span className="text-sm text-zinc-500">Page {workspace.page} of {workspace.pageCount}</span><div className="flex gap-2">{workspace.page > 1 ? <Link href={href({ ...base, page: String(workspace.page - 1) })} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Previous</Link> : null}{workspace.page < workspace.pageCount ? <Link href={href({ ...base, page: String(workspace.page + 1) })} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Next</Link> : null}</div></nav> : null}
-    <details className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900"><summary className="cursor-pointer font-semibold">Billing records and transition history</summary><p className="mt-2 max-w-3xl text-zinc-600 dark:text-zinc-400">Historical arrangements and migration records remain available for audit and recovery, separate from daily agreement management.</p><div className="mt-3 flex flex-wrap gap-3"><Link href="/admin/subscriptions/legacy" className="font-semibold text-emerald-700 underline dark:text-emerald-400">Open legacy records</Link><Link href="/admin/subscriptions/canonical/migrations" className="font-semibold text-emerald-700 underline dark:text-emerald-400">Open migration history</Link></div></details>
-      </main>
-
-      <aside className="grid gap-4 sm:grid-cols-2 xl:sticky xl:top-5 xl:grid-cols-1" aria-label="Subscription insights">
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="font-semibold">Subscription insights</h2><p className="mt-1 text-xs text-zinc-500">Across {workspace.metrics.currentCount} current agreements</p>
-          <div className="mt-5 flex items-center gap-4"><div className="relative grid size-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(rgb(5 150 105) ${cardPercent}%, rgb(191 219 254) 0)` }}><div className="grid size-16 place-items-center rounded-full bg-white text-sm font-bold dark:bg-zinc-900">{cardPercent}%</div></div><dl className="min-w-0 flex-1 space-y-2 text-sm"><div className="flex justify-between gap-3"><dt>Card billing</dt><dd className="font-semibold tabular-nums">{workspace.metrics.cardCount}</dd></div><div className="flex justify-between gap-3"><dt>Manual invoice</dt><dd className="font-semibold tabular-nums">{workspace.metrics.manualCount}</dd></div></dl></div>
-          <div className="my-4 border-t border-zinc-100 dark:border-zinc-800" /><h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">By status</h3><dl className="mt-3 space-y-2 text-sm">{[["Active", workspace.metrics.activeCount, "bg-emerald-500"], ["Setup required", workspace.metrics.setupCount, "bg-amber-400"], ["Billing review", workspace.metrics.reviewCount, "bg-violet-400"], ["Paused", workspace.metrics.pausedCount, "bg-zinc-400"], ["Ended / history", workspace.metrics.historyCount, "bg-slate-500"]].map(([label, count, dot]) => <div key={String(label)} className="flex items-center justify-between gap-3"><dt className="flex items-center gap-2"><span className={`size-2 rounded-full ${dot}`} />{label}</dt><dd className="font-semibold tabular-nums">{count}</dd></div>)}</dl>
-        </section>
-        <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm dark:border-emerald-900 dark:bg-emerald-950/20"><div className="flex items-center justify-between gap-3"><h2 className="font-semibold text-emerald-950 dark:text-emerald-100">Next actions</h2><span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">{nextActionCount}</span></div><div className="mt-3 space-y-2 text-sm">{workspace.metrics.setupCount ? <Link href={href({ view: "setup", sort: "renewal" })} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white px-3 py-3 font-medium hover:bg-emerald-50 dark:border-emerald-900 dark:bg-zinc-900"><span>{workspace.metrics.setupCount} subscription{workspace.metrics.setupCount === 1 ? "" : "s"} need setup</span><span>→</span></Link> : null}{workspace.metrics.reviewCount ? <Link href={href({ view: "review", sort: "renewal" })} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white px-3 py-3 font-medium hover:bg-emerald-50 dark:border-emerald-900 dark:bg-zinc-900"><span>{workspace.metrics.reviewCount} subscription{workspace.metrics.reviewCount === 1 ? "" : "s"} need review</span><span>→</span></Link> : null}{workspace.metrics.alertCount ? <Link href={href({ view: "alerts", sort: "renewal" })} className="flex items-center justify-between rounded-lg border border-rose-200 bg-white px-3 py-3 font-medium text-rose-800 hover:bg-rose-50 dark:border-rose-900 dark:bg-zinc-900"><span>{workspace.metrics.alertCount} collection alert{workspace.metrics.alertCount === 1 ? "" : "s"}</span><span>→</span></Link> : null}{nextActionCount === 0 ? <p className="rounded-lg border border-emerald-200 bg-white px-3 py-3 text-zinc-600 dark:border-emerald-900 dark:bg-zinc-900">No setup, review, or collection actions are waiting.</p> : null}</div></section>
-        <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm dark:border-blue-900 dark:bg-blue-950/20"><h2 className="font-semibold text-blue-950 dark:text-blue-100">Quick links</h2><nav className="mt-3 grid gap-1 text-sm"><Link href="/admin/reports" className="flex justify-between rounded-lg px-2 py-2 font-medium hover:bg-white/80">Subscription reports <span>→</span></Link><Link href="/admin/billing" className="flex justify-between rounded-lg px-2 py-2 font-medium hover:bg-white/80">Billing & invoices <span>→</span></Link><Link href="/admin/customers" className="flex justify-between rounded-lg px-2 py-2 font-medium hover:bg-white/80">Customer management <span>→</span></Link><Link href="/admin/devices" className="flex justify-between rounded-lg px-2 py-2 font-medium hover:bg-white/80">Device inventory <span>→</span></Link><Link href="/admin/sims" className="flex justify-between rounded-lg px-2 py-2 font-medium hover:bg-white/80">SIM inventory <span>→</span></Link></nav></section>
-      </aside>
-    </div>
+    <p className="px-1 text-xs text-zinc-500 dark:text-zinc-400">
+      Related:{" "}
+      <Link href="/admin/subscriptions/attention" className="font-medium hover:text-zinc-800 hover:underline dark:hover:text-zinc-200">Attention queue</Link>
+      {" \u00b7 "}
+      <Link href="/admin/subscriptions/canonical/migrations" className="font-medium hover:text-zinc-800 hover:underline dark:hover:text-zinc-200">Migration history</Link>
+      {" \u00b7 "}
+      <Link href="/admin/subscriptions/legacy" className="font-medium hover:text-zinc-800 hover:underline dark:hover:text-zinc-200">Legacy records</Link>
+      {" \u00b7 "}
+      <Link href="/admin/reports" className="font-medium hover:text-zinc-800 hover:underline dark:hover:text-zinc-200">Reports</Link>
+    </p>
   </div>;
 }

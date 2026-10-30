@@ -217,8 +217,9 @@ test("current and history views distinguish terminated arrangements without comb
 });
 
 test("UI routes include detail, empty, loading, error and price-history states", async () => {
-  const [overview, detailPage, detailWorkspace, demo, loading, error, preflight] = await Promise.all([
+  const [overviewPage, overviewWorkspace, detailPage, detailWorkspace, demo, loading, error, preflight] = await Promise.all([
     readFile("app/admin/subscriptions/canonical/page.tsx", "utf8"),
+    readFile("components/admin/subscriptions-workspace.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/[subscriptionId]/page.tsx", "utf8"),
     readFile("components/admin/canonical-subscription-detail-workspace.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/demo/page.tsx", "utf8"),
@@ -227,18 +228,17 @@ test("UI routes include detail, empty, loading, error and price-history states",
     readFile("docs/production-preview-preflight.md", "utf8"),
   ]);
   const detail = `${detailPage}\n${detailWorkspace}`;
-  assert.match(overview, /No subscriptions in this view/);
+  const overview = `${overviewPage}\n${overviewWorkspace}`;
+  assert.match(overview, /No matching subscriptions/);
+  assert.match(overview, /No subscriptions yet/);
   assert.match(detail, /Billing & renewal/);
   assert.match(detail, /Price history/);
   assert.match(detail, /Hardware assignments/);
   assert.match(loading, /aria-busy/);
   assert.match(error, /No billing action was performed/);
-  assert.match(overview, /Billing records and transition history/);
   assert.match(overview, /Operational MRR/);
-  assert.match(overview, /Collection alerts/);
-  assert.match(overview, /Subscription insights/);
-  assert.match(overview, /Next actions/);
-  assert.match(overview, /Quick links/);
+  assert.match(overview, /Needs attention/);
+  assert.doesNotMatch(overview, /Subscription insights|Next actions|Quick links|Billing records and transition history/);
   assert.match(overview, /Subscriptions pagination/);
   assert.match(overview, /canonicalSubscriptionUiVisible/);
   assert.match(detail, /canonicalSubscriptionUiEnabled/);
