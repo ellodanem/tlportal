@@ -43,7 +43,7 @@ function DevicePicker({
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const visible = needle
-    ? devices.filter((device) => `${device.label} ${device.simLabel ?? ""}`.toLowerCase().includes(needle))
+    ? devices.filter((device) => `${device.label} ${device.imei} ${device.simLabel ?? ""} ${device.iccid ?? ""}`.toLowerCase().includes(needle))
     : devices;
 
   return (
@@ -79,7 +79,7 @@ function DevicePicker({
                 onClick={() => onChange(device.id)}
                 className={`flex min-h-11 w-full flex-col items-start px-3 py-2 text-left text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${selected ? "bg-emerald-50 font-semibold text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100" : "hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
               >
-                <span className="min-w-0 break-words">{device.label}</span>
+                <span className="min-w-0 break-words">{device.label} <span className="text-xs font-normal text-zinc-500">· {device.imei}</span></span>
                 <span className="text-xs font-normal text-zinc-500">{device.simLabel ?? "no SIM"}</span>
               </button>
             </li>

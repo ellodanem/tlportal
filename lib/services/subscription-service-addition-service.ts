@@ -268,7 +268,7 @@ export type ServiceAdditionContext = {
   existingServices: { id: string; label: string; cycleAmount: string; startDate: string | null }[];
   currentRecurringCents: number;
   suggestedPrice: string;
-  availableDevices: { id: string; label: string; simLabel: string | null }[];
+  availableDevices: { id: string; label: string; simLabel: string | null; imei: string; iccid: string | null }[];
   unlinkedAssignments: { id: string; label: string }[];
   /** Why the flow is unavailable for this subscription, or null when services can be added. */
   blockedReason: string | null;
@@ -330,7 +330,7 @@ export async function getServiceAdditionContext(subscriptionId: string): Promise
         serviceAssignments: { none: { endDate: null, status: { not: "cancelled" } } },
       },
       orderBy: [{ label: "asc" }, { imei: "asc" }],
-      select: { id: true, label: true, deviceModel: { select: { name: true } }, simCard: { select: { label: true, msisdn: true } } },
+      select: { id: true, label: true, imei: true, deviceModel: { select: { name: true } }, simCard: { select: { label: true, msisdn: true, iccid: true } } },
       take: 500,
     }),
     prisma.serviceAssignment.findMany({
@@ -367,6 +367,8 @@ export async function getServiceAdditionContext(subscriptionId: string): Promise
       id: device.id,
       label: device.label?.trim() || `${device.deviceModel.name} device`,
       simLabel: device.simCard?.label?.trim() || device.simCard?.msisdn?.trim() || null,
+      imei: device.imei,
+      iccid: device.simCard?.iccid ?? null,
     })),
     unlinkedAssignments: assignments.map((assignment) => ({
       id: assignment.id,
