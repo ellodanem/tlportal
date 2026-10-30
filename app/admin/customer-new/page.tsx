@@ -15,7 +15,7 @@ import {
   parseCustomerNewFilter,
 } from "@/lib/admin/customer-new";
 import { prisma } from "@/lib/db";
-import { canonicalIntervalLabel, canonicalSubscriptionDisplayName, canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
+import { canonicalIntervalLabel, canonicalSubscriptionDisplayName } from "@/lib/domain/canonical-subscription-admin";
 import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { getCanonicalSubscriptionAdminDetail } from "@/lib/services/canonical-subscription-admin-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
@@ -134,12 +134,9 @@ export default async function CustomerNewPage({ searchParams }: Props) {
         .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
     const collection = [...new Set(subs.map((s) => customerNewCollectionLabel(s.collectionMethod)))].join(" + ");
 
-    const subscriptionsHref = canonicalSubscriptionUiVisible()
-      ? `/admin/customers/${customer.id}/subscriptions`
-      : `/admin/subscriptions/${customer.id}`;
-    const createSubscriptionHref = canonicalSubscriptionUiVisible()
-      ? `/admin/subscriptions/canonical/new?customerId=${customer.id}`
-      : "/admin/subscriptions";
+    const newSubscriptionHref = `/admin/subscriptions/new?customerId=${encodeURIComponent(customer.id)}`;
+    const subscriptionsHref = newSubscriptionHref;
+    const createSubscriptionHref = newSubscriptionHref;
 
     const contact = customer.contacts[0] ?? null;
 
