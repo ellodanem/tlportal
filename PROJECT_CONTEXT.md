@@ -5300,3 +5300,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - feat(subscriptions): route-based subscription detail, canonical ownership guards, shared financial ledger
 
+
+### 2026-11-01 23:55 UTC — commit `2614988`
+
+- docs: log subscription consolidation commit in PROJECT_CONTEXT
+
+
+### 2026-11-01 23:55 UTC — pre-push (`main` → origin) @ `2614988`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
