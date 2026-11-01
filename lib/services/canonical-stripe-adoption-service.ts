@@ -13,6 +13,7 @@ import {
 } from "@/lib/domain/canonical-stripe-shadow";
 import { normalizeCanonicalStripeSubscription } from "@/lib/stripe/canonical-provider-normalization";
 import { getStripeClient } from "@/lib/stripe/config";
+import { stripeSubscriptionStatusToTl } from "@/lib/domain/customer-subscription";
 
 export class CanonicalStripeAdoptionError extends Error {
   readonly code: string;
@@ -155,7 +156,12 @@ export async function adoptExistingStripeSubscription(input: {
     });
     await tx.customerSubscription.update({
       where: { id: configuration.id },
-      data: { controlMode: "canonical", lifecycleStatus: "active", status: "active" },
+      data: {
+        controlMode: "canonical",
+        lifecycleStatus: "active",
+        status: stripeSubscriptionStatusToTl(observed.status ?? ""),
+        collectionHealth: ["past_due", "unpaid"].includes(observed.status ?? "") ? "past_due" : "current",
+      },
     });
   });
   return { externalSubscriptionId: link.externalSubscriptionId, mappingCount: mappings.length, nextBillingDate: configuration.nextBillingDate };

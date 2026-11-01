@@ -39,7 +39,6 @@ import {
 import { resolveGpsPortalUrl } from "@/lib/services/device-link-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
 import { formatPlanTerm } from "@/lib/subscription-options/display";
-import { reconcileLatestStripeInvoiceForCustomer } from "@/lib/services/stripe-invoice-backfill-service";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -92,8 +91,6 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   const { fleet: fleetParam, archived, unarchived, unarchiveError } = await searchParams;
   const fleetFilter = parseFleetFilter(fleetParam);
 
-  await reconcileLatestStripeInvoiceForCustomer(id);
-
   const customer = await prisma.customer.findUnique({
     where: { id },
     include: {
@@ -113,6 +110,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
             },
           },
           simCard: true,
+          subscriptionItem: { select: { id: true, customerSubscriptionId: true } },
         },
       },
     },
@@ -464,7 +462,6 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
             phone: u.phone,
             traqcareUsername: u.traqcareUsername,
             hasPassword: Boolean(u.traqcarePassword),
-            traqcarePassword: u.traqcarePassword,
             role: u.role,
             notes: u.notes,
           }))}
@@ -647,6 +644,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
                           billingMode={customer.billingMode}
                           status={a.status}
                           open={assignmentOpen}
+                          canonicalServiceHref={a.subscriptionItem ? `/admin/subscriptions/canonical/${a.subscriptionItem.customerSubscriptionId}/services/${a.subscriptionItem.id}` : null}
                           layout="inline"
                         />
                       </td>

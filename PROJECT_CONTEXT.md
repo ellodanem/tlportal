@@ -5105,3 +5105,193 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-10-21 11:32 UTC — commit `2a282b3`
+
+- feat(subscriptions): manage tracker operations in place
+
+
+### 2026-10-21 11:33 UTC — pre-push (`main` → origin) @ `2a282b3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 15:50 UTC — commit `0e10cf8`
+
+- refactor(subscriptions): consolidate customer management UX
+
+
+### 2026-10-21 16:04 UTC — pre-push (`main` → origin) @ `0e10cf8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-21 20:39 UTC — commit `43b8cfb`
+
+- Revert "refactor(subscriptions): consolidate customer management UX"
+
+
+### 2026-10-21 20:45 UTC — pre-push (`main` → origin) @ `43b8cfb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-22 02:19 UTC — commit `16e0464`
+
+- Refine subscription detail workflow
+
+
+### 2026-10-22 02:19 UTC — pre-push (`main` → origin) @ `16e0464`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-22 11:22 UTC — commit `38acafb`
+
+- feat: unify expenses and vendor bills
+
+
+### 2026-10-22 11:22 UTC — pre-push (`main` → origin) @ `38acafb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-22 11:35 UTC — commit `4982f32`
+
+- data: consolidate Kerry expenses under Kerry A
+
+
+### 2026-10-22 11:35 UTC — pre-push (`main` → origin) @ `4982f32`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-28 12:36 UTC — commit `a1b0008`
+
+- feat: add new customer workspace
+
+
+### 2026-10-28 12:36 UTC — pre-push (`main` → origin) @ `a1b0008`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-28 12:42 UTC — commit `e5e8185`
+
+- fix(db): correct Kerry vendor consolidation migration SQL
+
+
+### 2026-10-28 12:42 UTC — pre-push (`main` → origin) @ `e5e8185`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-28 13:33 UTC — commit `d9bc0ec`
+
+- feat: mobile-optimize admin shell and Customer (New) page
+
+
+### 2026-10-28 13:33 UTC — pre-push (`main` → origin) @ `d9bc0ec`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-30 12:43 UTC — commit `207e5eb`
+
+- feat(subscriptions): unified subscription workflow with 6-step wizard, contextual add-service, and agreed partial-period charges
+
+
+### 2026-10-30 12:43 UTC — pre-push (`main` → origin) @ `207e5eb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-30 — Agent notes for `207e5eb` (unified subscription workflow)
+
+- Pushed to `main` (https://github.com/ellodanem/tlportal.git). Vercel reported the production deployment for `207e5eb` as successful (GitHub commit status); migration was applied by the build step, not queried independently.
+- Schema (additive only): migration `20261030120000_subscription_service_adjustments` adds `SubscriptionAdjustmentMethod`, nullable unique `creationKey` on `CustomerSubscription` and `SubscriptionItem`, and table `SubscriptionItemInitialAdjustment` (agreed partial-period charge; not an invoice).
+- UI: six-step new-subscription wizard, single subscription details screen with one Add service action, contextual 3-step add-service flow (`/admin/subscriptions/canonical/[id]/add-service`), compact customer subscriptions list. Details in `docs/subscription-workflow.md`.
+- Safety: none of the new flows create invoices, call Stripe or notify customers. Adjustment invoice creation is disabled in production until `CANONICAL_SUBSCRIPTION_OPERATIONS_ENABLED=true`.
+- Not committed (owner's earlier work, left untouched): billing/Stripe reconciliation files listed in `docs/cursor-agent-handoff.md`. `tests/canonical-subscription-admin.test.ts` "customer billing keeps financial history..." fails because that uncommitted work renamed "Manage renewals" on the billing page.
+### 2026-10-30 12:58 UTC — commit `c3627bf`
+
+- feat(subscriptions): searchable scrollable device picker in add-service flow
+
+
+### 2026-10-30 12:58 UTC — pre-push (`main` → origin) @ `c3627bf`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-30 - Agent notes for `c3627bf`
+
+- Add-service hardware step: the device dropdown is now a searchable, scrollable list (search by name, IMEI or SIM). UI only; no schema or billing change.
+
+### 2026-10-30 13:05 UTC — commit `dbd06af`
+
+- feat(subscriptions): add devices link to hardware picker
+
+
+### 2026-10-30 13:06 UTC — pre-push (`main` → origin) @ `dbd06af`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+- Agent notes: Added `Open Devices ↗` to the searchable hardware picker. It opens `/admin/devices` in a new tab with `noopener noreferrer`, preserving the add-service workflow. `tsc` and focused ESLint passed; pushed to `main`.
+### 2026-10-30 13:11 UTC — commit `ad04a09`
+
+- fix(subscriptions): search hardware picker by IMEI and ICCID
+
+
+### 2026-10-30 13:11 UTC — pre-push (`main` → origin) @ `ad04a09`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+- Agent notes: Hardware picker in add-service flow now loads and searches IMEI and SIM ICCID (previously only label/SIM label, so IMEI search always returned nothing) and shows the IMEI on each row. Pushed to `main`.
+
+
+### 2026-10-30 13:24 UTC — commit `3e711d7`
+
+- Create agreed-charge invoices as editable drafts first
+
+
+### 2026-10-30 13:24 UTC — pre-push (`main` → origin) @ `3e711d7`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+- Agent notes (3e711d7): Agreed partial-period charges now create a DRAFT invoice (service option finalize:false) and redirect to /admin/tl-invoices/[id] so staff can add lines (e.g. hardware fee) and finalize. Detail screen shows Draft invoice state and fixes the invoice link route. Migration 20261030140000_adjustment_invoice_set_null makes SubscriptionItemInitialAdjustment.invoiceId FK ON DELETE SET NULL so discarding a draft is allowed. Drafts are already excluded from outstanding balance/collection health. Vercel reported success.
+
+### 2026-10-30 13:45 UTC — commit `05b9a50`
+
+- fix(customers): route subscription links to new flow
+
+
+### 2026-10-30 13:45 UTC — pre-push (`main` → origin) @ `05b9a50`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-30 14:07 UTC — commit `b2c90d6`
+
+- fix(customers): open customer subscription details
+
+
+### 2026-10-30 14:07 UTC — pre-push (`main` → origin) @ `b2c90d6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-10-30 14:23 UTC — commit `8b5a3b2`
+
+- feat(subscriptions): group main subscriptions list by customer with simplified summary and filters
+
+
+### 2026-10-30 14:23 UTC — pre-push (`main` → origin) @ `8b5a3b2`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+- Agent notes (8b5a3b2, pushed to origin/main): redesigned `/admin/subscriptions/canonical` — one row per canonical customer id with expandable subscriptions, compact summary strip, single toolbar (search / status / billing frequency / optional columns). Presentation only: no schema, billing, Stripe, or subscription record changes. New `lib/domain/canonical-subscription-workspace.ts` and `components/admin/subscriptions-workspace.tsx`; `getCanonicalSubscriptionWorkspace` now returns grouped results; service count now excludes ended/canceled services on current subscriptions. Pre-existing unrelated test failure: `customer billing keeps financial history separate...` expects "Manage renewals".
+
+- Agent notes (subscription consolidation, committed next): subscription detail rebuilt as route tabs under `app/admin/subscriptions/canonical/[subscriptionId]/(tabs)` (overview, services, services/[itemId], billing, billing/annual-adjustment, invoices, activity, advanced); old `canonical-subscription-detail-workspace.tsx` and its accordions removed; `/add-service` is the single add-service entry and handles drafts. Server-side canonical ownership guards (`lib/domain/canonical-ownership.ts`, `lib/services/canonical-ownership-guard-service.ts`) block legacy schedule/billing-mode/subscription/renewal mutation of canonical-owned data. Shared financial ledger (`lib/domain/financial-ledger.ts`, `lib/services/financial-ledger-service.ts`) feeds customer Billing and the subscription Invoices tab; unlinked invoices labelled "Not linked to a subscription". Write-on-render removed (Stripe reconcile on customer pages; WhatsApp mark-read now a client effect). Traqcare passwords no longer serialised to client; reveal action is audited. No schema changes. Tests: 276 pass; `next build` OK with dummy DATABASE_URL (`npm run build` needs DB for `prisma migrate deploy`).

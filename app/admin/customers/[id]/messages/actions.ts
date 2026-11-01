@@ -78,5 +78,7 @@ export async function markCustomerWhatsAppReadAction(customerId: string): Promis
   });
   if (conversation) {
     await markWhatsAppConversationRead(conversation.id);
+    revalidatePath(`/admin/customers/${customerId}/messages`);
+    revalidatePath(`/admin/customers/${customerId}`);
   }
 }

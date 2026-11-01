@@ -12,12 +12,13 @@ import {
 } from "@/lib/domain/canonical-subscription-admin";
 import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { prisma } from "@/lib/db";
+import { NOT_LINKED_LABEL } from "@/lib/domain/financial-ledger";
+import { getCustomerFinancialLedger } from "@/lib/services/financial-ledger-service";
 import { loadCustomerCollectionSummary } from "@/lib/admin/load-customer-collection-summary";
 import {
   canonicalSubscriptionUiStaffViewer,
   getCanonicalSubscriptionAdminDetail,
 } from "@/lib/services/canonical-subscription-admin-service";
-import { reconcileLatestStripeInvoiceForCustomer } from "@/lib/services/stripe-invoice-backfill-service";
 
 type Props = { params: Promise<{ id: string }> };
 type SubscriptionDetail = NonNullable<Awaited<ReturnType<typeof getCanonicalSubscriptionAdminDetail>>>;
@@ -62,7 +63,6 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   if (!canonicalSubscriptionUiVisible()) notFound();
   if (!await canonicalSubscriptionUiStaffViewer()) redirect("/login");
   const { id } = await params;
-  await reconcileLatestStripeInvoiceForCustomer(id);
   const customer = await prisma.customer.findUnique({
     where: { id },
     select: {
@@ -80,7 +80,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   });
   if (!customer) notFound();
 
-  const [loadedSubscriptions, legacyAssignments, pausedAssignments, collectionSummary] = await Promise.all([
+  const [loadedSubscriptions, legacyAssignments, pausedAssignments, collectionSummary, ledger] = await Promise.all([
     Promise.all(customer.customerSubscriptions.map((subscription) => getCanonicalSubscriptionAdminDetail(subscription.id))),
     prisma.serviceAssignment.findMany({
       where: {
@@ -122,6 +122,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
       },
     }),
     loadCustomerCollectionSummary(customer.id),
+    getCustomerFinancialLedger(customer.id),
   ]);
   const subscriptions = loadedSubscriptions.filter(
     (subscription): subscription is SubscriptionDetail => subscription != null,
@@ -197,6 +198,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
           </div>;
         })}</div>
       </section> : null}
+      {ledger.unlinked.count > 0 ? <section role="note" className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900"><p className="font-semibold">{ledger.unlinked.count} customer invoice{ledger.unlinked.count === 1 ? "" : "s"}: {NOT_LINKED_LABEL}</p><p className="mt-1 text-zinc-600 dark:text-zinc-300">The balances below count only invoices attached to a subscription. Manual one-off invoices (installation, hardware) are in <Link href={`/admin/customers/${customer.id}/billing#recent-invoices`} className="font-semibold text-emerald-700 underline dark:text-emerald-400">Billing</Link>.</p></section> : null}
       {subscriptions.length ? <div className="space-y-5">{subscriptions.map((subscription) => {
         const currency = subscription.currency ?? "XCD";
         const displayName = canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths);
@@ -207,11 +209,11 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
           ? "Needs attention"
           : (subscription.lifecycleStatus ?? "Not classified").replaceAll("_", " ");
         const collectionHealth = subscription.summary?.collectionHealth === "not_started"
-          ? "No invoice history"
+          ? "No linked invoices yet"
           : subscription.summary?.collectionHealth?.replaceAll("_", " ") ?? "No billing history";
         return <article key={subscription.id} className={`overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-zinc-900 ${subscription.summary?.attentionRequired ? "border-amber-300 dark:border-amber-800" : "border-zinc-200 dark:border-zinc-800"}`}>
           <header className="border-b border-zinc-100 p-5 sm:p-6 dark:border-zinc-800"><div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2.5"><h2 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{displayName}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${subscriptionStatusClass(subscription)}`}>{statusLabel}</span></div><p className="mt-2 max-w-2xl truncate text-sm text-zinc-500" title={subscription.reference ?? undefined}>{collectionLabel(subscription.collectionMethod)} · {canonicalIntervalLabel(subscription.billingIntervalMonths)}{subscription.reference ? ` · ${subscription.reference}` : ""}</p></div><div className="flex flex-wrap gap-2"><Link href={`/admin/subscriptions/canonical/${subscription.id}`} className="rounded-xl bg-emerald-700 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900">Manage subscription</Link><Link href={`/admin/customers/${customer.id}/billing`} className="rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800 dark:focus-visible:ring-offset-zinc-900">Billing history</Link></div></div>
-            <dl className="mt-6 grid overflow-hidden rounded-xl border border-zinc-100 text-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 dark:border-zinc-800"><div className="border-b border-zinc-100 p-3.5 sm:border-r lg:border-b xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Services</dt><dd className="mt-1.5 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{subscription.items.length}</dd></div><div className="border-b border-zinc-100 p-3.5 lg:border-r xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Cycle total</dt><dd className="mt-1.5 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{money(subscription.summary?.recurringCycleTotal, currency)}</dd></div><div className="border-b border-zinc-100 p-3.5 sm:border-r xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Monthly value</dt><dd className="mt-1.5 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{money(subscription.normalizedMrr, currency)}</dd></div><div className="border-b border-zinc-100 p-3.5 lg:border-r xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Next renewal</dt><dd className="mt-1.5 font-semibold text-zinc-950 dark:text-zinc-50">{date(subscription.nextBillingDate)}</dd></div><div className="border-b border-zinc-100 p-3.5 sm:border-r sm:border-b-0 xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Invoice collection</dt><dd className="mt-1.5 font-semibold capitalize text-zinc-950 dark:text-zinc-50">{collectionHealth}</dd></div><div className="p-3.5"><dt className="text-xs font-medium text-zinc-500">Recorded balance</dt><dd className={`mt-1.5 font-semibold tabular-nums ${openBalance > 0 ? "text-amber-800 dark:text-amber-300" : "text-zinc-950 dark:text-zinc-50"}`}>{formatExpenseAmount(openBalance, currency)}</dd></div></dl>
+            <dl className="mt-6 grid overflow-hidden rounded-xl border border-zinc-100 text-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 dark:border-zinc-800"><div className="border-b border-zinc-100 p-3.5 sm:border-r lg:border-b xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Services</dt><dd className="mt-1.5 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{subscription.items.length}</dd></div><div className="border-b border-zinc-100 p-3.5 lg:border-r xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Cycle total</dt><dd className="mt-1.5 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{money(subscription.summary?.recurringCycleTotal, currency)}</dd></div><div className="border-b border-zinc-100 p-3.5 sm:border-r xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Monthly value</dt><dd className="mt-1.5 font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{money(subscription.normalizedMrr, currency)}</dd></div><div className="border-b border-zinc-100 p-3.5 lg:border-r xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Next renewal</dt><dd className="mt-1.5 font-semibold text-zinc-950 dark:text-zinc-50">{date(subscription.nextBillingDate)}</dd></div><div className="border-b border-zinc-100 p-3.5 sm:border-r sm:border-b-0 xl:border-b-0 dark:border-zinc-800"><dt className="text-xs font-medium text-zinc-500">Invoice collection</dt><dd className="mt-1.5 font-semibold capitalize text-zinc-950 dark:text-zinc-50">{collectionHealth}</dd></div><div className="p-3.5"><dt className="text-xs font-medium text-zinc-500">Linked invoice balance</dt><dd className={`mt-1.5 font-semibold tabular-nums ${openBalance > 0 ? "text-amber-800 dark:text-amber-300" : "text-zinc-950 dark:text-zinc-50"}`}>{formatExpenseAmount(openBalance, currency)}</dd></div></dl>
             {subscription.collectionMethod === "stripe_autocharge" ? <p className={`mt-4 text-xs ${providerConnected ? "text-blue-700 dark:text-blue-300" : "text-amber-800 dark:text-amber-300"}`}>{providerConnected ? "Card billing relationship recorded" : "Card billing relationship needs review"}</p> : <p className="mt-4 text-xs text-zinc-500">Manual collection · invoices and payments remain in customer Billing</p>}
           </header>
 

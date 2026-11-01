@@ -4,7 +4,8 @@ import type { ServiceAssignment } from "@prisma/client";
 
 import { addCalendarMonths, formatAssignmentDateLabel } from "@/lib/domain/assignment-renewal";
 import {
-  billableAssignmentWhere,
+  CANONICAL_ASSIGNMENT_RENEWAL_ERROR,
+  legacyRenewalAssignmentWhere,
   openAssignmentWhere,
   stripeTrackAssignmentWhere,
 } from "@/lib/domain/service-assignment-queries";
@@ -38,11 +39,21 @@ export type MarkAssignmentPeriodPaidResult =
     }
   | { ok: false; error: string };
 
+/** Legacy renewal bookkeeping never targets an assignment owned by a canonical subscription service. */
 function billableAssignmentWhereById(assignmentId: string) {
   return {
     id: assignmentId,
-    ...billableAssignmentWhere,
+    ...legacyRenewalAssignmentWhere,
   };
+}
+
+/** Distinguishes "belongs to a canonical subscription" from a genuinely missing assignment. */
+async function renewalAssignmentNotFoundError(assignmentId: string): Promise<string> {
+  const canonical = await prisma.serviceAssignment.findFirst({
+    where: { id: assignmentId, subscriptionItemId: { not: null } },
+    select: { id: true },
+  });
+  return canonical ? CANONICAL_ASSIGNMENT_RENEWAL_ERROR : "Active assignment not found.";
 }
 
 function resolveAdvanceBaseDate(assignment: Pick<ServiceAssignment, "nextDueDate" | "startDate">): Date {
@@ -194,7 +205,7 @@ export async function markAssignmentPeriodPaid(
   });
 
   if (!assignment) {
-    return { ok: false, error: "Active assignment not found." };
+    return { ok: false, error: await renewalAssignmentNotFoundError(input.assignmentId) };
   }
 
   if (
@@ -335,13 +346,14 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
     where: {
       customerId,
       ...stripeTrackAssignmentWhere(planTermMonths),
+      subscriptionItemId: null,
     },
     select: { id: true },
   });
 
   if (assignments.length === 0) {
     const billable = await prisma.serviceAssignment.findMany({
-      where: { customerId, ...billableAssignmentWhere },
+      where: { customerId, ...legacyRenewalAssignmentWhere },
       select: { id: true, intervalMonths: true },
     });
     const unset = billable.filter((a) => a.intervalMonths == null);
@@ -350,7 +362,7 @@ export async function advanceAssignmentsOnStripeInvoicePaid(
     );
     if (unset.length > 0 && otherTerm.length === 0) {
       await prisma.serviceAssignment.updateMany({
-        where: { customerId, ...billableAssignmentWhere, intervalMonths: null },
+        where: { customerId, ...legacyRenewalAssignmentWhere, intervalMonths: null },
         data: { intervalMonths: planTermMonths },
       });
       assignments = unset.map((a) => ({ id: a.id }));
@@ -419,7 +431,7 @@ export async function updateAssignmentNextDue(
   });
 
   if (!assignment) {
-    return { ok: false, error: "Active assignment not found." };
+    return { ok: false, error: await renewalAssignmentNotFoundError(input.assignmentId) };
   }
 
   await prisma.serviceAssignment.update({
@@ -460,7 +472,7 @@ export async function updateAssignmentIntervalMonths(
   });
 
   if (!assignment) {
-    return { ok: false, error: "Active assignment not found." };
+    return { ok: false, error: await renewalAssignmentNotFoundError(input.assignmentId) };
   }
 
   await prisma.serviceAssignment.update({
@@ -502,7 +514,7 @@ export async function listBillableAssignmentsForRenewal(customerId: string) {
   return prisma.serviceAssignment.findMany({
     where: {
       customerId,
-      ...billableAssignmentWhere,
+      ...legacyRenewalAssignmentWhere,
     },
     orderBy: [{ nextDueDate: "asc" }, { createdAt: "asc" }],
     include: {

@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 import {
   createPortalUserAction,
   deletePortalUserAction,
+  revealPortalUserPasswordAction,
   updatePortalUserAction,
   type PortalUserFormState,
 } from "@/app/admin/customers/portal-user-actions";
@@ -17,8 +18,8 @@ export type PortalUserRow = {
   email: string | null;
   phone: string | null;
   traqcareUsername: string | null;
+  /** The stored password is never sent to the browser; staff reveal it on demand. */
   hasPassword: boolean;
-  traqcarePassword: string | null;
   role: string | null;
   notes: string | null;
 };
@@ -226,9 +227,8 @@ function IconButton({
   );
 }
 
-function CopyLoginButton({ username, password }: { username: string; password: string }) {
+function CopyLoginButton({ username, getPassword }: { username: string; getPassword: () => Promise<string | null> }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
-  const value = `${username}\n${password}`;
   const title =
     status === "copied"
       ? "Username and password copied"
@@ -242,7 +242,9 @@ function CopyLoginButton({ username, password }: { username: string; password: s
       onClick={() => {
         void (async () => {
           try {
-            await navigator.clipboard.writeText(value);
+            const password = await getPassword();
+            if (!password) throw new Error("No password");
+            await navigator.clipboard.writeText(`${username}\n${password}`);
             setStatus("copied");
             window.setTimeout(() => setStatus("idle"), 2000);
           } catch {
@@ -260,13 +262,53 @@ function CopyLoginButton({ username, password }: { username: string; password: s
   );
 }
 
+function CopyPasswordButton({ getPassword }: { getPassword: () => Promise<string | null> }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void (async () => {
+          try {
+            const password = await getPassword();
+            if (!password) throw new Error("No password");
+            await navigator.clipboard.writeText(password);
+            setStatus("copied");
+          } catch {
+            setStatus("error");
+          }
+          window.setTimeout(() => setStatus("idle"), 2000);
+        })();
+      }}
+      title="Copy password"
+      aria-label="Copy password"
+      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+    >
+      {status === "copied" ? "Copied" : status === "error" ? "Failed" : "Copy"}
+    </button>
+  );
+}
+
 function PortalUserCard({ customerId, user }: { customerId: string; user: PortalUserRow }) {
   const [editing, setEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const title = user.name?.trim() || user.traqcareUsername?.trim() || user.email?.trim() || "Portal user";
   const username = user.traqcareUsername?.trim() ?? "";
-  const password = user.traqcarePassword ?? "";
-  const canCopyLogin = Boolean(username && user.hasPassword && password);
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
+  const canCopyLogin = Boolean(username && user.hasPassword);
+
+  async function fetchPassword(): Promise<string | null> {
+    if (revealed) return revealed;
+    const result = await revealPortalUserPasswordAction(customerId, user.id);
+    if (!result.ok) {
+      setRevealError(result.error);
+      return null;
+    }
+    setRevealError(null);
+    setRevealed(result.password);
+    return result.password;
+  }
 
   if (editing) {
     return (
@@ -306,14 +348,21 @@ function PortalUserCard({ customerId, user }: { customerId: string; user: Portal
             <div>
               <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Password</dt>
               <dd className="mt-0.5 flex min-w-0 items-center gap-1 text-zinc-800 dark:text-zinc-200">
-                {user.hasPassword && password ? (
+                {user.hasPassword ? (
                   <>
                     <span className="min-w-0 truncate font-mono text-xs">
-                      {showPassword ? password : "••••••••"}
+                      {showPassword && revealed ? revealed : "••••••••"}
                     </span>
                     <IconButton
                       title={showPassword ? "Hide password" : "Show password"}
-                      onClick={() => setShowPassword((v) => !v)}
+                      onClick={() => {
+                        if (showPassword) {
+                          setShowPassword(false);
+                          setRevealed(null);
+                          return;
+                        }
+                        void fetchPassword().then((value) => setShowPassword(Boolean(value)));
+                      }}
                     >
                       {showPassword ? (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden className="stroke-current">
@@ -335,7 +384,8 @@ function PortalUserCard({ customerId, user }: { customerId: string; user: Portal
                         </svg>
                       )}
                     </IconButton>
-                    <CopyValueButton value={password} kind="password" />
+                    <CopyPasswordButton getPassword={fetchPassword} />
+                    {revealError ? <span role="alert" className="text-xs text-red-700 dark:text-red-400">{revealError}</span> : null}
                   </>
                 ) : (
                   <span>—</span>
@@ -348,7 +398,7 @@ function PortalUserCard({ customerId, user }: { customerId: string; user: Portal
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {canCopyLogin ? <CopyLoginButton username={username} password={password} /> : null}
+          {canCopyLogin ? <CopyLoginButton username={username} getPassword={fetchPassword} /> : null}
           <button
             type="button"
             onClick={() => setEditing(true)}

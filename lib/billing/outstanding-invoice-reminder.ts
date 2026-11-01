@@ -101,6 +101,23 @@ export function buildOutstandingInvoiceReminderWhatsAppLines(
     .join("\n");
 }
 
+/**
+ * WhatsApp template variables may not contain newlines, tabs, or 4+ consecutive spaces
+ * (Meta rejects them), so the list passed as {{2}} is flattened to a single line.
+ */
+export function buildOutstandingInvoiceReminderWhatsAppTemplateList(
+  items: OutstandingInvoiceReminderCandidate[],
+): string {
+  return items
+    .map((item) => {
+      const ref = item.reference?.trim();
+      return `${item.label}${ref ? ` (${ref})` : ""} - Payment link: ${item.paymentUrl}`;
+    })
+    .join(" | ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function buildOutstandingInvoiceReminderWhatsAppText(input: {
   greetingName: string;
   items: OutstandingInvoiceReminderCandidate[];

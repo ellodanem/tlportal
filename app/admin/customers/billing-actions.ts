@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/get-session";
 import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import { prisma } from "@/lib/db";
+import { assertCustomerNotCanonicalManaged } from "@/lib/services/canonical-ownership-guard-service";
 import { sendAppEmail } from "@/lib/email/send-mail";
 import {
   openStripeBillingPortal,
@@ -30,7 +31,7 @@ import {
   buildOutstandingInvoiceReminderEmailHtml,
   buildOutstandingInvoiceReminderEmailSubject,
   buildOutstandingInvoiceReminderEmailText,
-  buildOutstandingInvoiceReminderWhatsAppLines,
+  buildOutstandingInvoiceReminderWhatsAppTemplateList,
   buildOutstandingInvoiceReminderWhatsAppText,
 } from "@/lib/billing/outstanding-invoice-reminder";
 import {
@@ -278,6 +279,8 @@ export async function setBillingModeAction(
     modeRaw === "stripe_subscription" ? "stripe_subscription" : "manual_legacy";
 
   try {
+    // Billing mode is legacy provider routing; canonical agreements carry their own collection method.
+    await assertCustomerNotCanonicalManaged(customerId);
     await setCustomerBillingMode(customerId, mode, session.sub);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not update billing mode." };
@@ -1196,7 +1199,7 @@ export async function sendOutstandingInvoiceReminderAction(
   const emailText = buildOutstandingInvoiceReminderEmailText({ greetingName, items: selectedItems });
   const emailHtml = buildOutstandingInvoiceReminderEmailHtml({ greetingName, items: selectedItems });
   const whatsAppBody = buildOutstandingInvoiceReminderWhatsAppText({ greetingName, items: selectedItems });
-  const whatsAppList = buildOutstandingInvoiceReminderWhatsAppLines(selectedItems);
+  const whatsAppList = buildOutstandingInvoiceReminderWhatsAppTemplateList(selectedItems);
 
   const successes: string[] = [];
   const failures: string[] = [];
@@ -1249,31 +1252,36 @@ export async function sendOutstandingInvoiceReminderAction(
         if (!result.ok) {
           failures.push(`WhatsApp: ${result.error}`);
         } else {
-          const phoneE164 = toSmsAddress(customer.phone);
-          if (phoneE164) {
-            await recordOutboundWhatsAppMessage({
-              phoneE164,
-              body: whatsAppBody,
-              messageSid: result.messageSid,
-              actorUserId: session.sub,
-              kind: "template",
-            });
-          }
           successes.push(`WhatsApp to ${customer.phone?.trim() || to}`);
-          await recordOperationalEvent({
-            category: "communication.message_sent",
-            customerId,
-            actorUserId: session.sub,
-            summary: `Outstanding invoice reminder WhatsApp sent to ${customer.phone ?? to}`,
-            payload: {
-              channel: "whatsapp",
-              kind: "outstanding_invoice_reminder",
-              to: customer.phone ?? to,
-              templateKind: "outstanding_invoices",
-              messageSid: result.messageSid,
-              selections: selectedItems.map((item) => item.selectionKey),
-            },
-          });
+          // The message is already sent; logging failures must not turn into a hung/failed action.
+          try {
+            const phoneE164 = toSmsAddress(customer.phone);
+            if (phoneE164) {
+              await recordOutboundWhatsAppMessage({
+                phoneE164,
+                body: whatsAppBody,
+                messageSid: result.messageSid,
+                actorUserId: session.sub,
+                kind: "template",
+              });
+            }
+            await recordOperationalEvent({
+              category: "communication.message_sent",
+              customerId,
+              actorUserId: session.sub,
+              summary: `Outstanding invoice reminder WhatsApp sent to ${customer.phone ?? to}`,
+              payload: {
+                channel: "whatsapp",
+                kind: "outstanding_invoice_reminder",
+                to: customer.phone ?? to,
+                templateKind: "outstanding_invoices",
+                messageSid: result.messageSid,
+                selections: selectedItems.map((item) => item.selectionKey),
+              },
+            });
+          } catch (err) {
+            console.error("Outstanding invoice WhatsApp logging failed", err);
+          }
         }
       }
     }

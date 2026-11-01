@@ -78,6 +78,7 @@ export default async function CustomersPage({ searchParams }: Props) {
           nextDueDate: true,
           deviceId: true,
           device: { select: { imei: true, label: true } },
+          subscriptionItem: { select: { id: true, customerSubscriptionId: true } },
         },
       },
     },

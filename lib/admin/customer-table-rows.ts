@@ -18,6 +18,8 @@ export type CustomerTableDeviceRow = {
   nextDueDate: string | null;
   urgency: OpsUrgency;
   status: ServiceAssignmentStatus;
+  /** Service page of the canonical subscription item, when the assignment belongs to one. */
+  canonicalServiceHref: string | null;
 };
 
 type CustomerWithAssignments = {
@@ -40,6 +42,7 @@ type CustomerWithAssignments = {
     nextDueDate: Date | null;
     deviceId: string;
     device: { imei: string; label: string | null };
+    subscriptionItem?: { id: string; customerSubscriptionId: string } | null;
   }[];
 };
 
@@ -67,6 +70,9 @@ export function buildCustomerTableRows(customers: CustomerWithAssignments[]): Cu
       nextDueDate: a.status === "suspended" ? null : a.nextDueDate?.toISOString() ?? null,
       urgency: a.status === "suspended" ? "unknown" : opsUrgencyFromNextDueDate(a.nextDueDate),
       status: a.status,
+      canonicalServiceHref: a.subscriptionItem
+        ? `/admin/subscriptions/canonical/${a.subscriptionItem.customerSubscriptionId}/services/${a.subscriptionItem.id}`
+        : null,
     }));
     return {
       id: c.id,

@@ -44,3 +44,23 @@ export async function listOperationalEventsForDevice(deviceId: string, limit = 1
     take: limit,
   });
 }
+
+/**
+ * Events for ONE subscription. Canonical actions record `payload.subscriptionId` (and
+ * `payload.targetSubscriptionId` on a service transfer), so no schema change is needed. The
+ * query is bounded by the indexed customer id and the `subscription.` category prefix.
+ */
+export async function listOperationalEventsForSubscription(subscriptionId: string, customerId: string, limit = 50) {
+  return prisma.operationalEvent.findMany({
+    where: {
+      customerId,
+      category: { startsWith: "subscription." },
+      OR: [
+        { payload: { path: ["subscriptionId"], equals: subscriptionId } },
+        { payload: { path: ["targetSubscriptionId"], equals: subscriptionId } },
+      ],
+    },
+    orderBy: { occurredAt: "desc" },
+    take: limit,
+  });
+}

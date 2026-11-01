@@ -163,6 +163,17 @@ test("exact provider ownership, items, quantities, prices, totals and anchor rec
   assert.deepEqual(result.issues, []);
 });
 
+test("past-due and unpaid Stripe subscriptions reconcile while retaining their collection warning", () => {
+  const expected = buildCanonicalStripeRateGroups(configuration(), new Date("2026-11-01T00:00:00.000Z"));
+  for (const status of ["past_due", "unpaid"]) {
+    const { link, observed } = providerState(expected);
+    link.providerStatus = status;
+    observed.status = status;
+    const result = reconcileCanonicalStripeSubscription({ expected, providerLink: link, observed });
+    assert.equal(result.status, "matched", status);
+    assert.deepEqual(result.issues, [], status);
+  }
+});
 test("reconciliation classifies price, quantity, anchor, ownership, missing and unexpected evidence", () => {
   const expected = buildCanonicalStripeRateGroups(configuration(), new Date("2026-11-01T00:00:00.000Z"));
   const { link, observed } = providerState(expected);

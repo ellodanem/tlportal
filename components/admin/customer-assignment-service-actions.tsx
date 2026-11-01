@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   AssignmentPauseForm,
   AssignmentResumeForm,
@@ -12,6 +14,7 @@ export function CustomerAssignmentServiceActions({
   billingMode,
   status,
   open,
+  canonicalServiceHref = null,
   layout = "stack",
 }: {
   assignmentId: string;
@@ -20,10 +23,23 @@ export function CustomerAssignmentServiceActions({
   status: ServiceAssignmentStatus;
   /** Open assignment (not ended, not cancelled). */
   open: boolean;
+  /**
+   * Set for a service that belongs to a canonical subscription. Its pause, price and end actions
+   * live on the subscription's service page, so the legacy pause form is never offered.
+   */
+  canonicalServiceHref?: string | null;
   layout?: "stack" | "inline";
 }) {
   if (!open) {
     return <span className="text-xs text-zinc-400">—</span>;
+  }
+
+  if (canonicalServiceHref) {
+    return (
+      <Link href={canonicalServiceHref} className="inline-flex min-h-10 items-center rounded-lg border border-emerald-300 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+        Manage service
+      </Link>
+    );
   }
 
   if (status === "suspended") {

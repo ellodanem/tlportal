@@ -7,6 +7,7 @@ import {
   parseRecurringScheduleRequestBody,
   type RecurringScheduleRequestPayload,
 } from "@/lib/billing/recurring-schedule-payload";
+import { assertScheduleNotCanonicalOwned } from "@/lib/services/canonical-ownership-guard-service";
 import type { CreateRecurringScheduleInput } from "@/lib/services/native-recurring-schedule-service";
 import {
   createRecurringSchedule,
@@ -157,6 +158,8 @@ export async function runRecurringScheduleNowAction(
   if (!scheduleId) return { error: "Schedule id is missing." };
 
   try {
+    // A forced run uses today as the issue date, which would bypass a canonical cycle's generation key.
+    await assertScheduleNotCanonicalOwned(scheduleId);
     const result = await generateInvoiceFromSchedule(scheduleId, new Date(), { force: true });
     revalidatePath("/admin/recurring-invoices");
     revalidatePath(`/admin/recurring-invoices/${scheduleId}`);

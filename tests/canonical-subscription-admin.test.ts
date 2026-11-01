@@ -216,18 +216,34 @@ test("current and history views distinguish terminated arrangements without comb
   assert.deepEqual(filterCanonicalSubscriptionAdminRows([current, historical], { view: "all" }).map((entry) => entry.id), ["sub-current", "sub-history"]);
 });
 
+/** The subscription detail is split into route tabs; assertions read the whole detail surface. */
+const SUBSCRIPTION_DETAIL_SOURCES = [
+  "app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/page.tsx",
+  "app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/billing/annual-adjustment/page.tsx",
+  "components/admin/canonical-subscription/overview-tab.tsx",
+  "components/admin/canonical-subscription/services-tab.tsx",
+  "components/admin/canonical-subscription/billing-tab.tsx",
+  "components/admin/canonical-subscription/activity-tab.tsx",
+  "components/admin/canonical-subscription/advanced-tab.tsx",
+  "lib/domain/canonical-subscription-navigation.ts",
+  "lib/admin/canonical-subscription-page-data.ts",
+] as const;
+
+async function readSources(paths: readonly string[]) {
+  return (await Promise.all(paths.map((path) => readFile(path, "utf8")))).join("\n");
+}
+
 test("UI routes include detail, empty, loading, error and price-history states", async () => {
-  const [overviewPage, overviewWorkspace, detailPage, detailWorkspace, demo, loading, error, preflight] = await Promise.all([
+  const [overviewPage, overviewWorkspace, detailFiles, demo, loading, error, preflight] = await Promise.all([
     readFile("app/admin/subscriptions/canonical/page.tsx", "utf8"),
     readFile("components/admin/subscriptions-workspace.tsx", "utf8"),
-    readFile("app/admin/subscriptions/canonical/[subscriptionId]/page.tsx", "utf8"),
-    readFile("components/admin/canonical-subscription-detail-workspace.tsx", "utf8"),
+    readSources(SUBSCRIPTION_DETAIL_SOURCES),
     readFile("app/admin/subscriptions/canonical/demo/page.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/loading.tsx", "utf8"),
     readFile("app/admin/subscriptions/canonical/error.tsx", "utf8"),
     readFile("docs/production-preview-preflight.md", "utf8"),
   ]);
-  const detail = `${detailPage}\n${detailWorkspace}`;
+  const detail = detailFiles;
   const overview = `${overviewPage}\n${overviewWorkspace}`;
   assert.match(overview, /No matching subscriptions/);
   assert.match(overview, /No subscriptions yet/);
@@ -285,11 +301,7 @@ test("canonical actions retain server-side authorization and do not directly inv
 });
 
 test("detail presents actual cycle prices and server-backed annual preview", async () => {
-  const [detailPage, detailWorkspace] = await Promise.all([
-    readFile("app/admin/subscriptions/canonical/[subscriptionId]/page.tsx", "utf8"),
-    readFile("components/admin/canonical-subscription-detail-workspace.tsx", "utf8"),
-  ]);
-  const detail = `${detailPage}\n${detailWorkspace}`;
+  const detail = await readSources(SUBSCRIPTION_DETAIL_SOURCES);
   assert.match(detail, /rate\.classification/);
   assert.match(detail, /previewAnnualSubscriptionAddition/);
   assert.match(detail, /Preview only/);

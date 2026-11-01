@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CustomerWhatsAppThread } from "@/components/admin/customer-whatsapp-thread";
+import { MarkWhatsAppReadOnView } from "@/components/admin/mark-whatsapp-read-on-view";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import {
   getWhatsAppConversationForCustomer,
   isWhatsAppSessionOpen,
-  markWhatsAppConversationRead,
 } from "@/lib/communications/whatsapp-conversation-service";
 import { prisma } from "@/lib/db";
 
@@ -22,9 +22,6 @@ export default async function CustomerMessagesPage({ params }: Props) {
   if (!customer) notFound();
 
   const conversation = await getWhatsAppConversationForCustomer(id);
-  if (conversation && conversation.unreadCount > 0) {
-    await markWhatsAppConversationRead(conversation.id);
-  }
 
   const title = customerDisplayName(customer);
   const sessionOpen = isWhatsAppSessionOpen(conversation?.lastInboundAt ?? null);
@@ -43,6 +40,7 @@ export default async function CustomerMessagesPage({ params }: Props) {
       </div>
 
       <CustomerSubnav customerId={customer.id} active="messages" />
+      {conversation ? <MarkWhatsAppReadOnView customerId={customer.id} unreadCount={conversation.unreadCount} /> : null}
 
       <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {conversation ? (

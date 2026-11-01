@@ -322,6 +322,14 @@ export async function voidInvoice(invoiceId: string): Promise<void> {
   });
 }
 
+/** Permanently remove an invoice that has never been finalized or paid. */
+export async function deleteDraftInvoice(invoiceId: string): Promise<void> {
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
+  if (!invoice) throw new Error("Invoice not found.");
+  if (invoice.status !== "draft") throw new Error("Only draft invoices can be deleted. Paid or recorded invoices must be voided.");
+  await prisma.invoice.delete({ where: { id: invoiceId } });
+}
+
 /** Write off an invoice (bad debt; preserved for audit). */
 export async function writeOffInvoice(invoiceId: string): Promise<void> {
   await prisma.invoice.update({

@@ -1,15 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 
-import { markAssignmentPeriodPaidAction } from "@/app/admin/customers/renewal-actions";
-import type { RenewalActionState } from "@/app/admin/customers/renewal-action-state";
 import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import type { CustomerTableDeviceRow } from "@/lib/admin/customer-table-rows";
 import type { CustomerBillingMode } from "@prisma/client";
-
-const renewalInitial: RenewalActionState = { error: null };
 
 function formatDue(iso: string | null) {
   if (!iso) return "—";
@@ -45,8 +41,6 @@ export function CustomerServicesExpand({
   devices: CustomerTableDeviceRow[];
 }) {
   const [open, setOpen] = useState(false);
-  const [, markAction, markPending] = useActionState(markAssignmentPeriodPaidAction, renewalInitial);
-
   const deviceCount = devices.length;
   const pausedCount = devices.filter((d) => d.status === "suspended").length;
   const dueDeviceCount = devices.filter(
@@ -99,20 +93,6 @@ export function CustomerServicesExpand({
                     ) : null}
                   </p>
                 </div>
-                {canMarkPaid && !isPaused && (d.urgency === "overdue" || d.urgency === "due_soon") ? (
-                  <form action={markAction} className="shrink-0">
-                    <input type="hidden" name="assignmentId" value={d.assignmentId} />
-                    <input type="hidden" name="customerId" value={customerId} />
-                    <input type="hidden" name="deviceId" value={d.deviceId} />
-                    <button
-                      type="submit"
-                      disabled={markPending}
-                      className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900"
-                    >
-                      {markPending ? "Saving…" : "Mark paid"}
-                    </button>
-                  </form>
-                ) : null}
                 <div className="shrink-0">
                   <CustomerAssignmentServiceActions
                     assignmentId={d.assignmentId}
@@ -120,6 +100,7 @@ export function CustomerServicesExpand({
                     billingMode={billingMode}
                     status={d.status}
                     open
+                    canonicalServiceHref={d.canonicalServiceHref}
                     layout="stack"
                   />
                 </div>
@@ -129,7 +110,7 @@ export function CustomerServicesExpand({
           {canMarkPaid ? (
             <li className="border-t border-zinc-200 pt-2 dark:border-zinc-700">
               <Link
-                href={`/admin/customers/${customerId}/billing`}
+                href={`/admin/subscriptions/${customerId}/renewals`}
                 className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
               >
                 Full renewal options →

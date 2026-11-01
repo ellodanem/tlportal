@@ -19,6 +19,10 @@ import { customerDisplayName } from "@/lib/admin/customer-display";
 import { prisma } from "@/lib/db";
 import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import {
+  assertAssignmentNotCanonical,
+  assertScheduleNotCanonicalOwned,
+} from "@/lib/services/canonical-ownership-guard-service";
+import {
   computeLineTotal,
   toMoneyString,
   toQtyString,
@@ -85,6 +89,7 @@ function validateScheduleInput(input: CreateRecurringScheduleInput): void {
 
 export async function createRecurringSchedule(input: CreateRecurringScheduleInput): Promise<string> {
   validateScheduleInput(input);
+  await assertAssignmentNotCanonical(input.serviceAssignmentId);
   const currency = (input.currency ?? "XCD").toUpperCase();
 
   const created = await prisma.recurringInvoiceSchedule.create({
@@ -119,6 +124,9 @@ export async function updateRecurringSchedule(
   input: CreateRecurringScheduleInput,
 ): Promise<void> {
   validateScheduleInput(input);
+  // Canonical-linked schedules are derived from the subscription; this generic editor must not rewrite them.
+  await assertScheduleNotCanonicalOwned(scheduleId);
+  await assertAssignmentNotCanonical(input.serviceAssignmentId);
 
   const existing = await prisma.recurringInvoiceSchedule.findUnique({
     where: { id: scheduleId },
@@ -159,6 +167,7 @@ export async function setRecurringScheduleStatus(
   scheduleId: string,
   status: RecurringScheduleStatus,
 ): Promise<void> {
+  await assertScheduleNotCanonicalOwned(scheduleId);
   await prisma.recurringInvoiceSchedule.update({
     where: { id: scheduleId },
     data: { status },

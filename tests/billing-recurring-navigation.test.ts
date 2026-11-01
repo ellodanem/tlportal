@@ -16,6 +16,9 @@ test("Billing navigation keeps recurring schedules reachable through their exist
   assert.match(recurringPage, /BillingWorkspaceHeader active="recurring"/);
   assert.match(recurringPage, /primaryHref="\/admin\/recurring-invoices\/new"/);
   assert.match(recurringPage, /Stripe-managed subscriptions remain under Stripe authority/);
+  assert.match(recurringPage, /where: includesEndedSchedules \? undefined : \{ status: \{ not: "ended" \} \}/);
+  assert.match(recurringPage, /Show ended schedules/);
+  assert.match(recurringPage, /Hide ended schedules/);
 });
 
 test("Customer billing exposes an existing manual recurring schedule without creating one", async () => {

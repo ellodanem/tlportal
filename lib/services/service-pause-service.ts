@@ -51,6 +51,8 @@ async function pauseRecurringSchedulesForAssignment(assignmentId: string): Promi
     where: {
       serviceAssignmentId: assignmentId,
       status: "active",
+      // Canonical schedules belong to the whole subscription; pausing one service never pauses them.
+      OR: [{ customerSubscriptionId: null }, { customerSubscription: { controlMode: { not: "canonical" } } }],
     },
     select: { id: true },
   });

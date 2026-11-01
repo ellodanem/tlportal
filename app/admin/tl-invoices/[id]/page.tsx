@@ -10,7 +10,7 @@ import {
   type InvoiceCustomerOption,
   type InvoiceFormInitial,
 } from "@/components/admin/invoice-generator-form";
-import { InvoicePaymentForm, InvoiceVoidForm } from "@/components/admin/invoice-payment-form";
+import { InvoiceDeleteForm, InvoicePaymentForm, InvoiceVoidForm } from "@/components/admin/invoice-payment-form";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
@@ -124,7 +124,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
   const canVoid =
     !isArchived &&
     !isStripeMirror &&
-    (invoice.status === "draft" || invoice.status === "open" || invoice.status === "partially_paid");
+    (invoice.status === "open" || invoice.status === "partially_paid" || invoice.status === "overdue" || invoice.status === "paid");
 
   return (
     <div className="flex flex-col gap-8">
@@ -255,7 +255,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         </div>
       ) : null}
 
-      {canVoid ? <InvoiceVoidForm invoiceId={invoice.id} /> : null}
+      {invoice.status === "draft" && !isStripeMirror ? (<InvoiceDeleteForm invoiceId={invoice.id} displayNumber={heading} />) : canVoid ? (<InvoiceVoidForm invoiceId={invoice.id} />) : null}
 
       {!isArchived ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">

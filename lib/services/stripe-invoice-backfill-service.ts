@@ -46,10 +46,9 @@ async function listStripeInvoicesForStripeCustomer(
 }
 
 /**
- * Read the newest provider invoice when staff open a Stripe customer record.
- * Webhooks remain the primary path, but this small reconciliation closes the
- * gap immediately when a provider delivery was missed instead of requiring a
- * staff member to press Sync from Stripe.
+ * Reads the newest provider invoice and mirrors it. This WRITES (invoice mirror, renewal advance),
+ * so it must only run from an explicit staff action or a webhook/cron — never from a page render.
+ * Customer pages no longer call it; staff use "Sync from Stripe" on the provider invoice list.
  */
 export async function reconcileLatestStripeInvoiceForCustomer(customerId: string): Promise<void> {
   if (!isStripeBillingEnabled()) return;

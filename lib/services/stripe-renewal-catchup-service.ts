@@ -3,7 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { opsUrgencyFromNextDueDate } from "@/lib/admin/assignment-ops-urgency";
 import {
-  billableAssignmentWhere,
+  legacyRenewalAssignmentWhere,
   stripeTrackAssignmentWhere,
 } from "@/lib/domain/service-assignment-queries";
 import { getCurrentCustomerSubscription } from "@/lib/services/customer-subscription-service";
@@ -72,7 +72,7 @@ async function customerNeedsStripeRenewalCatchUp(customerId: string): Promise<bo
   if (planTermMonths == null || planTermMonths <= 0) return false;
 
   const stripeTrack = await prisma.serviceAssignment.findMany({
-    where: { customerId, ...stripeTrackAssignmentWhere(planTermMonths) },
+    where: { customerId, ...stripeTrackAssignmentWhere(planTermMonths), subscriptionItemId: null },
     select: { nextDueDate: true },
   });
   const now = new Date();
@@ -81,7 +81,7 @@ async function customerNeedsStripeRenewalCatchUp(customerId: string): Promise<bo
   }
 
   const billable = await prisma.serviceAssignment.findMany({
-    where: { customerId, ...billableAssignmentWhere },
+    where: { customerId, ...legacyRenewalAssignmentWhere },
     select: { intervalMonths: true, nextDueDate: true },
   });
   if (billable.length === 0) return false;

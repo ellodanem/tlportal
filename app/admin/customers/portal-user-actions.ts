@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
+import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 
 export type PortalUserFormState = {
   error?: string;
@@ -153,6 +154,31 @@ export async function updatePortalUserAction(
 
   revalidateCustomer(customerId);
   return { ok: true, message: "Portal user saved." };
+}
+
+/**
+ * Returns a stored Traqcare password only when staff explicitly ask to see or copy it, and records
+ * who asked. The password is never serialised into the page payload on load.
+ */
+export async function revealPortalUserPasswordAction(
+  customerId: string,
+  portalUserId: string,
+): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+  const user = await prisma.customerPortalUser.findFirst({
+    where: { id: portalUserId, customerId },
+    select: { id: true, traqcarePassword: true, traqcareUsername: true },
+  });
+  if (!user?.traqcarePassword) return { ok: false, error: "No stored password." };
+  await recordOperationalEvent({
+    category: "customer.portal_credential_revealed",
+    summary: `Staff revealed the stored Traqcare password for ${user.traqcareUsername ?? "a portal user"}`,
+    customerId,
+    actorUserId: session.sub,
+    payload: { portalUserId },
+  });
+  return { ok: true, password: user.traqcarePassword };
 }
 
 export async function deletePortalUserAction(formData: FormData): Promise<void> {

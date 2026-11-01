@@ -79,6 +79,7 @@ export function PaymentRemindersSection({
   customerEmail,
   customerPhone,
   whatsAppConfigured,
+  whatsAppTemplateConfigured,
   candidates,
   deliveries,
 }: {
@@ -90,6 +91,7 @@ export function PaymentRemindersSection({
   customerEmail: string | null;
   customerPhone: string | null;
   whatsAppConfigured: boolean;
+  whatsAppTemplateConfigured: boolean;
   candidates: OutstandingInvoiceReminderCandidate[];
   deliveries: Delivery[];
 }) {
@@ -191,6 +193,7 @@ export function PaymentRemindersSection({
           customerEmail={customerEmail}
           customerPhone={customerPhone}
           whatsAppConfigured={whatsAppConfigured}
+          whatsAppTemplateConfigured={whatsAppTemplateConfigured}
           candidates={candidates}
           onSent={() => setOutstandingOpen(false)}
         />

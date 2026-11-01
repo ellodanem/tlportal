@@ -392,11 +392,14 @@ export function reconcileCanonicalStripeSubscription(input: {
         { expected: link.externalSubscriptionId, observed: observed.externalSubscriptionId },
       ));
     }
-    if (!observed.status || !["active", "trialing"].includes(observed.status)) {
+    // Past-due and unpaid subscriptions still have a live Stripe billing
+    // relationship. Reconciliation must preserve the collection warning, but
+    // it must not mistake that warning for a changed commercial agreement.
+    if (!observed.status || !["active", "trialing", "past_due", "unpaid"].includes(observed.status)) {
       issues.push(issue(
         "provider_status_mismatch",
-        "Stripe provider status is not active or trialing.",
-        { expected: "active or trialing", observed: observed.status },
+        "Stripe provider status is not active, trialing, past due, or unpaid.",
+        { expected: "active, trialing, past due, or unpaid", observed: observed.status },
       ));
     }
     const expectedPeriodStart = addUtcMonths(

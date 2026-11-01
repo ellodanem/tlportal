@@ -4,7 +4,13 @@ import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 
-import { recordPaymentAction, voidInvoiceAction, type RecordPaymentState } from "@/app/admin/tl-invoices/actions";
+import {
+  deleteDraftInvoiceAction,
+  recordPaymentAction,
+  voidInvoiceAction,
+  type DeleteInvoiceState,
+  type RecordPaymentState,
+} from "@/app/admin/tl-invoices/actions";
 import { PAYMENT_METHOD_LABELS } from "@/lib/domain/native-billing";
 import type { PaymentMethod } from "@prisma/client";
 
@@ -120,4 +126,16 @@ export function InvoiceVoidForm({ invoiceId }: { invoiceId: string }) {
       {state.error ? <p className="mt-1 text-sm text-red-700">{state.error}</p> : null}
     </form>
   );
+}
+
+
+export function InvoiceDeleteForm({ invoiceId, displayNumber }: { invoiceId: string; displayNumber: string }) {
+  const router = useRouter();
+  const [state, action] = useActionState<DeleteInvoiceState, FormData>(deleteDraftInvoiceAction, {});
+  useEffect(() => { if (state.ok) router.push("/admin/tl-invoices"); }, [state.ok, router]);
+  return (<form action={action} className="mt-4" onSubmit={(event) => { if (!window.confirm("Delete " + displayNumber + " permanently? This cannot be undone.")) event.preventDefault(); }}>
+    <input type="hidden" name="invoiceId" value={invoiceId} />
+    <button type="submit" className="text-sm font-medium text-red-700 hover:underline dark:text-red-400">Delete draft invoice</button>
+    {state.error ? <p className="mt-1 text-sm text-red-700">{state.error}</p> : null}
+  </form>);
 }

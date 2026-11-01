@@ -18,6 +18,7 @@ import { parseAssignmentDateInput } from "@/lib/domain/assignment-renewal";
 import { archiveInvoice, unarchiveInvoice } from "@/lib/services/invoice-archive-service";
 import {
   createDraftInvoice,
+  deleteDraftInvoice,
   finalizeAndSendInvoice,
   recordInvoicePayment,
   updateDraftInvoice,
@@ -31,6 +32,7 @@ export type CancelScheduledEmailState = { error?: string; ok?: boolean; message?
 export type MarkInvoiceSentState = { error?: string; ok?: boolean; message?: string; number?: string };
 export type RecordPaymentState = { error?: string; ok?: boolean; message?: string };
 export type VoidInvoiceState = { error?: string; ok?: boolean };
+export type DeleteInvoiceState = { error?: string; ok?: boolean };
 export type ArchiveInvoiceState = { error?: string; ok?: boolean };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -356,6 +358,14 @@ export async function voidInvoiceAction(_prev: VoidInvoiceState, formData: FormD
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not void invoice." };
   }
+}
+
+export async function deleteDraftInvoiceAction(_prev: DeleteInvoiceState, formData: FormData): Promise<DeleteInvoiceState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+  const invoiceId = String(formData.get("invoiceId") ?? "").trim();
+  if (!invoiceId) return { error: "Invoice id is missing." };
+  try { await deleteDraftInvoice(invoiceId); revalidatePath("/admin/tl-invoices"); revalidatePath("/admin/tl-invoices/" + invoiceId); return { ok: true }; } catch (e) { return { error: e instanceof Error ? e.message : "Could not delete invoice." }; }
 }
 
 function revalidateInvoicePaths(invoiceId: string) {

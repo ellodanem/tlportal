@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/get-session";
 import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import { prisma } from "@/lib/db";
+import { CANONICAL_CUSTOMER_OWNED_ERROR } from "@/lib/domain/canonical-ownership";
+import { customerHasCanonicalSubscription } from "@/lib/services/canonical-ownership-guard-service";
 import { createRecurringSchedule } from "@/lib/services/native-recurring-schedule-service";
 import { startStripeCheckout } from "@/lib/services/billing-service";
 import { openStripeBillingPortal } from "@/lib/services/billing-service";
@@ -67,6 +69,11 @@ export async function createSubscriptionAction(
     select: { id: true, email: true, company: true, firstName: true, lastName: true },
   });
   if (!customer) return { error: "Customer not found." };
+  // Legacy card/manual setup would create a competing, unlinked billing authority for a customer
+  // whose agreements are already canonical. New agreements use the canonical wizard instead.
+  if (await customerHasCanonicalSubscription(customerId)) {
+    return { error: `${CANONICAL_CUSTOMER_OWNED_ERROR} Use Add subscription.` };
+  }
 
   try {
     if (collectionMethod === "card") {

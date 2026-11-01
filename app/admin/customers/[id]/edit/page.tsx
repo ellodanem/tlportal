@@ -111,7 +111,6 @@ export default async function EditCustomerPage({ params, searchParams }: Props) 
               phone: u.phone,
               traqcareUsername: u.traqcareUsername,
               hasPassword: Boolean(u.traqcarePassword),
-              traqcarePassword: u.traqcarePassword,
               role: u.role,
               notes: u.notes,
             }))}

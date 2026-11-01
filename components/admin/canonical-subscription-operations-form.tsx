@@ -11,6 +11,7 @@ import {
   transitionCanonicalSubscriptionLifecycleAction,
   type CanonicalSubscriptionFormState,
 } from "@/app/admin/subscriptions/canonical/actions";
+import { SUBSCRIPTION_LIFECYCLE_ACTIONS } from "@/lib/domain/canonical-subscription-navigation";
 import {
   SERVICE_PAUSE_DISPOSITION_LABEL,
   SERVICE_PAUSE_REASON_LABEL,
@@ -36,18 +37,12 @@ function useRefreshOnSuccess(state: CanonicalSubscriptionFormState) {
   useEffect(() => { if (state.message) router.refresh(); }, [router, state.message]);
 }
 
-const lifecycleTargets: Record<string, { value: "active" | "paused" | "ended" | "canceled"; label: string }[]> = {
-  pending_activation: [{ value: "active", label: "Mark active" }, { value: "canceled", label: "Cancel agreement" }],
-  active: [{ value: "paused", label: "Pause agreement" }, { value: "ended", label: "End agreement" }, { value: "canceled", label: "Cancel agreement" }],
-  paused: [{ value: "active", label: "Reactivate agreement" }, { value: "ended", label: "End agreement" }, { value: "canceled", label: "Cancel agreement" }],
-};
-
 export function CanonicalSubscriptionLifecycleForm({ subscriptionId, lifecycleStatus }: { subscriptionId: string; lifecycleStatus: string }) {
-  const options = lifecycleTargets[lifecycleStatus] ?? [];
+  const options = SUBSCRIPTION_LIFECYCLE_ACTIONS[lifecycleStatus] ?? [];
   const [state, action, pending] = useActionState(transitionCanonicalSubscriptionLifecycleAction, initialState);
   useRefreshOnSuccess(state);
   if (!options.length) return null;
-  return <form action={action} className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+  return <form action={action} onSubmit={confirmServiceOperation("Apply this status change to the whole agreement?")} className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
     <input type="hidden" name="subscriptionId" value={subscriptionId} />
     <h3 className="font-semibold">Agreement lifecycle</h3>
     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Changes are staff-audited. They preserve historical invoices, payments, and service records; they do not create a financial or provider operation.</p>
@@ -121,7 +116,7 @@ export function CanonicalServiceHardwareReplacementForm({
   const [state, action, pending] = useActionState(replaceCanonicalServiceHardwareAction, initialState);
   useRefreshOnSuccess(state);
   if (!assignments.length) return <p className="mt-3 text-xs text-zinc-500">No unlinked active service assignments are available for a hardware replacement.</p>;
-  return <form action={action} className="mt-3 grid gap-3 rounded-lg border border-zinc-200 p-3 sm:grid-cols-[minmax(0,1fr)_170px_auto] sm:items-end dark:border-zinc-700">
+  return <form action={action} onSubmit={confirmServiceOperation("Replace the hardware on this service from the chosen date? The previous assignment is kept as history.")} className="mt-3 grid gap-3 rounded-lg border border-zinc-200 p-3 sm:grid-cols-[minmax(0,1fr)_170px_auto] sm:items-end dark:border-zinc-700">
     <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} />
     <label className="text-sm font-medium">Replacement assignment<select required name="replacementAssignmentId" className={inputClass}><option value="">Choose active device / SIM</option>{assignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.label}</option>)}</select></label>
     <label className="text-sm font-medium">Replacement date<input required type="date" name="replacedOn" className={inputClass} /></label>
@@ -144,7 +139,7 @@ export function CanonicalServiceTransferForm({
   const [state, action, pending] = useActionState(transferCanonicalServiceAction, initialState);
   useRefreshOnSuccess(state);
   if (!targetSubscriptions.length) return <p className="mt-3 text-xs text-zinc-500">No other manageable subscription agreement exists for this customer.</p>;
-  return <form action={action} className="mt-3 grid gap-3 rounded-lg border border-zinc-200 p-3 sm:grid-cols-2 dark:border-zinc-700">
+  return <form action={action} onSubmit={confirmServiceOperation("Transfer this service? It ends here on the transfer date and a successor service starts under the chosen agreement.")} className="mt-3 grid gap-3 rounded-lg border border-zinc-200 p-3 sm:grid-cols-2 dark:border-zinc-700">
     <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} />
     <label className="text-sm font-medium">Transfer to agreement<select required name="targetSubscriptionId" className={inputClass}><option value="">Choose agreement</option>{targetSubscriptions.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>
     <label className="text-sm font-medium">Transfer date<input required type="date" name="transferDate" className={inputClass} /></label>

@@ -93,7 +93,8 @@ export async function migrateManualPilotShadowAction(formData: FormData): Promis
 
 export async function activateManualPilotLocallyAction(formData: FormData): Promise<void> {
   const subscriptionId = text(formData, "subscriptionId");
-  const returnPath = `/admin/subscriptions/canonical/${encodeURIComponent(subscriptionId)}`;
+  // The pilot authority transfer lives on the staff-only Advanced page, so results return there.
+  const returnPath = `/admin/subscriptions/canonical/${encodeURIComponent(subscriptionId)}/advanced`;
   try {
     const user = await requireLocalStaff();
     const review = await getCanonicalManualPilotReview(subscriptionId);

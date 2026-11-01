@@ -51,17 +51,20 @@ export function CustomerWorkspaceHeader({ customer }: { customer: CustomerHeader
           </div>
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <details className="relative">
-            <summary className="inline-flex min-h-10 cursor-pointer list-none items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500">
-              New
-            </summary>
-            <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-              <Link href={`/admin/quotes/new${createQuery}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">Quote</Link>
-              <Link href={`/admin/tl-invoices/new${createQuery}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">Invoice</Link>
-              <Link href={`/admin/recurring-invoices/new${createQuery}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">Recurring schedule</Link>
-              <Link href={`/admin/customers/${customer.id}/messages`} className="block rounded-lg px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">Message customer</Link>
-            </div>
-          </details>
+          {/* Plain links, not a collapsed menu. A standalone recurring schedule is deliberately absent:
+              recurring billing is created by a subscription, never as a second competing schedule. */}
+          <Link href={`/admin/subscriptions/canonical/new${createQuery}`} className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500">
+            New subscription
+          </Link>
+          <Link href={`/admin/tl-invoices/new${createQuery}`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+            New invoice
+          </Link>
+          <Link href={`/admin/quotes/new${createQuery}`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+            New quote
+          </Link>
+          <Link href={`/admin/customers/${customer.id}/messages`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+            Message
+          </Link>
           <Link href={`/admin/customers/${customer.id}/billing`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">
             Billing
           </Link>

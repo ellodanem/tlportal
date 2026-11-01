@@ -38,16 +38,19 @@ export function CustomerCollectionSummary({
   primaryInvoice = null,
   hasSubscriptions = false,
   reminderAvailable = false,
+  hasRecordedInvoices = false,
 }: {
   customerId: string;
   summary: Summary;
   primaryInvoice?: NativeInvoice | null;
   hasSubscriptions?: boolean;
   reminderAvailable?: boolean;
+  /** True when the customer has any invoice at all (linked or not); prevents a false "No invoices yet". */
+  hasRecordedInvoices?: boolean;
 }) {
   const recordPaymentEligible = primaryInvoice && ["open", "partially_paid", "overdue"].includes(primaryInvoice.status);
   const hasInvoice = primaryInvoice != null;
-  const noInvoiceActivity = summary.latestInvoice == null && primaryInvoice == null;
+  const noInvoiceActivity = summary.latestInvoice == null && primaryInvoice == null && !hasRecordedInvoices;
   const title = noInvoiceActivity && summary.state !== "overdue" && summary.state !== "failed" ? "No invoices yet" : summary.state === "paid" ? "Account up to date" : summary.headline;
   const detail = noInvoiceActivity && summary.state !== "overdue" && summary.state !== "failed"
     ? "This customer does not have any recorded invoices."

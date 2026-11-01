@@ -37,6 +37,7 @@ export function OutstandingInvoiceReminderPanel({
   customerEmail,
   customerPhone,
   whatsAppConfigured,
+  whatsAppTemplateConfigured,
   candidates,
   onSent,
 }: {
@@ -46,14 +47,16 @@ export function OutstandingInvoiceReminderPanel({
   customerEmail: string | null;
   customerPhone: string | null;
   whatsAppConfigured: boolean;
+  whatsAppTemplateConfigured: boolean;
   candidates: OutstandingInvoiceReminderCandidate[];
   onSent?: () => void;
 }) {
+  const canSendWhatsApp = whatsAppConfigured && whatsAppTemplateConfigured;
   const router = useRouter();
   const [state, action] = useActionState(sendOutstandingInvoiceReminderAction, initialState);
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => candidates.map((item) => item.selectionKey));
   const [sendEmail, setSendEmail] = useState(Boolean(customerEmail?.trim()));
-  const [sendWhatsApp, setSendWhatsApp] = useState(Boolean(customerPhone?.trim()) && whatsAppConfigured);
+  const [sendWhatsApp, setSendWhatsApp] = useState(Boolean(customerPhone?.trim()) && canSendWhatsApp);
 
   useEffect(() => {
     if (state.ok) {
@@ -152,7 +155,7 @@ export function OutstandingInvoiceReminderPanel({
                 type="checkbox"
                 name="sendWhatsApp"
                 checked={sendWhatsApp}
-                disabled={!customerPhone?.trim() || !whatsAppConfigured}
+                disabled={!customerPhone?.trim() || !canSendWhatsApp}
                 onChange={(e) => setSendWhatsApp(e.target.checked)}
               />
               WhatsApp {customerPhone ? `(${customerPhone})` : "— no phone on file"}
@@ -165,11 +168,32 @@ export function OutstandingInvoiceReminderPanel({
             </p>
           ) : null}
 
+          {whatsAppConfigured && !whatsAppTemplateConfigured && customerPhone ? (
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              WhatsApp is disabled: no approved Twilio Content template is set for outstanding invoices
+              (<code>TWILIO_WA_TEMPLATE_OUTSTANDING_INVOICES</code>). Only email can be sent until it is added.
+            </p>
+          ) : null}
+
           {!customerEmail?.trim() && !customerPhone?.trim() ? (
             <p className="text-xs text-amber-800 dark:text-amber-200">
               Add an email and/or phone number on the customer profile before sending reminders.
             </p>
           ) : null}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <SendButton disabled={selectedItems.length === 0 || (!sendEmail && !sendWhatsApp)} />
+            {state.error ? (
+              <span className="text-sm text-rose-700 dark:text-rose-400" role="alert">
+                {state.error}
+              </span>
+            ) : null}
+            {state.ok && state.message ? (
+              <span className="text-sm text-emerald-800 dark:text-emerald-300" role="status">
+                {state.message}
+              </span>
+            ) : null}
+          </div>
 
           {selectedItems.length > 0 ? (
             <div className="grid gap-4 lg:grid-cols-2">
@@ -201,19 +225,6 @@ export function OutstandingInvoiceReminderPanel({
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Choose at least one invoice to generate the reminder.</p>
           )}
 
-          <div className="flex flex-wrap items-center gap-3">
-            <SendButton disabled={selectedItems.length === 0 || (!sendEmail && !sendWhatsApp)} />
-            {state.error ? (
-              <span className="text-sm text-rose-700 dark:text-rose-400" role="alert">
-                {state.error}
-              </span>
-            ) : null}
-            {state.ok && state.message ? (
-              <span className="text-sm text-emerald-800 dark:text-emerald-300" role="status">
-                {state.message}
-              </span>
-            ) : null}
-          </div>
         </form>
       )}
     </div>
