@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { CustomerDetail, type SnapshotSubscription } from "@/components/admin/customer-new/customer-detail";
+import { customerSubscriptionsPath } from "@/lib/admin/customer-subscriptions-path";
 import { CustomerListPane, type CustomerListRow } from "@/components/admin/customer-new/customer-list-pane";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
@@ -137,13 +138,10 @@ export default async function CustomerNewPage({ searchParams }: Props) {
     const canonicalUi = canonicalSubscriptionUiVisible();
     const subscriptionHref = (subscriptionId: string) =>
       canonicalUi ? `/admin/subscriptions/canonical/${subscriptionId}` : `/admin/subscriptions/${customer.id}`;
-    // One subscription opens directly; several open the customer's own subscriptions page.
-    const subscriptionsHref =
-      subs.length === 1
-        ? subscriptionHref(subs[0].id)
-        : canonicalUi
-          ? "/admin/subscriptions/canonical"
-          : `/admin/subscriptions/${customer.id}`;
+    // One subscription opens directly; several open the Subscriptions list narrowed to this customer.
+    const subscriptionsHref = canonicalUi
+      ? customerSubscriptionsPath(customer.id, subs.map((s) => s.id))
+      : `/admin/subscriptions/${customer.id}`;
     const createSubscriptionHref = `/admin/subscriptions/new?customerId=${encodeURIComponent(customer.id)}`;
 
     const contact = customer.contacts[0] ?? null;

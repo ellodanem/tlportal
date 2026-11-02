@@ -36,6 +36,8 @@ export const WORKSPACE_DEFAULT_PAGE_SIZE = 20;
 
 export type WorkspaceQuery = {
   query?: string;
+  /** Narrow to one customer by canonical customer id. */
+  customerId?: string;
   status?: WorkspaceStatusFilter;
   /** Billing interval in months, or "none" for subscriptions without a configured cadence. */
   cadence?: number | "none" | null;
@@ -48,13 +50,14 @@ export type WorkspaceQuery = {
 /** Normalises raw URL search params. Unknown values fall back to safe defaults. */
 export function parseWorkspaceSearchParams(raw: {
   q?: string;
+  customer?: string;
   status?: string;
   view?: string;
   cadence?: string;
   sort?: string;
   dir?: string;
   page?: string;
-}): Required<Pick<WorkspaceQuery, "query" | "status" | "cadence" | "sort" | "direction" | "page">> {
+}): Required<Pick<WorkspaceQuery, "query" | "customerId" | "status" | "cadence" | "sort" | "direction" | "page">> {
   // Earlier bookmarks used `view=`; keep them landing somewhere sensible.
   const legacyView: Record<string, WorkspaceStatusFilter> = {
     current: "all", active: "active", setup: "attention", review: "attention",
@@ -73,6 +76,7 @@ export function parseWorkspaceSearchParams(raw: {
   const direction: WorkspaceSortDirection = raw.dir === "desc" ? "desc" : "asc";
   return {
     query: raw.q?.trim() ?? "",
+    customerId: raw.customer?.trim() ?? "",
     status,
     cadence,
     sort,
@@ -325,6 +329,7 @@ export function buildSubscriptionWorkspace(
   const tokens = (query.query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
   const status = query.status ?? "all";
   const matching = rows.filter((row) =>
+    (!query.customerId || row.customerId === query.customerId) &&
     matchesText(row, tokens) && matchesStatus(row, status) && matchesCadence(row, query.cadence));
 
   // Group by canonical customer id. The display name is never used as a key.

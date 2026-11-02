@@ -16,7 +16,7 @@ type Option = { value: string; label: string };
 
 export type SubscriptionsWorkspaceProps = {
   groups: CustomerGroupView[];
-  filters: { query: string; status: string; cadence: string; sort: WorkspaceSortKey; dir: WorkspaceSortDirection };
+  filters: { query: string; customerId: string; customerName: string | null; status: string; cadence: string; sort: WorkspaceSortKey; dir: WorkspaceSortDirection };
   statusOptions: Option[];
   cadenceOptions: Option[];
   filtered: boolean;
@@ -392,6 +392,7 @@ export function SubscriptionsWorkspace(props: SubscriptionsWorkspaceProps) {
     const status = next.status ?? filters.status;
     const cadence = next.cadence ?? filters.cadence;
     if (q) params.set("q", q);
+    if (filters.customerId) params.set("customer", filters.customerId);
     if (status && status !== "all") params.set("status", status);
     if (cadence) params.set("cadence", cadence);
     if (filters.sort !== "customer") params.set("sort", filters.sort);
@@ -412,12 +413,22 @@ export function SubscriptionsWorkspace(props: SubscriptionsWorkspaceProps) {
     startTransition(() => router.replace(pathname, { scroll: false }));
   }
 
-  const resultKey = [filters.query, filters.status, filters.cadence, filters.sort, filters.dir, pagination.page].join("|");
+  const resultKey = [filters.query, filters.customerId, filters.status, filters.cadence, filters.sort, filters.dir, pagination.page].join("|");
   const template = gridTemplate(extra);
   const hasRows = groups.length > 0;
 
   return (
     <section aria-label="Subscriptions" className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      {filters.customerId ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50/60 px-4 py-2.5 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <p className="min-w-0 text-emerald-900 dark:text-emerald-200">
+            Showing subscriptions for <span className="font-semibold">{filters.customerName ?? "this customer"}</span>
+          </p>
+          <button type="button" onClick={clearAll} className="min-h-9 rounded-lg px-2 font-semibold text-emerald-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-300">
+            Show all customers
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-3 border-b border-zinc-100 p-3 sm:p-4 lg:flex-row lg:items-center dark:border-zinc-800">
         <form
           role="search"

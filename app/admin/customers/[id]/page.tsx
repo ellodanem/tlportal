@@ -10,6 +10,7 @@ import { UsagePurposeBadge } from "@/components/admin/device/usage-purpose-badge
 import { FleetHealthSummary, type FleetHealthFilter } from "@/components/dashboard/fleet-health-summary";
 import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { prisma } from "@/lib/db";
+import { customerSubscriptionsPath } from "@/lib/admin/customer-subscriptions-path";
 import { buildInvoilessBillToAddress } from "@/lib/invoiless/customer-sync";
 import { fetchInvoicesForInvoilessCustomerId, isInvoilessConfigured } from "@/lib/invoiless/invoices-list";
 import { customerDisplayName } from "@/lib/admin/customer-display";
@@ -121,10 +122,14 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
   }
 
   const name = customerDisplayName(customer);
-  const [stripeAccount, customerSubscription, invoilessCustomerId] = await Promise.all([
+  const [stripeAccount, customerSubscription, invoilessCustomerId, canonicalSubscriptionRows] = await Promise.all([
     isStripeConfigured() ? getStripeBillingAccount(customer.id) : Promise.resolve(null),
     getCurrentCustomerSubscription(customer.id),
     getInvoilessExternalCustomerId(customer.id),
+    prisma.customerSubscription.findMany({
+      where: { customerId: customer.id, controlMode: { not: "legacy" } },
+      select: { id: true },
+    }),
   ]);
   const openAssignments = customer.serviceAssignments.filter(
     (a) => a.endDate == null && a.status !== "cancelled",
@@ -277,6 +282,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
       <CustomerSubnav customerId={customer.id} active="overview" />
 
       <CustomerOverviewBillingRibbon
+        subscriptionsHref={customerSubscriptionsPath(customer.id, canonicalSubscriptionRows.map((row) => row.id))}
         billingMode={customer.billingMode}
         subscriptionStatusLabel={subscriptionStatusLabelForOverview(
           customer.billingMode,

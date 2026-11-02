@@ -19,7 +19,7 @@ import {
 } from "@/lib/services/canonical-subscription-admin-service";
 
 type Props = {
-  searchParams: Promise<{ q?: string; status?: string; view?: string; cadence?: string; sort?: string; dir?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; customer?: string; status?: string; view?: string; cadence?: string; sort?: string; dir?: string; page?: string }>;
 };
 
 const BASE_PATH = "/admin/subscriptions/canonical";
@@ -60,6 +60,7 @@ export default async function SubscriptionsPage({ searchParams }: Props) {
   const parsed = parseWorkspaceSearchParams(await searchParams);
   const workspace = await getCanonicalSubscriptionWorkspace({
     query: parsed.query,
+    customerId: parsed.customerId,
     status: parsed.status,
     cadence: parsed.cadence,
     sort: parsed.sort,
@@ -71,9 +72,9 @@ export default async function SubscriptionsPage({ searchParams }: Props) {
 
   const groups = workspace.groups.map((group) => customerGroupView(group, { money: formatMoney }));
   const cadenceValue = parsed.cadence == null ? "" : String(parsed.cadence);
-  const filtered = Boolean(parsed.query) || parsed.status !== "all" || parsed.cadence != null;
+  const filtered = Boolean(parsed.query) || Boolean(parsed.customerId) || parsed.status !== "all" || parsed.cadence != null;
 
-  const filterParams = { q: parsed.query, status: parsed.status === "all" ? null : parsed.status, cadence: cadenceValue };
+  const filterParams = { q: parsed.query, customer: parsed.customerId, status: parsed.status === "all" ? null : parsed.status, cadence: cadenceValue };
   const sortParams = (key: WorkspaceSortKey, direction: WorkspaceSortDirection) =>
     key === "customer" && direction === "asc" ? {} : { sort: key, dir: direction === "desc" ? "desc" : null };
   const sortLinks = Object.fromEntries((["customer", "services", "recurring", "renewal", "status"] as const).map((key) => {
@@ -129,7 +130,7 @@ export default async function SubscriptionsPage({ searchParams }: Props) {
 
     <SubscriptionsWorkspace
       groups={groups}
-      filters={{ query: parsed.query, status: parsed.status, cadence: cadenceValue, sort: parsed.sort, dir: parsed.direction }}
+      filters={{ query: parsed.query, customerId: parsed.customerId, customerName: parsed.customerId ? groups[0]?.customer ?? null : null, status: parsed.status, cadence: cadenceValue, sort: parsed.sort, dir: parsed.direction }}
       statusOptions={WORKSPACE_STATUS_FILTERS.map((value) => ({ value, label: WORKSPACE_STATUS_LABELS[value] }))}
       cadenceOptions={workspace.cadenceOptions}
       filtered={filtered}
