@@ -5531,3 +5531,40 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - fix(subscriptions): View subscriptions opens that customer's subscriptions
 
+
+### 2026-11-02 02:10 UTC — commit `8b12e40`
+
+- docs: log customer-specific subscriptions link
+
+
+### 2026-11-02 02:10 UTC — pre-push (`main` → origin) @ `8b12e40`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 02:12 UTC — commit `47bfd1f`
+
+- fix(subscriptions): remove generic billing link from invoices
+
+
+### 2026-11-02 02:12 UTC — pre-push (`main` → origin) @ `47bfd1f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 02:12 UTC — commit `901762b`
+
+- feat(subscriptions): separate ended services into tab
+
+
+### 2026-11-02 02:12 UTC — pre-push (`main` → origin) @ `901762b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 02:25 UTC — commit `6fef649`
+
+- feat(subscriptions): merge billing and invoices tabs into one Billing tab
+
+- Agent notes: subscription detail tabs go from five to four (Services, Billing, Activity, Advanced). Billing now shows Next charge and How it is collected, then one invoice list with payments on the invoice they paid (All/Open/Paid via `?show=`). MRR only shown on non-monthly cycles; header-strip figures no longer repeated. `/invoices` route now redirects to `/billing`; `invoices-tab.tsx` removed; `SubscriptionLedgerTable` added to `financial-ledger-table.tsx`. Pre-existing unrelated failure left alone: `canonical workflow confirms commercial changes...` ("Assign hardware later").
+
