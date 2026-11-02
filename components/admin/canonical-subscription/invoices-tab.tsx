@@ -27,7 +27,6 @@ export async function SubscriptionInvoicesTab({ subscription }: { subscription: 
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href={`/admin/subscriptions/customers/${subscription.customerId}/billing`} className="inline-flex min-h-11 items-center rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Customer billing</Link>
-            <Link href={`/admin/billing?q=${subscription.id}`} className="inline-flex min-h-11 items-center rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open in Billing</Link>
             <Link href={`/admin/tl-invoices/new?customerId=${subscription.customerId}`} className="inline-flex min-h-11 items-center rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Create invoice</Link>
           </div>
         </div>
