@@ -22,6 +22,7 @@ import {
   assertAssignmentNotCanonical,
   assertScheduleNotCanonicalOwned,
 } from "@/lib/services/canonical-ownership-guard-service";
+import { groupedLinesStillValid } from "@/lib/domain/canonical-schedule-presentation";
 import {
   computeLineTotal,
   toMoneyString,
@@ -367,6 +368,10 @@ async function commitRecurringInvoicePeriod(
     }
 
     const dueDate = addUtcDays(issueDate, schedule.dueDaysAfterIssue);
+    // Staff may present a canonical cycle as regrouped lines, but only while they still add up to
+    // the subscription's cycle total; otherwise the per-service lines are issued.
+    const useGroupedLines = canonicalCycle != null
+      && groupedLinesStillValid(schedule.lineItems, canonicalCycle.subtotal);
     const taxRate = schedule.taxRatePercent != null ? Number(schedule.taxRatePercent) : null;
     const shouldDeliver = schedule.autoEmail;
 
@@ -391,7 +396,15 @@ async function commitRecurringInvoicePeriod(
       paymentInstructions: schedule.paymentInstructions,
       serviceAssignmentId: schedule.serviceAssignmentId,
       createdById: schedule.createdById,
-      lineItems: canonicalCycle
+      lineItems: useGroupedLines
+        ? schedule.lineItems.map((line, index) => ({
+            description: line.description,
+            quantity: Number(line.quantity),
+            unitPrice: Number(line.unitPrice),
+            unitLabel: line.unitLabel,
+            sortOrder: line.sortOrder ?? index,
+          }))
+        : canonicalCycle
         ? canonicalCycle.lines.map((line, index) => ({
             description: line.description,
             quantity: Number(line.quantity),
@@ -409,7 +422,7 @@ async function commitRecurringInvoicePeriod(
     });
 
     if (canonicalCycle) {
-      await persistCanonicalInvoiceSnapshots(tx, invoiceId, canonicalCycle);
+      await persistCanonicalInvoiceSnapshots(tx, invoiceId, canonicalCycle, { groupedLines: useGroupedLines });
     }
     await finalizeInvoiceInTransaction(tx, invoiceId);
     await tx.recurringInvoiceSchedule.update({

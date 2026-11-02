@@ -9,6 +9,14 @@ import {
 } from "@/lib/domain/canonical-ownership";
 import { CANONICAL_ASSIGNMENT_RENEWAL_ERROR } from "@/lib/domain/service-assignment-queries";
 
+export async function scheduleIsCanonicalOwned(scheduleId: string): Promise<boolean> {
+  const schedule = await prisma.recurringInvoiceSchedule.findUnique({
+    where: { id: scheduleId },
+    select: { customerSubscription: { select: { controlMode: true } } },
+  });
+  return isCanonicalOwnedSchedule(schedule);
+}
+
 /** Throws when the schedule is derived from a canonical subscription. Missing schedules pass through. */
 export async function assertScheduleNotCanonicalOwned(scheduleId: string): Promise<void> {
   const schedule = await prisma.recurringInvoiceSchedule.findUnique({

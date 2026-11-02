@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CanonicalScheduleResetLines } from "@/components/admin/canonical-schedule-reset-lines";
+import { previewCanonicalSubscriptionCycle } from "@/lib/services/canonical-native-billing-service";
 import { RecurringScheduleActions } from "@/components/admin/recurring-schedule-actions";
 import {
   RecurringScheduleForm,
@@ -88,7 +90,16 @@ export default async function RecurringInvoiceDetailPage({ params }: { params: P
   };
 
   const canonicalOwned = isCanonicalOwnedSchedule(schedule);
-  const readOnly = schedule.status === "ended" || canonicalOwned;
+  const readOnly = schedule.status === "ended";
+  let canonicalCycleTotal: string | null = null;
+  if (canonicalOwned && schedule.customerSubscription) {
+    try {
+      const cycle = await previewCanonicalSubscriptionCycle(schedule.customerSubscription.id, schedule.nextIssueDate);
+      canonicalCycleTotal = cycle.subtotal.toFixed(2);
+    } catch {
+      canonicalCycleTotal = null;
+    }
+  }
   const cycleTotal = schedule.lineItems.reduce((sum, line) => sum + Number(line.lineTotal), 0);
 
   return (
@@ -119,15 +130,20 @@ export default async function RecurringInvoiceDetailPage({ params }: { params: P
       {canonicalOwned && schedule.customerSubscription ? (
         <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-950 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100">
           <p>
-            <strong>Managed by a subscription.</strong> This schedule is read-only. Each cycle&apos;s invoice has one line per
-            service on the subscription, so add or remove vehicles, change rates, pause or end billing from the subscription instead.
+            <strong>Linked to a subscription.</strong> You can freely edit the invoice lines (for example one
+            &quot;Annual GPS tracking × 5&quot; line instead of one per vehicle), wording, due days and email settings. The lines must
+            add up to {canonicalCycleTotal ? formatMoney(Number(canonicalCycleTotal), schedule.currency) : "the subscription's cycle total"}.
+            Vehicles, rates, dates and pausing or ending billing are changed from the subscription.
           </p>
-          <Link
-            href={`/admin/subscriptions/canonical/${schedule.customerSubscription.id}/billing`}
-            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Open subscription billing
-          </Link>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+            <Link
+              href={`/admin/subscriptions/canonical/${schedule.customerSubscription.id}/billing`}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Open subscription billing
+            </Link>
+            <CanonicalScheduleResetLines scheduleId={schedule.id} />
+          </div>
         </div>
       ) : (
         <RecurringScheduleActions scheduleId={schedule.id} status={schedule.status} />
@@ -152,7 +168,13 @@ export default async function RecurringInvoiceDetailPage({ params }: { params: P
         </div>
       ) : null}
 
-      <RecurringScheduleForm customers={customerOptions} initial={initial} readOnly={readOnly} />
+      <RecurringScheduleForm
+        customers={customerOptions}
+        initial={initial}
+        readOnly={readOnly}
+        canonicalOwned={canonicalOwned}
+        canonicalCycleTotal={canonicalCycleTotal}
+      />
     </div>
   );
 }

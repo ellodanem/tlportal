@@ -60,11 +60,17 @@ export function RecurringScheduleForm({
   initial,
   initialCustomerId,
   readOnly = false,
+  canonicalOwned = false,
+  canonicalCycleTotal = null,
 }: {
   customers: RecurringCustomerOption[];
   initial?: RecurringScheduleFormInitial;
   initialCustomerId?: string | null;
   readOnly?: boolean;
+  /** Linked to a subscription: customer, cadence, currency and date stay with the subscription. */
+  canonicalOwned?: boolean;
+  /** The subscription's cycle total the invoice lines must add up to. */
+  canonicalCycleTotal?: string | null;
 }) {
   const router = useRouter();
   const lineIdRef = useRef(initial?.lines?.length ?? 1);
@@ -102,6 +108,9 @@ export function RecurringScheduleForm({
 
   const isEnded = initial?.status === "ended";
   const fieldsDisabled = readOnly || isEnded;
+  const structureDisabled = fieldsDisabled || canonicalOwned;
+  const totalMismatch = canonicalOwned && canonicalCycleTotal != null
+    && Math.round(recurringTotal * 100) !== Math.round(Number(canonicalCycleTotal) * 100);
 
   useEffect(() => {
     if (saveState.ok && saveState.next) {
@@ -148,6 +157,10 @@ export function RecurringScheduleForm({
   }
 
   function submitSave(formData: FormData) {
+    if (totalMismatch) {
+      setError("The invoice lines must add up to the subscription's cycle total before saving.");
+      return;
+    }
     const built = buildPayload();
     if ("error" in built) {
       setError(built.error);
@@ -177,7 +190,7 @@ export function RecurringScheduleForm({
           <label className="block text-sm font-medium">Customer</label>
           <select
             value={customerId}
-            disabled={fieldsDisabled}
+            disabled={structureDisabled}
             onChange={(e) => {
               setCustomerId(e.target.value);
               setClientName("");
@@ -198,7 +211,7 @@ export function RecurringScheduleForm({
             <input
               type="text"
               value={clientName}
-              disabled={fieldsDisabled}
+              disabled={structureDisabled}
               onChange={(e) => setClientName(e.target.value)}
               className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950"
             />
@@ -208,7 +221,7 @@ export function RecurringScheduleForm({
           <label className="block text-sm font-medium">Interval</label>
           <select
             value={intervalMonths}
-            disabled={fieldsDisabled}
+            disabled={structureDisabled}
             onChange={(e) => setIntervalMonths(e.target.value)}
             className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950"
           >
@@ -224,7 +237,7 @@ export function RecurringScheduleForm({
           <input
             type="text"
             value={currency}
-            disabled={fieldsDisabled}
+            disabled={structureDisabled}
             onChange={(e) => setCurrency(e.target.value.toUpperCase())}
             className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950"
           />
@@ -234,7 +247,7 @@ export function RecurringScheduleForm({
           <input
             type="date"
             value={nextIssueDate}
-            disabled={fieldsDisabled}
+            disabled={structureDisabled}
             onChange={(e) => setNextIssueDate(e.target.value)}
             className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950"
           />
@@ -295,6 +308,13 @@ export function RecurringScheduleForm({
                 /><span className="text-right text-sm font-medium tabular-nums">{formatMoney((Number(row.quantity) || 0) * (Number(row.unitPrice) || 0), currency)}</span><button type="button" onClick={() => setLines((p) => p.length <= 1 ? p : p.filter((r) => r.id !== row.id))} disabled={fieldsDisabled || lines.length <= 1} className="text-zinc-400 hover:text-rose-600 disabled:opacity-30" aria-label={`Remove line ${i + 1}`}>×</button></div>
           ))}
         </div>
+        {canonicalOwned && canonicalCycleTotal != null ? (
+          <p className={`mt-2 text-xs ${totalMismatch ? "font-medium text-red-700" : "text-zinc-500"}`}>
+            {totalMismatch
+              ? `Lines add up to ${formatMoney(recurringTotal, currency)} but must equal ${formatMoney(Number(canonicalCycleTotal), currency)}.`
+              : `Lines add up to the subscription total of ${formatMoney(Number(canonicalCycleTotal), currency)}.`}
+          </p>
+        ) : null}
         {!fieldsDisabled ? (
           <button
             type="button"

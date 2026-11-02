@@ -116,7 +116,7 @@ export async function persistCanonicalInvoiceSnapshots(
   tx: CanonicalBillingTransaction,
   invoiceId: string,
   cycle: CanonicalScheduleBillingCycle,
-  options: { allowAdditionalLines?: boolean; allocationNotes?: string } = {},
+  options: { allowAdditionalLines?: boolean; allocationNotes?: string; groupedLines?: boolean } = {},
 ): Promise<void> {
   const invoice = await tx.invoice.findUnique({
     where: { id: invoiceId },
@@ -138,23 +138,29 @@ export async function persistCanonicalInvoiceSnapshots(
     orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
     select: { id: true, description: true, quantity: true, unitPrice: true, lineTotal: true },
   });
-  if (lineItems.length !== cycle.lines.length && !(options.allowAdditionalLines && lineItems.length > cycle.lines.length)) {
+  if (!options.groupedLines && lineItems.length !== cycle.lines.length && !(options.allowAdditionalLines && lineItems.length > cycle.lines.length)) {
     error("INVOICE_LINE_MISMATCH", "Invoice line count does not match the resolved subscription items.");
   }
 
   const snapshots = cycle.lines.map((line, index) => {
-    const invoiceLine = lineItems[index];
+    // Regrouped invoices present several services on shared lines, so a snapshot only points at an
+    // invoice line when there is exactly one; the invoice subtotal was already checked above.
+    const invoiceLine = options.groupedLines ? (lineItems.length === 1 ? lineItems[0] : null) : lineItems[index];
     if (
-      invoiceLine.description !== line.description
-      || !invoiceLine.quantity.equals(line.quantity)
-      || !invoiceLine.unitPrice.equals(line.agreedAmountPerCycle)
-      || !invoiceLine.lineTotal.equals(line.billedAmount)
+      !options.groupedLines
+      && invoiceLine
+      && (
+        invoiceLine.description !== line.description
+        || !invoiceLine.quantity.equals(line.quantity)
+        || !invoiceLine.unitPrice.equals(line.agreedAmountPerCycle)
+        || !invoiceLine.lineTotal.equals(line.billedAmount)
+      )
     ) {
       error("INVOICE_LINE_MISMATCH", `Invoice line ${index + 1} does not match its subscription item rate.`);
     }
     return {
       invoiceId,
-      invoiceLineItemId: invoiceLine.id,
+      invoiceLineItemId: invoiceLine?.id ?? null,
       subscriptionItemId: line.subscriptionItemId,
       subscriptionItemRateId: line.subscriptionItemRateId,
       serviceLabelSnapshot: line.description,

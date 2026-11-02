@@ -7,7 +7,11 @@ import {
   parseRecurringScheduleRequestBody,
   type RecurringScheduleRequestPayload,
 } from "@/lib/billing/recurring-schedule-payload";
-import { assertScheduleNotCanonicalOwned } from "@/lib/services/canonical-ownership-guard-service";
+import { assertScheduleNotCanonicalOwned, scheduleIsCanonicalOwned } from "@/lib/services/canonical-ownership-guard-service";
+import {
+  resetCanonicalScheduleLines,
+  saveCanonicalSchedulePresentation,
+} from "@/lib/services/canonical-schedule-line-sync-service";
 import type { CreateRecurringScheduleInput } from "@/lib/services/native-recurring-schedule-service";
 import {
   createRecurringSchedule,
@@ -74,6 +78,25 @@ export async function saveRecurringScheduleAction(
 
   try {
     if (scheduleId) {
+      if (await scheduleIsCanonicalOwned(scheduleId)) {
+        // Subscription-owned: only wording, terms, email settings and line grouping are editable.
+        await saveCanonicalSchedulePresentation(scheduleId, {
+          name: input.name ?? null,
+          notes: input.notes ?? null,
+          paymentInstructions: input.paymentInstructions ?? null,
+          dueDaysAfterIssue: input.dueDaysAfterIssue ?? 30,
+          autoEmail: input.autoEmail ?? true,
+          emailTo: input.emailTo ?? null,
+          lines: input.lineItems.map((line) => ({
+            description: line.description,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+          })),
+        });
+        revalidatePath("/admin/recurring-invoices");
+        revalidatePath(`/admin/recurring-invoices/${scheduleId}`);
+        return { ok: true, scheduleId, next: `/admin/recurring-invoices/${scheduleId}` };
+      }
       await updateRecurringSchedule(scheduleId, input);
       revalidatePath("/admin/recurring-invoices");
       revalidatePath(`/admin/recurring-invoices/${scheduleId}`);
@@ -177,5 +200,25 @@ export async function runRecurringScheduleNowAction(
     return { ok: true, message: `${invoiceNote}${emailNote}` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not generate invoice." };
+  }
+}
+
+export async function resetCanonicalScheduleLinesAction(
+  _prev: ScheduleStatusState,
+  formData: FormData,
+): Promise<ScheduleStatusState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+
+  const scheduleId = String(formData.get("scheduleId") ?? "").trim();
+  if (!scheduleId) return { error: "Schedule id is missing." };
+
+  try {
+    await resetCanonicalScheduleLines(scheduleId);
+    revalidatePath("/admin/recurring-invoices");
+    revalidatePath(`/admin/recurring-invoices/${scheduleId}`);
+    return { ok: true, message: "Back to one line per service." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not reset lines." };
   }
 }
