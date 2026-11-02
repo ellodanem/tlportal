@@ -5471,3 +5471,38 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-11-02 01:49 UTC — commit `c954734`
+
+- docs: log count correction push in PROJECT_CONTEXT
+
+
+### 2026-11-02 01:49 UTC — pre-push (`main` → origin) @ `c954734`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 01:50 UTC — commit `0778d18`
+
+- feat(subscriptions): searchable hardware picker
+
+
+### 2026-11-02 01:50 UTC — pre-push (`main` → origin) @ `0778d18`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 01:57 UTC — commit `f87e9cb`
+
+- fix(subscriptions): keep customer billing as sole billing link
+
+
+### 2026-11-02 01:57 UTC — pre-push (`main` → origin) @ `f87e9cb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 02:03 UTC — commit `6e96f05`
+
+- fix(subscriptions): link billing actions to new workspace
+
