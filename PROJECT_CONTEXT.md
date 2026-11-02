@@ -5590,3 +5590,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes: legacy installed devices (open ServiceAssignment with no subscription item) can now be activated from the customer Subscriptions page. Per-row Activate as service / Add to subscription (sole live subscription), and Activate all N as one subscription, deep-link to `canonical/new?assignmentId=` / `?customerId=&assignments=all` and `[subscriptionId]/add-service?assignmentId=`. The onboarding wizard now adopts an existing assignment via `serviceAssignmentId` (same-customer, unlinked, not combined with a stock deviceId) instead of only stock devices. Service start date still defaults to today (legacy start dates are not carried over). The migration campaign (`/admin/subscriptions/canonical/migrations`) only handles legacy recurring schedules, not bare assignments. Pre-existing unrelated test failures left alone: `Assign hardware later` text check and `customerId` in workspace search-params test. Untracked billing-date-correction WIP intentionally not committed.
 
+
+### 2026-11-02 02:30 UTC — commit `6b61d48`
+
+- docs: log legacy device activation in PROJECT_CONTEXT
+
+
+### 2026-11-02 02:30 UTC — pre-push (`main` → origin) @ `6b61d48`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
