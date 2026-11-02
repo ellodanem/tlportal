@@ -5375,3 +5375,25 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 
 - Agent notes (84b8752 + 6609c27): customer workspace added under Subscriptions at /admin/subscriptions/customers/[customerId]/{billing,statements,messages,activity} with a shared layout (breadcrumb, subscription switcher, View customer -> Customer (New), real-route tab bar); index redirects to billing. Statements/Messages/Activity bodies extracted to shared panels (customer-statements-panel, customer-messages-panel, customer-activity-panel) used by BOTH the new tabs and the original /admin/customers/[id]/* tabs, which are intentionally kept for now (same URLs, headers, CustomerSubnav). Server actions that change messages/activity data (messages/actions, note-actions, billing-actions, message-templates/actions) revalidate BOTH the old and new paths until the old workspace is retired. Entry points moved: Customer (New) detail has Billing/Statements/Messages/Activity links, a View billing link on Outstanding and View all on Recent Activity; subscription breadcrumb opens Customer (New); old workspace Message button opens the new Messages tab. Known leftover: Customer (New) 'View subscriptions' still opens /admin/customers/[id]/subscriptions when a customer has several subscriptions. Note: 84b8752 (committed by a parallel agent with git add -A) also bundled these files. Tests 307/307, tsc, eslint and next build (compile only, not the migrate step) clean.
+
+### 2026-11-02 00:51 UTC — commit `7d3168c`
+
+- docs: log customer workspace move and entry points in PROJECT_CONTEXT
+
+
+### 2026-11-02 00:51 UTC — pre-push (`main` → origin) @ `7d3168c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 01:01 UTC — commit `b736c10`
+
+- ﻿feat(devices): record unrecoverable assets (e.g. sunk boat) as lost and end billing
+
+
+### 2026-11-02 01:01 UTC — commit `fe502de`
+
+- feat(devices): record unrecoverable assets (e.g. sunk boat) as lost and end billing
+
+
+- Agent notes (fe502de; `b736c10` above is the pre-amend SHA, same change, fixed a stray BOM in the subject): "Asset lost / unrecoverable" workflow for devices whose asset is gone for good (e.g. a sunk boat). New `lib/domain/asset-loss.ts` (reasons, note/date helpers) and `lib/services/asset-loss-service.ts` (`recordCanonicalAssetLoss` / `recordLegacyAssetLoss`). In one Serializable transaction it ends billing (canonical: item `billingEffectiveUntil` + rate cut-off; legacy: ends the assignment's non-canonical recurring schedules), cancels the installation with `endDate` = loss date, sets the device to `lost` and unlinks its SIM, appends an audit note to device + assignment and writes an OperationalEvent (`subscription.asset_lost` / `assignment.asset_lost`). Existing invoices are never changed; unpaid ones dated on/after the loss date are returned and shown to staff to void/write off manually. `scheduleSubscriptionItemEnd` was split into `scheduleSubscriptionItemEndInTransaction` (same behaviour) so the end is atomic with the loss. UI: red card on the canonical service page (stays mounted after success so the result notice survives the refresh) and a form on the legacy device Assignment tab (canonical devices get a pointer to the subscription page). Tests: tests/asset-loss.test.ts (unit, 310/310 pass, tsc clean) plus two Postgres integration tests in tests/postgres/device-assignment-operations.integration.ts that were NOT run (no local DB) - run `npm run test:postgres-foundation` before relying on this. Only these files were committed; other uncommitted work in the tree (paused-service billing: service-pause-service, subscription-service-addition-service, canonical-native-billing, canonical-stripe-quantity-check, customer-subscription-reconciliation, format.ts, and the pause/resume parts of canonical actions/operations-form/service-details, tests/paused-service-billing.test.ts) belongs to a separate change and was left untouched.
