@@ -10,15 +10,18 @@ export function SectionTabs({
   active,
   hrefFor,
   ariaLabel,
+  className = "",
 }: {
   tabs: readonly SectionTab[];
   active: string;
   hrefFor: (id: string) => string;
   ariaLabel: string;
+  /** Extra classes for the nav, e.g. horizontal padding when the tabs sit inside a padded card. */
+  className?: string;
 }) {
   return (
     <nav
-      className="-mb-px flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800"
+      className={`-mb-px flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800 ${className}`}
       aria-label={ariaLabel}
     >
       {tabs.map((tab) => {

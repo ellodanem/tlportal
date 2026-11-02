@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { cardClass, cycleUnit, displayDate, iso, money, serviceStatusLabel, statusPillClass, warningPillClass } from "@/components/admin/canonical-subscription/format";
 import { ServiceTiming } from "@/components/admin/canonical-subscription/service-timing";
+import { SectionTabs } from "@/components/admin/section-tabs";
 import { SubscriptionNotices } from "@/components/admin/canonical-subscription/subscription-notices";
 import { CustomerServiceManagementModal } from "@/components/admin/customer-service-management-modal";
 import {
@@ -13,11 +14,20 @@ import {
 import { currentServiceRate, scheduledServiceRate } from "@/lib/domain/canonical-service-presentation";
 import {
   subscriptionAddServicePath,
+  subscriptionBasePath,
   subscriptionServicePath,
 } from "@/lib/domain/canonical-subscription-navigation";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
 
 type Item = SubscriptionDetail["items"][number];
+
+type ServicesTab = "billable" | "ended";
+
+/** Billable is the default tab and has the bare URL; Ended is a linkable `?view=ended`. */
+function servicesTabHref(subscriptionId: string, tab: ServicesTab): string {
+  const base = `${subscriptionBasePath(subscriptionId)}/services`;
+  return tab === "ended" ? `${base}?view=ended` : base;
+}
 
 function StatusPill({ item }: { item: Item }) {
   const { label, tone } = serviceStatusLabel(item);
@@ -115,15 +125,14 @@ function BillableServices({ subscription, items, canManage }: { subscription: Su
 
 /**
  * Services whose billing has ended. Kept as a reference record, not as billable services: no price
- * "now", no quick actions, and not counted in the heading above.
+ * "now", no quick actions, and not counted in the Billable services tab. Shown on its own tab so
+ * ended services are not constantly on screen.
  */
 function EndedServices({ subscription, items }: { subscription: SubscriptionDetail; items: Item[] }) {
   return (
-    <section aria-labelledby="ended-services-heading" className="border-t border-zinc-200 dark:border-zinc-800">
-      <h3 id="ended-services-heading" className="px-5 py-3 text-sm font-semibold text-zinc-600 dark:text-zinc-300">
-        Ended services ({items.length}) <span className="font-normal text-zinc-500">· kept for reference, not billed</span>
-      </h3>
-      <ul className="divide-y divide-zinc-100 bg-zinc-50/60 dark:divide-zinc-800 dark:bg-zinc-950/40">
+    <section aria-label="Ended services">
+      <p className="px-5 py-3 text-sm text-zinc-500">Kept for reference, not billed.</p>
+      <ul className="divide-y divide-zinc-100 border-t border-zinc-100 bg-zinc-50/60 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/40">
         {items.map((item, index) => {
           const rate = item.rates.at(-1);
           const assignment = item.serviceAssignments.at(-1);
@@ -155,11 +164,14 @@ export function SubscriptionServicesTab({
   permissions,
   error,
   pilot,
+  view,
 }: {
   subscription: SubscriptionDetail;
   permissions: SubscriptionPermissions;
   error?: string;
   pilot?: string;
+  /** `?view=ended` opens the Ended tab; anything else opens Billable services. */
+  view?: string;
 }) {
   const canAddService = permissions.canManage && subscription.controlMode === "canonical"
     && ["draft", "pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? "");
@@ -173,26 +185,50 @@ export function SubscriptionServicesTab({
   const billableCount = subscriptionEnded ? current.length : countBillableServices(current);
   const pausedCount = subscriptionEnded ? 0 : current.length - billableCount;
 
+  // Ended services live on their own tab so they are not constantly on screen. Without any, there is
+  // nothing to switch between, so the card stays a single list with no tabs.
+  const hasEndedTab = ended.length > 0;
+  const activeTab: ServicesTab = hasEndedTab && view === "ended" ? "ended" : "billable";
+  const pausedNote = pausedCount ? <span className="ml-2 text-sm font-normal text-zinc-500">· {pausedCount} paused, not billed</span> : null;
+
   return (
     <div className="flex flex-col gap-5">
     <SubscriptionNotices subscription={subscription} permissions={permissions} error={error} pilot={pilot} />
     <section aria-labelledby="services-heading" className={cardClass}>
-      <div className="flex flex-col gap-3 border-b border-zinc-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
+      <div className={`flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between ${hasEndedTab ? "pb-3" : "border-b border-zinc-200 dark:border-zinc-800"}`}>
         <div>
           <h2 id="services-heading" className="text-lg font-semibold">
-            Billable services ({billableCount})
-            {pausedCount ? <span className="ml-2 text-sm font-normal text-zinc-500">· {pausedCount} paused, not billed</span> : null}
+            {hasEndedTab ? "Services" : <>Billable services ({billableCount})</>}
+            {hasEndedTab ? null : pausedNote}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">One row per service, with its own price per billing cycle and current hardware.</p>
         </div>
         {canAddService ? <Link href={subscriptionAddServicePath(subscription.id)} className="min-h-11 rounded-lg bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-emerald-800">Add service</Link> : null}
       </div>
-      {current.length ? (
-        <BillableServices subscription={subscription} items={current} canManage={permissions.canManage} />
+      {hasEndedTab ? (
+        <SectionTabs
+          className="px-2"
+          ariaLabel="Service groups"
+          tabs={[
+            { id: "billable", label: `Billable services (${billableCount})` },
+            { id: "ended", label: `Ended (${ended.length})` },
+          ]}
+          active={activeTab}
+          hrefFor={(id) => servicesTabHref(subscription.id, id as ServicesTab)}
+        />
+      ) : null}
+      {activeTab === "ended" ? (
+        <EndedServices subscription={subscription} items={ended} />
       ) : (
-        <div className="p-10 text-center text-sm text-zinc-500">{ended.length ? "No services are being billed on this subscription." : "No billable services have been added."}</div>
+        <>
+          {hasEndedTab && pausedCount ? <p className="px-5 py-3 text-sm text-zinc-500">{pausedCount} paused, not billed.</p> : null}
+          {current.length ? (
+            <BillableServices subscription={subscription} items={current} canManage={permissions.canManage} />
+          ) : (
+            <div className="p-10 text-center text-sm text-zinc-500">{ended.length ? "No services are being billed on this subscription." : "No billable services have been added."}</div>
+          )}
+        </>
       )}
-      {ended.length ? <EndedServices subscription={subscription} items={ended} /> : null}
     </section>
     </div>
   );
