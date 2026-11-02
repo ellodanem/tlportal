@@ -26,10 +26,13 @@ type ServiceRow = {
   amount: string;
   classification: "standard" | "negotiated";
   deviceId: string;
+  /** An already-installed legacy assignment adopted by this service (mutually exclusive with deviceId). */
+  assignmentId: string;
   adjustment: AdjustmentChoice;
   adjustmentAmount: string;
   adjustmentReason: string;
 };
+export type OnboardingInstalledDevice = { id: string; label: string; imei: string };
 export type OnboardingPlan = { durationMonths: number; priceXcd: string };
 export type OnboardingExistingSubscription = {
   id: string;
@@ -52,7 +55,7 @@ function displayDate(value: string) {
 }
 
 function emptyService(key: number, amount: string): ServiceRow {
-  return { key, label: "", labelTouched: false, amount, classification: "standard", deviceId: "", adjustment: "daily_proration", adjustmentAmount: "", adjustmentReason: "" };
+  return { key, label: "", labelTouched: false, amount, classification: "standard", deviceId: "", assignmentId: "", adjustment: "daily_proration", adjustmentAmount: "", adjustmentReason: "" };
 }
 
 export function CanonicalCustomerOnboardingForm({
@@ -62,6 +65,8 @@ export function CanonicalCustomerOnboardingForm({
   defaultCustomerId,
   plans,
   existingSubscriptions,
+  installedDevices = {},
+  initialAssignmentIds = [],
   creationKey,
 }: {
   customers: { id: string; label: string; email: string | null }[];
@@ -70,6 +75,10 @@ export function CanonicalCustomerOnboardingForm({
   defaultCustomerId?: string;
   plans: OnboardingPlan[];
   existingSubscriptions: Record<string, OnboardingExistingSubscription[]>;
+  /** Per customer: installed legacy assignments not yet linked to a subscription service. */
+  installedDevices?: Record<string, OnboardingInstalledDevice[]>;
+  /** Legacy assignments to start with one service each (used by "Activate" deep links). */
+  initialAssignmentIds?: string[];
   creationKey: string;
 }) {
   const [state, action, pending] = useActionState(createCanonicalOnboardingAction, initialState);
@@ -88,8 +97,13 @@ export function CanonicalCustomerOnboardingForm({
   const planPrice = (months: number) => plans.find((plan) => plan.durationMonths === months)?.priceXcd ?? "";
   const [subscriptionName, setSubscriptionName] = useState("");
   const [reference, setReference] = useState("");
-  const [services, setServices] = useState<ServiceRow[]>([emptyService(1, planPrice(interval))]);
-  const [nextKey, setNextKey] = useState(2);
+  const [services, setServices] = useState<ServiceRow[]>(() => {
+    const seeded = (defaultCustomerId ? installedDevices[defaultCustomerId] ?? [] : [])
+      .filter((device) => initialAssignmentIds.includes(device.id));
+    if (!seeded.length) return [emptyService(1, planPrice(interval))];
+    return seeded.map((device, index) => ({ ...emptyService(index + 1, planPrice(interval)), label: device.label, assignmentId: device.id }));
+  });
+  const [nextKey, setNextKey] = useState(() => Math.max(2, initialAssignmentIds.length + 1));
 
   const [startDate, setStartDate] = useState(today);
   const [alignment, setAlignment] = useState<"new_cycle" | "align_to_renewal">("new_cycle");
@@ -116,6 +130,13 @@ export function CanonicalCustomerOnboardingForm({
   const nextBillingDate = alignment === "align_to_renewal" && alignedRenewal ? alignedRenewal : addMonthsClamped(startDate, interval);
   const unit = cycleUnitLabel(interval);
   const selectedDeviceIds = new Set(services.map((service) => service.deviceId).filter(Boolean));
+  const customerInstalled = useMemo(
+    () => (customerMode === "existing" && customerId ? installedDevices[customerId] ?? [] : []),
+    [customerMode, customerId, installedDevices],
+  );
+  // Ignore an adoption that belongs to a different customer than the one now selected.
+  const adoptedId = (service: ServiceRow) => customerInstalled.some((device) => device.id === service.assignmentId) ? service.assignmentId : "";
+  const adoptedIds = new Set(services.map(adoptedId).filter(Boolean));
 
   const computed = services.map((service) => {
     let cents: number | null = null;
@@ -178,7 +199,7 @@ export function CanonicalCustomerOnboardingForm({
       }
     }
     if (index === 3) {
-      const ids = services.map((service) => service.deviceId).filter(Boolean);
+      const ids = services.map((service) => service.deviceId || adoptedId(service)).filter(Boolean);
       if (new Set(ids).size !== ids.length) return "A device can only be assigned to one service.";
     }
     return null;
@@ -349,11 +370,25 @@ export function CanonicalCustomerOnboardingForm({
           {services.map((service, index) => (
             <div key={service.key} className="text-sm font-medium">
               <p className="mb-2">{service.label.trim() || `Service ${index + 1}`}</p>
+              <input type="hidden" name="serviceAssignmentId" value={adoptedId(service)} />
+              {customerInstalled.length ? (
+                <label className="mb-3 block rounded-lg border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+                  <span className="block font-medium">Use a device this customer already has installed</span>
+                  <span className="block text-xs font-normal text-zinc-500">Links the existing legacy assignment to this service. No device is reassigned.</span>
+                  <select value={adoptedId(service)} onChange={(event) => updateService(service.key, event.target.value ? { assignmentId: event.target.value, deviceId: "" } : { assignmentId: "" })} className={inputClass} aria-label={"Installed device for " + (service.label.trim() || "service " + (index + 1))}>
+                    <option value="">None — choose from stock below</option>
+                    {customerInstalled.map((device) => {
+                      const usedAbove = adoptedId(service) !== device.id && adoptedIds.has(device.id);
+                      return <option key={device.id} value={device.id} disabled={usedAbove}>{device.label} · {device.imei}{usedAbove ? " (used above)" : ""}</option>;
+                    })}
+                  </select>
+                </label>
+              ) : null}
               <DevicePicker
                 name="serviceDeviceId"
                 devices={devices}
-                value={service.deviceId}
-                onChange={(deviceId) => selectServiceDevice(service, deviceId)}
+                value={adoptedId(service) ? "" : service.deviceId}
+                onChange={(deviceId) => { selectServiceDevice(service, deviceId); if (deviceId) updateService(service.key, { assignmentId: "" }); }}
                 disabledIds={selectedDeviceIds}
                 allowClear
               />
@@ -385,7 +420,7 @@ export function CanonicalCustomerOnboardingForm({
           <div><dt className="text-zinc-500">Recurring total</dt><dd className="font-semibold tabular-nums">EC${formatCents(cycleTotalCents)} per {unit} · {services.length} service{services.length === 1 ? "" : "s"}</dd></div>
           <div><dt className="text-zinc-500">{alignment === "align_to_renewal" ? "Starts → joins renewal" : "Starts → first renewal"}</dt><dd className="font-semibold">{displayDate(startDate)} → {displayDate(nextBillingDate)}</dd></div>
           <div><dt className="text-zinc-500">Billing method</dt><dd className="font-semibold">{collection === "stripe_autocharge" ? "Card billing (Stripe), not connected" : "Manual invoice"}</dd></div>
-          <div><dt className="text-zinc-500">Hardware</dt><dd className="font-semibold">{services.filter((service) => service.deviceId).length} of {services.length} assigned</dd></div>
+          <div><dt className="text-zinc-500">Hardware</dt><dd className="font-semibold">{services.filter((service) => service.deviceId || adoptedId(service)).length} of {services.length} assigned</dd></div>
         </dl>
         <ul className="mt-4 divide-y divide-emerald-200 rounded-lg bg-white text-sm dark:divide-zinc-800 dark:bg-zinc-900">
           {services.map((service, index) => (

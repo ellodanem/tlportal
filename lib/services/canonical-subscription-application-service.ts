@@ -533,7 +533,12 @@ export async function createCanonicalOnboarding(
     });
 
     for (const [index, service] of input.items.entries()) {
-      let serviceAssignmentId: string | null = null;
+      // An already-installed legacy assignment is adopted as-is (validated against the customer
+      // by addBillableServiceInTransaction); a stock device gets a fresh assignment instead.
+      let serviceAssignmentId: string | null = cleanOptionalText(service.serviceAssignmentId);
+      if (service.deviceId && serviceAssignmentId) {
+        validation("HARDWARE_CHOICE_CONFLICT", "Choose either an available device or an existing assignment for a service, not both.");
+      }
       if (service.deviceId) {
         serviceAssignmentId = await createAssignmentForAvailableDeviceInTransaction(tx, {
           customerId: customerId!,

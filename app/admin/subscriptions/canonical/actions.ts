@@ -378,6 +378,7 @@ export async function createCanonicalOnboardingAction(
     const amounts = formData.getAll("serviceAmount").map((value) => String(value).trim());
     const classifications = formData.getAll("serviceClassification").map((value) => String(value));
     const deviceIds = formData.getAll("serviceDeviceId").map((value) => String(value).trim());
+    const assignmentIds = formData.getAll("serviceAssignmentId").map((value) => String(value).trim());
     if (!labels.length || labels.some((label) => !label)) return { error: "Every tracking service needs a label." };
     if (amounts.length !== labels.length || amounts.some((amount) => !amount)) return { error: "Every tracking service needs an explicit cycle price." };
 
@@ -419,6 +420,7 @@ export async function createCanonicalOnboardingAction(
           rateClassification: classifications[index] === "negotiated" ? "negotiated" as const : "standard" as const,
           rateChangeReason: classifications[index] === "negotiated" ? "Initial negotiated onboarding rate" : "Initial onboarding rate",
           deviceId: deviceIds[index] || null,
+          serviceAssignmentId: assignmentIds[index] || null,
           createdById: staff.sub,
           initialAdjustment: hasAdjustment
             ? {

@@ -18,10 +18,10 @@ function label(customer: { company: string | null; firstName: string | null; las
 export default async function NewCanonicalSubscriptionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ customerId?: string }>;
+  searchParams: Promise<{ customerId?: string; assignmentId?: string; assignments?: string }>;
 }) {
   if (!canonicalSubscriptionUiVisible()) notFound();
-  const [customers, devices, plans, subscriptions, params] = await Promise.all([
+  const [customers, devices, plans, subscriptions, installedAssignments, params] = await Promise.all([
     prisma.customer.findMany({
       where: { archivedAt: null },
       orderBy: [{ company: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
@@ -52,6 +52,12 @@ export default async function NewCanonicalSubscriptionPage({
         _count: { select: { items: { where: { status: { notIn: ["ended", "canceled"] } } } } },
       },
     }),
+    // Installed devices not yet linked to a subscription service (the customer page's "legacy assignments").
+    prisma.serviceAssignment.findMany({
+      where: { subscriptionItemId: null, endDate: null, status: { in: ["active", "due_soon", "overdue"] }, customer: { archivedAt: null } },
+      orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
+      select: { id: true, customerId: true, device: { select: { label: true, imei: true, deviceModel: { select: { name: true } } } } },
+    }),
     searchParams,
   ]);
   const today = new Date().toISOString().slice(0, 10);
@@ -66,6 +72,24 @@ export default async function NewCanonicalSubscriptionPage({
       serviceCount: subscription._count.items,
     });
   }
+
+  const installedDevices: Record<string, { id: string; label: string; imei: string }[]> = {};
+  for (const assignment of installedAssignments) {
+    (installedDevices[assignment.customerId] ??= []).push({
+      id: assignment.id,
+      label: assignment.device.label?.trim() || assignment.device.deviceModel.name,
+      imei: assignment.device.imei,
+    });
+  }
+
+  // Deep links from the customer page: one assignment, or all of that customer's installed devices.
+  const linked = params.assignmentId ? installedAssignments.find((assignment) => assignment.id === params.assignmentId) : undefined;
+  const defaultCustomerId = linked?.customerId ?? params.customerId;
+  const initialAssignmentIds = linked
+    ? [linked.id]
+    : params.assignments === "all" && params.customerId
+      ? (installedDevices[params.customerId] ?? []).map((device) => device.id)
+      : [];
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -84,9 +108,11 @@ export default async function NewCanonicalSubscriptionPage({
           iccid: device.simCard?.iccid ?? null,
         }))}
         today={today}
-        defaultCustomerId={params.customerId}
+        defaultCustomerId={defaultCustomerId}
         plans={plans.map((plan) => ({ durationMonths: plan.durationMonths, priceXcd: plan.priceXcd.toFixed(2) }))}
         existingSubscriptions={existingSubscriptions}
+        installedDevices={installedDevices}
+        initialAssignmentIds={initialAssignmentIds}
         creationKey={randomUUID()}
       />
     </div>

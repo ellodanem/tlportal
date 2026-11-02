@@ -287,6 +287,10 @@ test("customer billing keeps financial history separate from subscription renewa
   assert.match(customerSubscriptions, /Paused device assignments/);
   assert.match(customerSubscriptions, /Legacy installation assignments/);
   assert.match(customerSubscriptions, /subscriptionItemId: null/);
+  // Legacy installed devices can be activated into the canonical workflow (not just viewed).
+  assert.match(customerSubscriptions, /canonical\/new\?assignmentId=/);
+  assert.match(customerSubscriptions, /canonical\/new\?customerId=\$\{customer\.id\}&assignments=all/);
+  assert.match(customerSubscriptions, /add-service\?assignmentId=/);
   assert.match(accountRibbon, /commercial terms and service pricing are managed in Subscriptions/);
 });
 

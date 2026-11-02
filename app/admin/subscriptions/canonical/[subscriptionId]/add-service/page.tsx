@@ -15,8 +15,15 @@ export const dynamic = "force-dynamic";
  * The single entry point for adding a service. Draft subscriptions get the draft form inline
  * (their services are not billed yet); live subscriptions get the guided three-step flow.
  */
-export default async function AddServicePage({ params }: { params: Promise<{ subscriptionId: string }> }) {
+export default async function AddServicePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ subscriptionId: string }>;
+  searchParams: Promise<{ assignmentId?: string }>;
+}) {
   const { subscriptionId } = await params;
+  const { assignmentId } = await searchParams;
   const { subscription, permissions } = await requireSubscriptionPage(subscriptionId);
   const back = (
     <Link href={subscriptionBasePath(subscriptionId)} className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">← {subscription.customerLabel}</Link>
@@ -48,7 +55,7 @@ export default async function AddServicePage({ params }: { params: Promise<{ sub
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">Add a service</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Three short steps. The price, billing cycle and renewal come from the subscription; you only confirm what is new.</p>
       </div>
-      <SubscriptionAddServiceFlow context={context} creationKey={randomUUID()} today={today} />
+      <SubscriptionAddServiceFlow context={context} creationKey={randomUUID()} today={today} initialAssignmentId={assignmentId} />
     </div>
   );
 }

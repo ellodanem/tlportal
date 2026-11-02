@@ -154,6 +154,9 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
     .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
   const attentionCount = currentSubscriptions.filter((subscription) => subscription.summary?.attentionRequired).length;
   const today = new Date();
+  // Same rule as the per-subscription "Add service" button: only a live subscription takes a new service directly.
+  const addableSubscriptions = subscriptions.filter((subscription) => subscription.controlMode === "canonical" && ["pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? ""));
+  const soleAddableSubscription = addableSubscriptions.length === 1 ? addableSubscriptions[0] : null;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 rounded-2xl bg-zinc-50/70 p-1 sm:p-2 dark:bg-zinc-950/40">
@@ -184,9 +187,12 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Legacy installation assignments</h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">These devices are assigned to the customer outside the subscription workflow. They remain visible while installation is pending, but do not create a billable GPS service, invoice, or subscription.</p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">These devices are assigned to the customer outside the subscription workflow. They remain visible while installation is pending, but do not create a billable GPS service, invoice, or subscription. Activate them as billable services below; nothing is invoiced or charged until you confirm each step.</p>
           </div>
-          <Link href={`/admin/subscriptions/${customer.id}/renewals`} className="w-fit shrink-0 text-sm font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">Legacy renewal tools</Link>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+            <Link href={`/admin/subscriptions/canonical/new?customerId=${customer.id}&assignments=all`} className="inline-flex min-h-11 w-fit items-center rounded-lg bg-emerald-700 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950">{legacyAssignments.length === 1 ? "Activate as new subscription" : `Activate all ${legacyAssignments.length} as one subscription`}</Link>
+            <Link href={`/admin/subscriptions/${customer.id}/renewals`} className="w-fit text-sm font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">Legacy renewal tools</Link>
+          </div>
         </div>
         <div className="mt-5 space-y-3">{legacyAssignments.map((assignment) => {
           const deviceLabel = assignment.device.label?.trim() || assignment.device.deviceModel.name;
@@ -195,7 +201,13 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
             <div className="min-w-0 lg:pr-5"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-zinc-950 dark:text-zinc-50">{deviceLabel}</p><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200">Legacy assignment</span></div><p className="mt-1 truncate text-xs text-zinc-500" title={assignment.device.imei}>{assignment.device.deviceModel.name} / {assignment.device.imei}</p></div>
             <div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:border-r sm:pr-5 lg:border-l lg:border-r-0 lg:pl-5 lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Installation / service start</p><p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{date(assignment.startDate)}</p><p className="mt-1 text-xs text-zinc-500">{assignment.startDate ? "Confirm completion at the scheduled visit" : "Date not recorded"}</p></div>
             <div className="border-t border-zinc-100 pt-4 sm:border-t-0 sm:pl-5 lg:border-l lg:pt-0 dark:border-zinc-800"><p className="text-xs font-medium text-zinc-500">Billing context</p><p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{assignment.intervalMonths ? canonicalIntervalLabel(assignment.intervalMonths) : "Term not set"}</p><p className="mt-1 truncate text-xs text-zinc-500" title={simLabel}>SIM / {simLabel}</p></div>
-            <Link href={`/admin/devices/${assignment.device.id}/edit?tab=assignment`} className="w-fit border-t border-zinc-100 pt-4 text-sm font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-zinc-800 dark:text-emerald-400">View assignment</Link>
+            <div className="flex flex-col items-start gap-2 border-t border-zinc-100 pt-4 text-sm font-semibold lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-zinc-800">
+              {soleAddableSubscription
+                ? <Link href={`/admin/subscriptions/canonical/${soleAddableSubscription.id}/add-service?assignmentId=${assignment.id}`} className="inline-flex min-h-11 items-center rounded-lg bg-emerald-700 px-3 py-2 text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900">Add to subscription</Link>
+                : <Link href={`/admin/subscriptions/canonical/new?assignmentId=${assignment.id}`} className="inline-flex min-h-11 items-center rounded-lg bg-emerald-700 px-3 py-2 text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900">Activate as service</Link>}
+              {soleAddableSubscription ? <Link href={`/admin/subscriptions/canonical/new?assignmentId=${assignment.id}`} className="text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">Or start a new subscription</Link> : null}
+              <Link href={`/admin/devices/${assignment.device.id}/edit?tab=assignment`} className="text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">View assignment</Link>
+            </div>
           </div>;
         })}</div>
       </section> : null}

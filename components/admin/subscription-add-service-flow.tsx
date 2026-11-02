@@ -95,11 +95,15 @@ export function SubscriptionAddServiceFlow({
   context,
   creationKey,
   today,
+  initialAssignmentId,
 }: {
   context: ServiceAdditionContext;
   creationKey: string;
   today: string;
+  /** Preselects an installed legacy assignment (deep link from the customer page). Ignored if not eligible. */
+  initialAssignmentId?: string;
 }) {
+  const preselected = context.unlinkedAssignments.find((assignment) => assignment.id === initialAssignmentId);
   const [state, action, pending] = useActionState(addServiceAction, initialState);
   const router = useRouter();
   const { subscription, cycle } = context;
@@ -107,7 +111,7 @@ export function SubscriptionAddServiceFlow({
   const defaultStart = today < cycle.cycleStart ? cycle.cycleStart : today > subscription.nextBillingDate ? subscription.nextBillingDate : today;
 
   const [step, setStep] = useState(0);
-  const [label, setLabel] = useState("");
+  const [label, setLabel] = useState(preselected?.label ?? "");
   const [labelTouched, setLabelTouched] = useState(false);
   const [price, setPrice] = useState(context.suggestedPrice);
   const [classification, setClassification] = useState<"standard" | "negotiated">("standard");
@@ -115,9 +119,9 @@ export function SubscriptionAddServiceFlow({
   const [adjustment, setAdjustment] = useState<AdjustmentChoice>("daily_proration");
   const [manualAmount, setManualAmount] = useState("");
   const [reason, setReason] = useState("");
-  const [hardwareKind, setHardwareKind] = useState<"none" | "device" | "assignment">("none");
+  const [hardwareKind, setHardwareKind] = useState<"none" | "device" | "assignment">(preselected ? "assignment" : "none");
   const [deviceId, setDeviceId] = useState("");
-  const [assignmentId, setAssignmentId] = useState("");
+  const [assignmentId, setAssignmentId] = useState(preselected?.id ?? "");
   const [notes, setNotes] = useState("");
   const [stepError, setStepError] = useState<string | null>(null);
 

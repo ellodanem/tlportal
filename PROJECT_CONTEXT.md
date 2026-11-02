@@ -5568,3 +5568,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes: subscription detail tabs go from five to four (Services, Billing, Activity, Advanced). Billing now shows Next charge and How it is collected, then one invoice list with payments on the invoice they paid (All/Open/Paid via `?show=`). MRR only shown on non-monthly cycles; header-strip figures no longer repeated. `/invoices` route now redirects to `/billing`; `invoices-tab.tsx` removed; `SubscriptionLedgerTable` added to `financial-ledger-table.tsx`. Pre-existing unrelated failure left alone: `canonical workflow confirms commercial changes...` ("Assign hardware later").
 
+
+### 2026-11-02 02:25 UTC — commit `a73047a`
+
+- docs: log billing tab merge
+
+
+### 2026-11-02 02:25 UTC — pre-push (`main` → origin) @ `a73047a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
