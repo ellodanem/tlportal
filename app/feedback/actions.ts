@@ -49,8 +49,8 @@ export async function submitFeedback(
   if (contactRaw.length > FEEDBACK_CONTACT_MAX) {
     return { ok: false, error: "Email or phone is too long." };
   }
-  if (sharePermission && !displayNameRaw) {
-    return { ok: false, error: "Add your name if we may share your comment." };
+  if (!displayNameRaw) {
+    return { ok: false, error: "Please add your name." };
   }
 
   const displayName = displayNameRaw || null;

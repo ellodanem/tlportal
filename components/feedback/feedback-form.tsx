@@ -130,11 +130,8 @@ export function FeedbackForm() {
 
       <div>
         <label className={labelClass()} htmlFor="feedback-name">
-          Your name {sharePermission ? <span className="text-red-600">*</span> : null}
+          Your name <span className="text-red-600">*</span>
         </label>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          {sharePermission ? "Required because you allowed sharing." : "Optional unless you allow sharing"}
-        </p>
         <input
           id="feedback-name"
           name="displayName"
