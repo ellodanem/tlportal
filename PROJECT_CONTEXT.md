@@ -5685,3 +5685,50 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes: customer Subscriptions page now renders only current (non-ended/canceled) subscriptions as cards; ended/canceled ones appear in a compact visible 'Past subscriptions' list. Completes the Blue Taxi merge from the owner's view (previously the 4 emptied ended subscriptions still showed as cards). tsc clean; tests 393/395 (2 pre-existing failures).
 
+
+### 2026-11-02 11:16 UTC — commit `e2d50a5`
+
+- docs: log past-subscriptions display fix
+
+
+### 2026-11-02 11:16 UTC — pre-push (`main` → origin) @ `e2d50a5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 11:19 UTC — commit `29ac1f5`
+
+- feat(feedback): capture optional company name
+
+
+### 2026-11-02 11:19 UTC — pre-push (`main` → origin) @ `29ac1f5`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 11:21 UTC — commit `4a42248`
+
+- fix(feedback): require sender name
+
+
+### 2026-11-02 11:21 UTC — pre-push (`main` → origin) @ `4a42248`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 11:24 UTC — commit `51d6b5d`
+
+- feat(feedback): separate phone and email fields
+
+
+### 2026-11-02 11:24 UTC — pre-push (`main` → origin) @ `51d6b5d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 11:24 UTC — commit `310cb8f`
+
+- feat(subscriptions): hide ended/canceled subscriptions that hold no services
+
+- Agent notes: added `HIDE_EMPTY_RETIRED_SUBSCRIPTIONS` (lib/domain/canonical-subscription-merge.ts): ended/canceled subscriptions with zero items are excluded from the Subscriptions workspace, the subscription header sibling switcher (current subscription always kept), the customer Subscriptions page and the customer billing workspace layout/billing links. Not deleted: rows stay for audit (merge event, ended schedules). Verified on prod data: 48 subscriptions, 4 hidden (Blue Taxi's merged-away d839fb6d/f24cb5b3/fc505045/bc866fc4), legacy rows unaffected. tsc clean; tests 393/395 (2 pre-existing failures).
+
