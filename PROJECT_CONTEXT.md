@@ -5401,3 +5401,22 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - docs: log asset-loss workflow in PROJECT_CONTEXT
 
+
+### 2026-11-02 01:02 UTC — commit `d5b45d6`
+
+- feat(subscriptions): paused services drop out of the next renewal
+
+
+### 2026-11-02 01:02 UTC — pre-push (`main` → origin) @ `d5b45d6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 � Agent notes: paused services drop out of renewal (`d5b45d6`, `main` ? origin)
+
+- Plain Pause on a canonical service now sets the `SubscriptionItem` to `paused` in the same transaction as the tracker (opt-in `pauseSubscriptionItem`); Resume sets it back to `active` (`resumeSubscriptionItem`). No refunds or credits; Stripe is never changed automatically.
+- Paused items are excluded from `resolveCanonicalBillingCycle` planning (`requireActive: false`), `billableServiceCountAtRenewal` (Stripe check and nightly audit), the add-service preview, reconciliation totals and the UI `billsOnDate`.
+- Vehicle-sold and asset-loss flows unchanged (they end billing by `billingEffectiveUntil`); Resume is refused for services with a billing end date.
+- Add-service preview `effectiveAtRenewal` now honours `billingEffectiveUntil`.
+- Ops: Sharm Charles legitimately has 6 trackers (replacement tracker bought after a sale); IMEI/SIM corrected manually in the back end. Kurt Dieudonna's Stripe quantity must be 5 before the Nov 15 renewal.
+- Pushed together with the parallel asset-loss workstream's push; no DB-backed test of pause/resume has been run.
