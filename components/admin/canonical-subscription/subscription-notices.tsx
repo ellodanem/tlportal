@@ -1,17 +1,19 @@
 import Link from "next/link";
 
 import { CanonicalManualActivationForm } from "@/components/admin/canonical-subscription-activation-form";
-import { cardClass, collectionLabel, cycleUnit, displayDate, iso, money, nativeBillingReadinessIssues } from "@/components/admin/canonical-subscription/format";
+import { cardClass, collectionLabel, displayDate, iso, nativeBillingReadinessIssues } from "@/components/admin/canonical-subscription/format";
 import {
   subscriptionAdvancedPath,
   subscriptionBasePath,
-  subscriptionServicePath,
 } from "@/lib/domain/canonical-subscription-navigation";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
 
-const PREVIEW_LIMIT = 5;
-
-export function SubscriptionOverviewTab({
+/**
+ * Things that need a person's attention, shown above the services list: errors, collection and
+ * authority warnings, and the activation checklist for a draft. Renders nothing when there is
+ * nothing to say, so a healthy subscription goes straight to its services.
+ */
+export function SubscriptionNotices({
   subscription,
   permissions,
   error,
@@ -39,10 +41,9 @@ export function SubscriptionOverviewTab({
 
   const issues = nativeBillingReadinessIssues(subscription);
   const uninvoicedAdjustments = activeServices.filter((item) => item.initialAdjustment && !item.initialAdjustment.invoice).length;
-  const preview = activeServices.slice(0, PREVIEW_LIMIT);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 empty:hidden">
       {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{error}</p> : null}
       {pilot === "shadow-created" ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">The source-controlled subscription was created. Review it on the Advanced page before any authority transfer.</p> : null}
 
@@ -92,32 +93,6 @@ export function SubscriptionOverviewTab({
           <p className="mt-4 text-sm text-zinc-500">Need a different billing method? <Link href={`${base}/billing`} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Change it in Billing &amp; renewal</Link>.</p>
         </section>
       ) : null}
-
-      <section aria-labelledby="services-preview-heading" className={cardClass}>
-        <div className="flex flex-col gap-2 border-b border-zinc-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
-          <div><h2 id="services-preview-heading" className="text-lg font-semibold">Services ({activeServices.length})</h2><p className="mt-1 text-sm text-zinc-500">A quick look. Manage prices, hardware and lifecycle on the Services tab.</p></div>
-          <Link href={`${base}/services`} className="min-h-11 rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">All services</Link>
-        </div>
-        {preview.length ? (
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {preview.map((item, index) => {
-              const rate = item.rates.at(-1);
-              const assignment = item.serviceAssignments.find((entry) => entry.endDate == null && entry.status !== "cancelled");
-              const device = assignment?.device;
-              return (
-                <li key={item.id} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <Link href={subscriptionServicePath(subscription.id, item.id)} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">{item.label || `Service ${index + 1}`}</Link>
-                    <p className="text-xs text-zinc-500">{device ? device.label?.trim() || device.deviceModel.name : "No device assigned"} · <span className="capitalize">{item.status.replaceAll("_", " ")}</span></p>
-                  </div>
-                  <p className="text-sm font-semibold tabular-nums">{rate ? `${money(rate.agreedAmountPerCycle.toString(), rate.currency)} / ${cycleUnit(rate.billingIntervalMonths)}` : "Rate not set"}</p>
-                </li>
-              );
-            })}
-          </ul>
-        ) : <p className="p-8 text-center text-sm text-zinc-500">No billable services have been added.</p>}
-        {activeServices.length > PREVIEW_LIMIT ? <p className="border-t border-zinc-100 p-4 text-sm text-zinc-500 dark:border-zinc-800">+ {activeServices.length - PREVIEW_LIMIT} more on the Services tab.</p> : null}
-      </section>
     </div>
   );
 }

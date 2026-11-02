@@ -220,7 +220,7 @@ test("current and history views distinguish terminated arrangements without comb
 const SUBSCRIPTION_DETAIL_SOURCES = [
   "app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/page.tsx",
   "app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/billing/annual-adjustment/page.tsx",
-  "components/admin/canonical-subscription/overview-tab.tsx",
+  "components/admin/canonical-subscription/subscription-notices.tsx",
   "components/admin/canonical-subscription/services-tab.tsx",
   "components/admin/canonical-subscription/billing-tab.tsx",
   "components/admin/canonical-subscription/activity-tab.tsx",

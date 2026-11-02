@@ -2,8 +2,10 @@ import Link from "next/link";
 
 import { cardClass, cycleUnit, displayDate, iso, money, serviceStatusLabel, statusPillClass, warningPillClass } from "@/components/admin/canonical-subscription/format";
 import { ServiceTiming } from "@/components/admin/canonical-subscription/service-timing";
+import { SubscriptionNotices } from "@/components/admin/canonical-subscription/subscription-notices";
 import { CustomerServiceManagementModal } from "@/components/admin/customer-service-management-modal";
 import {
+  countBillableServices,
   ENDED_SERVICE_REASON_LABEL,
   endedServiceReason,
   partitionServicesByBilling,
@@ -140,7 +142,17 @@ function EndedServices({ subscription, items }: { subscription: SubscriptionDeta
   );
 }
 
-export function SubscriptionServicesTab({ subscription, permissions }: { subscription: SubscriptionDetail; permissions: SubscriptionPermissions }) {
+export function SubscriptionServicesTab({
+  subscription,
+  permissions,
+  error,
+  pilot,
+}: {
+  subscription: SubscriptionDetail;
+  permissions: SubscriptionPermissions;
+  error?: string;
+  pilot?: string;
+}) {
   const canAddService = permissions.canManage && subscription.controlMode === "canonical"
     && ["draft", "pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? "");
   // A subscription that has itself ended shows its services as history, not as a split list.
@@ -148,12 +160,21 @@ export function SubscriptionServicesTab({ subscription, permissions }: { subscri
   const { current, ended } = subscriptionEnded
     ? { current: subscription.items, ended: [] as Item[] }
     : partitionServicesByBilling(subscription.items);
+  // The heading counts services being billed (live and unpaused), like the recurring total; a
+  // paused service stays listed below with its "paused · not billed" status.
+  const billableCount = subscriptionEnded ? current.length : countBillableServices(current);
+  const pausedCount = subscriptionEnded ? 0 : current.length - billableCount;
 
   return (
+    <div className="flex flex-col gap-5">
+    <SubscriptionNotices subscription={subscription} permissions={permissions} error={error} pilot={pilot} />
     <section aria-labelledby="services-heading" className={cardClass}>
       <div className="flex flex-col gap-3 border-b border-zinc-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
         <div>
-          <h2 id="services-heading" className="text-lg font-semibold">Billable services ({current.length})</h2>
+          <h2 id="services-heading" className="text-lg font-semibold">
+            Billable services ({billableCount})
+            {pausedCount ? <span className="ml-2 text-sm font-normal text-zinc-500">· {pausedCount} paused, not billed</span> : null}
+          </h2>
           <p className="mt-1 text-sm text-zinc-500">One row per service, with its own price per billing cycle and current hardware.</p>
         </div>
         {canAddService ? <Link href={subscriptionAddServicePath(subscription.id)} className="min-h-11 rounded-lg bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-emerald-800">Add service</Link> : null}
@@ -165,5 +186,6 @@ export function SubscriptionServicesTab({ subscription, permissions }: { subscri
       )}
       {ended.length ? <EndedServices subscription={subscription} items={ended} /> : null}
     </section>
+    </div>
   );
 }

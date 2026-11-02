@@ -84,18 +84,31 @@ test("legacy mutators consult canonical ownership guards on the server", async (
 
 test("subscription tabs are real routes and Advanced only appears when relevant", () => {
   const without = subscriptionTabs("sub-1", { showAdvanced: false });
-  assert.deepEqual(without.map((tab) => tab.key), ["overview", "services", "billing", "invoices", "activity"]);
-  assert.equal(without[0].href, "/admin/subscriptions/canonical/sub-1");
+  assert.deepEqual(without.map((tab) => tab.key), ["services", "billing", "invoices", "activity"]);
+  // Services is the landing section; there is no separate overview tab.
+  assert.equal(without[0].href, "/admin/subscriptions/canonical/sub-1/services");
   assert.ok(without.every((tab) => !tab.href.includes("#")));
   assert.equal(subscriptionTabs("sub-1", { showAdvanced: true }).at(-1)?.href, "/admin/subscriptions/canonical/sub-1/advanced");
 });
 
 test("active tab resolves from the first child segment", () => {
-  assert.equal(activeSubscriptionTab(null), "overview");
-  assert.equal(activeSubscriptionTab(undefined), "overview");
+  assert.equal(activeSubscriptionTab(null), "services");
+  assert.equal(activeSubscriptionTab(undefined), "services");
   assert.equal(activeSubscriptionTab("services"), "services");
   assert.equal(activeSubscriptionTab("billing"), "billing");
-  assert.equal(activeSubscriptionTab("add-service"), "overview");
+  assert.equal(activeSubscriptionTab("add-service"), "services");
+});
+
+test("the subscription index redirects to Services and keeps the query string", async () => {
+  const index = await readFile("app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/page.tsx", "utf8");
+  assert.match(index, /redirect\(/);
+  assert.match(index, /\/services\$\{suffix\}/);
+  assert.match(index, /searchParams/);
+  const services = await readFile("app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/services/page.tsx", "utf8");
+  assert.match(services, /error=\{query\.error\}/);
+  assert.match(services, /pilot=\{query\.pilot\}/);
+  const tab = await readFile("components/admin/canonical-subscription/services-tab.tsx", "utf8");
+  assert.match(tab, /<SubscriptionNotices /);
 });
 
 test("manual-invoice customers with no provider history never see provider pages", () => {
@@ -231,7 +244,7 @@ test("each subscription tab has a route and invoices are visible by default", as
 test("adding a service has a single entry point", async () => {
   const header = await readFile("components/admin/canonical-subscription/subscription-header.tsx", "utf8");
   assert.match(header, /subscriptionAddServicePath/);
-  const overview = await readFile("components/admin/canonical-subscription/overview-tab.tsx", "utf8");
+  const overview = await readFile("components/admin/canonical-subscription/subscription-notices.tsx", "utf8");
   const services = await readFile("components/admin/canonical-subscription/services-tab.tsx", "utf8");
   assert.doesNotMatch(`${overview}\n${services}`, /AddCanonicalDraftItemForm/);
 });

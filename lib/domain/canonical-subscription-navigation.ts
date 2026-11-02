@@ -5,13 +5,13 @@
  * anchors, so a link can never point at hidden content.
  */
 
-export type SubscriptionTabKey = "overview" | "services" | "billing" | "invoices" | "activity" | "advanced";
+export type SubscriptionTabKey = "services" | "billing" | "invoices" | "activity" | "advanced";
 
 export type SubscriptionTab = {
   key: SubscriptionTabKey;
   label: string;
-  /** Route segment under the subscription, or null for the overview (index) route. */
-  segment: string | null;
+  /** Route segment under the subscription. */
+  segment: string;
   href: string;
 };
 
@@ -65,7 +65,6 @@ export function advancedSectionsFor(facts: AdvancedFacts): AdvancedSections {
 export function subscriptionTabs(subscriptionId: string, options: { showAdvanced: boolean }): SubscriptionTab[] {
   const base = subscriptionBasePath(subscriptionId);
   const tabs: SubscriptionTab[] = [
-    { key: "overview", label: "Overview", segment: null, href: base },
     { key: "services", label: "Services", segment: "services", href: `${base}/services` },
     { key: "billing", label: "Billing & renewal", segment: "billing", href: `${base}/billing` },
     { key: "invoices", label: "Invoices & payments", segment: "invoices", href: `${base}/invoices` },
@@ -83,7 +82,8 @@ export function activeSubscriptionTab(segment: string | null | undefined): Subsc
     case "invoices": return "invoices";
     case "activity": return "activity";
     case "advanced": return "advanced";
-    default: return "overview";
+    // The subscription index redirects to Services, which is also where add-service returns to.
+    default: return "services";
   }
 }
 
