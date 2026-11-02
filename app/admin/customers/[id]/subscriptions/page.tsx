@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
+import { countBillableServices } from "@/lib/domain/canonical-service-lifecycle";
 import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
 import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import {
@@ -131,7 +132,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
     (subscription) => !["ended", "canceled"].includes(subscription.lifecycleStatus ?? ""),
   );
   const activeServices = currentSubscriptions.reduce(
-    (sum, subscription) => sum + subscription.items.filter((item) => !["ended", "canceled"].includes(item.status)).length,
+    (sum, subscription) => sum + countBillableServices(subscription.items),
     0,
   );
   const recurringGroups = (() => {

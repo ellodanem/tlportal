@@ -19,9 +19,16 @@ export function parseAssetLossReason(raw: string): AssetLossReason | null {
   return ASSET_LOSS_REASONS.includes(v) ? v : null;
 }
 
+/** Every asset-loss audit note starts with this, so a recorded loss can be recognised from the note. */
+export const ASSET_LOSS_NOTE_PREFIX = "Asset lost —";
+
+export function hasAssetLossNote(notes: string | null | undefined): boolean {
+  return Boolean(notes?.includes(ASSET_LOSS_NOTE_PREFIX));
+}
+
 /** One-line audit note appended to the assignment and device notes. */
 export function assetLossNote(input: { reason: AssetLossReason; lossDate: string; note?: string | null }): string {
-  const base = `Asset lost — ${ASSET_LOSS_REASON_LABEL[input.reason]} (${input.lossDate}); tracker unrecoverable.`;
+  const base = `${ASSET_LOSS_NOTE_PREFIX} ${ASSET_LOSS_REASON_LABEL[input.reason]} (${input.lossDate}); tracker unrecoverable.`;
   const extra = input.note?.trim();
   return extra ? `${base} ${extra}` : base;
 }
