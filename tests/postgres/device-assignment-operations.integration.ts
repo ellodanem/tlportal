@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { after, test } from "node:test";
 
 import { prisma } from "../../lib/db";
+import { recordCanonicalAssetLoss, recordLegacyAssetLoss } from "../../lib/services/asset-loss-service";
 import { createDraftCanonicalSubscription } from "../../lib/services/canonical-subscription-application-service";
 import { changeDeviceSim, replaceDeviceForExistingAssignment } from "../../lib/services/device-assignment-operation-service";
 
@@ -84,4 +85,52 @@ test("canonical replacement keeps the same billable item and has no billing side
   assert.equal(oldDevice.status, "returned");
   assert.equal(oldDevice.condition, "faulty");
   assert.deepEqual(afterCounts, before);
+});
+
+test("legacy asset loss ends the installation, writes the device off and ends its schedule atomically", async () => {
+  const row = await fixture("legacy-loss");
+  const schedule = await prisma.recurringInvoiceSchedule.create({ data: { customerId: row.customer.id, serviceAssignmentId: row.assignment.id, nextIssueDate: new Date("2026-11-01T00:00:00.000Z") } });
+  const invoice = await prisma.invoice.create({ data: { customerId: row.customer.id, status: "open", total: "25.00", amountDue: "25.00", issueDate: new Date("2026-10-25T00:00:00.000Z"), recurringScheduleId: schedule.id } });
+  const result = await recordLegacyAssetLoss({ assignmentId: row.assignment.id, lossDate: "2026-10-20", reason: "sank", note: "Off Rodney Bay", actorUserId: "test-staff" });
+  const [assignment, device, endedSchedule, event, sim] = await Promise.all([
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: row.assignment.id } }),
+    prisma.device.findUniqueOrThrow({ where: { id: row.oldDevice.id } }),
+    prisma.recurringInvoiceSchedule.findUniqueOrThrow({ where: { id: schedule.id } }),
+    prisma.operationalEvent.findFirstOrThrow({ where: { deviceId: row.oldDevice.id, category: "assignment.asset_lost" } }),
+    prisma.simCard.findUniqueOrThrow({ where: { id: row.sim.id }, include: { device: true } }),
+  ]);
+  assert.equal(assignment.status, "cancelled");
+  assert.equal(assignment.endDate?.toISOString().slice(0, 10), "2026-10-20");
+  assert.equal(device.status, "lost");
+  assert.equal(device.simCardId, null);
+  assert.equal(sim.device, null);
+  assert.equal(endedSchedule.status, "ended");
+  assert.equal(result.endedRecurringSchedules, 1);
+  assert.deepEqual(result.openInvoices.map((i) => i.id), [invoice.id]);
+  assert.match(JSON.stringify(event.payload), /Off Rodney Bay/);
+  await assert.rejects(() => recordLegacyAssetLoss({ assignmentId: row.assignment.id, lossDate: "2026-10-20", reason: "sank" }), /no longer open/);
+});
+
+test("canonical asset loss ends the billing item and the installation in one transaction", async () => {
+  const row = await fixture("canonical-loss");
+  const subscription = await createDraftCanonicalSubscription({ customerId: row.customer.id, name: "Lost vessel", billingIntervalMonths: 1, collectionMethod: "manual_invoice", currency: "XCD", defaultAgreedAmountPerCycle: "25.00", commercialStartDate: "2026-10-01", billingAnchorDate: "2026-10-01", nextBillingDate: "2026-11-01", items: [{ label: "Boat", serviceActivatedDate: "2026-10-01", serviceAssignmentId: row.assignment.id }] });
+  const itemId = subscription.items[0].id;
+  await assert.rejects(() => recordLegacyAssetLoss({ assignmentId: row.assignment.id, lossDate: "2026-10-20", reason: "sank" }), /canonical subscription/);
+  await recordCanonicalAssetLoss({ subscriptionId: subscription.id, subscriptionItemId: itemId, assignmentId: row.assignment.id, lossDate: "2026-10-20", reason: "sank", actorUserId: "test-staff" });
+  const [item, assignment, device] = await Promise.all([
+    prisma.subscriptionItem.findUniqueOrThrow({ where: { id: itemId } }),
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: row.assignment.id } }),
+    prisma.device.findUniqueOrThrow({ where: { id: row.oldDevice.id } }),
+  ]);
+  assert.equal(item.billingEffectiveUntil?.toISOString().slice(0, 10), "2026-10-20");
+  assert.equal(assignment.status, "cancelled");
+  assert.equal(device.status, "lost");
+  assert.equal(device.simCardId, null);
+  // A loss date before the installation started must roll the billing end back with it.
+  const early = await fixture("canonical-loss-early");
+  const earlySub = await createDraftCanonicalSubscription({ customerId: early.customer.id, name: "Early loss", billingIntervalMonths: 1, collectionMethod: "manual_invoice", currency: "XCD", defaultAgreedAmountPerCycle: "25.00", commercialStartDate: "2026-10-01", billingAnchorDate: "2026-10-01", nextBillingDate: "2026-11-01", items: [{ label: "Boat", serviceActivatedDate: "2026-10-01", serviceAssignmentId: early.assignment.id }] });
+  await assert.rejects(() => recordCanonicalAssetLoss({ subscriptionId: earlySub.id, subscriptionItemId: earlySub.items[0].id, assignmentId: early.assignment.id, lossDate: "2026-09-15", reason: "stolen" }));
+  const untouched = await prisma.subscriptionItem.findUniqueOrThrow({ where: { id: earlySub.items[0].id } });
+  assert.equal(untouched.billingEffectiveUntil, null);
+  assert.equal((await prisma.device.findUniqueOrThrow({ where: { id: early.oldDevice.id } })).status, "assigned");
 });

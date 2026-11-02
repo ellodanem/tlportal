@@ -4,6 +4,7 @@ import { cardClass, cycleUnit, displayDate, iso, money, statusPillClass } from "
 import { ServiceTiming } from "@/components/admin/canonical-subscription/service-timing";
 import { EditCanonicalDraftItemForm } from "@/components/admin/canonical-subscription-draft-forms";
 import {
+  CanonicalAssetLossForm,
   CanonicalServiceHardwareReplacementForm,
   CanonicalServiceResumeForm,
   CanonicalServiceTransferForm,
@@ -97,6 +98,8 @@ export function SubscriptionServiceDetails({
                 : <CanonicalVehicleSaleRemovalForm subscriptionId={subscription.id} subscriptionItemId={item.id} assignmentId={open.id} />}
             </section>
           ) : null}
+          {/* Stays mounted after a successful loss (assignmentId becomes null) so the result notice survives the refresh. */}
+          <CanonicalAssetLossForm subscriptionId={subscription.id} subscriptionItemId={item.id} assignmentId={open?.id ?? null} deviceLabel={device ? device.label?.trim() || device.deviceModel.name : "the tracker"} />
         </>
       ) : null}
 

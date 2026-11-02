@@ -831,44 +831,53 @@ export async function updateDraftSubscriptionItemCommercialDetails(input: {
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
+/** Transaction-aware core so other workflows (e.g. asset loss) can end an item atomically. */
+export async function scheduleSubscriptionItemEndInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { subscriptionItemId: string; effectiveUntil: string },
+): Promise<void> {
+  const effectiveUntil = commercialDate(input.effectiveUntil, "effectiveUntil");
+  const item = await tx.subscriptionItem.findUnique({
+    where: { id: input.subscriptionItemId },
+    include: {
+      customerSubscription: true,
+      rates: { orderBy: { effectiveFrom: "asc" } },
+    },
+  });
+  if (!item) validation("ITEM_NOT_FOUND", "Subscription item not found.");
+  await requireEditableSubscription(tx, item.customerSubscriptionId);
+  if (item.billingEffectiveFrom && effectiveUntil <= item.billingEffectiveFrom) {
+    validation("INVALID_ITEM_DATES", "Item end must be later than billingEffectiveFrom.");
+  }
+  if (item.rates.some((rate) => rate.effectiveFrom >= effectiveUntil)) {
+    validation(
+      "FUTURE_RATE_CONFLICT",
+      "Remove or reschedule future rates before ending this item.",
+    );
+  }
+
+  await tx.subscriptionItemRate.updateMany({
+    where: {
+      subscriptionItemId: item.id,
+      effectiveFrom: { lt: effectiveUntil },
+      OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: effectiveUntil } }],
+    },
+    data: { effectiveUntil },
+  });
+  await tx.subscriptionItem.update({
+    where: { id: item.id },
+    data: { billingEffectiveUntil: effectiveUntil },
+  });
+}
+
 export async function scheduleSubscriptionItemEnd(input: {
   subscriptionItemId: string;
   effectiveUntil: string;
 }): Promise<void> {
-  const effectiveUntil = commercialDate(input.effectiveUntil, "effectiveUntil");
-  await prisma.$transaction(async (tx) => {
-    const item = await tx.subscriptionItem.findUnique({
-      where: { id: input.subscriptionItemId },
-      include: {
-        customerSubscription: true,
-        rates: { orderBy: { effectiveFrom: "asc" } },
-      },
-    });
-    if (!item) validation("ITEM_NOT_FOUND", "Subscription item not found.");
-    await requireEditableSubscription(tx, item.customerSubscriptionId);
-    if (item.billingEffectiveFrom && effectiveUntil <= item.billingEffectiveFrom) {
-      validation("INVALID_ITEM_DATES", "Item end must be later than billingEffectiveFrom.");
-    }
-    if (item.rates.some((rate) => rate.effectiveFrom >= effectiveUntil)) {
-      validation(
-        "FUTURE_RATE_CONFLICT",
-        "Remove or reschedule future rates before ending this item.",
-      );
-    }
-
-    await tx.subscriptionItemRate.updateMany({
-      where: {
-        subscriptionItemId: item.id,
-        effectiveFrom: { lt: effectiveUntil },
-        OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: effectiveUntil } }],
-      },
-      data: { effectiveUntil },
-    });
-    await tx.subscriptionItem.update({
-      where: { id: item.id },
-      data: { billingEffectiveUntil: effectiveUntil },
-    });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  await prisma.$transaction(
+    (tx) => scheduleSubscriptionItemEndInTransaction(tx, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 function isPostgresConstraintError(error: unknown): boolean {

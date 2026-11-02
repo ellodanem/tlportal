@@ -11,7 +11,9 @@ import {
   parseServicePauseDisposition,
   parseServicePauseReason,
 } from "@/lib/domain/service-pause";
+import { parseAssetLossReason } from "@/lib/domain/asset-loss";
 import { resumeFollowUp } from "@/lib/domain/resume-follow-up";
+import { formatOpenInvoicesNotice, recordLegacyAssetLoss } from "@/lib/services/asset-loss-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import {
   changeDeviceSim,
@@ -553,6 +555,58 @@ export async function unassignDeviceFromCustomer(
     revalidatePath(`/admin/sims/${device.simCardId}`);
   }
   return { error: null, next: `/admin/devices/${deviceId}/edit` };
+}
+
+/**
+ * Legacy (non-canonical) installation: the tracked asset is gone for good and the tracker is
+ * unrecoverable. Ends the assignment and its invoice schedules, and writes the device off as `lost`.
+ * Canonical services use the subscription service page so billing ends with the service.
+ */
+export async function recordDeviceAssetLoss(
+  _prev: DeviceFormActionState,
+  formData: FormData,
+): Promise<DeviceFormActionState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  const lossDate = String(formData.get("lossDate") ?? "").trim();
+  const reason = parseAssetLossReason(String(formData.get("lossReason") ?? ""));
+  if (!deviceId) return { error: "Missing device id." };
+  if (!lossDate) return { error: "Choose the date the asset was lost." };
+  if (!reason) return { error: "Select what happened to the asset." };
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: { deviceId, endDate: null, status: { not: "cancelled" } },
+    select: { id: true, customerId: true },
+  });
+  if (!assignment) return { error: "This device has no active assignment to end." };
+
+  try {
+    const result = await recordLegacyAssetLoss({
+      assignmentId: assignment.id,
+      lossDate,
+      reason,
+      note: parseOptionalString(formData, "lossNote"),
+      actorUserId: session.sub,
+    });
+    revalidatePath("/admin");
+    revalidatePath("/admin/devices");
+    revalidatePath(`/admin/devices/${deviceId}/edit`);
+    revalidatePath(`/admin/customers/${result.customerId}`);
+    revalidatePath("/admin/tl-invoices");
+    if (result.previousSimId) revalidatePath(`/admin/sims/${result.previousSimId}`);
+    const scheduleNote = result.endedRecurringSchedules
+      ? ` Ended ${result.endedRecurringSchedules} linked recurring invoice schedule${result.endedRecurringSchedules === 1 ? "" : "s"}.`
+      : "";
+    const simNote = result.previousSimId ? " The SIM was unlinked; suspend or cancel it with the carrier if it should stop costing money." : "";
+    return {
+      error: null,
+      message: `Asset recorded as lost. The installation ended ${lossDate} and the tracker is written off.${scheduleNote}${simNote}${formatOpenInvoicesNotice(result.openInvoices)}`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not record the loss." };
+  }
 }
 
 /**

@@ -37,6 +37,8 @@ import { activateCanonicalManualSubscription } from "@/lib/services/canonical-su
 import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { pauseServiceAssignment, resumeServiceAssignment } from "@/lib/services/service-pause-service";
+import { parseAssetLossReason } from "@/lib/domain/asset-loss";
+import { formatOpenInvoicesNotice, recordCanonicalAssetLoss } from "@/lib/services/asset-loss-service";
 import { adoptExistingStripeSubscription, CanonicalStripeAdoptionError } from "@/lib/services/canonical-stripe-adoption-service";
 
 export type CanonicalSubscriptionFormState = {
@@ -773,6 +775,44 @@ export async function removeCanonicalServiceForVehicleSaleAction(
     return actionError(error);
   }
 }
+/**
+ * The tracked asset is gone for good (e.g. a boat sank) and the tracker cannot be recovered.
+ * Ends billing for the service, ends the installation and writes the device off as `lost`
+ * in one transaction. Existing invoices are only reported, never changed.
+ */
+export async function recordCanonicalAssetLossAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const assignmentId = text(formData, "assignmentId");
+    const lossDate = text(formData, "lossDate");
+    const reason = parseAssetLossReason(text(formData, "lossReason"));
+    if (!assignmentId) return { error: "A current tracker assignment is required." };
+    if (!lossDate) return { error: "Choose the date the asset was lost." };
+    if (!reason) return { error: "Select what happened to the asset." };
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    await requireOpenCanonicalServiceAssignment(subscriptionItemId, assignmentId);
+    const result = await recordCanonicalAssetLoss({
+      subscriptionId,
+      subscriptionItemId,
+      assignmentId,
+      lossDate,
+      reason,
+      note: optionalText(formData, "lossNote"),
+      actorUserId: session.sub,
+    });
+    revalidateCanonicalServiceOperation({ subscriptionId, customerId: result.customerId, deviceId: result.deviceId, simCardId: result.previousSimId });
+    revalidatePath("/admin/tl-invoices");
+    const simNote = result.previousSimId ? " The SIM was unlinked from the device; suspend or cancel it with the carrier if it should stop costing money." : "";
+    return { message: `Asset recorded as lost. Billing ends ${lossDate}, the installation is closed and the tracker is written off.${simNote}${pauseBillingNotice(subscription.collectionMethod)}${formatOpenInvoicesNotice(result.openInvoices)}` };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
 export async function replaceCanonicalServiceHardwareAction(
   _previous: CanonicalSubscriptionFormState,
   formData: FormData,

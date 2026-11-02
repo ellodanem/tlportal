@@ -14,6 +14,7 @@ import { ObjectTypeIcon } from "@/components/device/object-type-icon";
 import { DeviceServiceAssignmentEditForm } from "@/components/admin/device-service-assignment-edit-form";
 import { MarkAssignmentPaidForm } from "@/components/admin/mark-assignment-paid-form";
 import { DeviceSetupCommands } from "@/components/admin/device-setup-commands";
+import { DeviceAssetLossForm } from "@/components/admin/device-asset-loss-form";
 import { DeviceUnassignForm } from "@/components/admin/device-unassign-form";
 import { SectionTabs } from "@/components/admin/section-tabs";
 import { customerDisplayName } from "@/lib/admin/customer-list";
@@ -360,6 +361,10 @@ export default async function EditDeviceCommercialPage({ params, searchParams }:
               )}
             </section>
           )}
+          <DeviceAssetLossForm
+            deviceId={device.id}
+            mode={!openAssignment || device.status === "decommissioned" || device.status === "lost" ? "none" : isCanonicalAssignment ? "canonical" : "legacy"}
+          />
         </div>
       ) : null}
 

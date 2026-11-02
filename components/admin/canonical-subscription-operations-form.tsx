@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   pauseCanonicalServiceAssignmentAction,
+  recordCanonicalAssetLossAction,
   removeCanonicalServiceForVehicleSaleAction,
   replaceCanonicalServiceHardwareAction,
   resumeCanonicalServiceAssignmentAction,
@@ -12,6 +13,7 @@ import {
   transitionCanonicalSubscriptionLifecycleAction,
   type CanonicalSubscriptionFormState,
 } from "@/app/admin/subscriptions/canonical/actions";
+import { ASSET_LOSS_REASON_LABEL } from "@/lib/domain/asset-loss";
 import { SUBSCRIPTION_LIFECYCLE_ACTIONS } from "@/lib/domain/canonical-subscription-navigation";
 import {
   SERVICE_PAUSE_DISPOSITION_LABEL,
@@ -130,6 +132,37 @@ export function CanonicalVehicleSaleRemovalForm({
     <button disabled={pending} className="mt-4 rounded-lg border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-800 disabled:opacity-50 dark:border-rose-800 dark:text-rose-200">{pending ? "Recording…" : "End service and remove tracker"}</button>
   </form>;
 }
+export function CanonicalAssetLossForm({
+  subscriptionId,
+  subscriptionItemId,
+  assignmentId,
+  deviceLabel,
+}: {
+  subscriptionId: string;
+  subscriptionItemId: string;
+  /** Null once the installation has been closed; only the last result notice is shown then. */
+  assignmentId: string | null;
+  deviceLabel: string;
+}) {
+  const [state, action, pending] = useActionState(recordCanonicalAssetLossAction, initialState);
+  useRefreshOnSuccess(state);
+  if (!assignmentId) {
+    return state.message ? <div className="rounded-lg border border-red-300 bg-red-50/50 p-4 dark:border-red-900/60 dark:bg-red-950/20"><h3 className="font-semibold text-red-950 dark:text-red-100">Asset lost / unrecoverable</h3><Feedback state={state} /></div> : null;
+  }
+  return <form action={action} onSubmit={confirmServiceOperation(`Record ${deviceLabel} as lost and unrecoverable? Billing ends on the chosen date, the installation is closed and the tracker is written off. This cannot be resumed.`)} className="rounded-lg border border-red-300 bg-red-50/50 p-4 dark:border-red-900/60 dark:bg-red-950/20">
+    <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
+    <h3 className="font-semibold text-red-950 dark:text-red-100">Asset lost / unrecoverable</h3>
+    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Use when the vehicle or boat is gone for good and the tracker cannot be recovered. Billing for this service ends on the loss date, the installation is closed, and {deviceLabel} is written off as <strong>lost</strong> (its SIM is unlinked). Past invoices are not changed.</p>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <label className="text-sm font-medium">Date of loss (billing ends)<input required type="date" name="lossDate" className={inputClass} /></label>
+      <label className="text-sm font-medium">What happened<select required name="lossReason" defaultValue="sank" className={inputClass}>{Object.entries(ASSET_LOSS_REASON_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label className="text-sm font-medium sm:col-span-2">Note (optional)<input name="lossNote" className={inputClass} placeholder="e.g. Vessel sank off Rodney Bay; insurance claim filed" /></label>
+    </div>
+    <Feedback state={state} />
+    <button disabled={pending} className="mt-4 min-h-11 rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/40">{pending ? "Recording…" : "Record asset as lost"}</button>
+  </form>;
+}
+
 export function CanonicalServiceHardwareReplacementForm({
   subscriptionId,
   subscriptionItemId,
