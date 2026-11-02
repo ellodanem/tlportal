@@ -36,7 +36,6 @@ export function SubscriptionBillingTab({ subscription, permissions }: { subscrip
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href={`/admin/subscriptions/customers/${subscription.customerId}/billing`} className="min-h-11 rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Customer billing</Link>
-            <Link href={`/admin/billing?q=${subscription.id}`} className="min-h-11 rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open in Billing</Link>
           </div>
         </div>
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
