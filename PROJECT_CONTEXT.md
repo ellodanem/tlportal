@@ -5651,3 +5651,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes: the merge hint banner only renders when strict grouping matches, so added permanent entry points: a `Merge subscriptions` button on the customer Subscriptions page (2+ current subscriptions) and a `Review merge` row inside expanded customer groups on the subscriptions list. The merge screen's empty state now shows each subscription's terms (cycle, currency, renewal, collection, status, grace) side by side. Could not query the production database from the agent environment (no DATABASE_URL locally), so why the banner did not group Blue Taxi's five is unconfirmed.
 
+
+### 2026-11-02 10:54 UTC — commit `ae04e5d`
+
+- docs: log merge entry points in PROJECT_CONTEXT
+
+
+### 2026-11-02 10:54 UTC — pre-push (`main` → origin) @ `ae04e5d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
