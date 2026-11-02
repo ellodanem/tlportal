@@ -16,7 +16,22 @@
  * Anything already invoiced needs a credit or reissued invoice, not a merge.
  */
 
+import type { Prisma } from "@prisma/client";
+
 import { CanonicalSubscriptionValidationError, commercialDateString } from "./canonical-subscription-application";
+
+/**
+ * Excludes ended/canceled subscriptions that no longer hold any service (e.g. emptied by a
+ * merge) from admin lists. The records stay in the database for audit and stay reachable by URL.
+ * The explicit null branch keeps legacy rows, which have no lifecycle status.
+ */
+export const HIDE_EMPTY_RETIRED_SUBSCRIPTIONS = {
+  OR: [
+    { lifecycleStatus: null },
+    { lifecycleStatus: { notIn: ["ended", "canceled"] } },
+    { items: { some: {} } },
+  ],
+} satisfies Prisma.CustomerSubscriptionWhereInput;
 
 /** Lifecycles that can take part. Paused and ended subscriptions are never merged. */
 export const MERGEABLE_LIFECYCLES = ["draft", "pending_activation", "active"] as const;

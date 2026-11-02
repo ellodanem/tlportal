@@ -6,6 +6,7 @@ import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerNewHref } from "@/lib/admin/customer-new";
 import { canonicalSubscriptionLinks } from "@/lib/admin/customer-subscription-links";
 import { prisma } from "@/lib/db";
+import { HIDE_EMPTY_RETIRED_SUBSCRIPTIONS } from "@/lib/domain/canonical-subscription-merge";
 
 type Props = {
   children: React.ReactNode;
@@ -22,7 +23,7 @@ export default async function CustomerWorkspaceLayout({ children, params }: Prop
   const [customer, subscriptionRows] = await Promise.all([
     prisma.customer.findUnique({ where: { id: customerId }, select: { id: true, company: true, firstName: true, lastName: true } }),
     prisma.customerSubscription.findMany({
-      where: { customerId },
+      where: { customerId, ...HIDE_EMPTY_RETIRED_SUBSCRIPTIONS },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true, billingIntervalMonths: true, lifecycleStatus: true, nextBillingDate: true },
     }),

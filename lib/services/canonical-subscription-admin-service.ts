@@ -2,6 +2,7 @@ import "server-only";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
+import { HIDE_EMPTY_RETIRED_SUBSCRIPTIONS } from "@/lib/domain/canonical-subscription-merge";
 import {
   buildCanonicalSubscriptionAdminRow,
   canonicalSubscriptionUiAccess,
@@ -51,6 +52,7 @@ export async function canonicalSubscriptionUiStaffViewer(): Promise<boolean> {
 
 export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSubscriptionAdminRow[]> {
   const subscriptions = await prisma.customerSubscription.findMany({
+    where: HIDE_EMPTY_RETIRED_SUBSCRIPTIONS,
     orderBy: [{ nextBillingDate: "asc" }, { updatedAt: "desc" }, { id: "asc" }],
     include: {
       customer: { select: { company: true, firstName: true, lastName: true } },
@@ -296,7 +298,7 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
   // Other canonical arrangements of the same customer, so one subscription can be
   // reached from another. Totals are intentionally NOT combined across cadences.
   const siblingRows = await prisma.customerSubscription.findMany({
-    where: { customerId: subscription.customerId, controlMode: { not: "legacy" } },
+    where: { customerId: subscription.customerId, controlMode: { not: "legacy" }, OR: [{ id: subscription.id }, HIDE_EMPTY_RETIRED_SUBSCRIPTIONS] },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
       id: true,

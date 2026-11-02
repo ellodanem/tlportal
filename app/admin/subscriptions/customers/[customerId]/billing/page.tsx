@@ -20,6 +20,7 @@ import { getCustomerFinancialLedger } from "@/lib/services/financial-ledger-serv
 import { buildPaymentDeclineEmailPreview } from "@/lib/stripe/payment-failure-messaging";
 import { getTwilioContentSid, isTwilioWhatsAppConfigured } from "@/lib/twilio/config";
 import { prisma } from "@/lib/db";
+import { HIDE_EMPTY_RETIRED_SUBSCRIPTIONS } from "@/lib/domain/canonical-subscription-merge";
 
 type Props = { params: Promise<{ customerId: string }>; searchParams: Promise<{ stripe?: string; setup?: string; warn?: string }> };
 
@@ -39,7 +40,7 @@ export default async function CustomerBillingPage({ params, searchParams }: Prop
     prisma.invoice.findMany({ where: { customerId: id, archivedAt: null, billingInvoiceId: null }, orderBy: { issueDate: "desc" }, take: 5, select: { id: true, number: true, status: true, amountDue: true, total: true, currency: true, issueDate: true, dueDate: true } }),
     prisma.recurringInvoiceSchedule.findFirst({ where: { customerId: id, status: { in: ["active", "paused"] } }, orderBy: { updatedAt: "desc" }, select: { id: true, status: true, nextIssueDate: true, currency: true, customerSubscriptionId: true, customerSubscription: { select: { name: true, billingIntervalMonths: true, lifecycleStatus: true } }, lineItems: { select: { lineTotal: true } } } }),
     getCustomerFinancialLedger(id),
-    prisma.customerSubscription.findMany({ where: { customerId: id }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, reference: true, billingIntervalMonths: true, lifecycleStatus: true, nextBillingDate: true } }),
+    prisma.customerSubscription.findMany({ where: { customerId: id, ...HIDE_EMPTY_RETIRED_SUBSCRIPTIONS }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, reference: true, billingIntervalMonths: true, lifecycleStatus: true, nextBillingDate: true } }),
   ]);
   const subscriptionLabels = Object.fromEntries(subscriptionRows.map((row) => [row.id, canonicalSubscriptionDisplayName(row.name, row.billingIntervalMonths)]));
   // Only canonical agreements have a subscription workspace to link to.

@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
 import { countBillableServices } from "@/lib/domain/canonical-service-lifecycle";
-import { suggestedMergeGroups } from "@/lib/domain/canonical-subscription-merge";
+import { HIDE_EMPTY_RETIRED_SUBSCRIPTIONS, suggestedMergeGroups } from "@/lib/domain/canonical-subscription-merge";
 import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
 import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import {
@@ -74,7 +74,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
       lastName: true,
       billingMode: true,
       customerSubscriptions: {
-        where: { controlMode: { not: "legacy" } },
+        where: { controlMode: { not: "legacy" }, ...HIDE_EMPTY_RETIRED_SUBSCRIPTIONS },
         orderBy: [{ nextBillingDate: "asc" }, { createdAt: "asc" }],
         select: { id: true },
       },
