@@ -5627,3 +5627,10 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-11-02 02:53 UTC — commit `29dc279`
+
+- feat(subscriptions): merge same-term subscriptions into one
+
+- Agent notes: new `/admin/subscriptions/canonical/merge?customerId=` screen and `mergeCanonicalSubscriptionsAction` fold same-customer subscriptions with identical terms (cycle, currency, renewal date, manual-invoice collection, lifecycle draft/pending/active, grace period) into one so the customer gets one invoice with a line per service. Canonical invoice lines are derived from items at generation time, so the merge only moves `SubscriptionItem` rows to the target (rates, assignments, adjustments, history follow), ends the sources' open recurring schedules and sets sources to ended (canceled if draft) in one serializable transaction. Locked once any invoice, provider link, billing operation, generated schedule invoice or invoiced adjustment exists on target or sources; schedule payment terms must match. Pure rules in `lib/domain/canonical-subscription-merge.ts`; service in `lib/services/canonical-subscription-merge-service.ts`; customer Subscriptions page shows a Review merge banner. Fixed an earlier regression: the Billing-tab date-correction section used a collapsed `<details>` (forbidden by `subscription-consolidation` tests); it is now a visible card. DB layer not exercised against a live database (DATABASE_URL may point at Neon); covered by domain tests and source assertions. Pre-existing unrelated failures left alone: `Assign hardware later` text check and `customerId` in workspace search-params test.
+
