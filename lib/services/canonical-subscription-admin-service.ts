@@ -145,10 +145,13 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
               invoice: { select: { id: true, number: true, status: true, total: true, amountPaid: true, amountDue: true, dueDate: true } },
             },
           },
+          // Read-only context for the single-service screen's history and transfer state.
+          successorItem: { select: { id: true, customerSubscriptionId: true } },
           rates: { orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }] },
           serviceAssignments: {
             orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
             include: {
+              simCard: { select: { id: true, iccid: true, label: true } },
               device: { select: { id: true, label: true, imei: true, simCard: { select: { id: true, iccid: true, label: true } }, deviceModel: { select: { name: true } } } },
             },
           },

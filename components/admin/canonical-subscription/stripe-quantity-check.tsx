@@ -35,9 +35,11 @@ export async function StripeQuantityCheck({ subscription, canManage }: { subscri
   const servicesHref = `${subscriptionBasePath(subscription.id)}/services`;
 
   if (check.state === "in_sync") {
+    // Healthy state: a quiet one-line indicator. Anything that needs action keeps the full warning below.
     return (
-      <p className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-        <span aria-hidden="true">✓</span> Stripe quantity matches: {plural(check.serviceCount, "billable service")}.
+      <p role="status" className="-mt-2 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-600" />
+        Stripe quantity in sync · {plural(check.serviceCount, "billable service")}
       </p>
     );
   }

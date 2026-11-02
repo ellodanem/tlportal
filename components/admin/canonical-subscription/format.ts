@@ -84,6 +84,20 @@ export function serviceStatusLabel(item: ItemBillingWindow, now = new Date()): {
   return { label: `${base} · ends ${displayDate(until)}`, tone: "warning" };
 }
 
+/** Prefix for money field labels: the portal's home currency reads "EC$", others show their code. */
+export function currencyPrefix(currency: string | null | undefined): string {
+  return !currency || currency === "XCD" ? "EC$" : currency;
+}
+
+export const neutralPillClass = "rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold capitalize text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+
+/** Pill colour for a service: green only when it is billing normally, amber for warnings, grey once closed. */
+export function servicePillClass(item: { status: string }, tone: "normal" | "warning"): string {
+  if (tone === "warning") return warningPillClass;
+  if (["ended", "canceled", "draft", "pending_activation"].includes(item.status)) return neutralPillClass;
+  return statusPillClass;
+}
+
 export const warningPillClass = "rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200";
 export const statusPillClass = "rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold capitalize text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
 export const cardClass = "rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";

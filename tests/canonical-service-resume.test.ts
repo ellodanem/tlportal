@@ -30,7 +30,8 @@ test("subscription pages offer Resume instead of pointing at the device page, wh
   assert.match(devices, /Pause or resume canonical services from the authorized subscription workflow/);
 
   const modal = await read("components/admin/customer-service-management-modal.tsx");
-  const details = await read("components/admin/canonical-subscription/service-details.tsx");
+  // The single-service screen now opens Resume from a focused dialog owned by the action panels.
+  const details = await read("components/admin/canonical-subscription/service-action-panels.tsx");
   for (const source of [modal, details]) {
     assert.match(source, /CanonicalServiceResumeForm/);
     assert.doesNotMatch(source, /Resume it from the device assignment/);
