@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import { resumeServiceAssignmentAction } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { ResumeFollowUpNotice } from "@/components/admin/resume-follow-up-notice";
 import { useDeviceFormRefreshOnSuccess } from "@/components/admin/use-device-form-refresh-on-success";
 import type { CustomerBillingMode } from "@prisma/client";
 
@@ -68,8 +69,9 @@ export function DeviceResumeServiceForm({
           {state.message}
         </p>
       ) : null}
+      <ResumeFollowUpNotice followUp={state.followUp} />
 
-      <SubmitButton />
+      {state.followUp ? null : <SubmitButton />}
     </form>
   );
 }

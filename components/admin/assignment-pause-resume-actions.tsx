@@ -8,6 +8,7 @@ import {
   resumeServiceAssignmentAction,
 } from "@/app/admin/devices/actions";
 import { deviceFormInitialState } from "@/app/admin/devices/device-form-state";
+import { ResumeFollowUpNotice } from "@/components/admin/resume-follow-up-notice";
 import { useDeviceFormRefreshOnSuccess } from "@/components/admin/use-device-form-refresh-on-success";
 import {
   SERVICE_PAUSE_DISPOSITION_LABEL,
@@ -132,14 +133,15 @@ export function AssignmentResumeForm({
     >
       <input type="hidden" name="assignmentId" value={assignmentId} />
       <input type="hidden" name="deviceId" value={deviceId} />
-      <div className="flex flex-wrap items-center gap-2">
+      {state.followUp ? null : <div className="flex flex-wrap items-center gap-2">
         <ResumeSubmit />
         {billingMode === "stripe_subscription" ? (
           <span className="text-xs text-amber-800 dark:text-amber-200">Restore Stripe billing after install.</span>
         ) : null}
-      </div>
+      </div>}
       {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}
       {state.message ? <p className="text-xs text-emerald-800 dark:text-emerald-200">{state.message}</p> : null}
+      <ResumeFollowUpNotice followUp={state.followUp} compact />
     </form>
   );
 }

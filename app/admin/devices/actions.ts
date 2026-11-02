@@ -11,6 +11,7 @@ import {
   parseServicePauseDisposition,
   parseServicePauseReason,
 } from "@/lib/domain/service-pause";
+import { resumeFollowUp } from "@/lib/domain/resume-follow-up";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import {
   changeDeviceSim,
@@ -798,12 +799,26 @@ export async function resumeServiceAssignmentAction(
     return { error: result.error };
   }
 
-  revalidateAfterServicePause(result.customerId, result.deviceId, assignment.device.simCardId);
+  const canonicalSubscriptions = await prisma.customerSubscription.findMany({
+    where: {
+      customerId: result.customerId,
+      controlMode: "canonical",
+      lifecycleStatus: { in: ["pending_activation", "active", "paused"] },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, collectionMethod: true },
+  });
+  const followUp = resumeFollowUp({
+    customerId: result.customerId,
+    billingMode: assignment.customer.billingMode,
+    assignmentLinked: false,
+    canonicalSubscriptions,
+  });
 
-  const stripeNotice =
-    assignment.customer.billingMode === "stripe_subscription"
-      ? " If this customer pays by card, resume billing or restore vehicle quantity in Stripe."
-      : null;
+  // Revalidating re-renders the current page at once, which swaps the resume form (and its
+  // follow-up notice) for the pause form. Admin pages are dynamic, so the notice's Done
+  // button or link loads fresh data instead.
+  if (!followUp) revalidateAfterServicePause(result.customerId, result.deviceId, assignment.device.simCardId);
 
   const dueLabel = result.restoredNextDue
     ? ` Next due restored to ${result.restoredNextDue.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}.`
@@ -811,6 +826,7 @@ export async function resumeServiceAssignmentAction(
 
   return {
     error: null,
-    message: `Service resumed.${dueLabel}${stripeNotice ?? ""}`,
+    message: `Service resumed.${dueLabel}`,
+    followUp,
   };
 }

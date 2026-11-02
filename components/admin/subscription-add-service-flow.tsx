@@ -314,6 +314,7 @@ export function SubscriptionAddServiceFlow({
           <p className="mt-1 text-xs text-zinc-500">Other subscriptions of this customer on a different schedule are not included.</p>
         </div>
         <p className="mt-4 text-sm text-emerald-950 dark:text-emerald-100">Saving adds the service, its price, and any hardware link. It does <strong>not</strong> create an invoice, charge anything, change Stripe, or notify the customer. Submitting twice cannot add it twice.</p>
+        {subscription.collectionMethod === "stripe_autocharge" ? <p role="note" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"><span className="font-semibold">Card billing:</span> after saving, update the Stripe vehicle quantity before {displayDate(subscription.nextBillingDate)}. The subscription page you return to shows the Stripe check and the update button.</p> : null}
       </section>
 
       {stepError ? <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">{stepError}</p> : null}

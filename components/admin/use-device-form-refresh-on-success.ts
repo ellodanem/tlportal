@@ -14,9 +14,10 @@ export function useDeviceFormRefreshOnSuccess(
   const wasPending = useRef(false);
 
   useEffect(() => {
-    if (wasPending.current && !isPending && !state.error) {
+    // A follow-up notice must stay visible; refreshing would unmount the form that shows it.
+    if (wasPending.current && !isPending && !state.error && !state.followUp) {
       router.refresh();
     }
     wasPending.current = isPending;
-  }, [isPending, state.error, router]);
+  }, [isPending, state.error, state.followUp, router]);
 }
