@@ -144,31 +144,43 @@ export function FeedbackForm() {
       </div>
 
       <div>
-        <label className={labelClass()} htmlFor="feedback-contact">
-          Email or phone
-        </label>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Optional — so we can follow up</p>
-        <input
-          id="feedback-contact"
-          name="contact"
-          type="text"
-          maxLength={FEEDBACK_CONTACT_MAX}
-          autoComplete="off"
-          className={fieldClass()}
-        />
-      </div>
-
-      <div>
         <label className={labelClass()} htmlFor="feedback-company">
           Company name
         </label>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Optional</p>
         <input
           id="feedback-company"
           name="companyName"
           type="text"
           maxLength={FEEDBACK_COMPANY_MAX}
           autoComplete="organization"
+          className={fieldClass()}
+        />
+      </div>
+
+      <div>
+        <label className={labelClass()} htmlFor="feedback-phone">
+          Phone/WhatsApp
+        </label>
+        <input
+          id="feedback-phone"
+          name="phone"
+          type="text"
+          maxLength={FEEDBACK_CONTACT_MAX}
+          autoComplete="tel"
+          className={fieldClass()}
+        />
+      </div>
+
+      <div>
+        <label className={labelClass()} htmlFor="feedback-email">
+          Email
+        </label>
+        <input
+          id="feedback-email"
+          name="email"
+          type="email"
+          maxLength={FEEDBACK_CONTACT_MAX}
+          autoComplete="email"
           className={fieldClass()}
         />
       </div>

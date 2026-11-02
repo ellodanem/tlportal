@@ -7,7 +7,6 @@ import {
   FEEDBACK_COMPANY_MAX,
   FEEDBACK_CONTACT_MAX,
   FEEDBACK_NAME_MAX,
-  parseFeedbackContact,
   parseFeedbackRating,
 } from "@/lib/feedback/parse-contact";
 import { prisma } from "@/lib/db";
@@ -26,7 +25,8 @@ export async function submitFeedback(
   const body = String(formData.get("body") ?? "").trim();
   const displayNameRaw = String(formData.get("displayName") ?? "").trim();
   const companyNameRaw = String(formData.get("companyName") ?? "").trim();
-  const contactRaw = String(formData.get("contact") ?? "").trim();
+  const phoneRaw = String(formData.get("phone") ?? "").trim();
+  const emailRaw = String(formData.get("email") ?? "").trim();
   const sharePermission =
     formData.get("sharePermission") === "on" || formData.get("sharePermission") === "true";
   const rating = parseFeedbackRating(String(formData.get("rating") ?? ""));
@@ -46,8 +46,8 @@ export async function submitFeedback(
   if (companyNameRaw.length > FEEDBACK_COMPANY_MAX) {
     return { ok: false, error: `Keep your company name under ${FEEDBACK_COMPANY_MAX} characters.` };
   }
-  if (contactRaw.length > FEEDBACK_CONTACT_MAX) {
-    return { ok: false, error: "Email or phone is too long." };
+  if (phoneRaw.length > FEEDBACK_CONTACT_MAX || emailRaw.length > FEEDBACK_CONTACT_MAX) {
+    return { ok: false, error: "Phone or email is too long." };
   }
   if (!displayNameRaw) {
     return { ok: false, error: "Please add your name." };
@@ -55,7 +55,8 @@ export async function submitFeedback(
 
   const displayName = displayNameRaw || null;
   const companyName = companyNameRaw || null;
-  const { email, phone } = parseFeedbackContact(contactRaw);
+  const email = emailRaw || null;
+  const phone = phoneRaw || null;
 
   let matchesCustomerId: string | null = null;
   if (email) {
