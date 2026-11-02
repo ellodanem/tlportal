@@ -5506,3 +5506,28 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - fix(subscriptions): link billing actions to new workspace
 
+
+### 2026-11-02 02:03 UTC — commit `98791a3`
+
+- docs: log subscription navigation fix
+
+
+### 2026-11-02 02:03 UTC — pre-push (`main` → origin) @ `98791a3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 02:09 UTC — commit `9b4f623`
+
+- feat(subscriptions): tabbed quick actions modal with change previews
+
+
+### 2026-11-02 02:09 UTC — pre-push (`main` → origin) @ `9b4f623`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 02:10 UTC — commit `546c25f`
+
+- fix(subscriptions): View subscriptions opens that customer's subscriptions
+
