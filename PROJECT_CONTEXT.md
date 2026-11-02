@@ -5661,3 +5661,10 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-11-02 11:13 UTC — commit `3394693`
+
+- chore(scripts): owner-run merge of a customer's same-term subscriptions
+
+- Agent notes: production data change at the owner's request: merged Blue Taxi (customer 668a5712) five single-vehicle annual manual-invoice subscriptions renewing 2027-01-27 into `60f3967f`, via `scripts/merge-customer-subscriptions.ts --apply` (dry run first; no blockers, none invoiced). Kept subscription now has 5 active services at EC$300/year each with their devices and one active schedule (next issue 2027-01-27); `d839fb6d`, `f24cb5b3`, `fc505045`, `bc866fc4` set to ended with their schedules ended. Audit event `subscription.subscriptions_merged` recorded. Data matched the merge banner's grouping, so why the owner did not see the banner/button in the UI is still unexplained.
+
