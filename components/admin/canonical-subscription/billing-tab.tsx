@@ -7,7 +7,7 @@ import {
   money,
   nativeBillingReadinessIssues,
 } from "@/components/admin/canonical-subscription/format";
-import { CanonicalBillingDatesForm } from "@/components/admin/canonical-billing-dates-form";
+import { CanonicalBillingDatesDialog } from "@/components/admin/canonical-billing-dates-dialog";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
 import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
@@ -61,6 +61,11 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
   const issues = nativeBillingReadinessIssues(subscription);
   const schedules = subscription.recurringSchedules;
   const showAnnualAdjustment = subscription.billingIntervalMonths === 12 && subscription.controlMode !== "legacy";
+  // Date correction is refused once any invoice exists, so only offer it while the ledger is empty.
+  const canCorrectDates = permissions.canManage
+    && subscription.collectionMethod === "manual_invoice"
+    && ledger.rows.length === 0
+    && Boolean(subscription.commercialStartDate && subscription.nextBillingDate && subscription.billingIntervalMonths);
 
   return (
     <div className="flex flex-col gap-5">
@@ -83,6 +88,14 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
         <p className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="text-2xl font-semibold tracking-tight">{displayDate(subscription.nextBillingDate)}</span>
           {nextNote ? <span className="text-sm text-zinc-500">{nextNote}</span> : null}
+          {canCorrectDates && subscription.commercialStartDate && subscription.nextBillingDate && subscription.billingIntervalMonths ? (
+            <CanonicalBillingDatesDialog
+              subscriptionId={subscription.id}
+              startDate={subscription.commercialStartDate.toISOString().slice(0, 10)}
+              renewalDate={subscription.nextBillingDate.toISOString().slice(0, 10)}
+              intervalMonths={subscription.billingIntervalMonths}
+            />
+          ) : null}
         </p>
         <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-sm">
           <span className="text-lg font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)}</span>
@@ -97,6 +110,12 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
               : "No collection method has been chosen yet, so nothing will be billed automatically."}
           {" "}The amount comes from each service&apos;s effective rate.
         </p>
+        {showAnnualAdjustment ? (
+          <p className="mt-3 text-sm text-zinc-500">
+            Adding a service mid-year?{" "}
+            <Link href={subscriptionAnnualAdjustmentPath(subscription.id)} className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">Preview the partial-period charge</Link>
+          </p>
+        ) : null}
       </section>
 
       <section aria-labelledby="collection-heading" className={`${cardClass} p-5`}>
@@ -135,25 +154,6 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
         </div>
       </section>
       </div>
-
-      {permissions.canManage
-        && subscription.collectionMethod === "manual_invoice"
-        && subscription.commercialStartDate
-        && subscription.nextBillingDate
-        && subscription.billingIntervalMonths ? (
-        <section aria-labelledby="billing-dates-heading" className={`${cardClass} p-5`}>
-          <h2 id="billing-dates-heading" className="text-lg font-semibold">Entered the wrong start or renewal date?</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            Correct it here instead of recreating the subscription. Services, rates, the recurring schedule and installed devices move to the new dates together. This is refused once an invoice, provider link or billing operation exists for the current dates.
-          </p>
-          <CanonicalBillingDatesForm
-            subscriptionId={subscription.id}
-            startDate={subscription.commercialStartDate.toISOString().slice(0, 10)}
-            renewalDate={subscription.nextBillingDate.toISOString().slice(0, 10)}
-            intervalMonths={subscription.billingIntervalMonths}
-          />
-        </section>
-      ) : null}
 
       {adjustmentRows.length ? (
         <section aria-labelledby="agreed-charges-heading" className="rounded-xl border border-amber-200 bg-white p-5 dark:border-amber-900 dark:bg-zinc-900">
@@ -201,20 +201,15 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
         </section>
       ) : null}
 
-      {showAnnualAdjustment ? (
-        <section aria-labelledby="annual-heading" className={`${cardClass} p-5`}>
-          <h2 id="annual-heading" className="text-lg font-semibold">Annual additions</h2>
-          <p className="mt-1 text-sm text-zinc-500">Working out the partial-period charge for a service joining an annual renewal mid-year is a controlled, preview-only step.</p>
-          <Link href={subscriptionAnnualAdjustmentPath(subscription.id)} className="mt-4 inline-flex min-h-11 items-center rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open annual adjustment preview</Link>
-        </section>
-      ) : null}
-
       <section aria-labelledby="invoices-heading" className={cardClass}>
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-5 sm:flex-row sm:items-start sm:justify-between dark:border-zinc-800">
           <div>
             <h2 id="invoices-heading" className="text-lg font-semibold">Invoices and payments</h2>
-            <p className="mt-1 text-sm text-zinc-500">Each payment is shown on the invoice it paid. Outstanding for this subscription: <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{outstanding ? formatMoney(outstanding.amount, outstanding.currency) : ledger.totalsByCurrency.length > 1 ? "Multiple currencies" : formatMoney(0, currency)}</span>.</p>
+            {ledger.rows.length ? (
+              <p className="mt-1 text-sm text-zinc-500">Each payment is shown on the invoice it paid. Outstanding for this subscription: <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{outstanding ? formatMoney(outstanding.amount, outstanding.currency) : ledger.totalsByCurrency.length > 1 ? "Multiple currencies" : formatMoney(0, currency)}</span>.</p>
+            ) : null}
           </div>
+          {ledger.rows.length ? (
           <nav aria-label="Filter invoices" className="flex flex-wrap gap-2">
             {([["all", "All", ledger.rows.length], ["open", "Open", openRows.length], ["paid", "Paid", paidRows.length]] as const).map(([key, label, count]) => (
               <Link
@@ -227,15 +222,20 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
               </Link>
             ))}
           </nav>
+          ) : null}
         </div>
         {ledger.rows.length === 0 ? (
           <div className="p-5 text-sm">
-            <p className="font-semibold">No invoices are linked to this subscription yet</p>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-300">{subscription.collectionMethod === "stripe_autocharge" ? "For a Stripe-managed subscription this usually means its invoices have not been matched to it, not that nothing was billed. Check the provider invoices on Customer billing." : "Nothing has been invoiced for this subscription yet. This does not mean the customer has no invoices."}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link href={`${customerBillingHref}#provider-invoices`} className={secondaryButtonClass}>View provider invoices</Link>
-              <Link href={customerBillingHref} className={secondaryButtonClass}>Customer ledger</Link>
-            </div>
+            <p className="font-semibold">No invoices yet</p>
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+              {subscription.collectionMethod === "stripe_autocharge"
+                ? "Stripe invoices may not be matched to this subscription yet, which is not the same as nothing being billed. "
+                : "Nothing has been invoiced for this subscription. "}
+              Other invoices for this customer are in the{" "}
+              <Link href={subscription.collectionMethod === "stripe_autocharge" ? `${customerBillingHref}#provider-invoices` : customerBillingHref} className="font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
+                {subscription.collectionMethod === "stripe_autocharge" ? "provider invoices" : "customer ledger"}
+              </Link>.
+            </p>
           </div>
         ) : (
           <SubscriptionLedgerTable rows={visibleRows} payments={ledger.payments} customerId={subscription.customerId} emptyMessage={filter === "open" ? "No open invoices on this subscription." : "No paid invoices on this subscription yet."} />

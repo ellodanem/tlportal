@@ -12,15 +12,18 @@ export function CanonicalBillingDatesForm({
   startDate,
   renewalDate,
   intervalMonths,
+  bare = false,
 }: {
   subscriptionId: string;
   startDate: string;
   renewalDate: string;
   intervalMonths: number;
+  /** Drop the card chrome when the form is already inside a dialog. */
+  bare?: boolean;
 }) {
   const [state, action, pending] = useActionState(correctCanonicalBillingDatesAction, initialState);
   return (
-    <form action={action} className="mt-4 flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+    <form action={action} className={bare ? "flex flex-col gap-4" : "mt-4 flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900"}>
       <input type="hidden" name="subscriptionId" value={subscriptionId} />
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-medium">
@@ -40,7 +43,7 @@ export function CanonicalBillingDatesForm({
       </label>
       <label className="flex items-start gap-3 text-sm">
         <input type="checkbox" name="confirm" value="yes" required className="mt-1 size-4" />
-        <span>Nothing has been invoiced or charged from the current dates. Services, rates, the recurring schedule and installed devices will move to the new dates.</span>
+        <span>I confirm nothing has been invoiced or charged from the current dates.</span>
       </label>
       <div className="flex flex-wrap items-center gap-3">
         <button disabled={pending} className="min-h-11 rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50 dark:border-emerald-800 dark:text-emerald-300">

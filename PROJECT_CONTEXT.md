@@ -5758,3 +5758,18 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes: subscription-linked recurring schedules are editable again (owner request: one 'Annual GPS tracking x 5' line instead of one per vehicle). Editable: name, notes, payment text, due days, email settings and the invoice lines, provided the lines add up exactly to the subscription's cycle total (lib/domain/canonical-schedule-presentation.ts). Customer, cadence, currency, next issue date, vehicles and rates stay with the subscription. Regrouped lines are marked via RecurringScheduleLineItem.unitLabel = 'grouped' (no schema change); they are used at generation only while they still match the cycle total, otherwise per-service lines are issued, and the line sync no longer overwrites them while valid. Invoice snapshots still record one row per service (linked to the invoice line only when there is a single line). 'Reset to one line per vehicle' button restores derived lines. Not integration-tested against Postgres (no test DB locally); unit tests added, tsc clean, 397/399 (2 pre-existing failures). Not pushed.
 
+
+### 2026-11-02 21:14 UTC — commit `4410806`
+
+- docs: log canonical schedule line sync and editable linked schedules
+
+
+### 2026-11-02 21:14 UTC — pre-push (`main` → origin) @ `4410806`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 21:14 UTC — commit `8de940c`
+
+- 改善(billing): streamline subscription billing workflow
+
