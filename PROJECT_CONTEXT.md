@@ -5437,3 +5437,24 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 
 - Agent notes (5c0a64a): Services tab now separates ended services from billable ones. New `lib/domain/canonical-service-lifecycle.ts`: a service is ended if its status is ended/canceled OR its `billingEffectiveUntil` is today or earlier (the stored status stays `active` after the end date passes - nothing flips it - so this is derived at display time, matching the half-open [from, until) billing window). "Billable services (n)" lists only services still billed (paused and future-dated ends stay); ended ones appear in an always-visible muted "Ended services" section (the repo test forbids collapsed `<details>` in subscription surfaces) with the reason (asset lost / vehicle sold, read from the assignment notes/pauseNote), historical rate and only an Open link - no Quick actions. The customer subscriptions "Billable services" tile uses `countBillableServices`. Display only: no billing, status or schema change. Tests 322/322, tsc and eslint clean on the staged tree. KNOWN GAPS left on purpose (they sit in another session's uncommitted files): `billableServiceCount` in canonical-subscription-admin-service.ts (subscriptions list count) and `resolveServiceActionAvailability` / service-details still use stored status only, so an ended-by-date service still counts there and still offers actions on its single-service page; switch them to `isServiceBillingEnded` once that work lands.
+### 2026-11-02 01:35 UTC — commit `08a4545`
+
+- docs: log ended-services split in PROJECT_CONTEXT
+
+
+### 2026-11-02 01:35 UTC — pre-push (`main` → origin) @ `08a4545`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 01:37 UTC — pre-push (`main` → origin) @ `08a4545`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 01:41 UTC — commit `fde1ef2`
+
+- feat(subscriptions): drop Overview tab, land on Services
+
+- Agent notes (fde1ef2): Removed the subscription Overview tab (UX review: it duplicated the Services list without actions). `/admin/subscriptions/canonical/[id]` now redirects to `/services` and forwards the query string, so old links, bookmarks and post-action `?error=` / `?pilot=` redirects still work. `overview-tab.tsx` became `subscription-notices.tsx` (the services preview was deleted): errors, collection / source-authority / billing-readiness warnings, uninvoiced-adjustment notice and the draft activation checklist + initial billing decision now render above the services card on the Services tab, and render nothing when healthy. `subscriptionTabs` no longer has `overview`; `activeSubscriptionTab` falls back to `services`. Tests updated (subscription-consolidation, canonical-subscription-admin; canonical-service-screen.test.ts is another session's untracked file - its tab-label assertion was updated in the working tree only). tsc + eslint clean, 76/76 on the touched suites. No schema changes.
+
