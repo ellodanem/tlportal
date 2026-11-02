@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/canonical-subscription-navigation";
 import { cadenceLabel, cycleUnitLabel } from "@/lib/domain/subscription-proration";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
+import { customerNewHref } from "@/lib/admin/customer-new";
 
 /** Subscription-level lifecycle, kept separate from collection state and device health. */
 function lifecycleBadge(subscription: SubscriptionDetail, isDraft: boolean) {
@@ -36,7 +37,7 @@ export function SubscriptionHeader({ subscription, permissions }: { subscription
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
         <Link href="/admin/subscriptions/canonical" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">Subscriptions</Link>
         <span aria-hidden="true">/</span>
-        <Link href={`/admin/customers/${subscription.customerId}`} className="hover:underline">{subscription.customerLabel}</Link>
+        <Link href={customerNewHref({ c: subscription.customerId })} className="hover:underline">{subscription.customerLabel}</Link>
         <span aria-hidden="true">/</span>
         <span aria-current="page" className="font-medium text-zinc-800 dark:text-zinc-200">{agreementName}</span>
       </nav>

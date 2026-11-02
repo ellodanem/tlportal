@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { customerInitials } from "@/lib/admin/customer-list";
 import { customerDisplayName } from "@/lib/admin/customer-display";
+import { customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 type CustomerHeaderCustomer = {
   id: string;
@@ -62,7 +63,7 @@ export function CustomerWorkspaceHeader({ customer }: { customer: CustomerHeader
           <Link href={`/admin/quotes/new${createQuery}`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">
             New quote
           </Link>
-          <Link href={`/admin/customers/${customer.id}/messages`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+          <Link href={customerWorkspacePath(customer.id, "messages")} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">
             Message
           </Link>
           <Link href={`/admin/subscriptions/customers/${customer.id}/billing`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800">

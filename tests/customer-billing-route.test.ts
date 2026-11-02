@@ -152,3 +152,20 @@ test("canonical surfaces no longer send staff to legacy customer-level renewal p
   assert.match(invoicePage, /customerSubscriptionId/);
   assert.match(invoicePage, /\/admin\/subscriptions\/canonical\/\$\{invoice\.recurringSchedule\.customerSubscriptionId\}\/billing/);
 });
+test("entry points open the Subscriptions customer workspace and Customer (New), not the old Customers tabs", async () => {
+  const [detail, subscriptionHeader, workspaceHeader] = await Promise.all([
+    source("components/admin/customer-new/customer-detail.tsx"),
+    source("components/admin/canonical-subscription/subscription-header.tsx"),
+    source("components/admin/customer-workspace-header.tsx"),
+  ]);
+  // Customer (New): quick links to every workspace tab, plus billing and activity shortcuts.
+  assert.match(detail, /CUSTOMER_WORKSPACE_TABS\.map/);
+  assert.match(detail, /customerWorkspacePath\(customer\.id, "billing"\)/);
+  assert.match(detail, /customerWorkspacePath\(customer\.id, "activity"\)/);
+  // Subscription breadcrumb: the customer name opens Customer (New), not the old overview.
+  assert.match(subscriptionHeader, /customerNewHref\(\{ c: subscription\.customerId \}\)/);
+  assert.doesNotMatch(subscriptionHeader, /\/admin\/customers\/\$\{subscription\.customerId\}/);
+  // The old workspace's Message button opens the new Messages tab.
+  assert.match(workspaceHeader, /customerWorkspacePath\(customer\.id, "messages"\)/);
+  assert.doesNotMatch(workspaceHeader, /\/admin\/customers\/\$\{customer\.id\}\/messages/);
+});
