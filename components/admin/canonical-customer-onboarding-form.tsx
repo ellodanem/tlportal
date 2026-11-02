@@ -7,6 +7,7 @@ import {
   createCanonicalOnboardingAction,
   type CanonicalSubscriptionFormState,
 } from "@/app/admin/subscriptions/canonical/actions";
+import { DevicePicker, type DevicePickerDevice } from "@/components/admin/device-picker";
 import {
   addMonthsClamped,
   cadenceLabel,
@@ -64,7 +65,7 @@ export function CanonicalCustomerOnboardingForm({
   creationKey,
 }: {
   customers: { id: string; label: string; email: string | null }[];
-  devices: { id: string; label: string; simLabel: string | null }[];
+  devices: DevicePickerDevice[];
   today: string;
   defaultCustomerId?: string;
   plans: OnboardingPlan[];
@@ -346,12 +347,17 @@ export function CanonicalCustomerOnboardingForm({
         <p className="mt-1 text-sm text-zinc-500">Optional. A selected device brings its SIM; unavailable hardware is excluded. You can assign hardware later.</p>
         <div className="mt-4 space-y-4">
           {services.map((service, index) => (
-            <label key={service.key} className="block text-sm font-medium">{service.label.trim() || `Service ${index + 1}`}
-              <select name="serviceDeviceId" value={service.deviceId} onChange={(event) => selectServiceDevice(service, event.target.value)} className={inputClass}>
-                <option value="">Assign hardware later</option>
-                {devices.map((device) => <option key={device.id} value={device.id} disabled={selectedDeviceIds.has(device.id) && service.deviceId !== device.id}>{device.label}{device.simLabel ? ` · ${device.simLabel}` : " · no SIM"}</option>)}
-              </select>
-            </label>
+            <div key={service.key} className="text-sm font-medium">
+              <p className="mb-2">{service.label.trim() || `Service ${index + 1}`}</p>
+              <DevicePicker
+                name="serviceDeviceId"
+                devices={devices}
+                value={service.deviceId}
+                onChange={(deviceId) => selectServiceDevice(service, deviceId)}
+                disabledIds={selectedDeviceIds}
+                allowClear
+              />
+            </div>
           ))}
         </div>
       </section>

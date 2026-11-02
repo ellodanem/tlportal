@@ -33,7 +33,7 @@ export default async function NewCanonicalSubscriptionPage({
         serviceAssignments: { none: { endDate: null, status: { not: "cancelled" } } },
       },
       orderBy: [{ label: "asc" }, { imei: "asc" }],
-      select: { id: true, label: true, imei: true, deviceModel: { select: { name: true } }, simCard: { select: { label: true, msisdn: true } } },
+      select: { id: true, label: true, imei: true, deviceModel: { select: { name: true } }, simCard: { select: { label: true, msisdn: true, iccid: true } } },
     }),
     prisma.subscriptionOption.findMany({
       where: { isActive: true },
@@ -80,6 +80,8 @@ export default async function NewCanonicalSubscriptionPage({
           id: device.id,
           label: device.label?.trim() || `${device.deviceModel.name} device`,
           simLabel: device.simCard?.label?.trim() || device.simCard?.msisdn?.trim() || null,
+          imei: device.imei,
+          iccid: device.simCard?.iccid ?? null,
         }))}
         today={today}
         defaultCustomerId={params.customerId}
