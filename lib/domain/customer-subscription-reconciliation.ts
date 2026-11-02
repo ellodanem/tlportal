@@ -87,7 +87,8 @@ function formatCents(value: bigint): string {
 }
 
 function currentItems(subscription: ReconciliationSubscription): ReconciliationItem[] {
-  return subscription.items.filter((item) => !["ended", "canceled"].includes(item.status));
+  // Paused services are not billed, so they are left out of the cycle totals and service counts.
+  return subscription.items.filter((item) => !["ended", "canceled", "paused"].includes(item.status));
 }
 
 export function analyzeCustomerSubscriptions(

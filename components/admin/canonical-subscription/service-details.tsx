@@ -90,7 +90,9 @@ export function SubscriptionServiceDetails({
           {open && device ? (
             <section aria-labelledby="sale-heading" className="space-y-3">
               <h3 id="sale-heading" className="font-semibold">{open.status === "suspended" ? "Paused tracker" : "Vehicle sold"}</h3>
-              {open.status === "suspended"
+              {open.status === "suspended" && item.billingEffectiveUntil
+                ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">This service has a billing end date, so its tracker cannot be resumed. To bill this tracker again, add a new service.</p>
+                : open.status === "suspended"
                 ? <>
                     <CanonicalServiceResumeForm subscriptionId={subscription.id} subscriptionItemId={item.id} assignmentId={open.id} deviceLabel={device.label?.trim() || device.deviceModel.name} billedByStripe={subscription.collectionMethod === "stripe_autocharge"} />
                     <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">Resume the tracker before recording a vehicle sale.</p>
@@ -98,6 +100,7 @@ export function SubscriptionServiceDetails({
                 : <CanonicalVehicleSaleRemovalForm subscriptionId={subscription.id} subscriptionItemId={item.id} assignmentId={open.id} />}
             </section>
           ) : null}
+
           {/* Stays mounted after a successful loss (assignmentId becomes null) so the result notice survives the refresh. */}
           <CanonicalAssetLossForm subscriptionId={subscription.id} subscriptionItemId={item.id} assignmentId={open?.id ?? null} deviceLabel={device ? device.label?.trim() || device.deviceModel.name : "the tracker"} />
         </>

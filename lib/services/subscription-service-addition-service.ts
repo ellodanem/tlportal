@@ -231,7 +231,8 @@ async function currentRenewalCents(tx: Prisma.TransactionClient, subscriptionId:
     select: {
       nextBillingDate: true,
       items: {
-        where: { status: { notIn: ["ended", "canceled"] } },
+        // Paused services are out of the next renewal.
+        where: { status: { notIn: ["ended", "canceled", "paused"] } },
         select: {
           billingEffectiveFrom: true,
           billingEffectiveUntil: true,
@@ -315,7 +316,14 @@ export async function getServiceAdditionContext(subscriptionId: string): Promise
       label: item.label?.trim() || "Tracking service",
       cycleAmount: rate ? rate.agreedAmountPerCycle.toFixed(2) : "0.00",
       startDate: item.serviceActivatedDate ? commercialDateString(item.serviceActivatedDate) : null,
-      effectiveAtRenewal: Boolean(item.billingEffectiveFrom && item.billingEffectiveFrom <= renewal && rate),
+      // Same rule as the renewal total: not paused, started, and not already ended by the renewal.
+      effectiveAtRenewal: Boolean(
+        item.status !== "paused"
+        && item.billingEffectiveFrom
+        && item.billingEffectiveFrom <= renewal
+        && (!item.billingEffectiveUntil || item.billingEffectiveUntil > renewal)
+        && rate,
+      ),
     };
   });
   const currentRecurringCents = recurringTotalsAfterAddition(

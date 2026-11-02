@@ -15,6 +15,11 @@ export type PauseServiceAssignmentInput = {
   note?: string | null;
   deviceDisposition: ServicePauseDeviceDisposition;
   actorUserId?: string | null;
+  /**
+   * Also pause the subscription service the assignment belongs to, in the same transaction, so it
+   * drops out of the next renewal. Left off by the vehicle-sold flow, which ends billing by date.
+   */
+  pauseSubscriptionItem?: boolean;
 };
 
 export type PauseServiceAssignmentResult =
@@ -24,12 +29,15 @@ export type PauseServiceAssignmentResult =
       customerId: string;
       deviceId: string;
       pausedRecurringSchedules: number;
+      subscriptionItemPaused: boolean;
     }
   | { ok: false; error: string };
 
 export type ResumeServiceAssignmentInput = {
   assignmentId: string;
   actorUserId?: string | null;
+  /** Also return a paused subscription service to active in the same transaction. */
+  resumeSubscriptionItem?: boolean;
 };
 
 export type ResumeServiceAssignmentResult =
@@ -39,6 +47,7 @@ export type ResumeServiceAssignmentResult =
       customerId: string;
       deviceId: string;
       restoredNextDue: Date | null;
+      subscriptionItemResumed: boolean;
     }
   | { ok: false; error: string };
 
@@ -95,7 +104,7 @@ export async function pauseServiceAssignment(
   const now = new Date();
   const deviceStatus = deviceStatusForDisposition(input.deviceDisposition);
 
-  await prisma.$transaction(async (tx) => {
+  const subscriptionItemPaused = await prisma.$transaction(async (tx) => {
     await tx.serviceAssignment.update({
       where: { id: assignment.id },
       data: {
@@ -111,6 +120,13 @@ export async function pauseServiceAssignment(
       where: { id: assignment.deviceId },
       data: { status: deviceStatus },
     });
+    if (!input.pauseSubscriptionItem || !assignment.subscriptionItemId) return false;
+    // Only a billing service can be paused; drafts and pending services are not billed yet.
+    const paused = await tx.subscriptionItem.updateMany({
+      where: { id: assignment.subscriptionItemId, status: "active" },
+      data: { status: "paused" },
+    });
+    return paused.count > 0;
   });
 
   const pausedRecurringSchedules = await pauseRecurringSchedulesForAssignment(assignment.id);
@@ -131,6 +147,7 @@ export async function pauseServiceAssignment(
       deviceDisposition: input.deviceDisposition,
       frozenNextDueDate: assignment.nextDueDate?.toISOString() ?? null,
       pausedRecurringSchedules,
+      subscriptionItemPaused,
     },
   });
 
@@ -140,6 +157,7 @@ export async function pauseServiceAssignment(
     customerId: assignment.customerId,
     deviceId: assignment.deviceId,
     pausedRecurringSchedules,
+    subscriptionItemPaused,
   };
 }
 
@@ -171,7 +189,7 @@ export async function resumeServiceAssignment(
   const now = new Date();
   const restoredNextDue = assignment.frozenNextDueDate ?? assignment.nextDueDate;
 
-  await prisma.$transaction(async (tx) => {
+  const subscriptionItemResumed = await prisma.$transaction(async (tx) => {
     await tx.serviceAssignment.update({
       where: { id: assignment.id },
       data: {
@@ -188,6 +206,12 @@ export async function resumeServiceAssignment(
       where: { id: assignment.deviceId },
       data: { status: "assigned" },
     });
+    if (!input.resumeSubscriptionItem || !assignment.subscriptionItemId) return false;
+    const resumed = await tx.subscriptionItem.updateMany({
+      where: { id: assignment.subscriptionItemId, status: "paused" },
+      data: { status: "active" },
+    });
+    return resumed.count > 0;
   });
 
   const deviceLabel =
@@ -202,6 +226,7 @@ export async function resumeServiceAssignment(
     payload: {
       assignmentId: assignment.id,
       restoredNextDueDate: restoredNextDue?.toISOString() ?? null,
+      subscriptionItemResumed,
     },
   });
 
@@ -211,5 +236,6 @@ export async function resumeServiceAssignment(
     customerId: assignment.customerId,
     deviceId: assignment.deviceId,
     restoredNextDue,
+    subscriptionItemResumed,
   };
 }

@@ -239,6 +239,7 @@ async function requireManageableCanonicalSubscription(subscriptionId: string) {
       controlMode: true,
       lifecycleStatus: true,
       collectionMethod: true,
+      nextBillingDate: true,
       canonicalMigrationLedger: { select: { id: true } },
     },
   });
@@ -274,6 +275,8 @@ function revalidateCanonicalServiceOperation(input: {
   simCardId: string | null;
 }) {
   revalidatePath(`/admin/subscriptions/canonical/${input.subscriptionId}`);
+  // The Stripe quantity check lives in the tabs layout, so refresh it with the page.
+  revalidatePath("/admin/subscriptions/canonical/[subscriptionId]", "layout");
   revalidatePath("/admin/subscriptions/canonical");
   revalidatePath(`/admin/customers/${input.customerId}`);
   revalidatePath(`/admin/customers/${input.customerId}/subscriptions`);
@@ -283,16 +286,31 @@ function revalidateCanonicalServiceOperation(input: {
   if (input.simCardId) revalidatePath(`/admin/sims/${input.simCardId}`);
 }
 
-function pauseBillingNotice(collectionMethod: string | null): string {
-  return collectionMethod === "stripe_autocharge"
-    ? " Review the linked Stripe subscription or vehicle quantity before the next charge."
-    : "";
+function noticeDate(value: Date | null): string {
+  return value
+    ? value.toLocaleDateString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" })
+    : "the next renewal";
 }
 
-function resumeBillingNotice(collectionMethod: string | null): string {
+/** A paused service stays on the subscription but drops out of the next renewal; nothing is refunded. */
+function pauseBillingNotice(collectionMethod: string | null, nextBillingDate?: Date | null): string {
+  if (nextBillingDate === undefined) {
+    return collectionMethod === "stripe_autocharge"
+      ? " Review the linked Stripe subscription or vehicle quantity before the next charge."
+      : "";
+  }
+  const base = ` It stays on the subscription but is not billed from the renewal on ${noticeDate(nextBillingDate)}; the current period is not refunded or credited.`;
   return collectionMethod === "stripe_autocharge"
-    ? " If you lowered the Stripe vehicle quantity while it was paused, restore it before the next charge; the Stripe check on this page shows the current numbers."
-    : "";
+    ? `${base} Lower the Stripe vehicle quantity before then; the Stripe check on this page shows the number.`
+    : base;
+}
+
+function resumeBillingNotice(collectionMethod: string | null, nextBillingDate: Date | null, billingResumed: boolean): string {
+  if (!billingResumed) return "";
+  const base = ` Billing resumes at the renewal on ${noticeDate(nextBillingDate)}; nothing is charged for the time it was paused.`;
+  return collectionMethod === "stripe_autocharge"
+    ? `${base} Raise the Stripe vehicle quantity before then; the Stripe check on this page shows the number.`
+    : base;
 }
 
 export async function createCanonicalDraftAction(
@@ -685,7 +703,9 @@ export async function pauseCanonicalServiceAssignmentAction(
     if (!deviceDisposition) return { error: "Select a tracker disposition." };
     const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
     const assignment = await requireOpenCanonicalServiceAssignment(subscriptionItemId, assignmentId);
-    const result = await pauseServiceAssignment({ assignmentId, reason, note: optionalText(formData, "pauseNote"), deviceDisposition, actorUserId: session.sub });
+    // Unlike the vehicle-sold flow (which ends billing by date), a plain pause keeps the service on
+    // the subscription but takes it out of the next renewal, in the same transaction as the tracker.
+    const result = await pauseServiceAssignment({ assignmentId, reason, note: optionalText(formData, "pauseNote"), deviceDisposition, actorUserId: session.sub, pauseSubscriptionItem: true });
     if (!result.ok) return { error: result.error };
     await recordOperationalEvent({
       category: "subscription.service_paused",
@@ -693,21 +713,21 @@ export async function pauseCanonicalServiceAssignmentAction(
       customerId: subscription.customerId,
       deviceId: assignment.deviceId,
       actorUserId: session.sub,
-      payload: { subscriptionId, subscriptionItemId, assignmentId, reason, deviceDisposition },
+      payload: { subscriptionId, subscriptionItemId, assignmentId, reason, deviceDisposition, billingPaused: result.subscriptionItemPaused },
     });
     revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
     const scheduleNote = result.pausedRecurringSchedules ? ` Paused ${result.pausedRecurringSchedules} linked recurring invoice schedule${result.pausedRecurringSchedules === 1 ? "" : "s"}.` : "";
-    return { message: `Service paused and tracker marked ${deviceDisposition === "in_stock" ? "in stock" : "returned"}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
+    return { message: `Service paused and tracker marked ${deviceDisposition === "in_stock" ? "in stock" : "returned"}.${scheduleNote}${result.subscriptionItemPaused ? pauseBillingNotice(subscription.collectionMethod, subscription.nextBillingDate) : ""}` };
   } catch (error) {
     return actionError(error);
   }
 }
 
 /**
- * Reverse of the pause above: reactivates the tracker assignment of a subscription service.
- * Pausing never ends the service or its price, so resuming changes no subscription record,
- * invoice or Stripe quantity. For card billing the Stripe quantity check on the subscription
- * page shows whether Stripe still needs updating.
+ * Reverse of the pause above: reactivates the tracker and returns the paused service to active,
+ * so it is billed again from the next renewal. Nothing is invoiced or charged for the paused time.
+ * Stripe is never changed here; for card billing the quantity check on the subscription page
+ * shows whether Stripe needs raising.
  */
 export async function resumeCanonicalServiceAssignmentAction(
   _previous: CanonicalSubscriptionFormState,
@@ -719,12 +739,16 @@ export async function resumeCanonicalServiceAssignmentAction(
     const assignmentId = text(formData, "assignmentId");
     if (!assignmentId) return { error: "A current tracker assignment is required." };
     const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
-    const item = await prisma.subscriptionItem.findUnique({ where: { id: subscriptionItemId }, select: { status: true } });
+    const item = await prisma.subscriptionItem.findUnique({ where: { id: subscriptionItemId }, select: { status: true, billingEffectiveUntil: true } });
     if (!item || ["ended", "canceled"].includes(item.status)) {
       return { error: "This service has ended, so its tracker cannot be resumed here." };
     }
+    if (item.billingEffectiveUntil) {
+      // Sold, lost or scheduled-to-end services stop billing by date; resuming the tracker would not restore it.
+      return { error: "This service has a billing end date, so it cannot be resumed. Add a new service to bill this tracker again." };
+    }
     const assignment = await requireOpenCanonicalServiceAssignment(subscriptionItemId, assignmentId);
-    const result = await resumeServiceAssignment({ assignmentId, actorUserId: session.sub });
+    const result = await resumeServiceAssignment({ assignmentId, actorUserId: session.sub, resumeSubscriptionItem: true });
     if (!result.ok) return { error: result.error };
     await recordOperationalEvent({
       category: "subscription.service_resumed",
@@ -732,10 +756,10 @@ export async function resumeCanonicalServiceAssignmentAction(
       customerId: subscription.customerId,
       deviceId: assignment.deviceId,
       actorUserId: session.sub,
-      payload: { subscriptionId, subscriptionItemId, assignmentId },
+      payload: { subscriptionId, subscriptionItemId, assignmentId, billingResumed: result.subscriptionItemResumed },
     });
     revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
-    return { message: `Service resumed and tracker marked assigned.${resumeBillingNotice(subscription.collectionMethod)}` };
+    return { message: `Service resumed and tracker marked assigned.${resumeBillingNotice(subscription.collectionMethod, subscription.nextBillingDate, result.subscriptionItemResumed)}` };
   } catch (error) {
     return actionError(error);
   }

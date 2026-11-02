@@ -67,7 +67,7 @@ type ItemBillingWindow = {
  * resolver (half-open [from, until)) so counts shown beside the total agree with it.
  */
 export function billsOnDate(item: ItemBillingWindow, date: Date | null): boolean {
-  if (["ended", "canceled"].includes(item.status)) return false;
+  if (["ended", "canceled", "paused"].includes(item.status)) return false;
   if (!date) return true;
   if (!item.billingEffectiveFrom || item.billingEffectiveFrom > date) return false;
   return item.billingEffectiveUntil == null || date < item.billingEffectiveUntil;
@@ -76,6 +76,7 @@ export function billsOnDate(item: ItemBillingWindow, date: Date | null): boolean
 /** Status label that also surfaces a scheduled or elapsed billing end, which `status` alone hides. */
 export function serviceStatusLabel(item: ItemBillingWindow, now = new Date()): { label: string; tone: "normal" | "warning" } {
   const base = item.status.replaceAll("_", " ");
+  if (item.status === "paused") return { label: "paused · not billed", tone: "warning" };
   const until = item.billingEffectiveUntil;
   if (!until || ["ended", "canceled"].includes(item.status)) return { label: base, tone: "normal" };
   const day = (value: Date) => value.toISOString().slice(0, 10);

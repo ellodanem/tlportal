@@ -69,10 +69,10 @@ export function CanonicalServicePauseForm({
 }) {
   const [state, action, pending] = useActionState(pauseCanonicalServiceAssignmentAction, initialState);
   useRefreshOnSuccess(state);
-  return <form action={action} onSubmit={confirmServiceOperation("Pause this service and record the tracker disposition?")} className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+  return <form action={action} onSubmit={confirmServiceOperation("Pause this service? It will not be billed from the next renewal, and the tracker disposition is recorded.")} className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
     <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
     <h3 className="font-semibold">Pause service</h3>
-    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Use for a temporary break. The device is recorded as returned or in stock while the assignment remains available to resume.</p>
+    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Use for a temporary break. The service stays on the subscription but is not billed from the next renewal; the current period is not refunded or credited. The device is recorded as returned or in stock, and you can resume it later.</p>
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-medium">Reason<select required name="pauseReason" defaultValue="no_vehicle" className={inputClass}>{SERVICE_PAUSE_REASONS.map((reason) => <option key={reason} value={reason}>{SERVICE_PAUSE_REASON_LABEL[reason]}</option>)}</select></label>
       <label className="text-sm font-medium">Tracker disposition<select required name="deviceDisposition" defaultValue="returned" className={inputClass}>{Object.entries(SERVICE_PAUSE_DISPOSITION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -101,8 +101,8 @@ export function CanonicalServiceResumeForm({
   return <form action={action} onSubmit={confirmServiceOperation(`Resume service for ${deviceLabel}? The tracker is marked assigned again.`)} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
     <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
     <h3 className="font-semibold">Resume service</h3>
-    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This tracker assignment is paused. Resuming marks {deviceLabel} assigned again. The service keeps its price and renewal; no invoice is created.</p>
-    {billedByStripe ? <p className="mt-2 text-sm text-amber-900 dark:text-amber-200">Card billing: if the Stripe vehicle quantity was lowered during the pause, restore it before the next charge. The Stripe check on this page shows the current numbers.</p> : null}
+    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This service is paused and is not being billed. Resuming marks {deviceLabel} assigned again and bills the service from the next renewal at its usual price. Nothing is invoiced or charged for the paused time.</p>
+    {billedByStripe ? <p className="mt-2 text-sm text-amber-900 dark:text-amber-200">Card billing: raise the Stripe vehicle quantity before the next charge. The Stripe check on this page shows the current numbers.</p> : null}
     <Feedback state={state} />
     <button disabled={pending} className="mt-4 min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">{pending ? "Resuming…" : "Resume service"}</button>
   </form>;

@@ -148,8 +148,10 @@ export function resolveCanonicalBillingCycle(
   const billingIntervalMonths = canonicalBillingInterval(configuration.billingIntervalMonths);
   const currency = normalizeCurrency(configuration.currency);
   const eligibleItems = configuration.items.filter((item) => {
+    // Planning (requireActive: false) also counts services not yet activated, but never a paused
+    // one: a paused service is out of the next renewal and out of the expected Stripe quantity.
     const statusEligible = options.requireActive === false
-      ? item.status !== "ended" && item.status !== "canceled"
+      ? item.status !== "ended" && item.status !== "canceled" && item.status !== "paused"
       : item.status === "active";
     return statusEligible && activeAt(periodStart, item.billingEffectiveFrom, item.billingEffectiveUntil);
   });

@@ -26,11 +26,11 @@ export type CanonicalStripeQuantityCheck =
     }
   | { state: "unavailable"; serviceCount: number; reason: string };
 
-/** Services that will be charged on the next renewal (same rule as the recurring total). */
+/** Services that will be charged on the next renewal (same rule as the recurring total). Paused services are not. */
 export function billableServiceCountAtRenewal(items: QuantityCheckItem[], nextBillingDate: Date | null): number {
   if (!nextBillingDate) return 0;
   return items.filter((item) => {
-    if (item.status === "ended" || item.status === "canceled") return false;
+    if (item.status === "ended" || item.status === "canceled" || item.status === "paused") return false;
     if (!item.billingEffectiveFrom || item.billingEffectiveFrom > nextBillingDate) return false;
     if (item.billingEffectiveUntil && item.billingEffectiveUntil <= nextBillingDate) return false;
     return true;
