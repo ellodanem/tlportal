@@ -27,6 +27,9 @@ Reference for agents debugging **â€œcommits on GitHub but Production unchangedâ€
 |------|----------|---------|
 | `/api/cron/nightly-sims-sync` | `5 4 * * *` | 1NCE SIM import (~00:05 AST) |
 | `/api/cron/broadcast-send` | `10 4 * * *` | Broadcast email batch (daily; `BROADCAST_CRON_BATCH_SIZE`, default 50) |
+| `/api/cron/billing-whatsapp-reminders` | `15 4 * * *` | Invoice-based customer billing notices |
+| `/api/cron/recurring-invoices` | `20 4 * * *` | Native recurring invoice schedules |
+| `/api/cron/stripe-quantity-audit` | `25 4 * * *` | Stripe vehicle quantity vs TL; staff SMS on new/changed drift (`?dryRun=1` to preview) |
 
 **Pro only:** more frequent `broadcast-send` (e.g. `*/2 * * * *`) for near-real-time mass email.
 

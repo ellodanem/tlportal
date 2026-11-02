@@ -21,6 +21,10 @@
     {
       "path": "/api/cron/recurring-invoices",
       "schedule": "20 4 * * *"
+    },
+    {
+      "path": "/api/cron/stripe-quantity-audit",
+      "schedule": "25 4 * * *"
     }
   ]
 }
