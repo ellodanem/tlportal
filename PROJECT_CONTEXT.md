@@ -5420,3 +5420,20 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Add-service preview `effectiveAtRenewal` now honours `billingEffectiveUntil`.
 - Ops: Sharm Charles legitimately has 6 trackers (replacement tracker bought after a sale); IMEI/SIM corrected manually in the back end. Kurt Dieudonna's Stripe quantity must be 5 before the Nov 15 renewal.
 - Pushed together with the parallel asset-loss workstream's push; no DB-backed test of pause/resume has been run.
+
+### 2026-11-02 01:02 UTC — commit `f991c6b`
+
+- docs: log paused-service billing change in PROJECT_CONTEXT
+
+
+### 2026-11-02 01:02 UTC — pre-push (`main` → origin) @ `f991c6b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 01:35 UTC — commit `5c0a64a`
+
+- feat(subscriptions): list ended services separately from billable ones
+
+
+- Agent notes (5c0a64a): Services tab now separates ended services from billable ones. New `lib/domain/canonical-service-lifecycle.ts`: a service is ended if its status is ended/canceled OR its `billingEffectiveUntil` is today or earlier (the stored status stays `active` after the end date passes - nothing flips it - so this is derived at display time, matching the half-open [from, until) billing window). "Billable services (n)" lists only services still billed (paused and future-dated ends stay); ended ones appear in an always-visible muted "Ended services" section (the repo test forbids collapsed `<details>` in subscription surfaces) with the reason (asset lost / vehicle sold, read from the assignment notes/pauseNote), historical rate and only an Open link - no Quick actions. The customer subscriptions "Billable services" tile uses `countBillableServices`. Display only: no billing, status or schema change. Tests 322/322, tsc and eslint clean on the staged tree. KNOWN GAPS left on purpose (they sit in another session's uncommitted files): `billableServiceCount` in canonical-subscription-admin-service.ts (subscriptions list count) and `resolveServiceActionAvailability` / service-details still use stored status only, so an ended-by-date service still counts there and still offers actions on its single-service page; switch them to `isServiceBillingEnded` once that work lands.
