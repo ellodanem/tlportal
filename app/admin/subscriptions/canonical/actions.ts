@@ -30,6 +30,7 @@ import {
   updateDraftSubscriptionItemCommercialDetails,
 } from "@/lib/services/canonical-subscription-application-service";
 import { correctSubscriptionBillingDates } from "@/lib/services/canonical-billing-date-correction-service";
+import { mergeSubscriptions } from "@/lib/services/canonical-subscription-merge-service";
 import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
 import { SubscriptionProrationError } from "@/lib/domain/subscription-proration";
 import { createAnnualServiceAdjustmentInvoice } from "@/lib/services/canonical-annual-adjustment-service";
@@ -222,6 +223,46 @@ export async function correctCanonicalBillingDatesAction(
     revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
     revalidatePath("/admin/devices");
     return { message: `Billing dates corrected: starts ${result.plan.next.commercialStartDate}, renews ${result.plan.next.nextBillingDate}. No invoice, charge, provider change or notification was made.` };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * Folds same-term subscriptions of one customer into a single subscription so the customer is
+ * invoiced once. Refused by the service once anything has been billed; never invoices,
+ * charges or notifies.
+ */
+export async function mergeCanonicalSubscriptionsAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  try {
+    const targetId = text(formData, "targetId");
+    const sourceIds = [...new Set(formData.getAll("sourceIds").map((value) => String(value).trim()).filter(Boolean))];
+    const { session, subscription } = await requireManageableCanonicalSubscription(targetId);
+    for (const sourceId of sourceIds) await requireManageableCanonicalSubscription(sourceId);
+    const reason = text(formData, "reason");
+    if (reason.length < 3) return { error: "Give a short reason for the merge (at least 3 characters)." };
+    if (reason.length > 300) return { error: "Keep the reason under 300 characters." };
+    if (text(formData, "confirm") !== "yes") return { error: "Confirm that nothing has been invoiced or charged from these subscriptions." };
+    const result = await mergeSubscriptions({ targetId, sourceIds });
+    await recordOperationalEvent({
+      category: "subscription.subscriptions_merged",
+      summary: `${result.plan.sourceIds.length} subscription${result.plan.sourceIds.length === 1 ? "" : "s"} merged into one by staff before any billing.`,
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { targetSubscriptionId: targetId, mergedSubscriptionIds: result.plan.sourceIds, services: result.plan.movedItemIds.length, schedulesEnded: result.plan.endedScheduleIds.length, reason },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${targetId}`);
+    revalidatePath("/admin/subscriptions/canonical/[subscriptionId]", "layout");
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
+    revalidatePath("/admin/devices");
+    return {
+      message: `Merged ${result.plan.movedLiveServiceCount} service${result.plan.movedLiveServiceCount === 1 ? "" : "s"} into one subscription. No invoice, charge, provider change or notification was made.`,
+      next: `/admin/subscriptions/canonical/${targetId}`,
+    };
   } catch (error) {
     return actionError(error);
   }

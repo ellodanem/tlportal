@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
 import { countBillableServices } from "@/lib/domain/canonical-service-lifecycle";
+import { suggestedMergeGroups } from "@/lib/domain/canonical-subscription-merge";
 import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
 import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import {
@@ -157,6 +158,17 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   // Same rule as the per-subscription "Add service" button: only a live subscription takes a new service directly.
   const addableSubscriptions = subscriptions.filter((subscription) => subscription.controlMode === "canonical" && ["pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? ""));
   const soleAddableSubscription = addableSubscriptions.length === 1 ? addableSubscriptions[0] : null;
+  // Cheap hint only: the merge screen re-checks everything (including "never invoiced") before offering it.
+  const mergeSuggestion = suggestedMergeGroups(currentSubscriptions.map((subscription) => ({
+    id: subscription.id,
+    controlMode: subscription.controlMode,
+    collectionMethod: subscription.collectionMethod,
+    lifecycleStatus: subscription.lifecycleStatus,
+    billingIntervalMonths: subscription.billingIntervalMonths,
+    currency: subscription.currency,
+    nextBillingDate: subscription.nextBillingDate,
+    gracePeriodDays: subscription.gracePeriodDays ?? 7,
+  }))).sort((left, right) => right.length - left.length)[0] ?? null;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 rounded-2xl bg-zinc-50/70 p-1 sm:p-2 dark:bg-zinc-950/40">
@@ -210,6 +222,10 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
             </div>
           </div>;
         })}</div>
+      </section> : null}
+      {mergeSuggestion ? <section role="note" className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900/60 dark:bg-emerald-950/20">
+        <p className="max-w-3xl text-emerald-950 dark:text-emerald-100"><span className="font-semibold">{mergeSuggestion.length} subscriptions have identical terms</span> ({canonicalIntervalLabel(mergeSuggestion[0].billingIntervalMonths)}, renewing {date(mergeSuggestion[0].nextBillingDate)}). Kept separate, each is invoiced separately; merged, {customerName(customer)} gets one invoice with a line per service.</p>
+        <Link href={`/admin/subscriptions/canonical/merge?customerId=${customer.id}`} className="inline-flex min-h-11 w-fit shrink-0 items-center rounded-lg bg-emerald-700 px-3.5 py-2.5 font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950">Review merge</Link>
       </section> : null}
       {ledger.unlinked.count > 0 ? <section role="note" className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900"><p className="font-semibold">{ledger.unlinked.count} customer invoice{ledger.unlinked.count === 1 ? "" : "s"}: {NOT_LINKED_LABEL}</p><p className="mt-1 text-zinc-600 dark:text-zinc-300">The balances below count only invoices attached to a subscription. Manual one-off invoices (installation, hardware) are in <Link href={`/admin/subscriptions/customers/${customer.id}/billing#recent-invoices`} className="font-semibold text-emerald-700 underline dark:text-emerald-400">Billing</Link>.</p></section> : null}
       {subscriptions.length ? <div className="space-y-5">{subscriptions.map((subscription) => {

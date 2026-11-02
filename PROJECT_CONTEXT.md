@@ -5617,3 +5617,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes: added `Entered the wrong start or renewal date?` on the subscription Billing tab (manual-invoice, manageable subscriptions). New `correctCanonicalBillingDatesAction` (staff-guarded, reason + confirmation required, audited as `subscription.billing_dates_corrected`) calls `correctSubscriptionBillingDates` which moves subscription, service, rate, derived recurring schedule and installed-device due dates in one serializable transaction. Locked once any invoice, provider link, billing operation, generated schedule invoice or partial-period charge exists. Pure rules in `lib/domain/canonical-billing-date-correction.ts`. Pre-existing unrelated failure left alone: `Assign hardware later` text check.
 
+
+### 2026-11-02 02:42 UTC — commit `b16d99c`
+
+- docs: log billing date correction in PROJECT_CONTEXT
+
+
+### 2026-11-02 02:42 UTC — pre-push (`main` → origin) @ `b16d99c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

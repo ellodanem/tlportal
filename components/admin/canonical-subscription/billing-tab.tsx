@@ -141,9 +141,9 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
         && subscription.commercialStartDate
         && subscription.nextBillingDate
         && subscription.billingIntervalMonths ? (
-        <details className={`${cardClass} group p-5`}>
-          <summary className="cursor-pointer text-sm font-semibold">Entered the wrong start or renewal date?</summary>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+        <section aria-labelledby="billing-dates-heading" className={`${cardClass} p-5`}>
+          <h2 id="billing-dates-heading" className="text-lg font-semibold">Entered the wrong start or renewal date?</h2>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
             Correct it here instead of recreating the subscription. Services, rates, the recurring schedule and installed devices move to the new dates together. This is refused once an invoice, provider link or billing operation exists for the current dates.
           </p>
           <CanonicalBillingDatesForm
@@ -152,7 +152,7 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
             renewalDate={subscription.nextBillingDate.toISOString().slice(0, 10)}
             intervalMonths={subscription.billingIntervalMonths}
           />
-        </details>
+        </section>
       ) : null}
 
       {adjustmentRows.length ? (
