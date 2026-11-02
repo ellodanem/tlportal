@@ -132,6 +132,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   const currentSubscriptions = subscriptions.filter(
     (subscription) => !["ended", "canceled"].includes(subscription.lifecycleStatus ?? ""),
   );
+  const pastSubscriptions = subscriptions.filter((subscription) => !currentSubscriptions.includes(subscription));
   const activeServices = currentSubscriptions.reduce(
     (sum, subscription) => sum + countBillableServices(subscription.items),
     0,
@@ -231,7 +232,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
         <Link href={`/admin/subscriptions/canonical/merge?customerId=${customer.id}`} className="inline-flex min-h-11 w-fit shrink-0 items-center rounded-lg bg-emerald-700 px-3.5 py-2.5 font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950">Review merge</Link>
       </section> : null}
       {ledger.unlinked.count > 0 ? <section role="note" className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900"><p className="font-semibold">{ledger.unlinked.count} customer invoice{ledger.unlinked.count === 1 ? "" : "s"}: {NOT_LINKED_LABEL}</p><p className="mt-1 text-zinc-600 dark:text-zinc-300">The balances below count only invoices attached to a subscription. Manual one-off invoices (installation, hardware) are in <Link href={`/admin/subscriptions/customers/${customer.id}/billing#recent-invoices`} className="font-semibold text-emerald-700 underline dark:text-emerald-400">Billing</Link>.</p></section> : null}
-      {subscriptions.length ? <div className="space-y-5">{subscriptions.map((subscription) => {
+      {currentSubscriptions.length ? <div className="space-y-5">{currentSubscriptions.map((subscription) => {
         const currency = subscription.currency ?? "XCD";
         const displayName = canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths);
         // Same figure as the subscription header: includes a repaired legacy term's unlinked opening invoice.
@@ -264,6 +265,15 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
           </section>
         </article>;
       })}</div> : <section className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900"><h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">No subscriptions have been set up</h2><p className="mt-1 text-sm text-zinc-500">Create the customer’s first agreement, then add each billable tracking service to it.</p><Link href={`/admin/subscriptions/canonical/new?customerId=${customer.id}`} className="mt-4 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900">Add subscription</Link></section>}
+
+      {pastSubscriptions.length ? <section className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm shadow-sm sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Past subscriptions</h2>
+        <p className="mt-1 text-zinc-500">Ended or canceled agreements, kept for history. They are no longer invoiced.</p>
+        <ul className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">{pastSubscriptions.map((subscription) => <li key={subscription.id} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0"><span className="font-medium text-zinc-950 dark:text-zinc-50">{canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths)}</span><span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold capitalize text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{(subscription.lifecycleStatus ?? "").replaceAll("_", " ")}</span></span>
+          <Link href={`/admin/subscriptions/canonical/${subscription.id}`} className="inline-flex min-h-11 w-fit items-center font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 sm:min-h-0 dark:text-emerald-400">View</Link>
+        </li>)}</ul>
+      </section> : null}
 
       {pausedAssignments.length ? <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm sm:p-6 dark:border-amber-900/60 dark:bg-amber-950/15">
         <div>
