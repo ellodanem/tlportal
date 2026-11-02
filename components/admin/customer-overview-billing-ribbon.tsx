@@ -9,21 +9,19 @@ function formatDate(d: Date | null | undefined) {
 }
 
 export function CustomerOverviewBillingRibbon({
-  customerId,
   billingMode,
   subscriptionStatusLabel,
   invoilessLinked,
   invoilessCustomerId,
   nextDue,
 }: {
-  customerId: string;
   billingMode: CustomerBillingMode;
   subscriptionStatusLabel: string;
   invoilessLinked: boolean;
   invoilessCustomerId: string | null;
   nextDue: Date | null | undefined;
 }) {
-  const subscriptionsHref = `/admin/customers/${customerId}/subscriptions`;
+  const subscriptionsHref = "/admin/subscriptions/canonical";
   const modeLabel = billingMode === "stripe_subscription" ? "Card (Stripe)" : "Manual / cash";
 
   return (

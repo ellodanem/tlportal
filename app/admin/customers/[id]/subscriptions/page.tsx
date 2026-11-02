@@ -171,7 +171,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
 
       <CustomerSubnav customerId={customer.id} active="subscriptions" />
 
-      {collectionSummary ? <CustomerCollectionSummary customerId={customer.id} summary={collectionSummary} /> : null}
+      {collectionSummary ? <CustomerCollectionSummary summary={collectionSummary} /> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="min-h-35 rounded-2xl border border-blue-200/90 bg-blue-50/80 p-5 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/25"><div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"><svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 21h-15a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 4.5 3h9L21 10.5v9a1.5 1.5 0 0 1-1.5 1.5Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13 3v7.5h8M8 15h8M8 18h5" /></svg></span><div><p className="text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300">Current agreements</p><p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-zinc-950 dark:text-zinc-50">{currentSubscriptions.length}</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Independent billing arrangements</p></div></div></div>

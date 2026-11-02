@@ -33,14 +33,12 @@ const headlineClasses: Record<Summary["tone"], string> = {
 };
 
 export function CustomerCollectionSummary({
-  customerId,
   summary,
   primaryInvoice = null,
   hasSubscriptions = false,
   reminderAvailable = false,
   hasRecordedInvoices = false,
 }: {
-  customerId: string;
   summary: Summary;
   primaryInvoice?: NativeInvoice | null;
   hasSubscriptions?: boolean;
@@ -104,7 +102,7 @@ export function CustomerCollectionSummary({
         {recordPaymentEligible ? <Link href={`/admin/tl-invoices/${primaryInvoice.id}#record-payment`} className="inline-flex min-h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100">Record payment</Link> : null}
         {reminderAvailable ? <a href="#collection-notifications" className="inline-flex min-h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100">Send reminder</a> : null}
         {!hasInvoice ? <Link href="/admin/tl-invoices/new" className="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">Create invoice</Link> : null}
-        {hasSubscriptions ? <Link href={`/admin/customers/${customerId}/subscriptions`} className="inline-flex min-h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100">View subscriptions</Link> : null}
+        {hasSubscriptions ? <Link href="/admin/subscriptions/canonical" className="inline-flex min-h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100">View subscriptions</Link> : null}
       </div>
     </section>
   );

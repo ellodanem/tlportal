@@ -142,7 +142,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
       subs.length === 1
         ? subscriptionHref(subs[0].id)
         : canonicalUi
-          ? `/admin/customers/${customer.id}/subscriptions`
+          ? "/admin/subscriptions/canonical"
           : `/admin/subscriptions/${customer.id}`;
     const createSubscriptionHref = `/admin/subscriptions/new?customerId=${encodeURIComponent(customer.id)}`;
 

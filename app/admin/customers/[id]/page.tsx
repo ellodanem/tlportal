@@ -277,7 +277,6 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
       <CustomerSubnav customerId={customer.id} active="overview" />
 
       <CustomerOverviewBillingRibbon
-        customerId={customer.id}
         billingMode={customer.billingMode}
         subscriptionStatusLabel={subscriptionStatusLabelForOverview(
           customer.billingMode,
@@ -289,7 +288,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
         nextDue={nextDue}
       />
 
-      {collectionSummary ? <CustomerCollectionSummary customerId={customer.id} summary={collectionSummary} /> : null}
+      {collectionSummary ? <CustomerCollectionSummary summary={collectionSummary} /> : null}
 
       <CustomerFinancialSummary
         customerId={customer.id}
