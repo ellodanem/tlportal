@@ -5732,3 +5732,29 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes: added `HIDE_EMPTY_RETIRED_SUBSCRIPTIONS` (lib/domain/canonical-subscription-merge.ts): ended/canceled subscriptions with zero items are excluded from the Subscriptions workspace, the subscription header sibling switcher (current subscription always kept), the customer Subscriptions page and the customer billing workspace layout/billing links. Not deleted: rows stay for audit (merge event, ended schedules). Verified on prod data: 48 subscriptions, 4 hidden (Blue Taxi's merged-away d839fb6d/f24cb5b3/fc505045/bc866fc4), legacy rows unaffected. tsc clean; tests 393/395 (2 pre-existing failures).
 
+
+### 2026-11-02 11:24 UTC — commit `85ec2e1`
+
+- docs: log hiding of empty retired subscriptions
+
+
+### 2026-11-02 11:25 UTC — pre-push (`main` → origin) @ `85ec2e1`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 11:38 UTC — commit `0ffa07a`
+
+- fix(billing): keep canonical schedule lines in sync with services; read-only canonical schedule page
+
+
+- Agent notes: Blue Taxi's merged subscription (60f3967f) showed one EC$300 line on its recurring schedule because the merge moved the services but never refreshed the schedule's stored lines (invoices are always built from the services at issue time, so the 2027-01-27 invoice would have been 5 x 300 regardless). New lib/services/canonical-schedule-line-sync-service.ts rewrites those stored lines from the services; called from merge, add service, end service, rate change, transfer and service pause/resume. Canonical-owned schedules on /admin/recurring-invoices/[id] are now read-only with a link to the subscription Billing tab (the editor's save was always rejected by the canonical ownership guard). Production data fix applied via scripts/sync-canonical-schedule-lines.ts --customer 'Blue Taxi' --apply: schedule 819ddd1a now has 5 lines, 1500.00. Not pushed. tsc clean; tests 393/395 (2 pre-existing failures).
+
+
+### 2026-11-02 17:24 UTC — commit `ba340c9`
+
+- feat(billing): edit invoice lines of subscription-linked schedules (regroup, must match cycle total)
+
+
+- Agent notes: subscription-linked recurring schedules are editable again (owner request: one 'Annual GPS tracking x 5' line instead of one per vehicle). Editable: name, notes, payment text, due days, email settings and the invoice lines, provided the lines add up exactly to the subscription's cycle total (lib/domain/canonical-schedule-presentation.ts). Customer, cadence, currency, next issue date, vehicles and rates stay with the subscription. Regrouped lines are marked via RecurringScheduleLineItem.unitLabel = 'grouped' (no schema change); they are used at generation only while they still match the cycle total, otherwise per-service lines are issued, and the line sync no longer overwrites them while valid. Invoice snapshots still record one row per service (linked to the invoice line only when there is a single line). 'Reset to one line per vehicle' button restores derived lines. Not integration-tested against Postgres (no test DB locally); unit tests added, tsc clean, 397/399 (2 pre-existing failures). Not pushed.
+
