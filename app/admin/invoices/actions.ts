@@ -127,7 +127,7 @@ export async function createInvoiceFromPortal(
 
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/customers/${customer.id}`);
-  revalidatePath(`/admin/customers/${customer.id}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customer.id}/billing`);
   redirect("/admin/invoices");
 }
 
@@ -186,7 +186,7 @@ export async function updateInvoiceFromPortal(
     const tlId = await findTlCustomerIdByInvoilessExternalId(invoilessCustomerId);
     if (tlId) {
       revalidatePath(`/admin/customers/${tlId}`);
-      revalidatePath(`/admin/customers/${tlId}/billing`);
+      revalidatePath(`/admin/subscriptions/customers/${tlId}/billing`);
     }
   }
   redirect("/admin/invoices");

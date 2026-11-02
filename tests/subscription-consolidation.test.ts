@@ -238,7 +238,7 @@ test("adding a service has a single entry point", async () => {
 
 test("page renders do not write: no Stripe reconcile and no read-marking on render", async () => {
   const pages = [
-    "app/admin/customers/[id]/billing/page.tsx",
+    "app/admin/subscriptions/customers/[customerId]/billing/page.tsx",
     "app/admin/customers/[id]/subscriptions/page.tsx",
     "app/admin/customers/[id]/page.tsx",
     "app/admin/customers/[id]/messages/page.tsx",
@@ -257,7 +257,7 @@ test("customer surfaces have one authoritative place per operation", async () =>
     readFile("components/admin/customer-workspace-header.tsx", "utf8"),
     readFile("components/admin/customer-services-expand.tsx", "utf8"),
     readFile("components/admin/customer-assignment-service-actions.tsx", "utf8"),
-    readFile("app/admin/customers/[id]/billing/page.tsx", "utf8"),
+    readFile("app/admin/subscriptions/customers/[customerId]/billing/page.tsx", "utf8"),
     readFile("components/admin/customer-collection-summary.tsx", "utf8"),
     readFile("app/admin/customers/[id]/subscriptions/page.tsx", "utf8"),
   ]);

@@ -18,7 +18,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function rowHref(row: LedgerRow, customerId: string) {
-  return row.nativeInvoiceId ? `/admin/tl-invoices/${row.nativeInvoiceId}` : `/admin/customers/${customerId}/billing#provider-invoices`;
+  return row.nativeInvoiceId ? `/admin/tl-invoices/${row.nativeInvoiceId}` : `/admin/subscriptions/customers/${customerId}/billing#provider-invoices`;
 }
 
 function RowLabel({ row, customerId }: { row: LedgerRow; customerId: string }) {

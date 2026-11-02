@@ -22,7 +22,7 @@ test("Billing navigation keeps recurring schedules reachable through their exist
 });
 
 test("Customer billing exposes an existing manual recurring schedule without creating one", async () => {
-  const customerBilling = await source("app/admin/customers/[id]/billing/page.tsx");
+  const customerBilling = await source("app/admin/subscriptions/customers/[customerId]/billing/page.tsx");
 
   assert.match(customerBilling, /prisma\.recurringInvoiceSchedule\.findFirst/);
   assert.match(customerBilling, /href=\{`\/admin\/recurring-invoices\/\$\{recurringSchedule\.id\}`\}/);

@@ -6,6 +6,7 @@ import {
   collectionLabel,
   displayDate,
   money,
+  nativeBillingReadinessIssues,
 } from "@/components/admin/canonical-subscription/format";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
@@ -21,7 +22,7 @@ export function SubscriptionBillingTab({ subscription, permissions }: { subscrip
     ? [{ item, adjustment: item.initialAdjustment, status: subscription.adjustmentStatuses.find((entry) => entry.itemId === item.id) ?? null }]
     : []);
   const adjustmentExecutionEnabled = canonicalAnnualAdjustmentExecutionEnabled();
-  const issues = subscription.summary?.validationIssues ?? [];
+  const issues = nativeBillingReadinessIssues(subscription);
   const schedules = subscription.recurringSchedules;
   const showAnnualAdjustment = subscription.billingIntervalMonths === 12 && subscription.controlMode !== "legacy";
 
@@ -33,7 +34,10 @@ export function SubscriptionBillingTab({ subscription, permissions }: { subscrip
             <h2 id="renewal-heading" className="text-lg font-semibold">Billing &amp; renewal</h2>
             <p className="mt-1 text-sm text-zinc-500">Cycle totals come from effective service rates. MRR is a normalized comparison only, not what is charged each cycle.</p>
           </div>
-          <Link href={`/admin/billing?q=${subscription.id}`} className="min-h-11 rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open in Billing</Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/admin/subscriptions/customers/${subscription.customerId}/billing`} className="min-h-11 rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Customer billing</Link>
+            <Link href={`/admin/billing?q=${subscription.id}`} className="min-h-11 rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open in Billing</Link>
+          </div>
         </div>
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">Cycle total (per {cycleUnitLabel(subscription.billingIntervalMonths)})</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)}</dd></div>

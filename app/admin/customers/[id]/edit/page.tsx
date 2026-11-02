@@ -80,7 +80,7 @@ export default async function EditCustomerPage({ params, searchParams }: Props) 
       <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-300">
         Billing, Stripe subscriptions, and payment links are on the{" "}
         <Link
-          href={`/admin/customers/${customer.id}/billing`}
+          href={`/admin/subscriptions/customers/${customer.id}/billing`}
           className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
         >
           Billing tab

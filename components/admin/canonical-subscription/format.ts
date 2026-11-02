@@ -22,6 +22,20 @@ export function collectionLabel(value: string | null) {
   return "Not configured";
 }
 
+/**
+ * Billing readiness issues come from the native recurring-invoice execution check (manual
+ * collection, one open recurring schedule, canonical control). They describe whether this app can
+ * issue invoices itself, so they are meaningless, and misleading, for a subscription Stripe
+ * collects (or one with no collection method yet). Only manual-invoice subscriptions show them.
+ */
+export function nativeBillingReadinessIssues(subscription: {
+  collectionMethod: string | null;
+  summary?: { validationIssues: { code: string; message: string }[] } | null;
+}): { code: string; message: string }[] {
+  if (subscription.collectionMethod !== "manual_invoice") return [];
+  return subscription.summary?.validationIssues ?? [];
+}
+
 export function authorityLabel(access: string) {
   if (access === "canonical_operational" || access === "editable_draft") return "Canonical";
   if (access.includes("shadow")) return "Source-controlled";

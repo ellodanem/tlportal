@@ -21,7 +21,7 @@ export function StripeSubscriptionInvoicePanel({
       <p className="mt-1 text-indigo-900/90 dark:text-indigo-200/90">
         Paid via card on file. This row is mirrored from Stripe for unified AR — edit in{" "}
         <Link
-          href={`/admin/customers/${customerId}/billing`}
+          href={`/admin/subscriptions/customers/${customerId}/billing`}
           className="font-semibold underline underline-offset-2"
         >
           Customer → Billing

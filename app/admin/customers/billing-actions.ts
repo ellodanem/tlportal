@@ -256,7 +256,7 @@ function revalidateCustomerBillingPaths(customerId: string) {
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}/edit`);
   revalidatePath(`/admin/customers/${customerId}`);
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}/messages`);
   revalidatePath(`/admin/subscriptions/${customerId}/renewals`);
   revalidatePath("/admin/subscriptions/canonical/[subscriptionId]", "layout");
@@ -325,7 +325,7 @@ export async function setPaymentRemindersAction(
     payload: { paymentReminders: preference },
   });
 
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   return { error: null };
 }
@@ -955,7 +955,7 @@ export async function syncInvoilessBillingAction(customerId: string) {
   if (result.ok) {
     revalidatePath(`/admin/customers/${customerId}/edit`);
     revalidatePath(`/admin/customers/${customerId}`);
-    revalidatePath(`/admin/customers/${customerId}/billing`);
+    revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
     revalidatePath("/admin/customers");
   }
   return result;
@@ -985,7 +985,7 @@ export async function enableBillingSetupAction(
     actorUserId: session.sub,
   });
 
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/edit`);
   revalidatePath("/admin/customers");
@@ -1023,7 +1023,7 @@ export async function regenerateBillingInvoicePdfAction(
   }
 
   const result = await generateAndStorePaidInvoicePdf(billingInvoiceId, { force: true });
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
 
   if (!result.ok) {
     return { error: result.error };
@@ -1054,12 +1054,12 @@ export async function syncStripeInvoicesFromStripeAction(
   const result = await syncStripeInvoicesForCustomer(customerId);
 
   if (!result.ok) {
-    revalidatePath(`/admin/customers/${customerId}/billing`);
+    revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
     return { error: result.error };
   }
 
   if (result.listed === 0) {
-    revalidatePath(`/admin/customers/${customerId}/billing`);
+    revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
     return { error: null, message: "Stripe has no invoices for this customer yet." };
   }
 
@@ -1073,7 +1073,7 @@ export async function syncStripeInvoicesFromStripeAction(
     // Non-fatal; invoices are already mirrored.
   }
 
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
 
@@ -1130,7 +1130,7 @@ export async function emailBillingInvoicePdfAction(
     return { error: "Could not send receipt email." };
   }
 
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   return { error: null, message: `Receipt emailed to ${sent.sentTo}.` };
 }
 
@@ -1289,7 +1289,7 @@ export async function sendOutstandingInvoiceReminderAction(
     }
   }
 
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/messages`);
   revalidatePath("/admin/message-templates");
@@ -1327,7 +1327,7 @@ export async function resendPaymentDeclineEmailAction(
     return { error: result.error };
   }
 
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin");
   return {
@@ -1362,7 +1362,7 @@ export async function resendPaymentDeclineWhatsAppAction(
     return { error: result.error };
   }
 
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin");
   return {
@@ -1386,7 +1386,7 @@ export async function retryBillingNotificationAction(
   if (!deliveryId || !customerId) return { error: "Missing notification delivery." };
   const result = await retryBillingNotificationDelivery(deliveryId, session.sub);
   if (!result.ok) return { error: result.error };
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   return { error: null, ok: true, message: "Notification resent." };
 }

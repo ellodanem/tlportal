@@ -20,7 +20,7 @@ function revalidateRenewalPaths(customerId: string, deviceId?: string) {
   revalidatePath("/admin");
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}`);
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   if (deviceId) {
     revalidatePath("/admin/devices");
     revalidatePath(`/admin/devices/${deviceId}/edit`);

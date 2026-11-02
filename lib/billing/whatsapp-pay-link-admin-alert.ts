@@ -86,7 +86,7 @@ export async function notifyAdminsMissingPayLink(
   }
 
   const base = getAppBaseUrl();
-  const billingUrl = `${base}/admin/customers/${input.customerId}/billing`;
+  const billingUrl = `${base}/admin/subscriptions/customers/${input.customerId}/billing`;
   const name = customerDisplayName(input.customer);
   const phone = input.customer.phone?.trim() || "—";
 

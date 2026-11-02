@@ -422,7 +422,7 @@ export async function getDashboardStats() {
         id: `pay-fail-${failure.customerId}`,
         title: `Payment declined — ${name}`,
         meta: `${amountLabel}${declinePart} · ${emailLabel} · ${whatsAppLabel}${smsPart} — follow up on billing.`,
-        href: `/admin/customers/${failure.customerId}/billing`,
+        href: `/admin/subscriptions/customers/${failure.customerId}/billing`,
         tone: "urgent",
       },
     });
@@ -442,7 +442,7 @@ export async function getDashboardStats() {
         id: a.id,
         title: `Overdue service — ${name}`,
         meta: `${duePart} · IMEI ${a.device.imei}`,
-        href: `/admin/customers/${a.customer.id}/billing`,
+        href: `/admin/subscriptions/customers/${a.customer.id}/billing`,
         tone: "urgent",
       },
     });
@@ -458,7 +458,7 @@ export async function getDashboardStats() {
         id: `stripe-${account.id}`,
         title: `Stripe ${account.status} — ${name}`,
         meta: "Open customer billing to review card subscription.",
-        href: `/admin/customers/${account.customer.id}/billing`,
+        href: `/admin/subscriptions/customers/${account.customer.id}/billing`,
         tone: "urgent",
       },
     });
@@ -478,7 +478,7 @@ export async function getDashboardStats() {
         id: a.id,
         title: `Due soon — ${name}`,
         meta: `${duePart} · IMEI ${a.device.imei}`,
-        href: `/admin/customers/${a.customer.id}/billing`,
+        href: `/admin/subscriptions/customers/${a.customer.id}/billing`,
         tone: "warning",
       },
     });
@@ -500,7 +500,7 @@ export async function getDashboardStats() {
           id: `inv-${c.id}`,
           title: `Invoiless not linked — ${displayName(c)}`,
           meta: "Link billing accounts on the customer Billing tab.",
-          href: `/admin/customers/${c.id}/billing`,
+          href: `/admin/subscriptions/customers/${c.id}/billing`,
           tone: "info",
         },
       });
@@ -533,7 +533,7 @@ export async function getDashboardStats() {
       id: `up-${a.id}`,
       title: `Next bill — ${name}`,
       meta: `Due ${formatShortDue(a.nextDueDate)} · IMEI ${a.device.imei}`,
-      href: `/admin/customers/${a.customer.id}/billing`,
+      href: `/admin/subscriptions/customers/${a.customer.id}/billing`,
       tone: "info",
     });
     if (upcomingBillItems.length >= 6) break;

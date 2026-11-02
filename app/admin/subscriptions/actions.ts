@@ -86,7 +86,7 @@ export async function createSubscriptionAction(
       });
       if (!checkout.ok) return { error: checkout.error };
       revalidatePath("/admin/subscriptions");
-      revalidatePath(`/admin/customers/${customerId}/billing`);
+      revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
       return { ok: true, url: checkout.url, message: "Checkout link created. Send it to the customer to activate the subscription." };
     }
 
@@ -107,7 +107,7 @@ export async function createSubscriptionAction(
     await prisma.customer.update({ where: { id: customerId }, data: { billingMode: "manual_legacy" } });
     revalidatePath("/admin/subscriptions");
     revalidatePath("/admin/recurring-invoices");
-    revalidatePath(`/admin/customers/${customerId}/billing`);
+    revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
     return { ok: true, url: `/admin/recurring-invoices/${scheduleId}`, message: "Manual subscription created. Its first invoice is scheduled for today." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not create subscription." };

@@ -264,7 +264,7 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
         body:
           "AUTOMATED — TL Portal\n\nPayment declined — do_not_honor (•••• 7521)\n\n" +
           `Customer: ${SAMPLE.firstName}\nAmount: ${SAMPLE.amountLabel}\n\n` +
-          "Follow up: https://tlportal.vercel.app/admin/customers/…/billing",
+          "Follow up: https://tlportal.vercel.app/admin/subscriptions/customers/…/billing",
       },
       config: smsConfig,
     },

@@ -159,7 +159,7 @@ export async function resolvePaymentFailure(
       customerId = await resolveTlCustomerIdFromStripeInvoice(stripeInvoice);
     }
   } else if (customerId) {
-    payUrl = `${getAppBaseUrl()}/admin/customers/${customerId}/billing`;
+    payUrl = `${getAppBaseUrl()}/admin/subscriptions/customers/${customerId}/billing`;
     kind = "unknown";
   }
 
@@ -296,7 +296,7 @@ export async function handleStripePaymentFailure(input: {
       select: { company: true, firstName: true, lastName: true },
     });
     const name = customer ? customerDisplayName(customer) : "Unknown customer";
-    const billingUrl = `${getAppBaseUrl()}/admin/customers/${failure.customerId}/billing`;
+    const billingUrl = `${getAppBaseUrl()}/admin/subscriptions/customers/${failure.customerId}/billing`;
     const declinePart = failure.declineCode ? ` — ${failure.declineCode}` : "";
     const cardPart = failure.last4 ? ` (•••• ${failure.last4})` : "";
 

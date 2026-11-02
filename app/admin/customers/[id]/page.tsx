@@ -260,7 +260,7 @@ export default async function CustomerDetailPage({ params, searchParams }: Props
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Link
-            href={`/admin/customers/${customer.id}/billing`}
+            href={`/admin/subscriptions/customers/${customer.id}/billing`}
             className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
           >
             Billing

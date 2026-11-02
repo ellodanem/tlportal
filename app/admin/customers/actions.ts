@@ -113,10 +113,10 @@ export async function createCustomer(
 
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}`);
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
 
   if (!setupBilling) {
-    redirect(`/admin/customers/${customerId}/billing`);
+    redirect(`/admin/subscriptions/customers/${customerId}/billing`);
   }
 
   const modeRaw = String(formData.get("billingSetupMode") ?? "").trim();
@@ -142,7 +142,7 @@ export async function createCustomer(
     setupMessages.length > 0
       ? `&warn=${encodeURIComponent(setupMessages.join(" "))}`
       : "";
-  redirect(`/admin/customers/${customerId}/billing?setup=1${warnQuery}`);
+  redirect(`/admin/subscriptions/customers/${customerId}/billing?setup=1${warnQuery}`);
 }
 
 export async function updateCustomer(

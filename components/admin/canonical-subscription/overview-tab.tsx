@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { CanonicalManualActivationForm } from "@/components/admin/canonical-subscription-activation-form";
-import { cardClass, collectionLabel, cycleUnit, displayDate, iso, money } from "@/components/admin/canonical-subscription/format";
+import { cardClass, collectionLabel, cycleUnit, displayDate, iso, money, nativeBillingReadinessIssues } from "@/components/admin/canonical-subscription/format";
 import {
   subscriptionAdvancedPath,
   subscriptionBasePath,
@@ -37,7 +37,7 @@ export function SubscriptionOverviewTab({
     { label: "Billing decision selected", detail: billingReady ? `${collectionLabel(subscription.collectionMethod)} · renews ${displayDate(subscription.nextBillingDate)}` : "Choose a collection method and renewal date", complete: billingReady },
   ];
 
-  const issues = subscription.summary?.validationIssues ?? [];
+  const issues = nativeBillingReadinessIssues(subscription);
   const uninvoicedAdjustments = activeServices.filter((item) => item.initialAdjustment && !item.initialAdjustment.invoice).length;
   const preview = activeServices.slice(0, PREVIEW_LIMIT);
 

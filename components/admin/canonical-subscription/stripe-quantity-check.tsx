@@ -6,6 +6,7 @@ import {
   billableServiceCountAtRenewal,
   evaluateCanonicalStripeQuantity,
 } from "@/lib/domain/canonical-stripe-quantity-check";
+import { subscriptionBasePath } from "@/lib/domain/canonical-subscription-navigation";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
 import { compareTlStripeSubscription } from "@/lib/services/stripe-subscription-sync-service";
 
@@ -29,7 +30,9 @@ export async function StripeQuantityCheck({ subscription, canManage }: { subscri
     linkedExternalSubscriptionId: linked?.externalSubscriptionId ?? null,
     sync,
   });
-  const renewalsHref = `/admin/subscriptions/${subscription.customerId}/renewals`;
+  // The quantity mismatch is reconciled on this subscription's own services, not on the legacy
+  // customer-level renewals page.
+  const servicesHref = `${subscriptionBasePath(subscription.id)}/services`;
 
   if (check.state === "in_sync") {
     return (
@@ -60,7 +63,7 @@ export async function StripeQuantityCheck({ subscription, canManage }: { subscri
           : `The customer has ${plural(check.deviceCount, "active device")} on this billing term, so the one-click update would set the wrong quantity. Reconcile the services and device assignments first.`}
         {sync.reason ? ` ${sync.reason}` : ""}
       </p>
-      <Link href={renewalsHref} className="mt-2 inline-block font-semibold text-emerald-700 underline dark:text-emerald-400">Open subscription operations</Link>
+      <Link href={servicesHref} className="mt-2 inline-block font-semibold text-emerald-700 underline dark:text-emerald-400">Review services on this subscription</Link>
     </section>
   );
 }

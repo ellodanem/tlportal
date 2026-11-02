@@ -35,7 +35,7 @@ export function CustomerFinancialSummary({
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Financial snapshot</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Recorded TL Portal invoices only. A zero here does not confirm that the current renewal was paid.</p>
         </div>
-        <Link href={`/admin/customers/${customerId}/billing`} className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Open billing →</Link>
+        <Link href={`/admin/subscriptions/customers/${customerId}/billing`} className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">Open billing →</Link>
       </div>
       <dl className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-950/60">

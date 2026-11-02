@@ -336,7 +336,7 @@ export async function getSubscriptionHealthReport() {
       id: `sub-${sub.id}`,
       title: `${displayName(sub.customer)} — subscription ${sub.status.replace("_", " ")}`,
       meta: "Review card billing and payment status.",
-      href: `/admin/customers/${sub.customerId}/billing`,
+      href: `/admin/subscriptions/customers/${sub.customerId}/billing`,
       tone: "urgent",
     });
   }
@@ -346,7 +346,7 @@ export async function getSubscriptionHealthReport() {
       id: `stripe-${account.id}`,
       title: `${displayName(account.customer)} — Stripe ${account.status}`,
       meta: "Open customer billing to review card subscription.",
-      href: `/admin/customers/${account.customerId}/billing`,
+      href: `/admin/subscriptions/customers/${account.customerId}/billing`,
       tone: "urgent",
     });
   }
@@ -375,7 +375,7 @@ export async function getSubscriptionHealthReport() {
       id,
       title: `${displayName(sub.customer)} — subscription renews ${days <= 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`}`,
       meta: `Period ends ${formatShortDate(sub.currentPeriodEnd)}`,
-      href: `/admin/customers/${sub.customerId}/billing`,
+      href: `/admin/subscriptions/customers/${sub.customerId}/billing`,
       tone: days <= 2 ? "warning" : "info",
     });
     attentionIds.add(id);
@@ -393,7 +393,7 @@ export async function getSubscriptionHealthReport() {
       id,
       title: `${name} — ${urgency === "overdue" ? "overdue renewal" : "renewal due soon"}`,
       meta: `Next due ${assignment.nextDueDate ? formatShortDate(assignment.nextDueDate) : "—"} · ${label}`,
-      href: `/admin/customers/${assignment.customer.id}/billing`,
+      href: `/admin/subscriptions/customers/${assignment.customer.id}/billing`,
       tone: urgency === "overdue" ? "urgent" : "warning",
     });
     attentionIds.add(id);

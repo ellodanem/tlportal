@@ -120,10 +120,10 @@ export async function approveRegistrationRequest(
   revalidatePath("/admin/registration-requests");
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${customerId}/edit`);
-  revalidatePath(`/admin/customers/${customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   return {
     error: null,
-    next: `/admin/customers/${customerId}/billing?setup=1`,
+    next: `/admin/subscriptions/customers/${customerId}/billing?setup=1`,
   };
 }
 

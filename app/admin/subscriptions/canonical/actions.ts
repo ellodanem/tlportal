@@ -275,7 +275,7 @@ function revalidateCanonicalServiceOperation(input: {
   revalidatePath("/admin/subscriptions/canonical");
   revalidatePath(`/admin/customers/${input.customerId}`);
   revalidatePath(`/admin/customers/${input.customerId}/subscriptions`);
-  revalidatePath(`/admin/customers/${input.customerId}/billing`);
+  revalidatePath(`/admin/subscriptions/customers/${input.customerId}/billing`);
   revalidatePath("/admin/devices");
   revalidatePath(`/admin/devices/${input.deviceId}/edit`);
   if (input.simCardId) revalidatePath(`/admin/sims/${input.simCardId}`);
@@ -558,7 +558,7 @@ export async function createServiceAdjustmentInvoiceAction(
       });
     }
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
-    revalidatePath(`/admin/customers/${subscription.customerId}/billing`);
+    revalidatePath(`/admin/subscriptions/customers/${subscription.customerId}/billing`);
     revalidatePath("/admin/tl-invoices");
     const invoiceId = result.invoice?.invoiceId ?? null;
     return {

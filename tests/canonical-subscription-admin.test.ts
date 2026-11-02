@@ -266,7 +266,7 @@ test("UI routes include detail, empty, loading, error and price-history states",
 
 test("customer billing keeps financial history separate from subscription renewal operations", async () => {
   const [billing, renewals, customerSubscriptions, accountRibbon] = await Promise.all([
-    readFile("app/admin/customers/[id]/billing/page.tsx", "utf8"),
+    readFile("app/admin/subscriptions/customers/[customerId]/billing/page.tsx", "utf8"),
     readFile("app/admin/subscriptions/[customerId]/renewals/page.tsx", "utf8"),
     readFile("app/admin/customers/[id]/subscriptions/page.tsx", "utf8"),
     readFile("components/admin/customer-overview-billing-ribbon.tsx", "utf8"),

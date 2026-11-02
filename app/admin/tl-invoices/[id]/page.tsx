@@ -14,6 +14,7 @@ import { InvoiceDeleteForm, InvoicePaymentForm, InvoiceVoidForm } from "@/compon
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
+import { canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
 import { displayInvoiceNumber } from "@/lib/domain/native-billing-cutover";
 import { formatMoney, INVOICE_KIND_LABELS, INVOICE_STATUS_LABELS, invoiceStatusBadgeClass, PAYMENT_METHOD_LABELS } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
@@ -38,7 +39,7 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         lineItems: { orderBy: { sortOrder: "asc" } },
         payments: { where: { voidedAt: null }, orderBy: { receivedAt: "desc" } },
         sourceQuote: { select: { id: true, number: true } },
-        recurringSchedule: { select: { id: true, name: true, status: true } },
+        recurringSchedule: { select: { id: true, name: true, status: true, customerSubscriptionId: true, customerSubscription: { select: { lifecycleStatus: true } } } },
         billingInvoice: {
           select: {
             id: true,
@@ -208,7 +209,12 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
           <p className="font-medium text-zinc-900 dark:text-zinc-100">From recurring schedule</p>
           <p className="mt-1 text-zinc-600 dark:text-zinc-400">
             <Link
-              href={`/admin/recurring-invoices/${invoice.recurringSchedule.id}`}
+              href={
+                // A schedule derived from a canonical subscription is managed on that subscription.
+                invoice.recurringSchedule.customerSubscriptionId && invoice.recurringSchedule.customerSubscription?.lifecycleStatus != null && canonicalSubscriptionUiVisible()
+                  ? `/admin/subscriptions/canonical/${invoice.recurringSchedule.customerSubscriptionId}/billing`
+                  : `/admin/recurring-invoices/${invoice.recurringSchedule.id}`
+              }
               className="text-emerald-700 hover:underline dark:text-emerald-400"
             >
               {invoice.recurringSchedule.name?.trim() || "Recurring schedule"}
