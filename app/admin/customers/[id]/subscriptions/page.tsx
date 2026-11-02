@@ -178,10 +178,13 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Subscriptions</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">Commercial agreements, billable GPS services, prices, equipment assignments, and renewals.</p>
         </div>
-        <Link href={`/admin/subscriptions/canonical/new?customerId=${customer.id}`} className="inline-flex w-fit items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950">
-          <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
-          Add subscription
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {currentSubscriptions.length > 1 ? <Link href={`/admin/subscriptions/canonical/merge?customerId=${customer.id}`} className="inline-flex min-h-11 w-fit items-center rounded-xl border border-emerald-300 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30 dark:focus-visible:ring-offset-zinc-950">Merge subscriptions</Link> : null}
+          <Link href={`/admin/subscriptions/canonical/new?customerId=${customer.id}`} className="inline-flex w-fit items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950">
+            <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+            Add subscription
+          </Link>
+        </div>
       </div>
 
       <CustomerSubnav customerId={customer.id} active="subscriptions" />

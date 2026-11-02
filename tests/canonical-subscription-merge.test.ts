@@ -179,4 +179,9 @@ test("the customer page points at the merge screen when same-term subscriptions 
   const page = await read("app/admin/customers/[id]/subscriptions/page.tsx");
   assert.match(page, /suggestedMergeGroups/);
   assert.match(page, /canonical\/merge\?customerId=/);
+  // A permanent entry point, so the screen is reachable even when the hint's strict grouping finds nothing.
+  assert.match(page, /currentSubscriptions\.length > 1/);
+  assert.match(page, /Merge subscriptions/);
+  const workspace = await read("components/admin/subscriptions-workspace.tsx");
+  assert.match(workspace, /canonical\/merge\?customerId=\$\{group\.key\}/);
 });

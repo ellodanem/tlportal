@@ -266,6 +266,12 @@ function GroupRows({
         {group.subscriptions.map((subscription, index) => (
           <ChildRow key={subscription.id} subscription={subscription} extra={extra} last={index === group.subscriptions.length - 1} />
         ))}
+        {group.subscriptions.length > 1 ? (
+          <div role="row" className="flex flex-col gap-1 px-4 py-3 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between dark:text-zinc-400">
+            <span role="cell">Several of these may share the same terms. Merged, {group.customer} gets one invoice instead of one per subscription.</span>
+            <span role="cell"><Link href={`/admin/subscriptions/canonical/merge?customerId=${group.key}`} className="inline-flex min-h-11 items-center font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400">Review merge</Link></span>
+          </div>
+        ) : null}
       </div>
     </>
   );

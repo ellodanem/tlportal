@@ -31,6 +31,14 @@ function displayDate(value: string | null) {
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(undefined, { dateStyle: "medium", timeZone: "UTC" });
 }
 
+/** Turns a compatibility key (interval|currency|renewal|collection|lifecycle|grace) into readable terms. */
+function describeTerms(key: string) {
+  const [interval, currency, renewal, collection, lifecycle, grace] = key.split("|");
+  const months = Number(interval);
+  const cycle = Number.isFinite(months) ? cadenceLabel(months) : "no cycle";
+  return [cycle, currency, renewal === "none" ? "no renewal date" : displayDate(renewal), collection.replaceAll("_", " "), lifecycle.replaceAll("_", " "), `${grace} grace days`].join(" · ");
+}
+
 function money(cents: number, currency: string) {
   return `${currency === "XCD" ? "EC$" : `${currency} `}${formatCents(cents)}`;
 }
@@ -65,7 +73,15 @@ export function CanonicalSubscriptionMergeForm({ customerLabel, candidates }: { 
       <div className={cardClass}>
         <h2 className="text-lg font-semibold">Nothing to merge</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{customerLabel} has no two subscriptions with identical terms (same cycle, renewal date, collection method, status and grace period) that have never been billed.</p>
-        {blocked.length ? <BlockedList blocked={blocked} /> : null}
+        {candidates.length ? (
+          <div className="mt-4">
+            <h3 className="text-sm font-semibold">Terms compared</h3>
+            <p className="mt-1 text-xs text-zinc-500">Cycle · currency · renewal · collection · status · grace days. Subscriptions must match on every one.</p>
+            <ul className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-zinc-300">
+              {candidates.map((candidate) => <li key={candidate.id}><span className="font-medium">{candidate.name}</span> — {describeTerms(candidate.key)}{candidate.blockers.length ? ` · ${candidate.blockers[0]}` : ""}</li>)}
+            </ul>
+          </div>
+        ) : null}
       </div>
     );
   }
