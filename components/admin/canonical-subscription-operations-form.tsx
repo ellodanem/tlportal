@@ -58,24 +58,33 @@ export function CanonicalServicePauseForm({
   subscriptionId,
   subscriptionItemId,
   assignmentId,
+  variant = "card",
 }: {
   subscriptionId: string;
   subscriptionItemId: string;
   assignmentId: string;
+  /** "bare" drops the boxed card, heading and long explainer for use inside a labelled tab. */
+  variant?: "card" | "bare";
 }) {
+  const bare = variant === "bare";
   const [state, action, pending] = useActionState(pauseCanonicalServiceAssignmentAction, initialState);
   useRefreshOnSuccess(state);
-  return <form action={action} onSubmit={confirmServiceOperation("Pause this service? It will not be billed from the next renewal, and the tracker disposition is recorded.")} className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+  return <form action={action} onSubmit={confirmServiceOperation("Pause this service? It will not be billed from the next renewal, and the tracker disposition is recorded.")} className={bare ? "" : "rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/60 dark:bg-amber-950/20"}>
     <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
-    <h3 className="font-semibold">Pause service</h3>
-    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Use for a temporary break. The service stays on the subscription but is not billed from the next renewal; the current period is not refunded or credited. The device is recorded as returned or in stock, and you can resume it later.</p>
+    {bare ? <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-300">
+      <li>Not billed from the next renewal. The current period is not refunded or credited.</li>
+      <li>The tracker is recorded as returned or in stock. You can resume later.</li>
+    </ul> : <>
+      <h3 className="font-semibold">Pause service</h3>
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Use for a temporary break. The service stays on the subscription but is not billed from the next renewal; the current period is not refunded or credited. The device is recorded as returned or in stock, and you can resume it later.</p>
+    </>}
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-medium">Reason<select required name="pauseReason" defaultValue="no_vehicle" className={inputClass}>{SERVICE_PAUSE_REASONS.map((reason) => <option key={reason} value={reason}>{SERVICE_PAUSE_REASON_LABEL[reason]}</option>)}</select></label>
       <label className="text-sm font-medium">Tracker disposition<select required name="deviceDisposition" defaultValue="returned" className={inputClass}>{Object.entries(SERVICE_PAUSE_DISPOSITION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label className="text-sm font-medium sm:col-span-2">Note (optional)<input name="pauseNote" className={inputClass} placeholder="Reason or collection note" /></label>
     </div>
     <Feedback state={state} />
-    <button disabled={pending} className="mt-4 rounded-lg border border-amber-400 px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50 dark:border-amber-700 dark:text-amber-200">{pending ? "Pausing…" : "Pause service"}</button>
+    <button disabled={pending} className={bare ? "mt-4 inline-flex min-h-11 items-center rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:opacity-50 dark:focus-visible:ring-offset-zinc-900" : "mt-4 rounded-lg border border-amber-400 px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50 dark:border-amber-700 dark:text-amber-200"}>{pending ? "Pausing…" : "Pause service"}</button>
   </form>;
 }
 
@@ -85,19 +94,28 @@ export function CanonicalServiceResumeForm({
   assignmentId,
   deviceLabel,
   billedByStripe,
+  variant = "card",
 }: {
   subscriptionId: string;
   subscriptionItemId: string;
   assignmentId: string;
   deviceLabel: string;
   billedByStripe: boolean;
+  /** "bare" drops the boxed card, heading and long explainer for use inside a labelled tab. */
+  variant?: "card" | "bare";
 }) {
+  const bare = variant === "bare";
   const [state, action, pending] = useActionState(resumeCanonicalServiceAssignmentAction, initialState);
   useRefreshOnSuccess(state);
-  return <form action={action} onSubmit={confirmServiceOperation(`Resume service for ${deviceLabel}? The tracker is marked assigned again.`)} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+  return <form action={action} onSubmit={confirmServiceOperation(`Resume service for ${deviceLabel}? The tracker is marked assigned again.`)} className={bare ? "" : "rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20"}>
     <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
-    <h3 className="font-semibold">Resume service</h3>
-    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This service is paused and is not being billed. Resuming marks {deviceLabel} assigned again and bills the service from the next renewal at its usual price. Nothing is invoiced or charged for the paused time.</p>
+    {bare ? <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-300">
+      <li>Billed again from the next renewal at the usual price.</li>
+      <li>{deviceLabel} is marked assigned. Nothing is invoiced or charged for the paused time.</li>
+    </ul> : <>
+      <h3 className="font-semibold">Resume service</h3>
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This service is paused and is not being billed. Resuming marks {deviceLabel} assigned again and bills the service from the next renewal at its usual price. Nothing is invoiced or charged for the paused time.</p>
+    </>}
     {billedByStripe ? <p className="mt-2 text-sm text-amber-900 dark:text-amber-200">Card billing: raise the Stripe vehicle quantity before the next charge. The Stripe check on this page shows the current numbers.</p> : null}
     <Feedback state={state} />
     <button disabled={pending} className="mt-4 min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">{pending ? "Resuming…" : "Resume service"}</button>

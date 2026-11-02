@@ -10,6 +10,7 @@ import {
   endedServiceReason,
   partitionServicesByBilling,
 } from "@/lib/domain/canonical-service-lifecycle";
+import { currentServiceRate, scheduledServiceRate } from "@/lib/domain/canonical-service-presentation";
 import {
   subscriptionAddServicePath,
   subscriptionServicePath,
@@ -28,7 +29,10 @@ function currentAssignment(item: Item) {
 }
 
 function RowActions({ subscription, item, label, canManage }: { subscription: SubscriptionDetail; item: Item; label: string; canManage: boolean }) {
-  const rate = item.rates.at(-1);
+  // The rate in force today, not the latest row: a scheduled future rate must not read as the current price.
+  const rate = currentServiceRate(item.rates);
+  const scheduledRate = scheduledServiceRate(item.rates);
+  const currency = rate?.currency ?? subscription.currency ?? "XCD";
   const assignment = currentAssignment(item);
   const device = assignment?.device;
   const open = assignment && assignment.endDate == null && assignment.status !== "cancelled" && device;
@@ -42,6 +46,10 @@ function RowActions({ subscription, item, label, canManage }: { subscription: Su
           serviceLabel={label}
           nextBillingDate={iso(subscription.nextBillingDate)}
           currentAmount={rate?.agreedAmountPerCycle.toString() ?? subscription.agreedAmountPerCycle?.toString() ?? "0.00"}
+          currency={currency}
+          currentRateText={rate ? `${money(rate.agreedAmountPerCycle.toString(), rate.currency)} / ${cycleUnit(rate.billingIntervalMonths)}` : undefined}
+          scheduledRateText={scheduledRate ? `${money(scheduledRate.agreedAmountPerCycle.toString(), scheduledRate.currency)} / ${cycleUnit(scheduledRate.billingIntervalMonths)} from ${displayDate(scheduledRate.effectiveFrom)}` : null}
+          billingEndsOn={iso(item.billingEffectiveUntil) || null}
           servicePageHref={href}
           assignment={open ? { id: assignment.id, deviceId: device.id, deviceLabel: device.label?.trim() || device.deviceModel.name, status: assignment.status } : null}
         />

@@ -499,7 +499,7 @@ function ManageRateDialog({ subscriptionId, itemId, serviceLabel, nextBillingDat
         <span className="text-zinc-500">Current rate </span><span className="font-semibold tabular-nums">{currentRateText}</span>
         {scheduledRateText ? <span className="block text-zinc-600 dark:text-zinc-400">Already scheduled: {scheduledRateText}</span> : null}
       </p>
-      <ScheduleCanonicalDraftRateForm itemId={itemId} subscriptionId={subscriptionId} nextBillingDate={nextBillingDate} currentAmount={currentAmount} currencyLabel={currencyPrefix(currency)} />
+      <ScheduleCanonicalDraftRateForm itemId={itemId} subscriptionId={subscriptionId} nextBillingDate={nextBillingDate} currentAmount={currentAmount} currencyLabel={currencyPrefix(currency)} currency={currency} />
       <Footer>
         <button type="button" onClick={onClose} className={secondaryButton}>Close</button>
       </Footer>
