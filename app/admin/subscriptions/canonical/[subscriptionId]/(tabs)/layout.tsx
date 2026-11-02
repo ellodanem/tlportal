@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+
+import { StripeQuantityCheck } from "@/components/admin/canonical-subscription/stripe-quantity-check";
 import { SubscriptionHeader } from "@/components/admin/canonical-subscription/subscription-header";
 import { requireSubscriptionPage } from "@/lib/admin/canonical-subscription-page-data";
 
@@ -17,6 +20,9 @@ export default async function SubscriptionTabsLayout({ children, params }: Props
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 text-zinc-950 dark:text-zinc-50">
       <SubscriptionHeader subscription={subscription} permissions={permissions} />
+      <Suspense fallback={null}>
+        <StripeQuantityCheck subscription={subscription} canManage={permissions.canManage} />
+      </Suspense>
       {children}
     </div>
   );

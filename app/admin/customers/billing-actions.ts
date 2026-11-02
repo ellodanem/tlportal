@@ -258,6 +258,8 @@ function revalidateCustomerBillingPaths(customerId: string) {
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}/messages`);
+  revalidatePath(`/admin/subscriptions/${customerId}/renewals`);
+  revalidatePath("/admin/subscriptions/canonical/[subscriptionId]", "layout");
 }
 
 export async function setBillingModeAction(
