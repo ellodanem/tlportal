@@ -29,6 +29,7 @@ import {
   updateDraftSubscriptionCollectionMethod,
   updateDraftSubscriptionItemCommercialDetails,
 } from "@/lib/services/canonical-subscription-application-service";
+import { correctSubscriptionBillingDates } from "@/lib/services/canonical-billing-date-correction-service";
 import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
 import { SubscriptionProrationError } from "@/lib/domain/subscription-proration";
 import { createAnnualServiceAdjustmentInvoice } from "@/lib/services/canonical-annual-adjustment-service";
@@ -183,6 +184,44 @@ export async function updateCanonicalDraftCollectionMethodAction(
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
     return { message: "Collection method saved. No provider, invoice, or payment operation was started." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * Fixes a subscription that was set up with the wrong start / renewal date. Refused by the
+ * service once anything has been billed from the old dates; never invoices, charges or notifies.
+ */
+export async function correctCanonicalBillingDatesAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const { session, subscription } = await requireManageableCanonicalSubscription(subscriptionId);
+    const reason = text(formData, "reason");
+    if (reason.length < 3) return { error: "Give a short reason for the correction (at least 3 characters)." };
+    if (reason.length > 300) return { error: "Keep the reason under 300 characters." };
+    if (text(formData, "confirm") !== "yes") return { error: "Confirm that nothing has been invoiced or charged from the current dates." };
+    const result = await correctSubscriptionBillingDates({
+      subscriptionId,
+      commercialStartDate: text(formData, "commercialStartDate"),
+      nextBillingDate: text(formData, "nextBillingDate"),
+    });
+    await recordOperationalEvent({
+      category: "subscription.billing_dates_corrected",
+      summary: "Subscription billing dates corrected by staff before any billing.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, reason, previous: result.plan.previous, next: result.plan.next, services: result.plan.items.length, schedules: result.scheduleCount, devices: result.assignmentCount },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical/[subscriptionId]", "layout");
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
+    revalidatePath("/admin/devices");
+    return { message: `Billing dates corrected: starts ${result.plan.next.commercialStartDate}, renews ${result.plan.next.nextBillingDate}. No invoice, charge, provider change or notification was made.` };
   } catch (error) {
     return actionError(error);
   }

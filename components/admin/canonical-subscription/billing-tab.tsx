@@ -7,6 +7,7 @@ import {
   money,
   nativeBillingReadinessIssues,
 } from "@/components/admin/canonical-subscription/format";
+import { CanonicalBillingDatesForm } from "@/components/admin/canonical-billing-dates-form";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
 import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
@@ -134,6 +135,25 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
         </div>
       </section>
       </div>
+
+      {permissions.canManage
+        && subscription.collectionMethod === "manual_invoice"
+        && subscription.commercialStartDate
+        && subscription.nextBillingDate
+        && subscription.billingIntervalMonths ? (
+        <details className={`${cardClass} group p-5`}>
+          <summary className="cursor-pointer text-sm font-semibold">Entered the wrong start or renewal date?</summary>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+            Correct it here instead of recreating the subscription. Services, rates, the recurring schedule and installed devices move to the new dates together. This is refused once an invoice, provider link or billing operation exists for the current dates.
+          </p>
+          <CanonicalBillingDatesForm
+            subscriptionId={subscription.id}
+            startDate={subscription.commercialStartDate.toISOString().slice(0, 10)}
+            renewalDate={subscription.nextBillingDate.toISOString().slice(0, 10)}
+            intervalMonths={subscription.billingIntervalMonths}
+          />
+        </details>
+      ) : null}
 
       {adjustmentRows.length ? (
         <section aria-labelledby="agreed-charges-heading" className="rounded-xl border border-amber-200 bg-white p-5 dark:border-amber-900 dark:bg-zinc-900">
