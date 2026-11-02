@@ -55,7 +55,30 @@ export function endedServiceReason(item: {
   return "ended";
 }
 
-/** Count of services still billed; the number shown beside "Billable services". */
+/**
+ * A service the customer is being billed for right now: not ended, and not paused. Paused services
+ * stay on the subscription but drop out of the next renewal, so counts shown beside the recurring
+ * total and the Stripe quantity leave them out, exactly as the total does.
+ */
+export function isServiceBilling(item: ServiceLifecycleItem, now: Date = new Date()): boolean {
+  return item.status !== "paused" && !isServiceBillingEnded(item, now);
+}
+
+/** Count of services being billed; the number shown beside "Billable services". */
 export function countBillableServices(items: readonly ServiceLifecycleItem[], now: Date = new Date()): number {
-  return items.filter((item) => !isServiceBillingEnded(item, now)).length;
+  return items.filter((item) => isServiceBilling(item, now)).length;
+}
+
+/**
+ * Service count for a subscription row in lists. A subscription that has itself ended keeps its
+ * full historical count; a current one counts only services being billed.
+ */
+export function subscriptionServiceCount(
+  subscription: { lifecycleStatus: string | null; items: readonly ServiceLifecycleItem[] },
+  now: Date = new Date(),
+): number {
+  if (subscription.lifecycleStatus === "ended" || subscription.lifecycleStatus === "canceled") {
+    return subscription.items.length;
+  }
+  return countBillableServices(subscription.items, now);
 }

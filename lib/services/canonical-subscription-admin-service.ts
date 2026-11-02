@@ -9,6 +9,7 @@ import {
   normalizedMonthlyAmount,
   type CanonicalSubscriptionAdminRow,
 } from "@/lib/domain/canonical-subscription-admin";
+import { subscriptionServiceCount } from "@/lib/domain/canonical-service-lifecycle";
 import { buildSubscriptionWorkspace, type WorkspaceQuery } from "@/lib/domain/canonical-subscription-workspace";
 import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
 import { getAnnualServiceAdjustmentProposal } from "@/lib/services/canonical-annual-adjustment-service";
@@ -26,18 +27,16 @@ function customerLabel(customer: {
 }
 
 /**
- * Billable services on a subscription. Ended or canceled services are not counted
- * for a current subscription (matching the subscription details sibling list);
- * a subscription that has itself ended keeps its full historical service count.
+ * Billable services on a subscription: live and unpaused. Ended services (by status or by a billing
+ * end date that has passed, e.g. an asset loss) and paused services are not counted for a current
+ * subscription, matching the recurring total beside the count. A subscription that has itself ended
+ * keeps its full historical service count.
  */
 function billableServiceCount(subscription: {
   lifecycleStatus: string | null;
-  items: { status: string }[];
+  items: { status: string; billingEffectiveUntil: Date | null }[];
 }): number {
-  if (subscription.lifecycleStatus === "ended" || subscription.lifecycleStatus === "canceled") {
-    return subscription.items.length;
-  }
-  return subscription.items.filter((item) => item.status !== "ended" && item.status !== "canceled").length;
+  return subscriptionServiceCount(subscription);
 }
 
 export type { CanonicalSubscriptionAdminRow } from "@/lib/domain/canonical-subscription-admin";
@@ -58,7 +57,7 @@ export async function listCanonicalSubscriptionAdminRows(): Promise<CanonicalSub
       canonicalMigrationLedger: { select: { id: true } },
       providerLinks: { select: { provider: true, endedAt: true, lastError: true } },
       billingOperations: { select: { status: true, failureMessage: true } },
-      items: { select: { status: true } },
+      items: { select: { status: true, billingEffectiveUntil: true } },
     },
   });
 

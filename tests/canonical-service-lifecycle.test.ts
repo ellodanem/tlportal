@@ -5,8 +5,10 @@ import { assetLossNote } from "../lib/domain/asset-loss";
 import {
   countBillableServices,
   endedServiceReason,
+  isServiceBilling,
   isServiceBillingEnded,
   partitionServicesByBilling,
+  subscriptionServiceCount,
 } from "../lib/domain/canonical-service-lifecycle";
 
 const now = new Date("2026-11-01T12:00:00.000Z");
@@ -46,4 +48,30 @@ test("the ended reason is read from the loss and vehicle-sale notes", () => {
   assert.equal(endedServiceReason(sold), "vehicle_sold");
   assert.equal(endedServiceReason(plain), "ended");
   assert.equal(endedServiceReason({ serviceAssignments: [] }), "ended");
+});
+
+test("only live, unpaused services count as billable", () => {
+  assert.equal(isServiceBilling({ status: "active", billingEffectiveUntil: null }, now), true);
+  assert.equal(isServiceBilling({ status: "active", billingEffectiveUntil: day("2026-12-01") }, now), true);
+  assert.equal(isServiceBilling({ status: "paused", billingEffectiveUntil: null }, now), false);
+  assert.equal(isServiceBilling({ status: "active", billingEffectiveUntil: day("2026-10-27") }, now), false);
+  assert.equal(isServiceBilling({ status: "ended", billingEffectiveUntil: null }, now), false);
+});
+
+test("the subscriptions list count leaves out ended and paused services (Naim Augustin: Vitz + sunk boat = 1)", () => {
+  const items = [
+    { status: "active", billingEffectiveUntil: null },
+    { status: "active", billingEffectiveUntil: day("2026-10-27") },
+  ];
+  assert.equal(subscriptionServiceCount({ lifecycleStatus: "active", items }, now), 1);
+  assert.equal(subscriptionServiceCount({ lifecycleStatus: "active", items: [...items, { status: "paused", billingEffectiveUntil: null }] }, now), 1);
+});
+
+test("a subscription that has itself ended keeps its full historical service count", () => {
+  const items = [
+    { status: "ended", billingEffectiveUntil: day("2026-09-01") },
+    { status: "ended", billingEffectiveUntil: day("2026-09-01") },
+  ];
+  assert.equal(subscriptionServiceCount({ lifecycleStatus: "ended", items }, now), 2);
+  assert.equal(subscriptionServiceCount({ lifecycleStatus: "canceled", items }, now), 2);
 });
