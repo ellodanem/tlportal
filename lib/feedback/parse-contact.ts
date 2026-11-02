@@ -1,5 +1,6 @@
 export const FEEDBACK_BODY_MAX = 4000;
 export const FEEDBACK_NAME_MAX = 80;
+export const FEEDBACK_COMPANY_MAX = 120;
 export const FEEDBACK_CONTACT_MAX = 120;
 export const FEEDBACK_ADMIN_NOTE_MAX = 2000;
 

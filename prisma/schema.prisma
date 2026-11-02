@@ -691,6 +691,7 @@ model FeedbackSubmission {
   body            String  @db.Text
   rating          Int?
   displayName     String?
+  companyName     String?
   email           String?
   phone           String?
   sharePermission Boolean @default(false)

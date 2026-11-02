@@ -87,6 +87,10 @@ export default async function FeedbackDetailPage({ params }: Props) {
               <dd className="text-right text-zinc-900 dark:text-zinc-50">{r.displayName?.trim() || "—"}</dd>
             </div>
             <div className="flex justify-between gap-4">
+              <dt className="text-zinc-500 dark:text-zinc-400">Company</dt>
+              <dd className="text-right text-zinc-900 dark:text-zinc-50">{r.companyName?.trim() || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
               <dt className="text-zinc-500 dark:text-zinc-400">Rating</dt>
               <dd className="text-right text-zinc-900 dark:text-zinc-50">{stars(r.rating)}</dd>
             </div>

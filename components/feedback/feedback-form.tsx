@@ -7,7 +7,12 @@ import {
   feedbackFormInitialState,
   type FeedbackFormState,
 } from "@/app/feedback/feedback-form-state";
-import { FEEDBACK_BODY_MAX, FEEDBACK_CONTACT_MAX, FEEDBACK_NAME_MAX } from "@/lib/feedback/parse-contact";
+import {
+  FEEDBACK_BODY_MAX,
+  FEEDBACK_COMPANY_MAX,
+  FEEDBACK_CONTACT_MAX,
+  FEEDBACK_NAME_MAX,
+} from "@/lib/feedback/parse-contact";
 
 function fieldClass() {
   return "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none ring-emerald-500 focus:border-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
@@ -152,6 +157,21 @@ export function FeedbackForm() {
           type="text"
           maxLength={FEEDBACK_CONTACT_MAX}
           autoComplete="off"
+          className={fieldClass()}
+        />
+      </div>
+
+      <div>
+        <label className={labelClass()} htmlFor="feedback-company">
+          Company name
+        </label>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Optional</p>
+        <input
+          id="feedback-company"
+          name="companyName"
+          type="text"
+          maxLength={FEEDBACK_COMPANY_MAX}
+          autoComplete="organization"
           className={fieldClass()}
         />
       </div>

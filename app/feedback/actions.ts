@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   FEEDBACK_BODY_MAX,
+  FEEDBACK_COMPANY_MAX,
   FEEDBACK_CONTACT_MAX,
   FEEDBACK_NAME_MAX,
   parseFeedbackContact,
@@ -24,6 +25,7 @@ export async function submitFeedback(
 
   const body = String(formData.get("body") ?? "").trim();
   const displayNameRaw = String(formData.get("displayName") ?? "").trim();
+  const companyNameRaw = String(formData.get("companyName") ?? "").trim();
   const contactRaw = String(formData.get("contact") ?? "").trim();
   const sharePermission =
     formData.get("sharePermission") === "on" || formData.get("sharePermission") === "true";
@@ -41,6 +43,9 @@ export async function submitFeedback(
   if (displayNameRaw.length > FEEDBACK_NAME_MAX) {
     return { ok: false, error: `Keep your name under ${FEEDBACK_NAME_MAX} characters.` };
   }
+  if (companyNameRaw.length > FEEDBACK_COMPANY_MAX) {
+    return { ok: false, error: `Keep your company name under ${FEEDBACK_COMPANY_MAX} characters.` };
+  }
   if (contactRaw.length > FEEDBACK_CONTACT_MAX) {
     return { ok: false, error: "Email or phone is too long." };
   }
@@ -49,6 +54,7 @@ export async function submitFeedback(
   }
 
   const displayName = displayNameRaw || null;
+  const companyName = companyNameRaw || null;
   const { email, phone } = parseFeedbackContact(contactRaw);
 
   let matchesCustomerId: string | null = null;
@@ -73,6 +79,7 @@ export async function submitFeedback(
         body,
         rating,
         displayName,
+        companyName,
         email,
         phone,
         sharePermission,

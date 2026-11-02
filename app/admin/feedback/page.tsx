@@ -70,6 +70,7 @@ export default async function FeedbackInboxPage({ searchParams }: Props) {
       body: true,
       rating: true,
       displayName: true,
+      companyName: true,
       sharePermission: true,
       submittedAt: true,
     },
@@ -126,6 +127,9 @@ export default async function FeedbackInboxPage({ searchParams }: Props) {
                 <p className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-50">
                   {r.displayName?.trim() || "Anonymous"}
                 </p>
+                {r.companyName?.trim() ? (
+                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{r.companyName}</p>
+                ) : null}
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{previewBody(r.body)}</p>
                 <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                   {formatWhen(r.submittedAt)} · {stars(r.rating)}
@@ -148,6 +152,7 @@ export default async function FeedbackInboxPage({ searchParams }: Props) {
             <tr>
               <th className="px-4 py-3">Submitted</th>
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Company</th>
               <th className="px-4 py-3">Rating</th>
               <th className="px-4 py-3">Visibility</th>
               <th className="px-4 py-3">Status</th>
@@ -157,7 +162,7 @@ export default async function FeedbackInboxPage({ searchParams }: Props) {
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No feedback in this view yet.
                 </td>
               </tr>
@@ -168,6 +173,7 @@ export default async function FeedbackInboxPage({ searchParams }: Props) {
                     {formatWhen(r.submittedAt)}
                   </td>
                   <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">{r.displayName?.trim() || "Anonymous"}</td>
+                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.companyName?.trim() || "—"}</td>
                   <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{stars(r.rating)}</td>
                   <td className="px-4 py-3">
                     {r.sharePermission ? (
