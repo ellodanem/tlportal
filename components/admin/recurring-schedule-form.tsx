@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import {
   saveRecurringScheduleAction,
@@ -47,6 +48,19 @@ function todayYmd(): string {
 }
 
 const initialSave: SaveRecurringScheduleState = {};
+
+function SaveButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="min-h-11 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+    >
+      {pending ? "Saving…" : label}
+    </button>
+  );
+}
 
 function RecurringInvoicePreview({ customer, clientName, currency, lines, notes, paymentInstructions, interval, nextIssueDate, total }: { customer: RecurringCustomerOption | null; clientName: string; currency: string; lines: LineRow[]; notes: string; paymentInstructions: string; interval: string; nextIssueDate: string; total: number }) {
   const billTo = customer?.billToLines ?? (clientName.trim() ? [clientName.trim()] : []);
@@ -112,11 +126,18 @@ export function RecurringScheduleForm({
   const totalMismatch = canonicalOwned && canonicalCycleTotal != null
     && Math.round(recurringTotal * 100) !== Math.round(Number(canonicalCycleTotal) * 100);
 
+  // Saving an existing schedule stays on the same page, so confirm it visibly for a few seconds.
+  const [dismissedSave, setDismissedSave] = useState<SaveRecurringScheduleState | null>(null);
+  const savedVisible = Boolean(saveState.ok) && dismissedSave !== saveState;
+
   useEffect(() => {
-    if (saveState.ok && saveState.next) {
+    if (!saveState.ok) return;
+    if (saveState.next && saveState.next !== window.location.pathname) {
       router.push(saveState.next);
-      router.refresh();
     }
+    router.refresh();
+    const timer = window.setTimeout(() => setDismissedSave(saveState), 6000);
+    return () => window.clearTimeout(timer);
   }, [saveState, router]);
 
   function buildPayload(): { payload: RecurringScheduleRequestPayload } | { error: string } {
@@ -157,6 +178,7 @@ export function RecurringScheduleForm({
   }
 
   function submitSave(formData: FormData) {
+    setError(null);
     if (totalMismatch) {
       setError("The invoice lines must add up to the subscription's cycle total before saving.");
       return;
@@ -380,10 +402,13 @@ export function RecurringScheduleForm({
       )}
 
       {!fieldsDisabled ? (
-        <form action={submitSave}>
-          <button type="submit" className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white">
-            {scheduleId ? "Save changes" : "Create schedule"}
-          </button>
+        <form action={submitSave} className="flex flex-wrap items-center gap-3">
+          <SaveButton label={scheduleId ? "Save changes" : "Create schedule"} />
+          {savedVisible ? (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100" role="status">
+              ✓ {scheduleId ? "Changes saved." : "Schedule created."}
+            </p>
+          ) : null}
         </form>
       ) : null}
 

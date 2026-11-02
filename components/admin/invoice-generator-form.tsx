@@ -214,14 +214,21 @@ export function InvoiceGeneratorForm({
     }
   }, [saveState.ok, saveState.invoiceId]);
 
+  // Saving an existing invoice stays on the same page, so confirm it visibly for a few seconds.
+  const [dismissedSave, setDismissedSave] = useState<SaveInvoiceState | null>(null);
+  const savedVisible = Boolean(saveState.ok) && dismissedSave !== saveState;
+
   useEffect(() => {
-    if (saveState.ok && saveState.next) {
+    if (!saveState.ok) return;
+    if (saveState.next) {
       if (saveState.next !== window.location.pathname) {
         router.push(saveState.next);
       } else {
         router.refresh();
       }
     }
+    const timer = window.setTimeout(() => setDismissedSave(saveState), 6000);
+    return () => window.clearTimeout(timer);
   }, [saveState, router]);
 
   useEffect(() => {
@@ -618,6 +625,15 @@ export function InvoiceGeneratorForm({
         {initial && initial.amountDue > 0 && initial.status !== "draft" ? (
           <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
             Amount due: {formatMoney(initial.amountDue, currency)}
+          </p>
+        ) : null}
+
+        {savedVisible ? (
+          <p
+            className="fixed bottom-4 right-4 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 shadow-lg dark:border-emerald-900/50 dark:bg-emerald-950 dark:text-emerald-100"
+            role="status"
+          >
+            ✓ Invoice saved.
           </p>
         ) : null}
 
