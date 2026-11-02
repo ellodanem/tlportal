@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { syncCanonicalScheduleLines } from "@/lib/services/canonical-schedule-line-sync-service";
 import { CanonicalSubscriptionValidationError } from "@/lib/domain/canonical-subscription-application";
 import {
   mergeBlockers,
@@ -163,6 +164,8 @@ export async function mergeSubscriptions(input: { targetId: string; sourceIds: s
       where: { id: { in: plan.sourceIds } },
       data: { lifecycleStatus: target.lifecycleStatus === "draft" ? "canceled" : "ended" },
     });
+    // The target's schedule still lists only its own original service; show every merged one.
+    await syncCanonicalScheduleLines(tx, plan.targetId);
 
     return { plan, customerId: target.customerId };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

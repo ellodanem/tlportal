@@ -10,6 +10,7 @@ import {
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerBillToLines } from "@/lib/billing/customer-bill-to";
+import { isCanonicalOwnedSchedule } from "@/lib/domain/canonical-ownership";
 import { formatMoney, RECURRING_SCHEDULE_STATUS_LABELS } from "@/lib/domain/native-billing";
 import { prisma } from "@/lib/db";
 
@@ -26,7 +27,10 @@ export default async function RecurringInvoiceDetailPage({ params }: { params: P
   const [schedule, customers, generated] = await Promise.all([
     prisma.recurringInvoiceSchedule.findUnique({
       where: { id },
-      include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        lineItems: { orderBy: { sortOrder: "asc" } },
+        customerSubscription: { select: { id: true, controlMode: true } },
+      },
     }),
     prisma.customer.findMany({
       where: activeCustomerWhere,
@@ -83,7 +87,8 @@ export default async function RecurringInvoiceDetailPage({ params }: { params: P
     })),
   };
 
-  const readOnly = schedule.status === "ended";
+  const canonicalOwned = isCanonicalOwnedSchedule(schedule);
+  const readOnly = schedule.status === "ended" || canonicalOwned;
   const cycleTotal = schedule.lineItems.reduce((sum, line) => sum + Number(line.lineTotal), 0);
 
   return (
@@ -111,7 +116,22 @@ export default async function RecurringInvoiceDetailPage({ params }: { params: P
         </p>
       </div>
 
-      <RecurringScheduleActions scheduleId={schedule.id} status={schedule.status} />
+      {canonicalOwned && schedule.customerSubscription ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-950 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100">
+          <p>
+            <strong>Managed by a subscription.</strong> This schedule is read-only. Each cycle&apos;s invoice has one line per
+            service on the subscription, so add or remove vehicles, change rates, pause or end billing from the subscription instead.
+          </p>
+          <Link
+            href={`/admin/subscriptions/canonical/${schedule.customerSubscription.id}/billing`}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Open subscription billing
+          </Link>
+        </div>
+      ) : (
+        <RecurringScheduleActions scheduleId={schedule.id} status={schedule.status} />
+      )}
 
       {generated.length > 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">

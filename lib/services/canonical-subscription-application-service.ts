@@ -24,6 +24,7 @@ import {
   type AnnualProrationPreview,
   type ExactMoneyInput,
 } from "@/lib/domain/canonical-subscription-application";
+import { syncCanonicalScheduleLines } from "@/lib/services/canonical-schedule-line-sync-service";
 import { addMonthsClamped, computeProration, type SubscriptionProrationMethod } from "@/lib/domain/subscription-proration";
 import {
   assertNoOverlappingItemRates,
@@ -351,6 +352,7 @@ export async function addBillableServiceInTransaction(
       data: { subscriptionItemId: item.id },
     });
   }
+  await syncCanonicalScheduleLines(tx, subscription.id);
   return item.id;
 }
 
@@ -873,6 +875,7 @@ export async function scheduleSubscriptionItemEndInTransaction(
     where: { id: item.id },
     data: { billingEffectiveUntil: effectiveUntil },
   });
+  await syncCanonicalScheduleLines(tx, item.customerSubscriptionId);
 }
 
 export async function scheduleSubscriptionItemEnd(input: {
@@ -967,6 +970,7 @@ export async function scheduleSubscriptionItemRate(input: {
         },
         select: { id: true },
       });
+      await syncCanonicalScheduleLines(tx, item.customerSubscriptionId);
       return rate.id;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
@@ -1138,6 +1142,8 @@ export async function transferSubscriptionItem(input: {
         data: { subscriptionItemId: successor.id, startDate: transferDate },
       });
     }
+    await syncCanonicalScheduleLines(tx, sourceSubscription.id);
+    await syncCanonicalScheduleLines(tx, targetSubscription.id);
     return successor.id;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

@@ -5,6 +5,7 @@ import type { DeviceStatus, ServiceAssignmentPauseReason } from "@prisma/client"
 import { openAssignmentWhere } from "@/lib/domain/service-assignment-queries";
 import type { ServicePauseDeviceDisposition } from "@/lib/domain/service-pause";
 import { prisma } from "@/lib/db";
+import { syncCanonicalScheduleLinesForItem } from "@/lib/services/canonical-schedule-line-sync-service";
 import { setRecurringScheduleStatus } from "@/lib/services/native-recurring-schedule-service";
 
 import { recordOperationalEvent } from "./operational-event-service";
@@ -126,6 +127,7 @@ export async function pauseServiceAssignment(
       where: { id: assignment.subscriptionItemId, status: "active" },
       data: { status: "paused" },
     });
+    if (paused.count > 0) await syncCanonicalScheduleLinesForItem(tx, assignment.subscriptionItemId);
     return paused.count > 0;
   });
 
@@ -211,6 +213,7 @@ export async function resumeServiceAssignment(
       where: { id: assignment.subscriptionItemId, status: "paused" },
       data: { status: "active" },
     });
+    if (resumed.count > 0) await syncCanonicalScheduleLinesForItem(tx, assignment.subscriptionItemId);
     return resumed.count > 0;
   });
 
