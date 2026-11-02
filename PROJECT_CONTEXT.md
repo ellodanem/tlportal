@@ -5358,3 +5358,20 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Agent notes (ad7da26, pushed to origin/main with 583cd90, bf0f9e3, 577b51f): bf0f9e3 adds daily cron /api/cron/stripe-quantity-audit (04:25 UTC, Hobby-safe; ?dryRun=1) that compares Stripe quantity with canonical billable services or legacy Stripe-track devices, records illing.stripe_quantity_drift / _resolved events, and texts billing alert phones only on new/changed drift. ad7da26: device resume returns a follow-up (Add to subscription when the device is not a canonical service, else Update Stripe quantity); notice persists until Done because resume skips revalidatePath when a follow-up is shown (admin pages are dynamic, no data cache). Known gap, not fixed: a canonical-linked paused assignment cannot be resumed anywhere (device action rejects linked assignments; canonical workflow has pause only). Opening-invoice and customer-workspace-tab changes remain uncommitted (parallel work).
 
+
+### 2026-11-02 00:50 UTC — commit `84b8752`
+
+- feat: consolidate customer subscription workspace
+
+
+### 2026-11-02 00:50 UTC — pre-push (`main` → origin) @ `84b8752`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 00:51 UTC — commit `6609c27`
+
+- feat(subscriptions): point customer entry points at the Subscriptions customer workspace
+
+
+- Agent notes (84b8752 + 6609c27): customer workspace added under Subscriptions at /admin/subscriptions/customers/[customerId]/{billing,statements,messages,activity} with a shared layout (breadcrumb, subscription switcher, View customer -> Customer (New), real-route tab bar); index redirects to billing. Statements/Messages/Activity bodies extracted to shared panels (customer-statements-panel, customer-messages-panel, customer-activity-panel) used by BOTH the new tabs and the original /admin/customers/[id]/* tabs, which are intentionally kept for now (same URLs, headers, CustomerSubnav). Server actions that change messages/activity data (messages/actions, note-actions, billing-actions, message-templates/actions) revalidate BOTH the old and new paths until the old workspace is retired. Entry points moved: Customer (New) detail has Billing/Statements/Messages/Activity links, a View billing link on Outstanding and View all on Recent Activity; subscription breadcrumb opens Customer (New); old workspace Message button opens the new Messages tab. Known leftover: Customer (New) 'View subscriptions' still opens /admin/customers/[id]/subscriptions when a customer has several subscriptions. Note: 84b8752 (committed by a parallel agent with git add -A) also bundled these files. Tests 307/307, tsc, eslint and next build (compile only, not the migrate step) clean.
