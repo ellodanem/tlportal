@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { cardClass, cycleUnit, iso, money, statusPillClass } from "@/components/admin/canonical-subscription/format";
+import { cardClass, cycleUnit, iso, money, serviceStatusLabel, statusPillClass, warningPillClass } from "@/components/admin/canonical-subscription/format";
 import { ServiceTiming } from "@/components/admin/canonical-subscription/service-timing";
 import { CustomerServiceManagementModal } from "@/components/admin/customer-service-management-modal";
 import {
@@ -10,6 +10,11 @@ import {
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
 
 type Item = SubscriptionDetail["items"][number];
+
+function StatusPill({ item }: { item: Item }) {
+  const { label, tone } = serviceStatusLabel(item);
+  return <span className={`${tone === "warning" ? warningPillClass : statusPillClass} capitalize`}>{label}</span>;
+}
 
 function currentAssignment(item: Item) {
   return item.serviceAssignments.find((entry) => entry.endDate == null && entry.status !== "cancelled") ?? item.serviceAssignments.at(-1);
@@ -64,7 +69,7 @@ export function SubscriptionServicesTab({ subscription, permissions }: { subscri
                 <li key={item.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0"><h3 className="font-semibold">{label}</h3><ServiceTiming item={item} /></div>
-                    <span className={statusPillClass}>{item.status.replaceAll("_", " ")}</span>
+                    <StatusPill item={item} />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
                     <div><dt className="text-xs text-zinc-500">Device</dt><dd className="mt-1 font-medium">{device ? device.label?.trim() || device.deviceModel.name : "Not assigned"}</dd>{device?.imei ? <dd className="mt-0.5 break-all text-xs text-zinc-500">{device.imei}</dd> : null}</div>
@@ -94,7 +99,7 @@ export function SubscriptionServicesTab({ subscription, permissions }: { subscri
                         {device?.simCard ? <p className="mt-1 text-xs"><Link href={`/admin/sims/${device.simCard.id}`} className="text-emerald-700 hover:underline dark:text-emerald-400">SIM {device.simCard.label || device.simCard.iccid}</Link></p> : null}
                       </td>
                       <td className="px-4 py-4"><p className="font-semibold tabular-nums">{rate ? `${money(rate.agreedAmountPerCycle.toString(), rate.currency)} / ${cycleUnit(rate.billingIntervalMonths)}` : "Not set"}</p>{rate && rate.billingIntervalMonths !== 1 ? <p className="mt-1 text-xs text-zinc-500">{money(Number(rate.agreedAmountPerCycle) / rate.billingIntervalMonths, rate.currency)} / month equivalent</p> : null}</td>
-                      <td className="px-4 py-4"><span className={statusPillClass}>{item.status.replaceAll("_", " ")}</span></td>
+                      <td className="px-4 py-4"><StatusPill item={item} /></td>
                       <td className="px-4 py-4"><RowActions subscription={subscription} item={item} label={label} canManage={permissions.canManage} /></td>
                     </tr>
                   );

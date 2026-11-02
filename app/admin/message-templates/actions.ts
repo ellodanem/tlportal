@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 import { randomUUID } from "crypto";
 
 import { customerDisplayName } from "@/lib/admin/customer-display";
@@ -157,6 +158,7 @@ export async function sendQuickWhatsAppAction(
 
   revalidatePath(`/admin/customers/${customer.id}`);
   revalidatePath(`/admin/customers/${customer.id}/messages`);
+  revalidatePath(customerWorkspacePath(customer.id, "messages"));
   revalidatePath("/admin/message-templates");
   return {
     error: null,
@@ -225,6 +227,7 @@ export async function sendQuickWhatsAppFreeformAction(
 
   revalidatePath(`/admin/customers/${customer.id}`);
   revalidatePath(`/admin/customers/${customer.id}/messages`);
+  revalidatePath(customerWorkspacePath(customer.id, "messages"));
   revalidatePath("/admin/message-templates");
   return {
     error: null,

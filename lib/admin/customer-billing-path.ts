@@ -1,5 +1,7 @@
+import { customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
+
 /**
- * Single source of truth for the customer billing workspace route.
+ * Single source of truth for the customer billing route.
  *
  * Customer billing lives in the Subscriptions area. The original
  * `/admin/customers/[id]/billing` URL is kept only as a permanent redirect so old bookmarks,
@@ -10,6 +12,6 @@
 export type CustomerBillingAnchor = "recent-invoices" | "provider-invoices" | "billing-settings";
 
 export function customerBillingPath(customerId: string, anchor?: CustomerBillingAnchor): string {
-  const base = `/admin/subscriptions/customers/${encodeURIComponent(customerId)}/billing`;
+  const base = customerWorkspacePath(customerId, "billing");
   return anchor ? `${base}#${anchor}` : base;
 }

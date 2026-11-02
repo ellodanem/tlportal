@@ -7,7 +7,7 @@ import {
   ScheduleCanonicalDraftItemEndForm,
   ScheduleCanonicalDraftRateForm,
 } from "@/components/admin/canonical-subscription-draft-forms";
-import { CanonicalServicePauseForm } from "@/components/admin/canonical-subscription-operations-form";
+import { CanonicalServicePauseForm, CanonicalServiceResumeForm } from "@/components/admin/canonical-subscription-operations-form";
 
 type Props = {
   subscriptionId: string;
@@ -18,6 +18,8 @@ type Props = {
   /** The dedicated page for multi-step or high-risk operations (hardware, transfer, vehicle sale). */
   servicePageHref: string;
   assignment?: { id: string; deviceId: string; deviceLabel: string; status: string } | null;
+  /** Adds the Stripe quantity reminder to the resume form; the action's result message always includes it. */
+  billedByStripe?: boolean;
 };
 
 /**
@@ -33,6 +35,7 @@ export function CustomerServiceManagementModal({
   currentAmount,
   servicePageHref,
   assignment = null,
+  billedByStripe = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const manageButtonRef = useRef<HTMLButtonElement>(null);
@@ -62,7 +65,7 @@ export function CustomerServiceManagementModal({
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-4 dark:border-zinc-800">
           <div>
             <h2 id={titleId} className="text-lg font-semibold tracking-tight">{serviceLabel}</h2>
-            <p className="mt-1 text-sm text-zinc-500">Change the price, schedule an end, or pause. Existing invoices, price history and device history are preserved.</p>
+            <p className="mt-1 text-sm text-zinc-500">Change the price, schedule an end, or pause or resume the tracker. Existing invoices, price history and device history are preserved.</p>
           </div>
           <button ref={closeButtonRef} type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-100" aria-label={`Close quick actions for ${serviceLabel}`}>
             <svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" /></svg>
@@ -74,7 +77,7 @@ export function CustomerServiceManagementModal({
         </div>
         {assignment ? <section aria-label="Pause service" className="mt-5">
           {assignment.status === "suspended"
-            ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">This tracker assignment is already paused. Resume it from the device assignment.</p>
+            ? <CanonicalServiceResumeForm subscriptionId={subscriptionId} subscriptionItemId={subscriptionItemId} assignmentId={assignment.id} deviceLabel={assignment.deviceLabel} billedByStripe={billedByStripe} />
             : <CanonicalServicePauseForm subscriptionId={subscriptionId} subscriptionItemId={subscriptionItemId} assignmentId={assignment.id} />}
         </section> : null}
         <p className="mt-6 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300">Replacing hardware, transferring to another subscription, or removing the tracker after a vehicle sale are on the <Link href={servicePageHref} className="font-semibold text-emerald-700 underline dark:text-emerald-400">service page</Link>, where you can review the current assignment first.</p>

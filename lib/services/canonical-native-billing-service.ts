@@ -222,6 +222,8 @@ export type CanonicalSubscriptionBillingSummary = {
   gracePeriodExceeded: boolean;
   attentionRequired: boolean;
   earliestPastDueDate: Date | null;
+  /** Unlinked invoice that began the current term of a repaired legacy agreement, when still unpaid. */
+  openingInvoice: { id: string; number: string | null; status: string; amountDue: string; dueDate: Date | null } | null;
   activeScheduleId: string | null;
   executionEnabled: boolean;
   eligibleForExecution: boolean;
@@ -251,6 +253,7 @@ export async function getCanonicalSubscriptionBillingSummary(
         },
         select: { id: true, amountDue: true, dueDate: true },
       },
+      canonicalMigrationLedger: { select: { sourceKind: true, sourceId: true, customerId: true } },
       canonicalManualPilotActivation: {
         select: {
           status: true,
@@ -274,12 +277,29 @@ export async function getCanonicalSubscriptionBillingSummary(
   });
   if (!subscription) error("SUBSCRIPTION_NOT_FOUND", "Subscription not found.");
 
+  // A reviewed legacy exception (e.g. a four-month agreement) is repaired future-only, so the
+  // invoice that started the current term is deliberately NOT linked to the subscription. It is
+  // still the agreement's current-term payment, so its unpaid balance must count here too.
+  const exceptionLedger = subscription.canonicalMigrationLedger;
+  const exceptionSourceInvoice = exceptionLedger?.sourceKind === "manual_invoice_exception"
+    ? await prisma.invoice.findFirst({
+        where: {
+          id: exceptionLedger.sourceId,
+          customerId: subscription.customerId,
+          archivedAt: null,
+          status: { notIn: ["draft", "void", "written_off"] },
+        },
+        select: { id: true, number: true, status: true, amountDue: true, dueDate: true },
+      })
+    : null;
+
   const collectionInvoices = [
     ...subscription.invoices,
     ...(subscription.canonicalManualPilotActivation?.legacySchedule?.generatedInvoices ?? []),
     ...(subscription.canonicalManualPilotActivation?.sourceInvoice
       ? [subscription.canonicalManualPilotActivation.sourceInvoice]
       : []),
+    ...(exceptionSourceInvoice ? [exceptionSourceInvoice] : []),
   ];
   const seenCollectionInvoices = new Set<string>();
   const collection = deriveCanonicalCollectionHealth({
@@ -366,6 +386,15 @@ export async function getCanonicalSubscriptionBillingSummary(
     gracePeriodExceeded: collection.gracePeriodExceeded,
     attentionRequired: collection.attentionRequired,
     earliestPastDueDate: collection.earliestPastDueDate,
+    openingInvoice: exceptionSourceInvoice && exceptionSourceInvoice.amountDue.gt(0)
+      ? {
+          id: exceptionSourceInvoice.id,
+          number: exceptionSourceInvoice.number,
+          status: exceptionSourceInvoice.status,
+          amountDue: exceptionSourceInvoice.amountDue.toFixed(2),
+          dueDate: exceptionSourceInvoice.dueDate,
+        }
+      : null,
     activeScheduleId: subscription.recurringSchedules[0]?.id ?? null,
     executionEnabled,
     eligibleForExecution: executionEnabled && validationIssues.length === 0,

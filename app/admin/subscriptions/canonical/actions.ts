@@ -36,7 +36,7 @@ import { addServiceToSubscription } from "@/lib/services/subscription-service-ad
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
 import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
-import { pauseServiceAssignment } from "@/lib/services/service-pause-service";
+import { pauseServiceAssignment, resumeServiceAssignment } from "@/lib/services/service-pause-service";
 import { adoptExistingStripeSubscription, CanonicalStripeAdoptionError } from "@/lib/services/canonical-stripe-adoption-service";
 
 export type CanonicalSubscriptionFormState = {
@@ -284,6 +284,12 @@ function revalidateCanonicalServiceOperation(input: {
 function pauseBillingNotice(collectionMethod: string | null): string {
   return collectionMethod === "stripe_autocharge"
     ? " Review the linked Stripe subscription or vehicle quantity before the next charge."
+    : "";
+}
+
+function resumeBillingNotice(collectionMethod: string | null): string {
+  return collectionMethod === "stripe_autocharge"
+    ? " If you lowered the Stripe vehicle quantity while it was paused, restore it before the next charge; the Stripe check on this page shows the current numbers."
     : "";
 }
 
@@ -690,6 +696,44 @@ export async function pauseCanonicalServiceAssignmentAction(
     revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
     const scheduleNote = result.pausedRecurringSchedules ? ` Paused ${result.pausedRecurringSchedules} linked recurring invoice schedule${result.pausedRecurringSchedules === 1 ? "" : "s"}.` : "";
     return { message: `Service paused and tracker marked ${deviceDisposition === "in_stock" ? "in stock" : "returned"}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * Reverse of the pause above: reactivates the tracker assignment of a subscription service.
+ * Pausing never ends the service or its price, so resuming changes no subscription record,
+ * invoice or Stripe quantity. For card billing the Stripe quantity check on the subscription
+ * page shows whether Stripe still needs updating.
+ */
+export async function resumeCanonicalServiceAssignmentAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const assignmentId = text(formData, "assignmentId");
+    if (!assignmentId) return { error: "A current tracker assignment is required." };
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    const item = await prisma.subscriptionItem.findUnique({ where: { id: subscriptionItemId }, select: { status: true } });
+    if (!item || ["ended", "canceled"].includes(item.status)) {
+      return { error: "This service has ended, so its tracker cannot be resumed here." };
+    }
+    const assignment = await requireOpenCanonicalServiceAssignment(subscriptionItemId, assignmentId);
+    const result = await resumeServiceAssignment({ assignmentId, actorUserId: session.sub });
+    if (!result.ok) return { error: result.error };
+    await recordOperationalEvent({
+      category: "subscription.service_resumed",
+      summary: "Subscription service tracker resumed by staff.",
+      customerId: subscription.customerId,
+      deviceId: assignment.deviceId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, assignmentId },
+    });
+    revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
+    return { message: `Service resumed and tracker marked assigned.${resumeBillingNotice(subscription.collectionMethod)}` };
   } catch (error) {
     return actionError(error);
   }

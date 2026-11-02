@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { nativeBillingReadinessIssues } from "../components/admin/canonical-subscription/format";
 import { customerBillingPath } from "../lib/admin/customer-billing-path";
+import { activeCustomerWorkspaceTab, CUSTOMER_WORKSPACE_TABS, customerWorkspacePath } from "../lib/admin/customer-workspace-path";
 
 const root = new URL("../", import.meta.url);
 const rootPath = fileURLToPath(root);
@@ -49,14 +50,63 @@ test("the old customer billing URL permanently redirects and keeps its query str
   assert.doesNotMatch(redirect, /loadCustomerBillingPageData|prisma/);
 });
 
-test("the customer billing workspace is a Subscriptions page that no longer uses the Customers tab bar", async () => {
-  const page = await source("app/admin/subscriptions/customers/[customerId]/billing/page.tsx");
-  assert.doesNotMatch(page, /CustomerSubnav/);
-  assert.match(page, /Breadcrumb/);
-  assert.match(page, /Subscriptions for this customer/);
-  assert.match(page, /customerNewHref/);
+test("customer billing is a Subscriptions page that no longer uses the Customers tab bar", async () => {
+  const [page, layout] = await Promise.all([
+    source("app/admin/subscriptions/customers/[customerId]/billing/page.tsx"),
+    source("app/admin/subscriptions/customers/[customerId]/layout.tsx"),
+  ]);
+  assert.doesNotMatch(`${page}\n${layout}`, /CustomerSubnav/);
+  assert.match(layout, /Breadcrumb/);
+  assert.match(layout, /Subscriptions for this customer/);
+  assert.match(layout, /customerNewHref/);
   assert.match(page, /getCustomerFinancialLedger/);
   assert.match(page, /PaymentRemindersSection/);
+});
+
+test("the customer workspace has Billing, Statements, Messages and Activity as real routes", async () => {
+  for (const tab of CUSTOMER_WORKSPACE_TABS) {
+    const page = await source(`app/admin/subscriptions/customers/[customerId]/${tab.key}/page.tsx`);
+    assert.ok(page.length > 0, `${tab.key} page exists`);
+    assert.equal(customerWorkspacePath("c1", tab.key), `/admin/subscriptions/customers/c1/${tab.key}`);
+  }
+  assert.deepEqual(CUSTOMER_WORKSPACE_TABS.map((tab) => tab.key), ["billing", "statements", "messages", "activity"]);
+  assert.equal(activeCustomerWorkspaceTab("messages"), "messages");
+  assert.equal(activeCustomerWorkspaceTab(null), "billing");
+  assert.equal(activeCustomerWorkspaceTab("unknown"), "billing");
+  const index = await source("app/admin/subscriptions/customers/[customerId]/page.tsx");
+  assert.match(index, /redirect\(customerWorkspacePath\(customerId, "billing"\)\)/);
+});
+
+test("the old Customers tabs still exist and share their bodies with the new workspace", async () => {
+  const pairs: [string, string, RegExp][] = [
+    ["app/admin/customers/[id]/statements/page.tsx", "app/admin/subscriptions/customers/[customerId]/statements/page.tsx", /CustomerStatementsPanel/],
+    ["app/admin/customers/[id]/messages/page.tsx", "app/admin/subscriptions/customers/[customerId]/messages/page.tsx", /CustomerMessagesPanel/],
+    ["app/admin/customers/[id]/activity/page.tsx", "app/admin/subscriptions/customers/[customerId]/activity/page.tsx", /CustomerActivityPanel/],
+  ];
+  for (const [legacy, current, panel] of pairs) {
+    const [legacySource, currentSource] = await Promise.all([source(legacy), source(current)]);
+    assert.match(legacySource, panel, `${legacy} uses the shared panel`);
+    assert.match(currentSource, panel, `${current} uses the shared panel`);
+    assert.match(legacySource, /CustomerSubnav/, `${legacy} keeps the Customers tab bar for now`);
+  }
+});
+
+test("actions that change messages or activity refresh both the old and new workspace pages", async () => {
+  const [messageActions, noteActions, billingActions, templateActions] = await Promise.all([
+    source("app/admin/customers/[id]/messages/actions.ts"),
+    source("app/admin/customers/note-actions.ts"),
+    source("app/admin/customers/billing-actions.ts"),
+    source("app/admin/message-templates/actions.ts"),
+  ]);
+  for (const [name, text, tab] of [
+    ["message actions", messageActions, "messages"],
+    ["note actions", noteActions, "activity"],
+    ["billing actions", billingActions, "messages"],
+    ["template actions", templateActions, "messages"],
+  ] as const) {
+    assert.match(text, new RegExp(`revalidatePath\\(\`/admin/customers/\\$\\{[\\w.]+\\}/${tab}\`\\)`), `${name} refresh the old ${tab} page`);
+    assert.match(text, new RegExp(`customerWorkspacePath\\([\\w.]+, "${tab}"\\)`), `${name} refresh the new ${tab} page`);
+  }
 });
 
 test("subscription Billing and Invoices tabs link to customer billing", async () => {

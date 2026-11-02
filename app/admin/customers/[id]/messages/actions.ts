@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 import { getSession } from "@/lib/auth/get-session";
 import {
@@ -64,6 +65,7 @@ export async function sendCustomerWhatsAppReplyAction(
   });
 
   revalidatePath(`/admin/customers/${customerId}/messages`);
+  revalidatePath(customerWorkspacePath(customerId, "messages"));
   revalidatePath(`/admin/customers/${customerId}`);
   return { error: null, ok: true };
 }
@@ -79,6 +81,7 @@ export async function markCustomerWhatsAppReadAction(customerId: string): Promis
   if (conversation) {
     await markWhatsAppConversationRead(conversation.id);
     revalidatePath(`/admin/customers/${customerId}/messages`);
+    revalidatePath(customerWorkspacePath(customerId, "messages"));
     revalidatePath(`/admin/customers/${customerId}`);
   }
 }

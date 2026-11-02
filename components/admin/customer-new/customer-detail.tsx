@@ -7,6 +7,7 @@ import {
   type ActivityEventRow,
 } from "@/components/admin/customer-activity-event";
 import { CnIcon, type CustomerNewIconName } from "@/components/admin/customer-new/icons";
+import { CUSTOMER_WORKSPACE_TABS, customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 export type SnapshotSubscription = {
   id: string;
@@ -245,6 +246,18 @@ export function CustomerDetail({
           </div>
         </header>
 
+        <nav aria-label="Customer workspace" className="-mt-1 flex flex-wrap items-center gap-2">
+          {CUSTOMER_WORKSPACE_TABS.map((tab) => (
+            <Link
+              key={tab.key}
+              href={customerWorkspacePath(customer.id, tab.key)}
+              className="inline-flex min-h-10 items-center rounded-full border border-zinc-300 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+
         {/* 2×2 on narrow panes (1px gaps act as dividers), one row of four when there is room. */}
         <section
           aria-label="Summary"
@@ -254,7 +267,17 @@ export function CustomerDetail({
             icon="doc"
             iconClass="bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
             label="Outstanding"
-            footer={`${outstanding.openInvoices} open invoice${outstanding.openInvoices === 1 ? "" : "s"}`}
+            footer={
+              <span className="flex flex-wrap items-center gap-x-2">
+                <span>{`${outstanding.openInvoices} open invoice${outstanding.openInvoices === 1 ? "" : "s"}`}</span>
+                <Link
+                  href={customerWorkspacePath(customer.id, "billing")}
+                  className="inline-flex min-h-8 items-center font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                >
+                  View billing →
+                </Link>
+              </span>
+            }
           >
             {outstanding.label}
           </Stat>
@@ -357,7 +380,15 @@ export function CustomerDetail({
 
           <div className="flex min-w-0 flex-col gap-4 @lg:gap-5">
             <section className={`${cardClass} p-4 @lg:p-5`}>
-              <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Recent Activity</h3>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Recent Activity</h3>
+                <Link
+                  href={customerWorkspacePath(customer.id, "activity")}
+                  className="inline-flex min-h-10 items-center text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                >
+                  View all →
+                </Link>
+              </div>
               {events.length === 0 ? (
                 <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">No activity recorded yet.</p>
               ) : (

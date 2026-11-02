@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 import { getSession } from "@/lib/auth/get-session";
 import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
@@ -258,6 +259,7 @@ function revalidateCustomerBillingPaths(customerId: string) {
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}/messages`);
+  revalidatePath(customerWorkspacePath(customerId, "messages"));
   revalidatePath(`/admin/subscriptions/${customerId}/renewals`);
   revalidatePath("/admin/subscriptions/canonical/[subscriptionId]", "layout");
 }
@@ -1292,6 +1294,7 @@ export async function sendOutstandingInvoiceReminderAction(
   revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/messages`);
+  revalidatePath(customerWorkspacePath(customerId, "messages"));
   revalidatePath("/admin/message-templates");
 
   if (successes.length === 0) {

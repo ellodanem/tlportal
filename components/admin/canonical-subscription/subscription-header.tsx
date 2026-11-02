@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { SubscriptionLifecycleDialog } from "@/components/admin/canonical-subscription/subscription-lifecycle-dialog";
 import { SubscriptionTabsNav } from "@/components/admin/canonical-subscription/subscription-tabs-nav";
-import { authorityLabel, collectionLabel, displayDate, money } from "@/components/admin/canonical-subscription/format";
+import { authorityLabel, billsOnDate, collectionLabel, displayDate, money } from "@/components/admin/canonical-subscription/format";
 import {
   canonicalIntervalLabel,
   canonicalSubscriptionDisplayName,
@@ -24,7 +24,7 @@ export function SubscriptionHeader({ subscription, permissions }: { subscription
   const currency = subscription.currency ?? "XCD";
   const isDraft = permissions.editable && subscription.controlMode === "canonical";
   const agreementName = canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths);
-  const activeServices = subscription.items.filter((item) => !["ended", "canceled"].includes(item.status));
+  const activeServices = subscription.items.filter((item) => billsOnDate(item, subscription.nextBillingDate));
   const invoiceCount = subscription.invoices.length + subscription.billingInvoices.length;
   const canAddService = permissions.canManage
     && subscription.controlMode === "canonical"
@@ -78,9 +78,9 @@ export function SubscriptionHeader({ subscription, permissions }: { subscription
 
       <section aria-label="Subscription summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">Recurring total</p><p className="mt-1 text-xl font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)}</p><p className="text-xs text-zinc-500">per {cycleUnitLabel(subscription.billingIntervalMonths)}, this subscription only</p></div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">Next renewal</p><p className="mt-1 text-xl font-semibold">{displayDate(subscription.nextBillingDate)}</p><p className="text-xs text-zinc-500">{activeServices.length} current service{activeServices.length === 1 ? "" : "s"}</p></div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">Next renewal</p><p className="mt-1 text-xl font-semibold">{displayDate(subscription.nextBillingDate)}</p><p className="text-xs text-zinc-500">{activeServices.length} service{activeServices.length === 1 ? "" : "s"} billing at renewal</p></div>
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">Billing method</p><p className="mt-1 text-xl font-semibold">{collectionLabel(subscription.collectionMethod)}</p><p className="text-xs text-zinc-500">{subscription.collectionMethod === "manual_invoice" ? `Grace ${subscription.gracePeriodDays} days` : subscription.collectionMethod === "stripe_autocharge" ? "Stripe-managed collection" : "Choose in Billing & renewal"}</p></div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">Outstanding</p><p className="mt-1 text-xl font-semibold tabular-nums">{money(subscription.summary?.outstandingBalance, currency)}</p><p className="text-xs text-zinc-500">{invoiceCount} linked invoice record{invoiceCount === 1 ? "" : "s"}</p></div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">Outstanding</p><p className="mt-1 text-xl font-semibold tabular-nums">{money(subscription.summary?.outstandingBalance, currency)}</p><p className="text-xs text-zinc-500">{subscription.summary?.openingInvoice ? `Unpaid ${subscription.summary.openingInvoice.number ?? "opening invoice"} (current term)` : `${invoiceCount} linked invoice record${invoiceCount === 1 ? "" : "s"}`}</p></div>
       </section>
 
       <SubscriptionTabsNav tabs={tabs} />

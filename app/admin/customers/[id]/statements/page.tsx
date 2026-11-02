@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { CustomerStatementForm } from "@/components/admin/customer-statement-form";
-import { CustomerStatementPreview } from "@/components/admin/customer-statement-preview";
+import { CustomerStatementsPanel } from "@/components/admin/customer-statements-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { customerDisplayName } from "@/lib/admin/customer-display";
-import { buildCustomerStatement, resolveStatementPeriod } from "@/lib/billing/customer-statement";
 import { prisma } from "@/lib/db";
 
 type Props = {
@@ -20,7 +18,6 @@ type Props = {
 export default async function CustomerStatementsPage({ params, searchParams }: Props) {
   const { id } = await params;
   const sp = await searchParams;
-  const period = resolveStatementPeriod(sp);
 
   const customer = await prisma.customer.findUnique({
     where: { id },
@@ -37,13 +34,6 @@ export default async function CustomerStatementsPage({ params, searchParams }: P
   }
 
   const title = customerDisplayName(customer);
-  const result = await buildCustomerStatement({
-    customerId: id,
-    from: period.from,
-    to: period.to,
-  });
-  const statementError = "error" in result ? result.error : null;
-  const statement = "error" in result ? null : result;
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,23 +50,12 @@ export default async function CustomerStatementsPage({ params, searchParams }: P
 
       <CustomerSubnav customerId={customer.id} active="statements" />
 
-      <CustomerStatementForm
-        customers={[]}
-        lockedCustomerId={customer.id}
-        lockedCustomerName={title}
+      <CustomerStatementsPanel
+        customerId={customer.id}
+        customerName={title}
         basePath={`/admin/customers/${customer.id}/statements`}
-        initialPreset={period.preset}
-        initialFrom={period.from}
-        initialTo={period.to}
+        searchParams={sp}
       />
-
-      {statementError ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
-          {statementError}
-        </p>
-      ) : null}
-
-      {statement ? <CustomerStatementPreview statement={statement} /> : null}
     </div>
   );
 }

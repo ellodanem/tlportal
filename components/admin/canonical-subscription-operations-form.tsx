@@ -7,6 +7,7 @@ import {
   pauseCanonicalServiceAssignmentAction,
   removeCanonicalServiceForVehicleSaleAction,
   replaceCanonicalServiceHardwareAction,
+  resumeCanonicalServiceAssignmentAction,
   transferCanonicalServiceAction,
   transitionCanonicalSubscriptionLifecycleAction,
   type CanonicalSubscriptionFormState,
@@ -77,6 +78,31 @@ export function CanonicalServicePauseForm({
     </div>
     <Feedback state={state} />
     <button disabled={pending} className="mt-4 rounded-lg border border-amber-400 px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50 dark:border-amber-700 dark:text-amber-200">{pending ? "Pausing…" : "Pause service"}</button>
+  </form>;
+}
+
+export function CanonicalServiceResumeForm({
+  subscriptionId,
+  subscriptionItemId,
+  assignmentId,
+  deviceLabel,
+  billedByStripe,
+}: {
+  subscriptionId: string;
+  subscriptionItemId: string;
+  assignmentId: string;
+  deviceLabel: string;
+  billedByStripe: boolean;
+}) {
+  const [state, action, pending] = useActionState(resumeCanonicalServiceAssignmentAction, initialState);
+  useRefreshOnSuccess(state);
+  return <form action={action} onSubmit={confirmServiceOperation(`Resume service for ${deviceLabel}? The tracker is marked assigned again.`)} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+    <input type="hidden" name="subscriptionId" value={subscriptionId} /><input type="hidden" name="subscriptionItemId" value={subscriptionItemId} /><input type="hidden" name="assignmentId" value={assignmentId} />
+    <h3 className="font-semibold">Resume service</h3>
+    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">This tracker assignment is paused. Resuming marks {deviceLabel} assigned again. The service keeps its price and renewal; no invoice is created.</p>
+    {billedByStripe ? <p className="mt-2 text-sm text-amber-900 dark:text-amber-200">Card billing: if the Stripe vehicle quantity was lowered during the pause, restore it before the next charge. The Stripe check on this page shows the current numbers.</p> : null}
+    <Feedback state={state} />
+    <button disabled={pending} className="mt-4 min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">{pending ? "Resuming…" : "Resume service"}</button>
   </form>;
 }
 

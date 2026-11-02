@@ -242,13 +242,19 @@ test("page renders do not write: no Stripe reconcile and no read-marking on rend
     "app/admin/customers/[id]/subscriptions/page.tsx",
     "app/admin/customers/[id]/page.tsx",
     "app/admin/customers/[id]/messages/page.tsx",
+    "app/admin/subscriptions/customers/[customerId]/messages/page.tsx",
+    "app/admin/subscriptions/customers/[customerId]/statements/page.tsx",
+    "app/admin/subscriptions/customers/[customerId]/activity/page.tsx",
+    "components/admin/customer-messages-panel.tsx",
+    "components/admin/customer-activity-panel.tsx",
+    "components/admin/customer-statements-panel.tsx",
   ];
   for (const page of pages) {
     const source = await readFile(page, "utf8");
     assert.doesNotMatch(source, /reconcileLatestStripeInvoiceForCustomer/, `${page} must not reconcile during render`);
     assert.doesNotMatch(source, /markWhatsAppConversationRead\(/, `${page} must not mark read during render`);
   }
-  const messages = await readFile("app/admin/customers/[id]/messages/page.tsx", "utf8");
+  const messages = await readFile("components/admin/customer-messages-panel.tsx", "utf8");
   assert.match(messages, /MarkWhatsAppReadOnView/);
 });
 

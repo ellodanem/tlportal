@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
@@ -34,5 +35,6 @@ export async function addCustomerNoteAction(
 
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/activity`);
+  revalidatePath(customerWorkspacePath(customerId, "activity"));
   return { error: null, ok: true };
 }

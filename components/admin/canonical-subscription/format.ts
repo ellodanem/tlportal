@@ -56,5 +56,33 @@ export function cycleUnit(months: number | null) {
   return "cycle";
 }
 
+type ItemBillingWindow = {
+  status: string;
+  billingEffectiveFrom: Date | null;
+  billingEffectiveUntil: Date | null;
+};
+
+/**
+ * Whether a service is part of the recurring total at a given date. This mirrors the billing
+ * resolver (half-open [from, until)) so counts shown beside the total agree with it.
+ */
+export function billsOnDate(item: ItemBillingWindow, date: Date | null): boolean {
+  if (["ended", "canceled"].includes(item.status)) return false;
+  if (!date) return true;
+  if (!item.billingEffectiveFrom || item.billingEffectiveFrom > date) return false;
+  return item.billingEffectiveUntil == null || date < item.billingEffectiveUntil;
+}
+
+/** Status label that also surfaces a scheduled or elapsed billing end, which `status` alone hides. */
+export function serviceStatusLabel(item: ItemBillingWindow, now = new Date()): { label: string; tone: "normal" | "warning" } {
+  const base = item.status.replaceAll("_", " ");
+  const until = item.billingEffectiveUntil;
+  if (!until || ["ended", "canceled"].includes(item.status)) return { label: base, tone: "normal" };
+  const day = (value: Date) => value.toISOString().slice(0, 10);
+  if (day(until) <= day(now)) return { label: `Billing ended ${displayDate(until)}`, tone: "warning" };
+  return { label: `${base} · ends ${displayDate(until)}`, tone: "warning" };
+}
+
+export const warningPillClass = "rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200";
 export const statusPillClass = "rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold capitalize text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
 export const cardClass = "rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";

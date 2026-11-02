@@ -5310,3 +5310,51 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-11-01 23:57 UTC — commit `557148e`
+
+- feat(customers): canonical-aware customer surfaces and on-demand portal credential reveal
+
+
+### 2026-11-01 23:57 UTC — commit `e1693f1`
+
+- docs: log subscription consolidation push in PROJECT_CONTEXT
+
+
+### 2026-11-01 23:57 UTC — pre-push (`main` → origin) @ `e1693f1`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+- Agent notes (e1693f1, pushed to origin/main; code landed in c614c15): route-based subscription detail (Overview/Services/Billing/Invoices/Activity/Advanced), server-side canonical ownership guards, shared financial ledger with a 'Not linked to a subscription' label, write-on-render removed, customer surfaces made canonical-aware, stored Traqcare passwords no longer serialised to the client (audited reveal action). No schema changes. Tests 276/276, tsc clean, next build OK. Deferred: encrypting stored credentials, customers-list row expander link, list query N+1.
+
+
+### 2026-11-02 00:37 UTC — commit `583cd90`
+
+- feat(subscriptions): live Stripe quantity check on canonical subscription pages
+
+- Agent notes (583cd90, not pushed): canonical subscription tabs layout renders StripeQuantityCheck (Suspense, live Stripe read) for canonical stripe_autocharge agreements. Compares Stripe quantity with services billable at next renewal (lib/domain/canonical-stripe-quantity-check.ts); reuses StripeSyncPanel push only when the legacy device count equals the service count, else a warning linking to subscription operations. Trigger: Kurt Dieudonna's resumed HQ3037 was missing from the canonical adoption (paused at adoption time), was re-added via Add service; Stripe was left at quantity 4. Committed only these files; a parallel billing-route move remains uncommitted in the working tree.
+
+
+### 2026-11-02 00:42 UTC — commit `bf0f9e3`
+
+- feat(billing): nightly Stripe vehicle quantity audit with staff SMS
+
+
+### 2026-11-02 00:42 UTC — commit `577b51f`
+
+- feat(subscriptions): move customer billing into Subscriptions, redirect old URL, fix legacy links
+
+
+- Agent notes (577b51f, not pushed): customer billing page moved to /admin/subscriptions/customers/[customerId]/billing (Subscriptions breadcrumb, per-subscription switcher, View customer -> Customer (New)); /admin/customers/[id]/billing is now a permanentRedirect that preserves the query string (?setup=1, ?stripe=...). All hrefs and revalidatePath calls swept to the new path; tests/customer-billing-route.test.ts fails if the old path reappears. Canonical subscriptions link to their own Billing & renewal tab; a schedule derived from a canonical subscription says 'Manage on subscription' (legacy standalone schedules still use /admin/recurring-invoices/[id]); Stripe quantity warning and invoice 'From recurring schedule' no longer point at legacy renewals/schedule pages. Billing readiness warnings (nativeBillingReadinessIssues) now show only for manual_invoice subscriptions; the underlying execution check is unchanged. Old Customers workspace tabs (Overview, Subscriptions, Statements, Messages, Activity) intentionally left in place. Left out of this commit because they belong to a parallel change: canonical-native-billing-service.ts and subscription-header.tsx (opening-invoice balance) and the opening-invoice hunk in customers/[id]/subscriptions/page.tsx. Tests 290/290, tsc and eslint clean.
+
+### 2026-11-02 00:45 UTC — commit `ad7da26`
+
+- feat(devices): next-step prompt after resume and card-billing note in add-service
+
+
+### 2026-11-02 00:47 UTC — pre-push (`main` → origin) @ `ad7da26`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+- Agent notes (ad7da26, pushed to origin/main with 583cd90, bf0f9e3, 577b51f): bf0f9e3 adds daily cron /api/cron/stripe-quantity-audit (04:25 UTC, Hobby-safe; ?dryRun=1) that compares Stripe quantity with canonical billable services or legacy Stripe-track devices, records illing.stripe_quantity_drift / _resolved events, and texts billing alert phones only on new/changed drift. ad7da26: device resume returns a follow-up (Add to subscription when the device is not a canonical service, else Update Stripe quantity); notice persists until Done because resume skips revalidatePath when a follow-up is shown (admin pages are dynamic, no data cache). Known gap, not fixed: a canonical-linked paused assignment cannot be resumed anywhere (device action rejects linked assignments; canonical workflow has pause only). Opening-invoice and customer-workspace-tab changes remain uncommitted (parallel work).
+

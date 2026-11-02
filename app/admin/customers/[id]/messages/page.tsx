@@ -1,14 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CustomerMessagesPanel } from "@/components/admin/customer-messages-panel";
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
-import { CustomerWhatsAppThread } from "@/components/admin/customer-whatsapp-thread";
-import { MarkWhatsAppReadOnView } from "@/components/admin/mark-whatsapp-read-on-view";
 import { customerDisplayName } from "@/lib/admin/customer-display";
-import {
-  getWhatsAppConversationForCustomer,
-  isWhatsAppSessionOpen,
-} from "@/lib/communications/whatsapp-conversation-service";
 import { prisma } from "@/lib/db";
 
 type Props = { params: Promise<{ id: string }> };
@@ -21,10 +16,7 @@ export default async function CustomerMessagesPage({ params }: Props) {
   });
   if (!customer) notFound();
 
-  const conversation = await getWhatsAppConversationForCustomer(id);
-
   const title = customerDisplayName(customer);
-  const sessionOpen = isWhatsAppSessionOpen(conversation?.lastInboundAt ?? null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,39 +32,7 @@ export default async function CustomerMessagesPage({ params }: Props) {
       </div>
 
       <CustomerSubnav customerId={customer.id} active="messages" />
-      {conversation ? <MarkWhatsAppReadOnView customerId={customer.id} unreadCount={conversation.unreadCount} /> : null}
-
-      <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        {conversation ? (
-          <CustomerWhatsAppThread
-            customerId={customer.id}
-            phoneE164={conversation.phoneE164}
-            sessionOpen={sessionOpen}
-            lastInboundAt={conversation.lastInboundAt?.toISOString() ?? null}
-            messages={conversation.messages.map((m) => ({
-              id: m.id,
-              direction: m.direction,
-              body: m.body,
-              kind: m.kind,
-              occurredAt: m.occurredAt.toISOString(),
-            }))}
-          />
-        ) : (
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            <p>No WhatsApp conversation yet for this customer.</p>
-            <p className="mt-2">
-              When they message your Twilio WhatsApp number
-              {customer.phone ? (
-                <>
-                  {" "}
-                  from <span className="font-mono text-xs">{customer.phone}</span>
-                </>
-              ) : null}
-              , messages appear here. Outbound templates from Message templates also start a thread once recorded.
-            </p>
-          </div>
-        )}
-      </section>
+      <CustomerMessagesPanel customer={customer} />
     </div>
   );
 }
