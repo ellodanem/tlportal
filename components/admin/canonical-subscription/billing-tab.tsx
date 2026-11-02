@@ -3,20 +3,55 @@ import Link from "next/link";
 import {
   adjustmentMethodLabel,
   cardClass,
-  collectionLabel,
   displayDate,
   money,
   nativeBillingReadinessIssues,
 } from "@/components/admin/canonical-subscription/format";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
+import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
 import { canonicalAnnualAdjustmentExecutionEnabled } from "@/lib/domain/canonical-annual-adjustment";
-import { subscriptionAnnualAdjustmentPath } from "@/lib/domain/canonical-subscription-navigation";
+import { daysUntil } from "@/lib/domain/canonical-service-presentation";
+import { subscriptionAnnualAdjustmentPath, subscriptionBillingPath } from "@/lib/domain/canonical-subscription-navigation";
+import { NOT_LINKED_LABEL } from "@/lib/domain/financial-ledger";
+import { formatMoney } from "@/lib/domain/native-billing";
 import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
+import { getSubscriptionFinancials } from "@/lib/services/financial-ledger-service";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
 
-export function SubscriptionBillingTab({ subscription, permissions }: { subscription: SubscriptionDetail; permissions: SubscriptionPermissions }) {
+export type LedgerFilter = "all" | "open" | "paid";
+
+export function parseLedgerFilter(value: string | undefined): LedgerFilter {
+  return value === "open" || value === "paid" ? value : "all";
+}
+
+const secondaryButtonClass = "inline-flex min-h-11 items-center rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800";
+
+function relativeDays(date: Date | null): string | null {
+  if (!date) return null;
+  const days = daysUntil(date);
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  if (days > 1) return `In ${days} days`;
+  return days === -1 ? "1 day ago" : `${-days} days ago`;
+}
+
+/**
+ * Everything about money on one subscription, ordered by urgency: what needs attention, what
+ * happens next, how it is collected, then what has already been invoiced and paid. The header
+ * summary strip already shows totals on every tab, so they are not repeated here.
+ */
+export async function SubscriptionBillingTab({ subscription, permissions, filter = "all" }: { subscription: SubscriptionDetail; permissions: SubscriptionPermissions; filter?: LedgerFilter }) {
+  const ledger = await getSubscriptionFinancials(subscription.id, subscription.customerId);
   const currency = subscription.currency ?? "XCD";
+  const customerBillingHref = `/admin/subscriptions/customers/${subscription.customerId}/billing`;
+  const billingPath = subscriptionBillingPath(subscription.id);
+  const openRows = ledger.rows.filter((row) => row.countsAsOutstanding);
+  const paidRows = ledger.rows.filter((row) => row.status.toLowerCase() === "paid");
+  const visibleRows = filter === "open" ? openRows : filter === "paid" ? paidRows : ledger.rows;
+  const outstanding = ledger.outstanding;
+  const showMrr = subscription.billingIntervalMonths != null && subscription.billingIntervalMonths !== 1;
+  const nextNote = relativeDays(subscription.nextBillingDate);
   const activeServices = subscription.items.filter((item) => !["ended", "canceled"].includes(item.status));
   const adjustmentRows = activeServices.flatMap((item) => item.initialAdjustment
     ? [{ item, adjustment: item.initialAdjustment, status: subscription.adjustmentStatuses.find((entry) => entry.itemId === item.id) ?? null }]
@@ -28,24 +63,11 @@ export function SubscriptionBillingTab({ subscription, permissions }: { subscrip
 
   return (
     <div className="flex flex-col gap-5">
-      <section aria-labelledby="renewal-heading" className={`${cardClass} p-5`}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 id="renewal-heading" className="text-lg font-semibold">Billing &amp; renewal</h2>
-            <p className="mt-1 text-sm text-zinc-500">Cycle totals come from effective service rates. MRR is a normalized comparison only, not what is charged each cycle.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/admin/subscriptions/customers/${subscription.customerId}/billing`} className="min-h-11 rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Customer billing</Link>
-          </div>
+      {subscription.summary?.attentionRequired ? (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">
+          <span className="font-semibold">Review collection.</span> An open balance is beyond grace or a provider operation needs review.{outstanding && outstanding.amount > 0 ? ` ${formatMoney(outstanding.amount, outstanding.currency)} is outstanding on this subscription.` : ""} Open invoices are listed below.
         </div>
-        <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">Cycle total (per {cycleUnitLabel(subscription.billingIntervalMonths)})</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)}</dd></div>
-          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">MRR equivalent</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{money(subscription.normalizedMrr, currency)}</dd></div>
-          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">Next billing</dt><dd className="mt-1 font-semibold">{displayDate(subscription.nextBillingDate)}</dd></div>
-          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">Billing method</dt><dd className="mt-1 font-semibold">{collectionLabel(subscription.collectionMethod)}</dd></div>
-          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950"><dt className="text-xs text-zinc-500">Outstanding (this subscription)</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{money(subscription.summary?.outstandingBalance, currency)}</dd></div>
-        </dl>
-      </section>
+      ) : null}
 
       {issues.length ? (
         <section aria-label="Billing readiness issues" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
@@ -54,8 +76,30 @@ export function SubscriptionBillingTab({ subscription, permissions }: { subscrip
         </section>
       ) : null}
 
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <section aria-labelledby="next-charge-heading" className={`${cardClass} p-5`}>
+        <h2 id="next-charge-heading" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Next charge</h2>
+        <p className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-2xl font-semibold tracking-tight">{displayDate(subscription.nextBillingDate)}</span>
+          {nextNote ? <span className="text-sm text-zinc-500">{nextNote}</span> : null}
+        </p>
+        <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-sm">
+          <span className="text-lg font-semibold tabular-nums">{money(subscription.summary?.recurringCycleTotal, currency)}</span>
+          <span className="text-zinc-500">per {cycleUnitLabel(subscription.billingIntervalMonths)}</span>
+          {showMrr ? <span className="text-zinc-500">· MRR equivalent {money(subscription.normalizedMrr, currency)}</span> : null}
+        </p>
+        <p className="mt-4 border-t border-zinc-100 pt-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+          {subscription.collectionMethod === "stripe_autocharge"
+            ? "Stripe charges the saved card automatically on this date. TL Portal does not create an invoice for the cycle."
+            : subscription.collectionMethod === "manual_invoice"
+              ? `TL Portal issues an invoice on this date. It is due ${schedules[0]?.dueDaysAfterIssue != null ? `${schedules[0].dueDaysAfterIssue} days after issue` : "after it is issued"}, with ${subscription.gracePeriodDays ?? 0} days' grace before it needs attention.`
+              : "No collection method has been chosen yet, so nothing will be billed automatically."}
+          {" "}The amount comes from each service&apos;s effective rate.
+        </p>
+      </section>
+
       <section aria-labelledby="collection-heading" className={`${cardClass} p-5`}>
-        <h2 id="collection-heading" className="text-lg font-semibold">Collection method</h2>
+        <h2 id="collection-heading" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">How it is collected</h2>
         {subscription.collectionMethod === "manual_invoice" ? (
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300"><strong>Recurring invoice.</strong> An invoice is issued automatically each cycle. The customer may pay by cash, cheque, bank transfer, or the invoice&apos;s optional card link. Payment terms: due after the invoice is issued, with {subscription.gracePeriodDays} days&apos; grace before it needs attention.</p>
         ) : subscription.collectionMethod === "stripe_autocharge" ? (
@@ -84,7 +128,12 @@ export function SubscriptionBillingTab({ subscription, permissions }: { subscrip
             <CanonicalSubscriptionCollectionForm subscriptionId={subscription.id} value={subscription.collectionMethod} />
           </div>
         ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href={customerBillingHref} className={secondaryButtonClass}>Customer billing</Link>
+          <Link href={`/admin/tl-invoices/new?customerId=${subscription.customerId}`} className={secondaryButtonClass}>Create invoice</Link>
+        </div>
       </section>
+      </div>
 
       {adjustmentRows.length ? (
         <section aria-labelledby="agreed-charges-heading" className="rounded-xl border border-amber-200 bg-white p-5 dark:border-amber-900 dark:bg-zinc-900">
@@ -137,6 +186,47 @@ export function SubscriptionBillingTab({ subscription, permissions }: { subscrip
           <h2 id="annual-heading" className="text-lg font-semibold">Annual additions</h2>
           <p className="mt-1 text-sm text-zinc-500">Working out the partial-period charge for a service joining an annual renewal mid-year is a controlled, preview-only step.</p>
           <Link href={subscriptionAnnualAdjustmentPath(subscription.id)} className="mt-4 inline-flex min-h-11 items-center rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Open annual adjustment preview</Link>
+        </section>
+      ) : null}
+
+      <section aria-labelledby="invoices-heading" className={cardClass}>
+        <div className="flex flex-col gap-3 border-b border-zinc-200 p-5 sm:flex-row sm:items-start sm:justify-between dark:border-zinc-800">
+          <div>
+            <h2 id="invoices-heading" className="text-lg font-semibold">Invoices and payments</h2>
+            <p className="mt-1 text-sm text-zinc-500">Each payment is shown on the invoice it paid. Outstanding for this subscription: <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{outstanding ? formatMoney(outstanding.amount, outstanding.currency) : ledger.totalsByCurrency.length > 1 ? "Multiple currencies" : formatMoney(0, currency)}</span>.</p>
+          </div>
+          <nav aria-label="Filter invoices" className="flex flex-wrap gap-2">
+            {([["all", "All", ledger.rows.length], ["open", "Open", openRows.length], ["paid", "Paid", paidRows.length]] as const).map(([key, label, count]) => (
+              <Link
+                key={key}
+                href={key === "all" ? billingPath : `${billingPath}?show=${key}`}
+                aria-current={filter === key ? "page" : undefined}
+                className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-semibold ${filter === key ? "border-emerald-700 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"}`}
+              >
+                {label} {count}
+              </Link>
+            ))}
+          </nav>
+        </div>
+        {ledger.rows.length === 0 ? (
+          <div className="p-5 text-sm">
+            <p className="font-semibold">No invoices are linked to this subscription yet</p>
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">{subscription.collectionMethod === "stripe_autocharge" ? "For a Stripe-managed subscription this usually means its invoices have not been matched to it, not that nothing was billed. Check the provider invoices on Customer billing." : "Nothing has been invoiced for this subscription yet. This does not mean the customer has no invoices."}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href={`${customerBillingHref}#provider-invoices`} className={secondaryButtonClass}>View provider invoices</Link>
+              <Link href={customerBillingHref} className={secondaryButtonClass}>Customer ledger</Link>
+            </div>
+          </div>
+        ) : (
+          <SubscriptionLedgerTable rows={visibleRows} payments={ledger.payments} customerId={subscription.customerId} emptyMessage={filter === "open" ? "No open invoices on this subscription." : "No paid invoices on this subscription yet."} />
+        )}
+      </section>
+
+      {ledger.unlinked.count > 0 ? (
+        <section role="note" className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <h2 className="font-semibold">{ledger.unlinked.count} customer invoice{ledger.unlinked.count === 1 ? "" : "s"}: {NOT_LINKED_LABEL}</h2>
+          <p className="mt-1 text-zinc-600 dark:text-zinc-300">These belong to {subscription.customerLabel} but are not attached to any subscription, so they are not counted above{ledger.unlinked.outstandingByCurrency.some((entry) => entry.amount > 0) ? ` (open balance ${ledger.unlinked.outstandingByCurrency.filter((entry) => entry.amount > 0).map((entry) => formatMoney(entry.amount, entry.currency)).join(", ")})` : ""}. Typical examples are installation, hardware or one-off charges.</p>
+          <p className="mt-2"><Link href={customerBillingHref} className="font-semibold text-emerald-700 underline dark:text-emerald-400">View the full customer ledger</Link></p>
         </section>
       ) : null}
     </div>

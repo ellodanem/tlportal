@@ -6,7 +6,7 @@
  */
 
 export const CANONICAL_SCHEDULE_OWNED_ERROR =
-  "This recurring schedule is managed by a canonical subscription. Change cadence, services or status from the subscription's Billing & renewal page instead.";
+  "This recurring schedule is managed by a canonical subscription. Change cadence, services or status from the subscription's Billing tab instead.";
 
 export const CANONICAL_CUSTOMER_OWNED_ERROR =
   "This customer already has a canonical subscription. Manage billing there, or create another agreement with New subscription.";

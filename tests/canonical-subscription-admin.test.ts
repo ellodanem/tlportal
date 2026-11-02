@@ -247,7 +247,9 @@ test("UI routes include detail, empty, loading, error and price-history states",
   const overview = `${overviewPage}\n${overviewWorkspace}`;
   assert.match(overview, /No matching subscriptions/);
   assert.match(overview, /No subscriptions yet/);
-  assert.match(detail, /Billing & renewal/);
+  assert.match(detail, /label: "Billing"/);
+  assert.match(detail, /Next charge/);
+  assert.match(detail, /Invoices and payments/);
   assert.match(detail, /Price history/);
   assert.match(detail, /Hardware assignments/);
   assert.match(loading, /aria-busy/);

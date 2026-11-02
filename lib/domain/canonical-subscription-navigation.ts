@@ -5,7 +5,7 @@
  * anchors, so a link can never point at hidden content.
  */
 
-export type SubscriptionTabKey = "services" | "billing" | "invoices" | "activity" | "advanced";
+export type SubscriptionTabKey = "services" | "billing" | "activity" | "advanced";
 
 export type SubscriptionTab = {
   key: SubscriptionTabKey;
@@ -26,6 +26,10 @@ export function subscriptionServicePath(subscriptionId: string, itemId: string):
 /** The single entry point for adding a service, for both draft and active subscriptions. */
 export function subscriptionAddServicePath(subscriptionId: string): string {
   return `${subscriptionBasePath(subscriptionId)}/add-service`;
+}
+
+export function subscriptionBillingPath(subscriptionId: string): string {
+  return `${subscriptionBasePath(subscriptionId)}/billing`;
 }
 
 export function subscriptionAnnualAdjustmentPath(subscriptionId: string): string {
@@ -66,8 +70,7 @@ export function subscriptionTabs(subscriptionId: string, options: { showAdvanced
   const base = subscriptionBasePath(subscriptionId);
   const tabs: SubscriptionTab[] = [
     { key: "services", label: "Services", segment: "services", href: `${base}/services` },
-    { key: "billing", label: "Billing & renewal", segment: "billing", href: `${base}/billing` },
-    { key: "invoices", label: "Invoices & payments", segment: "invoices", href: `${base}/invoices` },
+    { key: "billing", label: "Billing", segment: "billing", href: `${base}/billing` },
     { key: "activity", label: "Activity", segment: "activity", href: `${base}/activity` },
   ];
   if (options.showAdvanced) tabs.push({ key: "advanced", label: "Advanced", segment: "advanced", href: `${base}/advanced` });
@@ -79,7 +82,8 @@ export function activeSubscriptionTab(segment: string | null | undefined): Subsc
   switch (segment) {
     case "services": return "services";
     case "billing": return "billing";
-    case "invoices": return "invoices";
+    // The old Invoices & payments route redirects to Billing; keep it highlighted while it does.
+    case "invoices": return "billing";
     case "activity": return "activity";
     case "advanced": return "advanced";
     // The subscription index redirects to Services, which is also where add-service returns to.

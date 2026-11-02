@@ -31,9 +31,9 @@ export default async function CanonicalAnnualAdjustmentPage({ params, searchPara
 
   return (
     <section aria-labelledby="annual-adjustment-heading" className={`${cardClass} p-5`}>
-      <Link href={billingPath} className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">← Billing &amp; renewal</Link>
+      <Link href={billingPath} className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">← Billing</Link>
       <h2 id="annual-adjustment-heading" className="mt-3 text-lg font-semibold">Annual addition and adjustment preview</h2>
-      <p className="mt-2 text-sm text-zinc-500">Preview only. This does not authorize collection, create an invoice, or advance the recurring schedule. Issuing an agreed partial-period charge is done from the agreed charges on Billing &amp; renewal.</p>
+      <p className="mt-2 text-sm text-zinc-500">Preview only. This does not authorize collection, create an invoice, or advance the recurring schedule. Issuing an agreed partial-period charge is done from the agreed charges on Billing.</p>
       <form method="get" className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm font-medium">Period start<input required type="date" name="periodStart" defaultValue={query.periodStart ?? iso(subscription.billingAnchorDate)} className={inputClass} /></label>
         <label className="text-sm font-medium">Period end<input required type="date" name="periodEnd" defaultValue={query.periodEnd ?? iso(subscription.nextBillingDate)} className={inputClass} /></label>

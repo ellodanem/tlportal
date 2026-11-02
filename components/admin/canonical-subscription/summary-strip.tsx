@@ -49,7 +49,7 @@ export function SummaryStrip({ total, cycleUnit, serviceCount, nextBillingDate, 
         <Cell icon={<CalendarIcon className="size-5" />} label="Next renewal" note={renewalNote(nextBillingDate)}>
           {displayDate(nextBillingDate)}
         </Cell>
-        <Cell icon={<CardIcon className="size-5" />} label="Billing method" note={collectionMethod === "manual_invoice" ? `Grace ${gracePeriodDays} days` : collectionMethod === "stripe_autocharge" ? "Stripe-managed collection" : "Choose in Billing & renewal"}>
+        <Cell icon={<CardIcon className="size-5" />} label="Billing method" note={collectionMethod === "manual_invoice" ? `Grace ${gracePeriodDays} days` : collectionMethod === "stripe_autocharge" ? "Stripe-managed collection" : "Choose in Billing"}>
           {collectionLabel(collectionMethod)}
         </Cell>
         <Cell icon={<DocumentIcon className="size-5" />} label="Outstanding" note={outstandingNote}>

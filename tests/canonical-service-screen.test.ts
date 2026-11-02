@@ -24,7 +24,7 @@ function functionBody(source: string, name: string): string {
 test("Services stays the active tab on the service screen and its history, and every tab is kept", () => {
   assert.deepEqual(
     subscriptionTabs("sub-1", { showAdvanced: true }).map((tab) => tab.label),
-    ["Services", "Billing & renewal", "Invoices & payments", "Activity", "Advanced"],
+    ["Services", "Billing", "Activity", "Advanced"],
   );
   // The tabs read the first segment under the subscription layout, which is "services" for
   // /services, /services/:id and /services/:id/history alike.

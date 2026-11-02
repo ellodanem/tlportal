@@ -109,13 +109,9 @@ test("actions that change messages or activity refresh both the old and new work
   }
 });
 
-test("subscription Billing and Invoices tabs link to customer billing", async () => {
-  const [billingTab, invoicesTab] = await Promise.all([
-    source("components/admin/canonical-subscription/billing-tab.tsx"),
-    source("components/admin/canonical-subscription/invoices-tab.tsx"),
-  ]);
+test("the subscription Billing tab links to customer billing", async () => {
+  const billingTab = await source("components/admin/canonical-subscription/billing-tab.tsx");
   assert.match(billingTab, /\/admin\/subscriptions\/customers\/\$\{subscription\.customerId\}\/billing/);
-  assert.match(invoicesTab, /\/admin\/subscriptions\/customers\/\$\{subscription\.customerId\}\/billing/);
 });
 
 test("native billing readiness issues only show for manual-invoice subscriptions", () => {
@@ -131,7 +127,7 @@ test("native billing readiness issues only show for manual-invoice subscriptions
   assert.deepEqual(nativeBillingReadinessIssues({ collectionMethod: "manual_invoice", summary: null }), []);
 });
 
-test("customer billing sends canonical subscriptions to their own Billing & renewal tab, legacy rows to the old tools", async () => {
+test("customer billing sends canonical subscriptions to their own Billing tab, legacy rows to the old tools", async () => {
   const page = await source("app/admin/subscriptions/customers/[customerId]/billing/page.tsx");
   // Canonical subscriptions: per-subscription link, and a derived schedule is managed on the subscription.
   assert.match(page, /\/admin\/subscriptions\/canonical\/\$\{entry\.id\}\/billing/);

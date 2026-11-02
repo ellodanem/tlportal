@@ -84,7 +84,7 @@ test("legacy mutators consult canonical ownership guards on the server", async (
 
 test("subscription tabs are real routes and Advanced only appears when relevant", () => {
   const without = subscriptionTabs("sub-1", { showAdvanced: false });
-  assert.deepEqual(without.map((tab) => tab.key), ["services", "billing", "invoices", "activity"]);
+  assert.deepEqual(without.map((tab) => tab.key), ["services", "billing", "activity"]);
   // Services is the landing section; there is no separate overview tab.
   assert.equal(without[0].href, "/admin/subscriptions/canonical/sub-1/services");
   assert.ok(without.every((tab) => !tab.href.includes("#")));
@@ -96,6 +96,8 @@ test("active tab resolves from the first child segment", () => {
   assert.equal(activeSubscriptionTab(undefined), "services");
   assert.equal(activeSubscriptionTab("services"), "services");
   assert.equal(activeSubscriptionTab("billing"), "billing");
+  // The retired Invoices & payments route redirects to Billing and must not leave no tab active.
+  assert.equal(activeSubscriptionTab("invoices"), "billing");
   assert.equal(activeSubscriptionTab("add-service"), "services");
 });
 
@@ -230,15 +232,28 @@ test("subscription management surfaces have no collapsed sections or hidden anch
   }
 });
 
-test("each subscription tab has a route and invoices are visible by default", async () => {
-  for (const segment of ["services", "billing", "invoices", "activity", "advanced"]) {
+test("each subscription tab has a route and invoices are visible by default on Billing", async () => {
+  for (const segment of ["services", "billing", "activity", "advanced"]) {
     const page = await readFile(`app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/${segment}/page.tsx`, "utf8");
     assert.match(page, /requireSubscriptionPage/);
   }
-  const invoices = await readFile("components/admin/canonical-subscription/invoices-tab.tsx", "utf8");
-  assert.match(invoices, /getSubscriptionFinancials/);
-  assert.match(invoices, /NOT_LINKED_LABEL/);
-  assert.doesNotMatch(invoices, /<details/);
+  const billing = await readFile("components/admin/canonical-subscription/billing-tab.tsx", "utf8");
+  assert.match(billing, /getSubscriptionFinancials/);
+  assert.match(billing, /NOT_LINKED_LABEL/);
+  assert.match(billing, /SubscriptionLedgerTable/);
+  assert.doesNotMatch(billing, /<details/);
+});
+
+test("the retired Invoices & payments route redirects to Billing and nothing links to it", async () => {
+  const redirectPage = await readFile("app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/invoices/page.tsx", "utf8");
+  assert.match(redirectPage, /redirect\(subscriptionBillingPath\(/);
+  for (const file of [
+    "components/admin/canonical-subscription/subscription-notices.tsx",
+    "components/admin/financial-ledger-table.tsx",
+    "components/admin/canonical-subscription/billing-tab.tsx",
+  ]) {
+    assert.doesNotMatch(await readFile(file, "utf8"), /\/invoices`/, `${file} must link to Billing, not the retired invoices route`);
+  }
 });
 
 test("adding a service has a single entry point", async () => {

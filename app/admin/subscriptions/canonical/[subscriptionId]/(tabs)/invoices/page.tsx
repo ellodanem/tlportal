@@ -1,8 +1,9 @@
-import { SubscriptionInvoicesTab } from "@/components/admin/canonical-subscription/invoices-tab";
-import { requireSubscriptionPage } from "@/lib/admin/canonical-subscription-page-data";
+import { redirect } from "next/navigation";
 
-export default async function CanonicalSubscriptionInvoicesPage({ params }: { params: Promise<{ subscriptionId: string }> }) {
+import { subscriptionBillingPath } from "@/lib/domain/canonical-subscription-navigation";
+
+/** Invoices and payments now live on the Billing tab. Old links and bookmarks land there. */
+export default async function CanonicalSubscriptionInvoicesRedirect({ params }: { params: Promise<{ subscriptionId: string }> }) {
   const { subscriptionId } = await params;
-  const { subscription } = await requireSubscriptionPage(subscriptionId);
-  return <SubscriptionInvoicesTab subscription={subscription} />;
+  redirect(subscriptionBillingPath(subscriptionId));
 }
