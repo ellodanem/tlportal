@@ -15,6 +15,7 @@ import {
   IconNavExpenses,
   IconNavExternal,
   IconNavFeedback,
+  IconNavQr,
   IconNavHealth,
   IconNavInbox,
   IconNavInvoice,
@@ -111,6 +112,7 @@ function buildNavSections(ctx: { nativeBillingPrimary: boolean; invoilessLegacyU
         { href: "/admin/broadcasts", label: "Broadcasts", Icon: IconNavBroadcast },
         { href: "/admin/feedback", label: "Feedback", Icon: IconNavFeedback },
         { href: "/admin/message-templates", label: "Message templates", Icon: IconNavInbox },
+        { href: "/admin/vehicle-qr", label: "Vehicle QR", Icon: IconNavQr },
       ],
     },
   ];
