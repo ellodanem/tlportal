@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/canonical-subscription-admin";
 import {
   parseServicePauseDisposition,
+  SERVICE_PAUSE_DISPOSITION_OUTCOME,
   parseServicePauseReason,
 } from "@/lib/domain/service-pause";
 import { CanonicalSubscriptionValidationError } from "@/lib/domain/canonical-subscription-application";
@@ -799,7 +800,7 @@ export async function pauseCanonicalServiceAssignmentAction(
     });
     revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
     const scheduleNote = result.pausedRecurringSchedules ? ` Paused ${result.pausedRecurringSchedules} linked recurring invoice schedule${result.pausedRecurringSchedules === 1 ? "" : "s"}.` : "";
-    return { message: `Service paused and tracker marked ${deviceDisposition === "in_stock" ? "in stock" : "returned"}.${scheduleNote}${result.subscriptionItemPaused ? pauseBillingNotice(subscription.collectionMethod, subscription.nextBillingDate) : ""}` };
+    return { message: `Service paused and tracker ${SERVICE_PAUSE_DISPOSITION_OUTCOME[deviceDisposition]}.${scheduleNote}${result.subscriptionItemPaused ? pauseBillingNotice(subscription.collectionMethod, subscription.nextBillingDate) : ""}` };
   } catch (error) {
     return actionError(error);
   }
@@ -876,7 +877,7 @@ export async function removeCanonicalServiceForVehicleSaleAction(
     });
     revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
     const scheduleNote = result.pausedRecurringSchedules ? ` Paused ${result.pausedRecurringSchedules} linked recurring invoice schedule${result.pausedRecurringSchedules === 1 ? "" : "s"}.` : "";
-    return { message: `Billing ends on ${effectiveUntil}; tracker marked ${deviceDisposition === "in_stock" ? "in stock" : "returned"}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
+    return { message: `Billing ends on ${effectiveUntil}; tracker ${SERVICE_PAUSE_DISPOSITION_OUTCOME[deviceDisposition]}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
   } catch (error) {
     return actionError(error);
   }

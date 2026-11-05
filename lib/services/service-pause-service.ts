@@ -53,6 +53,8 @@ export type ResumeServiceAssignmentResult =
   | { ok: false; error: string };
 
 function deviceStatusForDisposition(disposition: ServicePauseDeviceDisposition): DeviceStatus {
+  // A tracker left in the vehicle stays with the customer, so it is not returned to stock or storage.
+  if (disposition === "left_in_vehicle") return "suspended";
   return disposition === "in_stock" ? "in_stock" : "returned";
 }
 
