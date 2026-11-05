@@ -118,6 +118,15 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
       ? `${getAppBaseUrl()}/pay/i/${invoice.publicToken}`
       : null;
 
+  // A schedule derived from a canonical subscription is managed on that subscription.
+  const recurringScheduleHref = invoice.recurringSchedule
+    ? invoice.recurringSchedule.customerSubscriptionId &&
+      invoice.recurringSchedule.customerSubscription?.lifecycleStatus != null &&
+      canonicalSubscriptionUiVisible()
+      ? `/admin/subscriptions/canonical/${invoice.recurringSchedule.customerSubscriptionId}/billing`
+      : `/admin/recurring-invoices/${invoice.recurringSchedule.id}`
+    : "#";
+
   const canRecordPayment =
     !isArchived &&
     !isStripeMirror &&
@@ -175,6 +184,27 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
             ? ` · Sent ${invoice.sentAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
             : ""}
         </p>
+        {invoice.recurringSchedule || invoice.sourceQuote ? (
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+            {invoice.recurringSchedule ? (
+              <span>
+                From recurring schedule{" "}
+                <Link href={recurringScheduleHref} className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                  {invoice.recurringSchedule.name?.trim() || "Recurring schedule"}
+                </Link>
+              </span>
+            ) : null}
+            {invoice.recurringSchedule && invoice.sourceQuote ? <span aria-hidden>·</span> : null}
+            {invoice.sourceQuote ? (
+              <span>
+                From quote{" "}
+                <Link href={`/admin/quotes/${invoice.sourceQuote.id}`} className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                  {invoice.sourceQuote.number ?? "Quote"}
+                </Link>
+              </span>
+            ) : null}
+          </p>
+        ) : null}
       </div>
 
       {pendingScheduledEmail ? (
@@ -202,36 +232,6 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
           stripeExternalId={invoice.billingInvoice.externalInvoiceId}
           providerInvoiceNumber={invoice.billingInvoice.providerInvoiceNumber}
         />
-      ) : null}
-
-      {invoice.recurringSchedule ? (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
-          <p className="font-medium text-zinc-900 dark:text-zinc-100">From recurring schedule</p>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-            <Link
-              href={
-                // A schedule derived from a canonical subscription is managed on that subscription.
-                invoice.recurringSchedule.customerSubscriptionId && invoice.recurringSchedule.customerSubscription?.lifecycleStatus != null && canonicalSubscriptionUiVisible()
-                  ? `/admin/subscriptions/canonical/${invoice.recurringSchedule.customerSubscriptionId}/billing`
-                  : `/admin/recurring-invoices/${invoice.recurringSchedule.id}`
-              }
-              className="text-emerald-700 hover:underline dark:text-emerald-400"
-            >
-              {invoice.recurringSchedule.name?.trim() || "Recurring schedule"}
-            </Link>
-          </p>
-        </div>
-      ) : null}
-
-      {invoice.sourceQuote ? (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
-          <p className="font-medium text-zinc-900 dark:text-zinc-100">From quote</p>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-            <Link href={`/admin/quotes/${invoice.sourceQuote.id}`} className="text-emerald-700 hover:underline dark:text-emerald-400">
-              {invoice.sourceQuote.number ?? "Quote"}
-            </Link>
-          </p>
-        </div>
       ) : null}
 
       {canRecordPayment ? (
