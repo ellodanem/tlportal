@@ -111,7 +111,7 @@ export default async function SubscriptionsPage({ searchParams }: Props) {
       </Link>
       <Link href={href({ status: "active" })} className={`${TILE_LINK}`} title="Show active subscriptions">
         <SummaryIcon tone="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" path="M5 12l4.5 4.5L19 7" />
-        <div><p className={LABEL}>Active</p><p className={VALUE}>{metrics.activeCount}</p></div>
+        <div><p className={LABEL}>Active devices</p><p className={VALUE}>{metrics.activeDeviceCount}</p></div>
       </Link>
       <div className={`${TILE}`} title={metrics.operationalMrr == null
         ? "Active subscriptions span more than one currency, so no single total is shown."

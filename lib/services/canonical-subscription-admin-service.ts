@@ -358,5 +358,30 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
  * grouped under its customer id, with summary figures computed from the same rows.
  */
 export async function getCanonicalSubscriptionWorkspace(query: WorkspaceQuery = {}) {
-  return buildSubscriptionWorkspace(await listCanonicalSubscriptionAdminRows(), query);
+  const [rows, activeDevices] = await Promise.all([
+    listCanonicalSubscriptionAdminRows(),
+    prisma.serviceAssignment.findMany({
+      where: {
+        subscriptionItem: {
+          status: "active",
+          customerSubscription: {
+            controlMode: "canonical",
+            lifecycleStatus: "active",
+          },
+        },
+        status: { in: ["active", "due_soon", "overdue"] },
+        endDate: null,
+      },
+      distinct: ["deviceId"],
+      select: { deviceId: true },
+    }),
+  ]);
+  const workspace = buildSubscriptionWorkspace(rows, query);
+  return {
+    ...workspace,
+    metrics: {
+      ...workspace.metrics,
+      activeDeviceCount: activeDevices.length,
+    },
+  };
 }

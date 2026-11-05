@@ -223,7 +223,10 @@ export type WorkspaceGroup = {
 export type WorkspaceMetrics = {
   /** Canonical subscription records (not customers, not services). */
   totalCount: number;
+  /** Active canonical subscription records, retained for workspace filtering/tests. */
   activeCount: number;
+  /** Distinct devices assigned to currently active canonical subscription services. */
+  activeDeviceCount: number;
   needsAttentionCount: number;
   /** Null when active subscriptions span several currencies. */
   operationalMrr: number | null;
@@ -239,6 +242,7 @@ export function computeWorkspaceMetrics(rows: CanonicalSubscriptionAdminRow[]): 
   return {
     totalCount: canonical.length,
     activeCount: operational.length,
+    activeDeviceCount: 0,
     needsAttentionCount: canonical.filter(subscriptionNeedsAttention).length,
     operationalMrr: currencies.length === 1 ? Number(mrr.toFixed(2)) : null,
     operationalMrrCurrency: currencies.length === 1 ? currencies[0] : null,
