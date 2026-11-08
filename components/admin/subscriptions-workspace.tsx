@@ -90,6 +90,8 @@ const COLLECTION_KIND_META: Record<CollectionKind, { label: string }> = {
   recurring: { label: "Recurring \u2014 recurring invoices" },
 };
 
+// Kept as a small compatibility helper for callers that render the combined form.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CollectionIcons({ kinds }: { kinds: CollectionKind[] }) {
   if (kinds.length === 0) {
     return (
@@ -119,13 +121,37 @@ function CollectionIcons({ kinds }: { kinds: CollectionKind[] }) {
   );
 }
 
+function CollectionColumn({ kind, kinds }: { kind: CollectionKind; kinds: CollectionKind[] }) {
+  const present = kinds.includes(kind);
+  return (
+    <div role="cell" className="hidden items-center lg:flex">
+      {present ? (
+        <span
+          role="img"
+          aria-label={COLLECTION_KIND_META[kind].label}
+          title={COLLECTION_KIND_META[kind].label}
+          className={
+            kind === "stripe"
+              ? "grid size-5 place-items-center rounded bg-[#635bff] text-[11px] font-bold leading-none text-white"
+              : "grid size-5 place-items-center rounded bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
+          }
+        >
+          {kind === "stripe" ? "S" : <Icon path={REPEAT} className="size-3.5" />}
+        </span>
+      ) : (
+        <span aria-label="Not set" title="Not set" className="text-xs leading-none text-zinc-400 dark:text-zinc-600">{"—"}</span>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Layout                                                              */
 /* ------------------------------------------------------------------ */
 
 function gridTemplate(extra: ExtraColumns): string {
   const columns = [
-    "minmax(0,2.6fr)", "minmax(5rem,0.8fr)", "minmax(8.25rem,1fr)", "minmax(7rem,1fr)",
+    "minmax(0,2.6fr)", "3rem", "3rem", "minmax(5rem,0.8fr)", "minmax(8.25rem,1fr)", "minmax(7rem,1fr)",
   ];
   if (extra.collection) columns.push("minmax(6.5rem,0.9fr)");
   if (extra.reference) columns.push("minmax(6rem,0.9fr)");
@@ -183,6 +209,7 @@ function Muted({ value }: { value: string | null }) {
 /** Shared cells for the three row types so columns line up exactly. */
 function RowCells({
   services, recurring, recurringPeriod, nextCycle, collection, reference, status, extra, action,
+  collectionKinds,
 }: {
   services: string;
   recurring: string | null;
@@ -193,9 +220,12 @@ function RowCells({
   status: WorkspaceStatusView;
   extra: ExtraColumns;
   action: React.ReactNode;
+  collectionKinds: CollectionKind[];
 }) {
   return (
     <>
+      <CollectionColumn kind="stripe" kinds={collectionKinds} />
+      <CollectionColumn kind="recurring" kinds={collectionKinds} />
       <div className="order-3 col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 lg:order-none lg:contents lg:text-sm dark:text-zinc-400">
         <div role="cell" className="text-zinc-700 lg:text-sm dark:text-zinc-300">{services}</div>
         <div role="cell" className="lg:text-sm"><Recurring amount={recurring} period={recurringPeriod} /></div>
@@ -232,7 +262,6 @@ function SingleRow({ group, extra }: { group: CustomerGroupView; extra: ExtraCol
               {group.customer}
               <span className="sr-only">, open subscription {subscription.name}</span>
             </Link>
-            <CollectionIcons kinds={group.collectionKinds} />
           </div>
           <p className="text-xs text-zinc-500 lg:truncate dark:text-zinc-400">{group.context}</p>
         </div>
@@ -240,7 +269,7 @@ function SingleRow({ group, extra }: { group: CustomerGroupView; extra: ExtraCol
       <RowCells
         services={group.servicesLabel} recurring={group.recurring} recurringPeriod={group.recurringPeriod}
         nextCycle={group.nextCycle} collection={group.collection} reference={group.reference}
-        status={group.status} extra={extra} action={<Icon path={CHEVRON_RIGHT} />}
+        status={group.status} extra={extra} action={<Icon path={CHEVRON_RIGHT} />} collectionKinds={group.collectionKinds}
       />
     </div>
   );
@@ -261,7 +290,6 @@ function ChildRow({ subscription, extra, last }: { subscription: SubscriptionRow
             <Link href={subscription.href} className={`block min-w-0 text-sm font-medium text-zinc-800 dark:text-zinc-100 ${NAME} ${STRETCH}`}>
               {subscription.name}
             </Link>
-            <CollectionIcons kinds={subscription.collectionKinds} />
           </div>
           <p className="text-xs text-zinc-500 lg:truncate dark:text-zinc-400">{subscription.cadence}</p>
         </div>
@@ -269,7 +297,7 @@ function ChildRow({ subscription, extra, last }: { subscription: SubscriptionRow
       <RowCells
         services={subscription.servicesLabel} recurring={subscription.recurring} recurringPeriod={subscription.recurringPeriod}
         nextCycle={subscription.nextCycle} collection={subscription.collection} reference={subscription.reference}
-        status={subscription.status} extra={extra} action={<Icon path={CHEVRON_RIGHT} />}
+        status={subscription.status} extra={extra} action={<Icon path={CHEVRON_RIGHT} />} collectionKinds={subscription.collectionKinds}
       />
     </div>
   );
@@ -302,7 +330,6 @@ function GroupRows({
                 {group.customer}
                 <span className="sr-only">, {open ? "collapse" : "expand"} subscriptions</span>
               </button>
-              <CollectionIcons kinds={group.collectionKinds} />
             </div>
             <p className="text-xs text-zinc-500 lg:truncate dark:text-zinc-400">{group.context}</p>
           </div>
@@ -310,7 +337,7 @@ function GroupRows({
         <RowCells
           services={group.servicesLabel} recurring={group.recurring} recurringPeriod={group.recurringPeriod}
           nextCycle={group.nextCycle} collection={group.collection} reference={group.reference}
-          status={group.status} extra={extra} action={null}
+          status={group.status} extra={extra} action={null} collectionKinds={group.collectionKinds}
         />
       </div>
       <div id={panelId} role="rowgroup" hidden={!open} className="divide-y divide-zinc-100 border-t border-zinc-100 bg-zinc-50/40 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -537,6 +564,8 @@ export function SubscriptionsWorkspace(props: SubscriptionsWorkspaceProps) {
           <div role="rowgroup" className="hidden border-b border-zinc-100 bg-zinc-50/70 text-xs font-medium text-zinc-500 lg:block dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-400">
             <div role="row" className={ROW_GRID.replace("py-3", "py-2")}>
               <SortHeader label="Customer / Subscription" sortKey="customer" link={props.sortLinks.customer} className="pl-[4.75rem]" />
+              <div role="columnheader" className="text-center" title="Stripe automatic card billing">Stripe</div>
+              <div role="columnheader" className="text-center" title="Recurring invoices">Recurring</div>
               <SortHeader label="Services" sortKey="services" link={props.sortLinks.services} />
               <SortHeader label="Recurring" sortKey="recurring" link={props.sortLinks.recurring} />
               <SortHeader label="Next cycle" sortKey="renewal" link={props.sortLinks.renewal} />
