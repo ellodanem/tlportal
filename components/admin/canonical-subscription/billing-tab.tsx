@@ -9,6 +9,7 @@ import {
 } from "@/components/admin/canonical-subscription/format";
 import { CanonicalBillingDatesDialog } from "@/components/admin/canonical-billing-dates-dialog";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
+import { SwitchToStripe } from "@/components/admin/canonical-subscription/switch-to-stripe";
 import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
 import { canonicalAnnualAdjustmentExecutionEnabled } from "@/lib/domain/canonical-annual-adjustment";
@@ -147,6 +148,12 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
             <p className="mt-1 text-xs text-zinc-500">Allowed only while the subscription is a draft. It does not create an invoice or contact Stripe.</p>
             <CanonicalSubscriptionCollectionForm subscriptionId={subscription.id} value={subscription.collectionMethod} />
           </div>
+        ) : null}
+        {permissions.canManage
+          && subscription.controlMode === "canonical"
+          && subscription.lifecycleStatus === "active"
+          && subscription.collectionMethod === "manual_invoice" ? (
+          <SwitchToStripe subscriptionId={subscription.id} />
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <Link href={customerBillingHref} className={secondaryButtonClass}>Customer billing</Link>

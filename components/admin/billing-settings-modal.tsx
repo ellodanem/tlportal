@@ -26,7 +26,9 @@ export function BillingSettingsModal({
   stripeConfigured,
   hasInvoilessId,
   billingSetup,
+  subscriptionManaged = false,
 }: {
+  subscriptionManaged?: boolean;
   open: boolean;
   onClose: () => void;
   customerId: string;
@@ -48,6 +50,7 @@ export function BillingSettingsModal({
       stripeConfigured={stripeConfigured}
       hasInvoilessId={hasInvoilessId}
       billingSetup={billingSetup}
+      subscriptionManaged={subscriptionManaged}
     />
   );
 }
@@ -60,7 +63,9 @@ function BillingSettingsModalBody({
   stripeConfigured,
   hasInvoilessId,
   billingSetup,
+  subscriptionManaged,
 }: {
+  subscriptionManaged: boolean;
   onClose: () => void;
   customerId: string;
   billingMode: CustomerBillingMode;
@@ -123,6 +128,17 @@ function BillingSettingsModalBody({
             </form>
           ) : null}
 
+          {subscriptionManaged ? (
+            <div className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700">
+              <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                Billing mode: {isStripe ? "Stripe card billing" : "Manual / recurring invoices"}
+              </p>
+              <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                This is set automatically from the customer&apos;s subscriptions: Stripe when any active subscription is collected by Stripe, otherwise manual.
+                To change how a subscription is collected, open its Billing tab and use <strong>Switch to Stripe</strong>. Close this window to see the subscriptions.
+              </p>
+            </div>
+          ) : (
           <form action={modeAction} className="flex flex-col gap-3">
             <input type="hidden" name="customerId" value={customerId} />
             <fieldset className="flex flex-col gap-2">
@@ -161,6 +177,7 @@ function BillingSettingsModalBody({
             </button>
             {modeState.error ? <p className="text-sm text-red-600">{modeState.error}</p> : null}
           </form>
+          )}
 
           {invoilessConfigured ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

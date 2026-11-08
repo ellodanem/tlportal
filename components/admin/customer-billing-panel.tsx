@@ -17,7 +17,10 @@ export function CustomerBillingPanel({
   stripeConfigured,
   hasInvoilessId,
   billingSetup,
+  subscriptionManaged = false,
 }: {
+  /** Collection method is chosen per subscription (Stripe vs recurring invoice), not per customer. */
+  subscriptionManaged?: boolean;
   customerId: string;
   billingMode: CustomerBillingMode;
   invoilessConfigured: boolean;
@@ -62,6 +65,7 @@ export function CustomerBillingPanel({
         stripeConfigured={stripeConfigured}
         hasInvoilessId={hasInvoilessId}
         billingSetup={billingSetup}
+        subscriptionManaged={subscriptionManaged}
       />
     </>
   );

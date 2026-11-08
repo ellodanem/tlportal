@@ -43,6 +43,12 @@ import { pauseServiceAssignment, resumeServiceAssignment } from "@/lib/services/
 import { parseAssetLossReason } from "@/lib/domain/asset-loss";
 import { formatOpenInvoicesNotice, recordCanonicalAssetLoss } from "@/lib/services/asset-loss-service";
 import { adoptExistingStripeSubscription, CanonicalStripeAdoptionError } from "@/lib/services/canonical-stripe-adoption-service";
+import {
+  CanonicalStripeLinkError,
+  findLinkableStripeSubscriptions,
+  linkExistingStripeSubscription,
+  type LinkableStripeResult,
+} from "@/lib/services/canonical-stripe-link-service";
 
 export type CanonicalSubscriptionFormState = {
   error?: string;
@@ -72,6 +78,7 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
     || error instanceof CanonicalSubscriptionUiError
     || error instanceof CanonicalSubscriptionActivationError
     || error instanceof CanonicalStripeAdoptionError
+    || error instanceof CanonicalStripeLinkError
     || error instanceof CanonicalAnnualAdjustmentError
     || error instanceof SubscriptionProrationError
   ) {
@@ -118,6 +125,62 @@ export async function adoptExistingStripeSubscriptionAction(
     revalidatePath("/admin/subscriptions/canonical");
     revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
     return { message: `Existing Stripe billing is connected with ${result.mappingCount} exact rate mapping${result.mappingCount === 1 ? "" : "s"}. No Stripe subscription, charge, invoice, payment, or notification was created.` };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Read-only: the customer's Stripe subscriptions with an exact-match verdict for this subscription. */
+export async function findLinkableStripeSubscriptionsAction(subscriptionId: string): Promise<LinkableStripeResult & { error?: string }> {
+  try {
+    await requireStaff();
+    return await findLinkableStripeSubscriptions(subscriptionId);
+  } catch (error) {
+    return { blockers: [], stripeCustomerId: null, candidates: [], error: actionError(error).error };
+  }
+}
+
+/**
+ * Switch an active Recurring-invoice subscription to Stripe by linking a Stripe subscription
+ * that already exists. Reads Stripe only; never creates, changes or charges anything there.
+ */
+export async function linkExistingStripeSubscriptionAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    if (text(formData, "confirmLinkStripe") !== "yes") {
+      return { error: "Confirm the switch before linking." };
+    }
+    const session = await requireStaff();
+    const subscription = await prisma.customerSubscription.findUnique({
+      where: { id: subscriptionId },
+      select: { id: true, customerId: true },
+    });
+    if (!subscription) return { error: "Subscription not found." };
+    const externalSubscriptionId = text(formData, "externalSubscriptionId") || text(formData, "externalSubscriptionIdManual");
+    const result = await linkExistingStripeSubscription({ subscriptionId, externalSubscriptionId });
+    await recordOperationalEvent({
+      category: "subscription.switched_to_stripe",
+      summary: "Subscription switched from Recurring invoices to Stripe by linking an existing Stripe subscription.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: {
+        subscriptionId,
+        externalSubscriptionId: result.externalSubscriptionId,
+        mappedRateGroups: result.mappingCount,
+        recurringSchedulesEnded: result.schedulesEnded,
+        customerBillingModeChanged: result.billingModeChanged,
+      },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath("/admin/subscriptions");
+    revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
+    return {
+      message: `Linked ${result.externalSubscriptionId}. Stripe now collects this subscription${result.schedulesEnded ? ` and ${result.schedulesEnded} recurring invoice schedule${result.schedulesEnded === 1 ? " was" : "s were"} stopped` : ""}. Nothing was changed in Stripe.`,
+    };
   } catch (error) {
     return actionError(error);
   }
