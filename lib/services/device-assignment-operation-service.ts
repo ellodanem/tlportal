@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { replaceSubscriptionItemHardwareInTransaction } from "@/lib/services/canonical-subscription-application-service";
 
-type SimDisposition = "move_current" | "select" | "none";
+type SimDisposition = "move_current" | "keep_replacement" | "select" | "none";
 type HardwareDisposition = "in_stock" | "faulty_returned" | "lost";
 
 export class DeviceAssignmentOperationError extends Error {}
@@ -88,11 +88,17 @@ export async function replaceDeviceForExistingAssignment(input: {
     });
     if (openReplacementAssignment) throw new DeviceAssignmentOperationError("Replacement device is already installed.");
 
+    if (input.simDisposition === "keep_replacement" && !replacement.simCardId) {
+      throw new DeviceAssignmentOperationError("The replacement device has no SIM to keep.");
+    }
+    // keep_replacement: the replacement device's own SIM stays; the old device's SIM is unlinked below.
     const nextSimId = input.simDisposition === "move_current"
       ? current.device.simCardId
-      : input.simDisposition === "select"
-        ? input.replacementSimCardId!
-        : null;
+      : input.simDisposition === "keep_replacement"
+        ? replacement.simCardId
+        : input.simDisposition === "select"
+          ? input.replacementSimCardId!
+          : null;
     if (nextSimId) await assertSimIsAvailable(tx, nextSimId, [current.deviceId, replacement.id]);
 
     const created = await tx.serviceAssignment.create({
@@ -157,6 +163,8 @@ export async function replaceDeviceForExistingAssignment(input: {
           subscriptionItemId: current.subscriptionItemId,
           previousSimCardId: current.device.simCardId,
           nextSimCardId: nextSimId,
+          simDisposition: input.simDisposition,
+          replacementPreviousSimCardId: replacement.simCardId,
           effectiveDate: input.effectiveDate,
           oldHardwareDisposition: input.oldHardwareDisposition,
           reason: input.reason?.trim() || null,

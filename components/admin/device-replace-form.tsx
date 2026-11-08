@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { replaceDeviceWithinService } from "@/app/admin/devices/actions";
@@ -18,13 +18,15 @@ function Submit() {
 
 export function DeviceReplaceForm({ assignmentId, devices, currentSimId, availableSims }: {
   assignmentId: string;
-  devices: { id: string; label: string }[];
+  devices: { id: string; label: string; simIccid: string | null }[];
   currentSimId: string | null;
   availableSims: UnlinkedSimRow[];
 }) {
   const [state, action] = useActionState(replaceDeviceWithinService, deviceFormInitialState);
+  const [replacementId, setReplacementId] = useState("");
   useDeviceFormActionNav(state);
   const today = new Date().toISOString().slice(0, 10);
+  const replacementSim = devices.find((device) => device.id === replacementId)?.simIccid ?? null;
   return <section className="mt-6 border-t border-zinc-200 pt-6 dark:border-zinc-800">
     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Replace device</h3>
     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Replaces this physical installation only. It preserves the current service identity, commercial terms, billing dates, invoices, and provider authority.</p>
@@ -32,12 +34,15 @@ export function DeviceReplaceForm({ assignmentId, devices, currentSimId, availab
       <input type="hidden" name="assignmentId" value={assignmentId} />
       {state.error ? <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{state.error}</p> : null}
       {state.message ? <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">{state.message}</p> : null}
-      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Replacement device<select required name="replacementDeviceId" defaultValue="" className={inputClass}><option value="" disabled>Select a sound in-stock device…</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.label}</option>)}</select></label>
+      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Replacement device<select required name="replacementDeviceId" value={replacementId} onChange={(event) => setReplacementId(event.target.value)} className={inputClass}><option value="" disabled>Select a sound in-stock device…</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.label}{device.simIccid ? ` · SIM ${device.simIccid}` : ""}</option>)}</select></label>
       <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Effective date<input required name="effectiveDate" type="date" defaultValue={today} className={inputClass} /></label>
-      <fieldset className="space-y-2"><legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">SIM handling</legend>
-        {currentSimId ? <label className="flex gap-2 text-sm text-zinc-700 dark:text-zinc-300"><input type="radio" name="simDisposition" value="move_current" defaultChecked /> Move the current SIM to the replacement device</label> : null}
-        <label className="flex gap-2 text-sm text-zinc-700 dark:text-zinc-300"><input type="radio" name="simDisposition" value="select" defaultChecked={!currentSimId} /> Use another eligible SIM</label>
+      {/* key resets the radio defaults whenever the replacement device (and so its SIM) changes */}
+      <fieldset key={replacementId} className="space-y-2"><legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">SIM handling</legend>
+        {replacementSim ? <label className="flex gap-2 text-sm text-zinc-700 dark:text-zinc-300"><input type="radio" name="simDisposition" value="keep_replacement" defaultChecked /> Keep the replacement device&apos;s SIM ({replacementSim}){currentSimId ? "; the old device's SIM is unlinked" : ""}</label> : null}
+        {currentSimId ? <label className="flex gap-2 text-sm text-zinc-700 dark:text-zinc-300"><input type="radio" name="simDisposition" value="move_current" defaultChecked={!replacementSim} /> Move the current SIM to the replacement device</label> : null}
+        <label className="flex gap-2 text-sm text-zinc-700 dark:text-zinc-300"><input type="radio" name="simDisposition" value="select" defaultChecked={!replacementSim && !currentSimId} /> Use another eligible SIM</label>
         <label className="flex gap-2 text-sm text-zinc-700 dark:text-zinc-300"><input type="radio" name="simDisposition" value="none" /> Install without a SIM</label>
+        {replacementSim ? <p className="text-xs text-amber-800 dark:text-amber-200">Choosing anything other than “Keep” unlinks the replacement device&apos;s own SIM ({replacementSim}).</p> : null}
         <p className="text-xs text-amber-800 dark:text-amber-200">A provider or APN change may need manual follow-up. GPS setup commands are not changed automatically.</p>
       </fieldset>
       <UnlinkedSimPicker inputName="replacementSimCardId" sims={availableSims} availabilityHint="Only choose a SIM here when ‘Use another eligible SIM’ is selected." />

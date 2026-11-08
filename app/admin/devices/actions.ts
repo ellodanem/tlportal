@@ -694,12 +694,12 @@ export async function replaceDeviceWithinService(
   const oldHardwareDisposition = String(formData.get("oldHardwareDisposition") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim() || null;
   if (!assignmentId || !replacementDeviceId || !effectiveDate) return { error: "Choose the installation, replacement device, and effective date." };
-  if (!["move_current", "select", "none"].includes(simDisposition)) return { error: "Choose how the SIM should be handled." };
+  if (!["move_current", "keep_replacement", "select", "none"].includes(simDisposition)) return { error: "Choose how the SIM should be handled." };
   if (!["in_stock", "faulty_returned", "lost"].includes(oldHardwareDisposition)) return { error: "Choose the old hardware disposition." };
   try {
     const result = await replaceDeviceForExistingAssignment({
       assignmentId, replacementDeviceId, effectiveDate,
-      simDisposition: simDisposition as "move_current" | "select" | "none",
+      simDisposition: simDisposition as "move_current" | "keep_replacement" | "select" | "none",
       replacementSimCardId,
       oldHardwareDisposition: oldHardwareDisposition as "in_stock" | "faulty_returned" | "lost",
       reason, actorUserId: session.sub,

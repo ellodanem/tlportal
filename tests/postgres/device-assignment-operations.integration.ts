@@ -50,6 +50,27 @@ test("legacy replacement is atomic, auditable, and does not create financial rec
   assert.match(JSON.stringify(event.payload), /H9 replacement/);
 });
 
+test("keep_replacement keeps the replacement device's own SIM and frees the old device's SIM", async () => {
+  const row = await fixture("keep-replacement-sim");
+  await prisma.device.update({ where: { id: row.replacement.id }, data: { simCardId: row.alternateSim.id } });
+  const result = await replaceDeviceForExistingAssignment({ assignmentId: row.assignment.id, replacementDeviceId: row.replacement.id, effectiveDate: "2026-10-20", simDisposition: "keep_replacement", oldHardwareDisposition: "in_stock", actorUserId: "test-staff" });
+  const [newAssignment, oldDevice, newDevice, freedSim] = await Promise.all([
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: result.assignmentId } }),
+    prisma.device.findUniqueOrThrow({ where: { id: row.oldDevice.id } }),
+    prisma.device.findUniqueOrThrow({ where: { id: row.replacement.id } }),
+    prisma.simCard.findUniqueOrThrow({ where: { id: row.sim.id }, include: { device: true } }),
+  ]);
+  assert.equal(newAssignment.simCardId, row.alternateSim.id);
+  assert.equal(newDevice.simCardId, row.alternateSim.id);
+  assert.equal(oldDevice.simCardId, null);
+  assert.equal(freedSim.device, null);
+});
+
+test("keep_replacement is rejected when the replacement device has no SIM", async () => {
+  const row = await fixture("keep-replacement-no-sim");
+  await assert.rejects(() => replaceDeviceForExistingAssignment({ assignmentId: row.assignment.id, replacementDeviceId: row.replacement.id, effectiveDate: "2026-10-20", simDisposition: "keep_replacement", oldHardwareDisposition: "in_stock", actorUserId: "test-staff" }), /no SIM to keep/);
+});
+
 test("SIM-only swap records before/after state and cannot change financial records", async () => {
   const row = await fixture("sim-swap");
   const before = await Promise.all([prisma.invoice.count({ where: { customerId: row.customer.id } }), prisma.payment.count({ where: { customerId: row.customer.id } }), prisma.recurringInvoiceSchedule.count({ where: { customerId: row.customer.id } })]);
