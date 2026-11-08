@@ -12,7 +12,11 @@ export const CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL = "CANONICAL_STRIPE_LIVE_C
 export const CANONICAL_STRIPE_LIVE_CANARY_APPROVAL_SECRET = "CANONICAL_STRIPE_LIVE_CANARY_APPROVAL_SECRET";
 
 export const LIVE_CANARY_CURRENCY = "XCD";
+export const CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT = "CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT";
+/** Default cap when the owner has not raised it. */
 export const LIVE_CANARY_MAX_RECURRING_AMOUNT = "5.00";
+/** Even a deliberate setting can never exceed this, so a typo cannot open the canary wide. */
+export const LIVE_CANARY_ABSOLUTE_MAX_RECURRING_AMOUNT = "100.00";
 export const LIVE_CANARY_AUTHORIZATION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const LIVE_CANARY_PROVIDER_CONTEXT = "stripe_live_canary" as const;
 
@@ -29,6 +33,7 @@ export type CanonicalStripeLiveCanaryEnvironment = {
   CANONICAL_STRIPE_LIVE_CANARY_STRIPE_ACCOUNT_ID?: string;
   CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL?: string;
   CANONICAL_STRIPE_LIVE_CANARY_APPROVAL_SECRET?: string;
+  CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
 };
@@ -97,6 +102,26 @@ function normalizedAmount(value: string, label: string): string {
   }
   if (amount.isNegative() || amount.decimalPlaces() > 2) {
     canaryError("CANARY_AMOUNT_INVALID", `${label} must be non-negative with no more than two decimal places.`);
+  }
+  return amount.toFixed(2);
+}
+
+/**
+ * The most the canary may charge per cycle. EC$5.00 unless the owner sets
+ * CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT, and never above EC$100.00.
+ * Must be set identically wherever the canary is checked (the runner and the webhook).
+ */
+export function liveCanaryMaxRecurringAmount(
+  environment: CanonicalStripeLiveCanaryEnvironment = process.env,
+): string {
+  const configured = environment.CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT?.trim();
+  if (!configured) return LIVE_CANARY_MAX_RECURRING_AMOUNT;
+  const amount = new Prisma.Decimal(normalizedAmount(configured, CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT));
+  if (amount.lessThanOrEqualTo(0) || amount.greaterThan(LIVE_CANARY_ABSOLUTE_MAX_RECURRING_AMOUNT)) {
+    canaryError(
+      "CANARY_CAP_INVALID",
+      `${CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT} must be greater than 0 and no more than EC$${LIVE_CANARY_ABSOLUTE_MAX_RECURRING_AMOUNT}.`,
+    );
   }
   return amount.toFixed(2);
 }
@@ -316,8 +341,9 @@ export function assertCanonicalStripeLiveCanaryAuthorization(input: {
   if (!new Prisma.Decimal(recurringAmount).plus(taxAmount).equals(total)) {
     canaryError("CANARY_TOTAL_MISMATCH", "The approved total must equal the recurring price plus approved tax.");
   }
-  if (new Prisma.Decimal(total).lessThanOrEqualTo(0) || new Prisma.Decimal(total).greaterThan(LIVE_CANARY_MAX_RECURRING_AMOUNT)) {
-    canaryError("CANARY_CHARGE_CAP_EXCEEDED", `The live canary charge must be greater than zero and no more than EC$${LIVE_CANARY_MAX_RECURRING_AMOUNT}.`);
+  const cap = liveCanaryMaxRecurringAmount(environment);
+  if (new Prisma.Decimal(total).lessThanOrEqualTo(0) || new Prisma.Decimal(total).greaterThan(cap)) {
+    canaryError("CANARY_CHARGE_CAP_EXCEEDED", `The live canary charge must be greater than zero and no more than EC$${cap}.`);
   }
   if (authorization.renewalDate !== input.proposal.nextBillingDate.toISOString().slice(0, 10)) {
     canaryError("CANARY_RENEWAL_MISMATCH", "The owner-approved renewal date does not match the preserved canonical anniversary.");

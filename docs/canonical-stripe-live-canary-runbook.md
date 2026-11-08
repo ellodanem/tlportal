@@ -95,3 +95,24 @@ Never delete genuine invoices, payments, BillingOperations, provider links, or a
 ## Preview and deployment isolation
 
 `VERCEL_ENV=production` is mandatory for the live canary. Preview deployments cannot satisfy the gate. The validation branch remains excluded from Vercel in `vercel.json`. This phase does not change cron schedules or migration behavior and adds no database migration.
+
+## Owner run sheet (single customer, amount above EC$5)
+
+The owner-run runner is `scripts/canonical-stripe-live-canary.ts`. It acts only on the subscription in `CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID`, never prints a secret, and every mutating step needs a typed confirmation.
+
+**Raising the cap.** The EC$5 default can be raised with `CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT` (for example `50.00`), hard-limited to EC$100.00. It must be set identically in Vercel Production, because the webhook re-checks the signed authorization against it; if it is missing there, paid-invoice events for the canary are rejected.
+
+**Settings to add in Vercel Production (then redeploy):** `CANONICAL_STRIPE_LIVE_CANARY_ENABLED=true`, `..._CUSTOMER_ID`, `..._SUBSCRIPTION_ID`, `..._STRIPE_ACCOUNT_ID` (`acct_...`), `..._OWNER_EMAIL`, `..._APPROVAL_SECRET` (at least 32 random bytes, never pasted into chat or committed), and `..._MAX_RECURRING_AMOUNT`. Remove them after the pilot.
+
+**Steps:**
+1. `check` — read-only; every setting verified.
+2. Verify in the Stripe Dashboard: account ID, XCD card payments, minimum charge, webhook events listed above.
+3. `convert` — switches the subscription to Stripe collection and PAUSES its recurring invoice schedules (reversible).
+4. `prepare` — review the exact proposal.
+5. `sign` — six typed confirmations; writes a signed authorization valid under 24 hours to `.canary/authorization.json` (git-ignored).
+6. `approve` then `execute` — creates the one Checkout Session. Send the customer the link.
+7. After the customer pays and `status` shows the Stripe link: `finalize` (ends the paused invoice schedules).
+8. If Checkout is never completed: `revert` (only allowed while no Stripe subscription exists). Otherwise nobody bills the customer.
+9. To stop: `sign --cancel <sub_id>`, then `cancel <sub_id>` (cancels at period end).
+
+The single-use rule still applies: only one canary operation may ever exist.

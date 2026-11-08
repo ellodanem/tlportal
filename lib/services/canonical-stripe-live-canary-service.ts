@@ -29,6 +29,25 @@ function storedCanonicalProposal(metadata: Prisma.JsonValue | null) {
   };
 }
 
+/** The immutable proposal stored with a COMPLETED canary activation; the basis for a cancellation authorization. */
+export async function getCanonicalStripeLiveCanaryCompletedProposal(input: {
+  subscriptionId: string;
+  externalSubscriptionId: string;
+}) {
+  const operation = await prisma.billingOperation.findFirst({
+    where: {
+      operationKey: { startsWith: "canonical-stripe-live-canary:" },
+      customerSubscriptionId: input.subscriptionId,
+      providerSubscriptionReference: input.externalSubscriptionId,
+      status: "completed",
+    },
+    orderBy: { completedAt: "desc" },
+    select: { metadata: true },
+  });
+  if (!operation) throw new Error("A completed live-canary activation is required.");
+  return storedCanonicalProposal(operation.metadata);
+}
+
 export async function getCanonicalStripeLiveCanaryProposal(input: {
   authorization: CanonicalStripeLiveCanaryAuthorization;
   environment?: CanonicalStripeLiveCanaryEnvironment;

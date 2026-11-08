@@ -10,7 +10,7 @@ import {
   assertCanonicalStripeLiveCanaryEnvironment,
   CanonicalStripeLiveCanaryError,
   LIVE_CANARY_CURRENCY,
-  LIVE_CANARY_MAX_RECURRING_AMOUNT,
+  liveCanaryMaxRecurringAmount,
   type CanonicalStripeLiveCanaryAuthorization,
   type CanonicalStripeLiveCanaryEnvironment,
 } from "@/lib/domain/canonical-stripe-live-canary";
@@ -152,8 +152,9 @@ export class StripeLiveCanaryCanonicalProviderAdapter implements CanonicalStripe
     }
     const unitAmount = new Prisma.Decimal(amount);
     const total = unitAmount.times(quantity);
-    if (unitAmount.lessThanOrEqualTo(0) || total.greaterThan(LIVE_CANARY_MAX_RECURRING_AMOUNT)) {
-      providerError("CANARY_CHARGE_CAP_EXCEEDED", `The approved recurring total may not exceed EC$${LIVE_CANARY_MAX_RECURRING_AMOUNT}.`);
+    const cap = liveCanaryMaxRecurringAmount(this.config.environment);
+    if (unitAmount.lessThanOrEqualTo(0) || total.greaterThan(cap)) {
+      providerError("CANARY_CHARGE_CAP_EXCEEDED", `The approved recurring total may not exceed EC$${cap}.`);
     }
     canonicalMajorAmountToStripeMinor(unitAmount.toFixed(2), this.config.minorUnitExponent);
   }
@@ -325,7 +326,7 @@ export class StripeLiveCanaryCanonicalProviderAdapter implements CanonicalStripe
       (sum, group) => sum.plus(new Prisma.Decimal(group.agreedAmountPerCycle).times(group.quantity)),
       new Prisma.Decimal(0),
     );
-    if (!total.equals(proposal.expectedRecurringTotal) || total.greaterThan(LIVE_CANARY_MAX_RECURRING_AMOUNT)) {
+    if (!total.equals(proposal.expectedRecurringTotal) || total.greaterThan(liveCanaryMaxRecurringAmount(this.config.environment))) {
       providerError("CANARY_CHARGE_CAP_EXCEEDED", "The live Stripe request exceeds the approved canary total.");
     }
     const [customer, ...prices] = await Promise.all([

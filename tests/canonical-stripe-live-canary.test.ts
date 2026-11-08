@@ -11,6 +11,7 @@ import {
   canonicalStripeLiveCanaryProposalDigest,
   CanonicalStripeLiveCanaryError,
   LIVE_CANARY_PROVIDER_CONTEXT,
+  liveCanaryMaxRecurringAmount,
   signCanonicalStripeLiveCanaryAuthorization,
   type CanonicalStripeLiveCanaryAuthorization,
   type CanonicalStripeLiveCanaryEnvironment,
@@ -554,4 +555,40 @@ test("cancellation is end-of-period, idempotent and preserves the billing anchor
   assert.equal(fake.subscriptionUpdates[0].params.cancel_at_period_end, true);
   assert.equal(fake.subscriptionUpdates[0].params.proration_behavior, "none");
   assert.equal(fake.subscriptionUpdates[0].options?.idempotencyKey, idempotencyKey);
+});
+
+test("the charge cap defaults to EC$5, can be raised by the owner setting, and has a hard ceiling", () => {
+  const now = new Date("2026-10-16T13:00:00.000Z");
+  const raised: CanonicalStripeLiveCanaryEnvironment = { ...environment, CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT: "50.00" };
+  const fifty = proposal({ expectedRecurringTotal: "50.00" });
+  const fiftyAuthorization = authorization({ recurringAmount: "50.00", totalExpectedCharge: "50.00" }, fifty);
+
+  // Without the setting, EC$50 is refused; with it, EC$50 passes.
+  assert.throws(
+    () => assertCanonicalStripeLiveCanaryAuthorization({ proposal: fifty, authorization: fiftyAuthorization, environment, now }),
+    /no more than EC\$5\.00/,
+  );
+  assert.doesNotThrow(() => assertCanonicalStripeLiveCanaryAuthorization({ proposal: fifty, authorization: fiftyAuthorization, environment: raised, now }));
+
+  // One cent above the raised cap is still refused.
+  const over = proposal({ expectedRecurringTotal: "50.01" });
+  assert.throws(
+    () => assertCanonicalStripeLiveCanaryAuthorization({
+      proposal: over,
+      authorization: authorization({ recurringAmount: "50.01", totalExpectedCharge: "50.01" }, over),
+      environment: raised,
+      now,
+    }),
+    /no more than EC\$50\.00/,
+  );
+
+  assert.equal(liveCanaryMaxRecurringAmount(environment), "5.00");
+  assert.equal(liveCanaryMaxRecurringAmount(raised), "50.00");
+  for (const bad of ["100.01", "0", "-5", "abc", "50.123"]) {
+    assert.throws(
+      () => liveCanaryMaxRecurringAmount({ ...environment, CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT: bad }),
+      (caught: unknown) => caught instanceof CanonicalStripeLiveCanaryError,
+    );
+  }
+  assert.equal(liveCanaryMaxRecurringAmount({ ...environment, CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT: "100.00" }), "100.00");
 });

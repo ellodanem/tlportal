@@ -46,3 +46,6 @@ debug-*.log
 .cursor/debug*.log
 
 /app/generated/prisma
+
+# Owner-signed live-canary authorizations (never commit)
+.canary/

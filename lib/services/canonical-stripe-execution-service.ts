@@ -196,6 +196,25 @@ export async function getCanonicalStripeExecutionProposal(input: {
   return proposal;
 }
 
+/**
+ * The live-canary activation proposal BEFORE it is signed, so the owner can review the exact
+ * customer, amount, renewal date and operation key and then sign it. Reads only: no Stripe
+ * call, no write, no approval.
+ */
+export async function getCanonicalStripeLiveCanaryUnsignedProposal(
+  subscriptionId: string,
+): Promise<CanonicalStripeOperationProposal> {
+  const subscription = await loadConfiguration(prisma, subscriptionId);
+  const baseProposal = buildCanonicalStripeOperationProposal({
+    kind: "activation",
+    configuration: subscription,
+    providerLink: oneOpenProviderLink(subscription),
+    observed: null,
+    observedOwnerSubscriptionId: null,
+  });
+  return asCanonicalStripeLiveCanaryProposal(baseProposal);
+}
+
 export async function approveCanonicalStripeOperation(input: {
   subscriptionId: string;
   kind: CanonicalStripeOperationKind;
