@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 
@@ -11,6 +11,7 @@ import {
   type DeleteInvoiceState,
   type RecordPaymentState,
 } from "@/app/admin/tl-invoices/actions";
+import { INVOICE_ACTION_BUTTON_CLASS, InvoiceActionModal } from "@/components/admin/invoice-action-modal";
 import { formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/domain/native-billing";
 import type { PaymentMethod } from "@prisma/client";
 
@@ -38,6 +39,11 @@ function PayButton() {
   );
 }
 
+function subscribeToHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
 export function InvoicePaymentForm({
   invoiceId,
   amountDue,
@@ -47,12 +53,72 @@ export function InvoicePaymentForm({
   amountDue: number;
   currency: string;
 }) {
+  const [userOpen, setUserOpen] = useState(false);
+  const [hashDismissed, setHashDismissed] = useState(false);
+  // Deep link from the customer summary: /admin/tl-invoices/<id>#record-payment
+  const hashRequested = useSyncExternalStore(
+    subscribeToHash,
+    () => window.location.hash === "#record-payment",
+    () => false,
+  );
+  const open = userOpen || (hashRequested && !hashDismissed);
+  const close = useCallback(() => {
+    setUserOpen(false);
+    setHashDismissed(true);
+  }, []);
+  const setOpen = (next: boolean) => (next ? setUserOpen(true) : close());
+
+  return (
+    <>
+      <button
+        id="record-payment"
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        className={INVOICE_ACTION_BUTTON_CLASS}
+      >
+        Record payment
+      </button>
+      <InvoiceActionModal
+        open={open}
+        onClose={close}
+        title="Record payment"
+        description={
+          <>
+            Log a cash, cheque, or bank payment. Balance due{" "}
+            <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+              {formatMoney(amountDue, currency)}
+            </span>
+            .
+          </>
+        }
+      >
+        <PaymentFormBody invoiceId={invoiceId} amountDue={amountDue} currency={currency} onDone={close} />
+      </InvoiceActionModal>
+    </>
+  );
+}
+
+function PaymentFormBody({
+  invoiceId,
+  amountDue,
+  currency,
+  onDone,
+}: {
+  invoiceId: string;
+  amountDue: number;
+  currency: string;
+  onDone: () => void;
+}) {
   const router = useRouter();
   const [state, action] = useActionState(recordPaymentAction, initialPayment);
 
   useEffect(() => {
-    if (state.ok) router.refresh();
-  }, [state.ok, router]);
+    if (state.ok) {
+      router.refresh();
+      onDone();
+    }
+  }, [state.ok, router, onDone]);
 
   const methods = (["cash", "cheque", "bank_transfer", "card_manual", "other"] as PaymentMethod[]).map((m) => ({
     value: m,
@@ -80,24 +146,9 @@ export function InvoicePaymentForm({
   const label = "block text-xs font-medium text-zinc-600 dark:text-zinc-400";
 
   return (
-    <section
-      id="record-payment"
-      className="scroll-mt-6 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-zinc-100 px-4 py-4 dark:border-zinc-800 sm:px-5">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Record payment</h2>
-          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">Log a cash, cheque, or bank payment received for this invoice.</p>
-        </div>
-        <div className="text-left sm:text-right">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Balance due</p>
-          <p className="text-xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{formatMoney(amountDue, currency)}</p>
-        </div>
-      </div>
-
       <form action={action} className="px-4 py-4 sm:px-5">
         <input type="hidden" name="invoiceId" value={invoiceId} />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="payment-amount" className={label}>Amount</label>
             <div className="relative">
@@ -174,7 +225,6 @@ export function InvoicePaymentForm({
           </div>
         </div>
       </form>
-    </section>
   );
 }
 

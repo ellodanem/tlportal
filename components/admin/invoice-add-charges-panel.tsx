@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { addInvoiceChargesAction, type AddInvoiceChargesState } from "@/app/admin/tl-invoices/actions";
+import { INVOICE_ACTION_BUTTON_CLASS, InvoiceActionModal } from "@/components/admin/invoice-action-modal";
 import { formatMoney } from "@/lib/domain/native-billing";
 
 type Row = { id: string; description: string; quantity: string; unitPrice: string };
@@ -17,37 +18,65 @@ function defaultRows(batch: number): Row[] {
 
 const initialState: AddInvoiceChargesState = {};
 
-export function InvoiceAddChargesPanel({
-  invoiceId,
-  currency,
-  allowOnlinePayment,
-  stripeConfigured,
-  hasPayments,
-}: {
+type PanelProps = {
   invoiceId: string;
   currency: string;
   allowOnlinePayment: boolean;
   stripeConfigured: boolean;
   hasPayments: boolean;
-}) {
+};
+
+export function InvoiceAddChargesPanel(props: PanelProps) {
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        className={INVOICE_ACTION_BUTTON_CLASS}
+      >
+        Add charges
+      </button>
+      <InvoiceActionModal
+        open={open}
+        onClose={close}
+        title="Add charges to this invoice"
+        maxWidthClass="max-w-2xl"
+        description={
+          <>
+            Appends new lines (e.g. device and installation). Existing lines, the invoice number, and the pay link stay
+            the same; the total and balance due update.
+            {props.hasPayments ? " Payments already recorded are kept." : ""}
+          </>
+        }
+      >
+        <AddChargesBody {...props} onDone={close} />
+      </InvoiceActionModal>
+    </>
+  );
+}
+
+function AddChargesBody({
+  invoiceId,
+  currency,
+  allowOnlinePayment,
+  stripeConfigured,
+  onDone,
+}: PanelProps & { onDone: () => void }) {
   const router = useRouter();
   const extraId = useRef(0);
   const [rows, setRows] = useState<Row[]>(() => defaultRows(0));
   const [state, action, pending] = useActionState(addInvoiceChargesAction, initialState);
 
-  // Reset the rows once per successful submission (state-derived-from-state pattern).
-  const [handled, setHandled] = useState<{ last: AddInvoiceChargesState | null; count: number }>({
-    last: null,
-    count: 0,
-  });
-  if (state.ok && handled.last !== state) {
-    setHandled({ last: state, count: handled.count + 1 });
-    setRows(defaultRows(handled.count + 1));
-  }
-
   useEffect(() => {
-    if (state.ok) router.refresh();
-  }, [state, router]);
+    if (state.ok) {
+      router.refresh();
+      onDone();
+    }
+  }, [state, router, onDone]);
 
   function update(id: string, patch: Partial<Row>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -63,16 +92,6 @@ export function InvoiceAddChargesPanel({
     "w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-2 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100";
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-      <div className="border-b border-zinc-100 px-4 py-4 dark:border-zinc-800 sm:px-5">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Add charges to this invoice</h2>
-        <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-          Appends new lines (e.g. device and installation). Existing lines, the invoice number, and the pay link stay the
-          same; the total and balance due update.
-          {hasPayments ? " Payments already recorded are kept." : ""}
-        </p>
-      </div>
-
       <form action={action} className="px-4 py-4 sm:px-5">
         <input type="hidden" name="invoiceId" value={invoiceId} />
         {stripeConfigured ? <input type="hidden" name="allowOnlinePaymentPresent" value="1" /> : null}
@@ -193,6 +212,5 @@ export function InvoiceAddChargesPanel({
           </button>
         </div>
       </form>
-    </section>
   );
 }

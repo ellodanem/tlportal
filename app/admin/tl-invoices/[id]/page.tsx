@@ -212,6 +212,26 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
             ) : null}
           </p>
         ) : null}
+        {canRecordPayment || canAddCharges ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {canRecordPayment ? (
+              <InvoicePaymentForm
+                invoiceId={invoice.id}
+                amountDue={Number(invoice.amountDue)}
+                currency={invoice.currency}
+              />
+            ) : null}
+            {canAddCharges ? (
+              <InvoiceAddChargesPanel
+                invoiceId={invoice.id}
+                currency={invoice.currency}
+                allowOnlinePayment={invoice.allowOnlinePayment}
+                stripeConfigured={isStripeBillingEnabled()}
+                hasPayments={invoice.payments.length > 0}
+              />
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {pendingScheduledEmail ? (
@@ -238,24 +258,6 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
           invoicePdfUrl={invoice.billingInvoice.invoicePdfUrl}
           stripeExternalId={invoice.billingInvoice.externalInvoiceId}
           providerInvoiceNumber={invoice.billingInvoice.providerInvoiceNumber}
-        />
-      ) : null}
-
-      {canRecordPayment ? (
-        <InvoicePaymentForm
-          invoiceId={invoice.id}
-          amountDue={Number(invoice.amountDue)}
-          currency={invoice.currency}
-        />
-      ) : null}
-
-      {canAddCharges ? (
-        <InvoiceAddChargesPanel
-          invoiceId={invoice.id}
-          currency={invoice.currency}
-          allowOnlinePayment={invoice.allowOnlinePayment}
-          stripeConfigured={isStripeBillingEnabled()}
-          hasPayments={invoice.payments.length > 0}
         />
       ) : null}
 
