@@ -6,6 +6,7 @@ import Stripe from "stripe";
 import type { CanonicalStripeOperationProposal } from "../lib/domain/canonical-stripe-execution";
 import {
   asCanonicalStripeLiveCanaryProposal,
+  buildSignedCanonicalStripeLiveCanaryAuthorization,
   assertCanonicalStripeLiveCanaryAuthorization,
   assertCanonicalStripeLiveCanaryEnvironment,
   canonicalStripeLiveCanaryProposalDigest,
@@ -591,4 +592,45 @@ test("the charge cap defaults to EC$5, can be raised by the owner setting, and h
     );
   }
   assert.equal(liveCanaryMaxRecurringAmount({ ...environment, CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT: "100.00" }), "100.00");
+});
+
+test("the shared signer produces an authorization that verifies, expires under 24 hours, and refuses a proposal over the cap", () => {
+  const now = new Date("2026-10-16T13:00:00.000Z");
+  const input = proposal();
+  const signed = buildSignedCanonicalStripeLiveCanaryAuthorization({
+    proposal: input,
+    operation: "activate_subscription",
+    externalSubscriptionId: null,
+    environment,
+    now,
+  });
+  assert.equal(signed.approvedByEmail, "owner@example.com");
+  assert.equal(signed.providerAccountId, "acct_expected");
+  assert.equal(signed.recurringAmount, "5.00");
+  assert.equal(signed.taxAmount, "0.00");
+  assert.ok(new Date(signed.expiresAt).getTime() - new Date(signed.issuedAt).getTime() < 24 * 60 * 60 * 1000);
+  assert.doesNotThrow(() => assertCanonicalStripeLiveCanaryAuthorization({ proposal: input, authorization: signed, environment, now }));
+
+  // Over the cap: refuses to sign at all (no authorization is ever produced).
+  assert.throws(
+    () => buildSignedCanonicalStripeLiveCanaryAuthorization({
+      proposal: proposal({ expectedRecurringTotal: "50.00" }),
+      operation: "activate_subscription",
+      externalSubscriptionId: null,
+      environment,
+      now,
+    }),
+    (caught: unknown) => caught instanceof CanonicalStripeLiveCanaryError,
+  );
+  // Without the approval secret it cannot sign.
+  assert.throws(
+    () => buildSignedCanonicalStripeLiveCanaryAuthorization({
+      proposal: input,
+      operation: "activate_subscription",
+      externalSubscriptionId: null,
+      environment: { ...environment, CANONICAL_STRIPE_LIVE_CANARY_APPROVAL_SECRET: "short" },
+      now,
+    }),
+    (caught: unknown) => caught instanceof CanonicalStripeLiveCanaryError,
+  );
 });

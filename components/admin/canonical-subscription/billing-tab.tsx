@@ -9,6 +9,7 @@ import {
 } from "@/components/admin/canonical-subscription/format";
 import { CanonicalBillingDatesDialog } from "@/components/admin/canonical-billing-dates-dialog";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
+import { StripeCanaryPanel } from "@/components/admin/canonical-subscription/stripe-canary-panel";
 import { SwitchToStripe } from "@/components/admin/canonical-subscription/switch-to-stripe";
 import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
@@ -82,6 +83,8 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
           <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-950 dark:text-amber-200">{issues.map((issue) => <li key={issue.code}>{issue.message}</li>)}</ul>
         </section>
       ) : null}
+
+      <StripeCanaryPanel subscriptionId={subscription.id} />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <section aria-labelledby="next-charge-heading" className={`${cardClass} p-5`}>

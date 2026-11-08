@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { Prisma } from "@prisma/client";
 
@@ -374,6 +374,66 @@ export function assertCanonicalStripeLiveCanaryAuthorization(input: {
   ) {
     canaryError("CANARY_APPROVAL_EXPIRED", "The live canary requires a current owner authorization no older than 24 hours.");
   }
+}
+
+/**
+ * Builds and signs the owner authorization for one operation, then independently verifies it
+ * before returning. The CALLER must have collected every owner confirmation (typed prompts in
+ * the runner, checkboxes plus a typed word on the screen); this function records them as given.
+ * The signing secret never leaves the process environment.
+ */
+export function buildSignedCanonicalStripeLiveCanaryAuthorization(input: {
+  proposal: CanonicalStripeOperationProposal;
+  operation: CanonicalStripeLiveCanaryAuthorizedOperation;
+  externalSubscriptionId: string | null;
+  environment: CanonicalStripeLiveCanaryEnvironment;
+  now?: Date;
+}): CanonicalStripeLiveCanaryAuthorization {
+  const { proposal, environment } = input;
+  const issuedAt = input.now ?? new Date();
+  const expiresAt = new Date(issuedAt.getTime() + LIVE_CANARY_AUTHORIZATION_MAX_AGE_MS - 60_000);
+  const unsigned: Omit<CanonicalStripeLiveCanaryAuthorization, "signature"> = {
+    authorizationId: randomUUID(),
+    operation: input.operation,
+    operationKey: proposal.operationKey,
+    requestFingerprint: proposal.requestFingerprint,
+    sourceFingerprint: proposal.sourceFingerprint,
+    proposalDigest: canonicalStripeLiveCanaryProposalDigest(proposal),
+    providerContext: LIVE_CANARY_PROVIDER_CONTEXT,
+    providerAccountId: required(environment, CANONICAL_STRIPE_LIVE_CANARY_ACCOUNT_ID),
+    externalSubscriptionId: input.externalSubscriptionId,
+    approvedByEmail: required(environment, CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL),
+    customerId: proposal.customerId,
+    subscriptionId: proposal.subscriptionId,
+    currency: proposal.currency,
+    recurringAmount: proposal.expectedRecurringTotal,
+    taxAmount: "0.00",
+    totalExpectedCharge: proposal.expectedRecurringTotal,
+    billingIntervalMonths: proposal.billingIntervalMonths,
+    renewalDate: proposal.nextBillingDate.toISOString().slice(0, 10),
+    cancellationProcedure: "cancel_at_period_end_and_verify",
+    customerIdentityConfirmed: true,
+    subscriptionConfirmed: true,
+    chargeConfirmed: true,
+    minimumChargeConfirmed: true,
+    renewalConfirmed: true,
+    cancellationConfirmed: true,
+    issuedAt: issuedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  };
+  const authorization: CanonicalStripeLiveCanaryAuthorization = {
+    ...unsigned,
+    signature: signCanonicalStripeLiveCanaryAuthorization(unsigned, environment),
+  };
+  assertCanonicalStripeLiveCanaryAuthorization({
+    proposal,
+    authorization,
+    expectedOperation: input.operation,
+    externalSubscriptionId: input.externalSubscriptionId,
+    environment,
+    now: issuedAt,
+  });
+  return authorization;
 }
 
 export function asCanonicalStripeLiveCanaryProposal(

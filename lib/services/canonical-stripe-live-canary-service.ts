@@ -5,6 +5,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
   assertCanonicalStripeLiveCanaryAuthorization,
+  assertCanonicalStripeLiveCanaryEnvironment,
+  buildSignedCanonicalStripeLiveCanaryAuthorization,
+  liveCanaryMaxRecurringAmount,
   type CanonicalStripeLiveCanaryAuthorization,
   type CanonicalStripeLiveCanaryEnvironment,
 } from "@/lib/domain/canonical-stripe-live-canary";
@@ -12,7 +15,12 @@ import {
   approveCanonicalStripeOperation,
   executeCanonicalStripeActivation,
   getCanonicalStripeExecutionProposal,
+  getCanonicalStripeLiveCanaryUnsignedProposal,
 } from "@/lib/services/canonical-stripe-execution-service";
+import {
+  convertSubscriptionToStripeCollectionForCanary,
+  revertCanaryCollectionToRecurringInvoices,
+} from "@/lib/services/canonical-stripe-canary-collection-service";
 import {
   createStripeLiveCanaryCanonicalProviderAdapter,
   type StripeLiveCanaryCanonicalProviderAdapter,
@@ -27,6 +35,171 @@ function storedCanonicalProposal(metadata: Prisma.JsonValue | null) {
     billingAnchorDate: new Date(String(stored.billingAnchorDate)),
     nextBillingDate: new Date(String(stored.nextBillingDate)),
   };
+}
+
+export type LiveCanaryPanelState =
+  | { visible: false }
+  | {
+    visible: true;
+    environmentIssue: string | null;
+    collectionMethod: string | null;
+    preview: { currency: string; amount: string; renewsOn: string; groups: string[]; cap: string } | null;
+    previewIssue: string | null;
+    operation: { status: string; failureMessage: string | null } | null;
+    checkout: { url: string | null; status: string } | null;
+    checkoutIssue: string | null;
+    linked: { externalSubscriptionId: string; providerStatus: string | null } | null;
+    openSchedules: number;
+    /** Switched to Stripe collection but nothing approved yet (a half-finished attempt). */
+    converted: boolean;
+  };
+
+/**
+ * What the owner-only screen shows for ONE subscription. Invisible to everyone but the
+ * configured owner, and for any subscription other than the allowlisted one.
+ */
+export async function getCanonicalStripeLiveCanaryPanelState(input: {
+  subscriptionId: string;
+  actorEmail: string | null;
+  environment?: CanonicalStripeLiveCanaryEnvironment;
+}): Promise<LiveCanaryPanelState> {
+  const environment = input.environment ?? process.env;
+  const allowedSubscription = environment.CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID?.trim();
+  const owner = environment.CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL?.trim().toLowerCase();
+  if (
+    !allowedSubscription || allowedSubscription !== input.subscriptionId
+    || !owner || !input.actorEmail || input.actorEmail.trim().toLowerCase() !== owner
+  ) return { visible: false };
+
+  let environmentIssue: string | null = null;
+  try {
+    assertCanonicalStripeLiveCanaryEnvironment(environment);
+  } catch (caught) {
+    environmentIssue = caught instanceof Error ? caught.message : "Canary settings are incomplete.";
+  }
+
+  const status = await getCanonicalStripeLiveCanaryStatus(input.subscriptionId);
+  const operation = status.billingOperations[0] ?? null;
+  const link = status.providerLinks[0] ?? null;
+  const openSchedules = await prisma.recurringInvoiceSchedule.count({
+    where: { customerSubscriptionId: input.subscriptionId, status: { in: ["active", "paused"] } },
+  });
+
+  let preview: Extract<LiveCanaryPanelState, { visible: true }>["preview"] = null;
+  let previewIssue: string | null = null;
+  if (!operation && !link) {
+    try {
+      const proposal = await getCanonicalStripeLiveCanaryUnsignedProposal(input.subscriptionId, { previewAsStripeCollection: true });
+      preview = {
+        currency: proposal.currency,
+        amount: proposal.expectedRecurringTotal,
+        renewsOn: proposal.nextBillingDate.toISOString().slice(0, 10),
+        groups: proposal.rateGroups.map((group) => `${group.quantity} × ${group.agreedAmountPerCycle}`),
+        cap: liveCanaryMaxRecurringAmount(environment),
+      };
+    } catch (caught) {
+      previewIssue = caught instanceof Error ? caught.message : "The proposal could not be built.";
+    }
+  }
+
+  let checkout: Extract<LiveCanaryPanelState, { visible: true }>["checkout"] = null;
+  let checkoutIssue: string | null = null;
+  if (operation?.providerReference && !link && !environmentIssue) {
+    try {
+      const row = await prisma.billingOperation.findUnique({ where: { id: operation.id }, select: { metadata: true, operationKey: true } });
+      const stored = (row?.metadata as Prisma.JsonObject | null)?.liveCanaryAuthorization as unknown as CanonicalStripeLiveCanaryAuthorization | undefined;
+      if (row && stored) {
+        const adapter = createStripeLiveCanaryCanonicalProviderAdapter({
+          authorization: stored,
+          proposal: storedCanonicalProposal(row.metadata),
+          environment,
+        });
+        const session = await adapter.retrieveCheckoutSession(operation.providerReference, row.operationKey, input.subscriptionId);
+        checkout = { url: session.url, status: session.status };
+      }
+    } catch (caught) {
+      checkoutIssue = caught instanceof Error ? caught.message : "The Checkout link could not be loaded.";
+    }
+  }
+
+  return {
+    visible: true,
+    environmentIssue,
+    collectionMethod: status.collectionMethod,
+    preview,
+    previewIssue,
+    operation: operation ? { status: operation.status, failureMessage: operation.failureMessage } : null,
+    checkout,
+    checkoutIssue,
+    linked: link ? { externalSubscriptionId: link.externalSubscriptionId, providerStatus: link.providerStatus } : null,
+    openSchedules,
+    converted: status.collectionMethod === "stripe_autocharge" && !operation && !link,
+  };
+}
+
+/**
+ * The whole owner-initiated activation in one guarded call: switch to Stripe collection, sign,
+ * approve, create the one Checkout. If anything fails BEFORE the durable approval exists
+ * (nothing has reached Stripe) the subscription is put back exactly as it was. A retry after an
+ * approval exists reuses the stored authorization and the same idempotent operation.
+ */
+export async function startCanonicalStripeLiveCanaryFromOwner(input: {
+  subscriptionId: string;
+  environment?: CanonicalStripeLiveCanaryEnvironment;
+}) {
+  const environment = input.environment ?? process.env;
+  assertCanonicalStripeLiveCanaryEnvironment(environment);
+  if (environment.CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID?.trim() !== input.subscriptionId) {
+    throw new Error("This subscription is not the allowlisted canary subscription.");
+  }
+  const ownerEmail = environment.CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL!.trim();
+
+  const existing = await prisma.billingOperation.findFirst({
+    where: { operationKey: { startsWith: "canonical-stripe-live-canary:" }, customerSubscriptionId: input.subscriptionId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, metadata: true },
+  });
+  if (existing) {
+    const stored = (existing.metadata as Prisma.JsonObject | null)?.liveCanaryAuthorization as unknown as CanonicalStripeLiveCanaryAuthorization | undefined;
+    if (!stored) throw new Error("The existing canary operation lacks its stored authorization.");
+    return executeCanonicalStripeLiveCanary({ operationId: existing.id, authorization: stored, environment });
+  }
+
+  let operationId: string;
+  let authorization: CanonicalStripeLiveCanaryAuthorization;
+  let converted = false;
+  try {
+    await convertSubscriptionToStripeCollectionForCanary(input.subscriptionId);
+    converted = true;
+    const proposal = await getCanonicalStripeLiveCanaryUnsignedProposal(input.subscriptionId);
+    authorization = buildSignedCanonicalStripeLiveCanaryAuthorization({
+      proposal,
+      operation: "activate_subscription",
+      externalSubscriptionId: null,
+      environment,
+    });
+    const verified = await getCanonicalStripeLiveCanaryProposal({ authorization, environment });
+    const approval = await approveCanonicalStripeLiveCanary({
+      authorization,
+      confirmationToken: verified.confirmationToken,
+      approvedBy: ownerEmail,
+      approvalReason: "Owner-approved single-customer live canary started from the Billing tab.",
+      environment,
+    });
+    operationId = approval.operationId;
+  } catch (error) {
+    if (converted) {
+      const stillNothingApproved = !(await prisma.billingOperation.findFirst({
+        where: { operationKey: { startsWith: "canonical-stripe-live-canary:" }, customerSubscriptionId: input.subscriptionId },
+        select: { id: true },
+      }));
+      if (stillNothingApproved) {
+        await revertCanaryCollectionToRecurringInvoices(input.subscriptionId).catch(() => undefined);
+      }
+    }
+    throw error;
+  }
+  return executeCanonicalStripeLiveCanary({ operationId, authorization, environment });
 }
 
 /** The immutable proposal stored with a COMPLETED canary activation; the basis for a cancellation authorization. */

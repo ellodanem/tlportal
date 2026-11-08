@@ -124,11 +124,20 @@ export async function revertCanaryCollectionToRecurringInvoices(subscriptionId: 
       where: {
         customerSubscriptionId: subscriptionId,
         operationKey: { startsWith: "canonical-stripe-live-canary:" },
-        providerSubscriptionReference: { not: null },
+        OR: [
+          { providerSubscriptionReference: { not: null } },
+          // A Checkout link that exists can still be paid, which would create the subscription.
+          { providerReference: { not: null }, status: { not: "failed" } },
+        ],
       },
       select: { id: true },
     });
-    if (started) fail("STRIPE_RELATIONSHIP_EXISTS", "The canary already created a Stripe subscription. Revert is no longer safe.");
+    if (started) {
+      fail(
+        "STRIPE_RELATIONSHIP_EXISTS",
+        "A Stripe Checkout or subscription already exists for this canary. Reverting could bill the customer twice; let the Checkout expire or cancel it in Stripe first.",
+      );
+    }
 
     const event = await tx.operationalEvent.findFirst({
       where: { category: CONVERTED, customerId: subscription.customerId },

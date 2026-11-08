@@ -203,11 +203,13 @@ export async function getCanonicalStripeExecutionProposal(input: {
  */
 export async function getCanonicalStripeLiveCanaryUnsignedProposal(
   subscriptionId: string,
+  options: { previewAsStripeCollection?: boolean } = {},
 ): Promise<CanonicalStripeOperationProposal> {
   const subscription = await loadConfiguration(prisma, subscriptionId);
   const baseProposal = buildCanonicalStripeOperationProposal({
     kind: "activation",
-    configuration: subscription,
+    // A preview before the subscription is switched shows exactly what activation will propose.
+    configuration: options.previewAsStripeCollection ? { ...subscription, collectionMethod: "stripe_autocharge" } : subscription,
     providerLink: oneOpenProviderLink(subscription),
     observed: null,
     observedOwnerSubscriptionId: null,

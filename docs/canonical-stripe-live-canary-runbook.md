@@ -116,3 +116,5 @@ The owner-run runner is `scripts/canonical-stripe-live-canary.ts`. It acts only 
 9. To stop: `sign --cancel <sub_id>`, then `cancel <sub_id>` (cancels at period end).
 
 The single-use rule still applies: only one canary operation may ever exist.
+
+**Screen instead of the runner.** On the allowlisted subscription's Billing tab, the configured owner (the signed-in user whose email equals `CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL`) sees "Live test: create the Stripe subscription from TL Portal". It shows the exact charge, renewal date and cap, requires six ticked confirmations plus typing `CREATE`, then switches the subscription, signs, approves and creates the one Checkout in a single guarded step, and shows the link to send the customer. If anything fails before the durable approval exists, the switch is undone automatically. After the customer pays and Stripe is linked, a **Finish** button ends the paused recurring invoices. Everyone else (and every other subscription) sees nothing. Cancellation stays in the runner (`sign --cancel`, `cancel`).

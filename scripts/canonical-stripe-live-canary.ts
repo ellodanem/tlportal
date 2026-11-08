@@ -26,20 +26,15 @@
  */
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 import { prisma } from "../lib/db";
 import {
-  assertCanonicalStripeLiveCanaryAuthorization,
   assertCanonicalStripeLiveCanaryEnvironment,
-  canonicalStripeLiveCanaryProposalDigest,
+  buildSignedCanonicalStripeLiveCanaryAuthorization,
   liveCanaryMaxRecurringAmount,
-  LIVE_CANARY_AUTHORIZATION_MAX_AGE_MS,
-  LIVE_CANARY_PROVIDER_CONTEXT,
-  signCanonicalStripeLiveCanaryAuthorization,
   type CanonicalStripeLiveCanaryAuthorization,
   type CanonicalStripeLiveCanaryEnvironment,
 } from "../lib/domain/canonical-stripe-live-canary";
@@ -77,7 +72,6 @@ function requireValue(value: string | undefined, name: string): string {
 const subscriptionId = () => requireValue(environment.CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID, "CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID");
 const customerId = () => requireValue(environment.CANONICAL_STRIPE_LIVE_CANARY_CUSTOMER_ID, "CANONICAL_STRIPE_LIVE_CANARY_CUSTOMER_ID");
 const ownerEmail = () => requireValue(environment.CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL, "CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL");
-const accountId = () => requireValue(environment.CANONICAL_STRIPE_LIVE_CANARY_STRIPE_ACCOUNT_ID, "CANONICAL_STRIPE_LIVE_CANARY_STRIPE_ACCOUNT_ID");
 
 async function confirm(prompt: string, expected = "yes"): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -165,49 +159,9 @@ async function sign() {
   ];
   for (const question of questions) await confirm(question);
 
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + Math.min(LIVE_CANARY_AUTHORIZATION_MAX_AGE_MS - 60_000, 23 * 60 * 60 * 1000));
-  const unsigned: Omit<CanonicalStripeLiveCanaryAuthorization, "signature"> = {
-    authorizationId: randomUUID(),
-    operation,
-    operationKey: proposal.operationKey,
-    requestFingerprint: proposal.requestFingerprint,
-    sourceFingerprint: proposal.sourceFingerprint,
-    proposalDigest: canonicalStripeLiveCanaryProposalDigest(proposal),
-    providerContext: LIVE_CANARY_PROVIDER_CONTEXT,
-    providerAccountId: accountId(),
-    externalSubscriptionId: cancelTarget,
-    approvedByEmail: ownerEmail(),
-    customerId: proposal.customerId,
-    subscriptionId: proposal.subscriptionId,
-    currency: proposal.currency,
-    recurringAmount: proposal.expectedRecurringTotal,
-    taxAmount: "0.00",
-    totalExpectedCharge: proposal.expectedRecurringTotal,
-    billingIntervalMonths: proposal.billingIntervalMonths,
-    renewalDate: proposal.nextBillingDate.toISOString().slice(0, 10),
-    cancellationProcedure: "cancel_at_period_end_and_verify",
-    customerIdentityConfirmed: true,
-    subscriptionConfirmed: true,
-    chargeConfirmed: true,
-    minimumChargeConfirmed: true,
-    renewalConfirmed: true,
-    cancellationConfirmed: true,
-    issuedAt: issuedAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-  };
-  const authorization: CanonicalStripeLiveCanaryAuthorization = {
-    ...unsigned,
-    signature: signCanonicalStripeLiveCanaryAuthorization(unsigned, environment),
-  };
-  // Independently verify before anything is written.
-  assertCanonicalStripeLiveCanaryAuthorization({
-    proposal,
-    authorization,
-    expectedOperation: operation,
-    externalSubscriptionId: cancelTarget,
-    environment,
-  });
+  // Built and independently verified by the shared signer before anything is written.
+  const authorization = buildSignedCanonicalStripeLiveCanaryAuthorization({ proposal, operation, externalSubscriptionId: cancelTarget, environment });
+  const expiresAt = new Date(authorization.expiresAt);
   const file = arg("file") ?? DEFAULT_FILE;
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(authorization, null, 2), { mode: 0o600 });
