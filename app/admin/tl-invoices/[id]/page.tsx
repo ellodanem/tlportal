@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { ArchiveInvoiceButton, UnarchiveInvoiceButton } from "@/components/admin/archive-invoice-button";
 import { InvoiceDeclineFollowUpBanner } from "@/components/admin/invoice-decline-follow-up-banner";
 import { StripeSubscriptionInvoicePanel } from "@/components/admin/stripe-subscription-invoice-panel";
+import { InvoiceAddChargesPanel } from "@/components/admin/invoice-add-charges-panel";
+import { canAppendChargesToInvoice } from "@/lib/services/native-invoice-service";
 import { InvoiceScheduledEmailBanner } from "@/components/admin/invoice-scheduled-email-banner";
 import {
   InvoiceGeneratorForm,
@@ -131,6 +133,11 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
     !isArchived &&
     !isStripeMirror &&
     (invoice.status === "open" || invoice.status === "partially_paid" || invoice.status === "overdue");
+  const canAddCharges = canAppendChargesToInvoice({
+    status: invoice.status,
+    kind: invoice.kind,
+    archivedAt: invoice.archivedAt,
+  });
   const canVoid =
     !isArchived &&
     !isStripeMirror &&
@@ -242,6 +249,16 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
         />
       ) : null}
 
+      {canAddCharges ? (
+        <InvoiceAddChargesPanel
+          invoiceId={invoice.id}
+          currency={invoice.currency}
+          allowOnlinePayment={invoice.allowOnlinePayment}
+          stripeConfigured={isStripeBillingEnabled()}
+          hasPayments={invoice.payments.length > 0}
+        />
+      ) : null}
+
       {invoice.payments.length > 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-sm font-medium">Payments</p>
@@ -284,6 +301,8 @@ export default async function TlInvoiceDetailPage({ params }: { params: Promise<
 
       {!isStripeMirror ? (
         <InvoiceGeneratorForm
+          // The form seeds its state from `initial`; remount when lines/totals change (e.g. charges added).
+          key={`${invoice.lineItems.length}-${invoice.total}-${invoice.allowOnlinePayment}`}
           customers={customerOptions}
           initial={initial}
           readOnly={readOnly}

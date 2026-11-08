@@ -17,6 +17,7 @@ import {
 import { parseAssignmentDateInput } from "@/lib/domain/assignment-renewal";
 import { archiveInvoice, unarchiveInvoice } from "@/lib/services/invoice-archive-service";
 import {
+  appendChargesToIssuedInvoice,
   createDraftInvoice,
   deleteDraftInvoice,
   finalizeAndSendInvoice,
@@ -340,6 +341,50 @@ export async function recordPaymentAction(
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not record payment." };
+  }
+}
+
+export type AddInvoiceChargesState = { error?: string; ok?: boolean; message?: string };
+
+export async function addInvoiceChargesAction(
+  _prev: AddInvoiceChargesState,
+  formData: FormData,
+): Promise<AddInvoiceChargesState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+
+  const invoiceId = String(formData.get("invoiceId") ?? "").trim();
+  if (!invoiceId) return { error: "Invoice id is missing." };
+
+  const descriptions = formData.getAll("description").map((v) => String(v).trim());
+  const quantities = formData.getAll("quantity").map((v) => Number(v));
+  const unitPrices = formData.getAll("unitPrice").map((v) => Number(v));
+
+  const lines: Array<{ description: string; quantity: number; unitPrice: number }> = [];
+  for (let i = 0; i < descriptions.length; i++) {
+    // Skip untouched blank rows.
+    if (!descriptions[i] && !(unitPrices[i] > 0)) continue;
+    lines.push({ description: descriptions[i], quantity: quantities[i], unitPrice: unitPrices[i] });
+  }
+  if (!lines.length) return { error: "Enter at least one line to add." };
+
+  const allowOnlineRaw = formData.get("allowOnlinePaymentPresent")
+    ? formData.get("allowOnlinePayment") === "on"
+    : undefined;
+
+  try {
+    const result = await appendChargesToIssuedInvoice({
+      invoiceId,
+      lines,
+      allowOnlinePayment: allowOnlineRaw,
+    });
+    revalidateInvoicePaths(invoiceId);
+    return {
+      ok: true,
+      message: `Added ${lines.length} line${lines.length === 1 ? "" : "s"}. New balance due: ${result.amountDue.toFixed(2)}.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not add charges." };
   }
 }
 

@@ -314,6 +314,105 @@ export async function recordInvoicePayment(input: RecordPaymentInput): Promise<{
   });
 }
 
+/** Statuses on which extra charges can still be appended to an issued invoice. */
+const ADD_CHARGES_ALLOWED_STATUSES: ReadonlySet<InvoiceStatus> = new Set<InvoiceStatus>([
+  "open",
+  "partially_paid",
+  "overdue",
+]);
+
+export function canAppendChargesToInvoice(inv: {
+  status: InvoiceStatus;
+  kind: InvoiceKind;
+  archivedAt: Date | null;
+}): boolean {
+  return (
+    ADD_CHARGES_ALLOWED_STATUSES.has(inv.status) &&
+    inv.kind !== "subscription_mirror" &&
+    !inv.archivedAt
+  );
+}
+
+export type AppendInvoiceChargesInput = {
+  invoiceId: string;
+  lines: Array<{ description: string; quantity: number; unitPrice: number }>;
+  /** When defined, updates the "pay by card online" flag on the invoice. */
+  allowOnlinePayment?: boolean;
+};
+
+/**
+ * Append line items to an already-issued invoice. Existing lines are never changed; the
+ * document total and balance due are recomputed (payments already recorded are preserved).
+ * The invoice number, pay link, and status are unchanged.
+ */
+export async function appendChargesToIssuedInvoice(
+  input: AppendInvoiceChargesInput,
+): Promise<{ total: number; amountDue: number; addedTotal: number }> {
+  if (!input.lines.length) throw new Error("Add at least one line.");
+  for (const line of input.lines) {
+    if (!line.description.trim()) throw new Error("Each line needs a description.");
+    if (!Number.isFinite(line.quantity) || line.quantity <= 0) throw new Error("Invalid quantity.");
+    if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) throw new Error("Invalid unit price.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const inv = await tx.invoice.findUnique({
+      where: { id: input.invoiceId },
+      select: {
+        id: true,
+        status: true,
+        kind: true,
+        archivedAt: true,
+        taxRatePercent: true,
+        discountTotal: true,
+        amountPaid: true,
+        lineItems: { select: { quantity: true, unitPrice: true, sortOrder: true } },
+      },
+    });
+    if (!inv) throw new Error("Invoice not found.");
+    if (!canAppendChargesToInvoice(inv)) {
+      throw new Error("Charges can only be added to open, partially paid, or overdue invoices.");
+    }
+
+    const maxSort = inv.lineItems.reduce((m, l) => Math.max(m, l.sortOrder), -1);
+    const newLines: NativeLineInput[] = input.lines.map((l, i) => ({
+      description: l.description.trim(),
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+      sortOrder: maxSort + 1 + i,
+    }));
+
+    const allLines = [
+      ...inv.lineItems.map((l) => ({ description: "", quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) })),
+      ...newLines,
+    ];
+    const totals = computeDocumentTotals(
+      allLines,
+      inv.taxRatePercent != null ? Number(inv.taxRatePercent) : null,
+      Number(inv.discountTotal),
+    );
+    const amountPaid = round2(Number(inv.amountPaid));
+    const amountDue = round2(totals.total - amountPaid);
+    const addedTotal = round2(newLines.reduce((s, l) => s + computeLineTotal(l.quantity, l.unitPrice), 0));
+
+    await tx.invoiceLineItem.createMany({
+      data: lineCreateData(newLines).map((l) => ({ ...l, invoiceId: inv.id })),
+    });
+    await tx.invoice.update({
+      where: { id: inv.id },
+      data: {
+        subtotal: toMoneyString(totals.subtotal),
+        discountTotal: toMoneyString(totals.discountTotal),
+        taxTotal: toMoneyString(totals.taxTotal),
+        total: toMoneyString(totals.total),
+        amountDue: toMoneyString(amountDue),
+        ...(input.allowOnlinePayment !== undefined ? { allowOnlinePayment: input.allowOnlinePayment } : {}),
+      },
+    });
+    return { total: totals.total, amountDue, addedTotal };
+  });
+}
+
 /** Mark an invoice void (not collectable; preserved for audit). */
 export async function voidInvoice(invoiceId: string): Promise<void> {
   await prisma.invoice.update({
