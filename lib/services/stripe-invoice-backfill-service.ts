@@ -14,6 +14,7 @@ import {
   resolveStripeCustomerIdForTlCustomer,
   syncStripeInvoiceToDatabase,
 } from "@/lib/stripe/invoice-sync";
+import { applyMirroredPaidInvoicesToAdoptedSubscriptions } from "@/lib/services/adopted-stripe-inbound-service";
 import { advanceAssignmentsOnStripeInvoicePaid } from "@/lib/services/assignment-renewal-service";
 
 const MAX_INVOICES_PER_CUSTOMER = 100;
@@ -185,10 +186,11 @@ export async function backfillRecentPaidStripeInvoices(): Promise<{
   listed: number;
   mirrored: number;
   unresolved: number;
+  renewalsAdvanced: number;
   errors: string[];
 }> {
   if (!isStripeBillingEnabled()) {
-    return { listed: 0, mirrored: 0, unresolved: 0, errors: [] };
+    return { listed: 0, mirrored: 0, unresolved: 0, renewalsAdvanced: 0, errors: [] };
   }
 
   const stripe = getStripeClient();
@@ -197,6 +199,7 @@ export async function backfillRecentPaidStripeInvoices(): Promise<{
   let listed = 0;
   let mirrored = 0;
   let unresolved = 0;
+  const mirroredInvoiceIds: string[] = [];
 
   try {
     for await (const invoice of stripe.invoices.list({
@@ -207,8 +210,10 @@ export async function backfillRecentPaidStripeInvoices(): Promise<{
       listed += 1;
       try {
         const { invoiceId } = await syncStripeInvoiceToDatabase(invoice);
-        if (invoiceId) mirrored += 1;
-        else unresolved += 1;
+        if (invoiceId) {
+          mirrored += 1;
+          mirroredInvoiceIds.push(invoiceId);
+        } else unresolved += 1;
       } catch (e) {
         errors.push(
           `${invoice.id}: ${e instanceof Error ? e.message : "sync failed"}`,
@@ -220,5 +225,16 @@ export async function backfillRecentPaidStripeInvoices(): Promise<{
     errors.push(e instanceof Error ? e.message : "Stripe invoice list failed.");
   }
 
-  return { listed, mirrored, unresolved, errors };
+  // Missed `invoice.paid` webhooks: record the payment against adopted canonical
+  // subscriptions too. Oldest period first; already-applied invoices are no-ops.
+  let renewalsAdvanced = 0;
+  try {
+    const applied = await applyMirroredPaidInvoicesToAdoptedSubscriptions(mirroredInvoiceIds);
+    renewalsAdvanced = applied.advanced;
+    errors.push(...applied.errors);
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : "Adopted renewal catch-up failed.");
+  }
+
+  return { listed, mirrored, unresolved, renewalsAdvanced, errors };
 }

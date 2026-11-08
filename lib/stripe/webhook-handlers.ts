@@ -3,6 +3,13 @@ import "server-only";
 import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
+import {
+  applyPaidStripeInvoiceToAdoptedSubscription,
+  markAdoptedSubscriptionPastDue,
+  recordAdoptedSubscriptionState,
+  resolveAdoptedInboundEvent,
+  type AdoptedStripeSubscription,
+} from "@/lib/services/adopted-stripe-inbound-service";
 import { advanceAssignmentsOnStripeInvoicePaid } from "@/lib/services/assignment-renewal-service";
 import {
   mirrorStripePaidInvoiceToInvoiless,
@@ -150,11 +157,101 @@ async function processPaidStripeInvoice(invoice: Stripe.Invoice): Promise<void> 
   }
 }
 
+/** Inbound-only fulfilment for an adopted canonical Stripe subscription. Local writes only. */
+async function handleAdoptedStripeInboundEvent(
+  event: Stripe.Event,
+  adopted: AdoptedStripeSubscription,
+): Promise<void> {
+  switch (event.type) {
+    case "invoice.paid": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const { invoiceId } = await syncStripeInvoiceToDatabase(invoice);
+      if (!invoiceId) {
+        // Throwing keeps the event retryable instead of silently losing a payment.
+        throw new Error(`invoice.paid could not mirror ${invoice.id} for adopted subscription ${adopted.id}.`);
+      }
+      // Advance the renewal before the slow side effects (PDF, email) so a timeout
+      // cannot leave a paid customer looking overdue.
+      const applied = await applyPaidStripeInvoiceToAdoptedSubscription({
+        subscriptionId: adopted.id,
+        billingInvoiceId: invoiceId,
+      });
+      await recordOperationalEvent({
+        category: "billing.synced",
+        summary: `Stripe invoice paid${invoice.number ? ` — ${invoice.number}` : ""}`,
+        customerId: adopted.customerId,
+        payload: {
+          provider: "stripe",
+          source: "stripe_inbound",
+          invoiceId: invoice.id,
+          amountPaid: invoice.amount_paid,
+          renewal: applied.decision.action,
+          assignmentsUpdated: applied.assignmentsUpdated,
+        },
+      });
+      await fulfillPaidInvoiceReceiptBestEffort(invoiceId);
+      try {
+        await sendStripePaymentReceivedNotification(invoiceId);
+      } catch (error) {
+        console.error("[stripe webhook] payment received notification failed", error);
+      }
+      return;
+    }
+    case "invoice.finalized":
+    case "invoice.voided": {
+      await syncStripeInvoiceToDatabase(event.data.object as Stripe.Invoice);
+      return;
+    }
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      await syncStripeInvoiceToDatabase(invoice);
+      await markAdoptedSubscriptionPastDue(adopted);
+      const paymentIntentId = stripeInvoicePaymentIntentId(invoice);
+      if (paymentIntentId) {
+        try {
+          const paymentIntent = await loadPaymentIntentForFailure(paymentIntentId);
+          await handleStripePaymentFailure({ paymentIntent, stripeInvoice: invoice });
+        } catch (error) {
+          console.error("[stripe webhook] adopted payment failure follow-up failed", error);
+          await recordOperationalEvent({
+            category: "billing.reconciliation_required",
+            summary: "Stripe payment failed; decline follow-up could not run — review",
+            customerId: adopted.customerId,
+            payload: {
+              source: "stripe_inbound",
+              invoiceId: invoice.id,
+              error: error instanceof Error ? error.message : "Unknown error",
+            },
+          });
+        }
+      }
+      return;
+    }
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted": {
+      await recordAdoptedSubscriptionState(adopted, event.data.object as Stripe.Subscription, event.type);
+      return;
+    }
+    default:
+      return;
+  }
+}
+
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
   // The controlled live canary uses the existing signed production endpoint,
   // but exact Phase 3B3B ownership must be resolved before either general
   // canonical or legacy fulfillment is considered.
   if (await tryHandleCanonicalStripeLiveCanaryWebhookEvent(event)) return;
+  // Subscriptions adopted into the canonical model while Stripe execution is still
+  // disabled: Stripe collects the money, so TL Portal must still LISTEN. These events
+  // take an inbound-only path that records in our own database and never calls Stripe
+  // to change anything. The execution guard below still blocks every outbound change.
+  const adopted = await resolveAdoptedInboundEvent(event);
+  if (adopted) {
+    await handleAdoptedStripeInboundEvent(event, adopted);
+    return;
+  }
   // Phase 3B2 canonical events are accepted only through exact operation/provider
   // ownership and the non-production execution guard. All other events retain
   // the established legacy fulfillment path below.
