@@ -100,6 +100,23 @@ test("Plastic Solutions appears once with independent annual and monthly subscri
   assert.deepEqual(view.subscriptions.map((row) => row.id), ["plastic-monthly", "plastic-annual"]);
 });
 
+test("collection icons: Stripe, Recurring, both for a mixed customer, or a dash when unset", () => {
+  const stripe = sub({ id: "s", customerId: "mix", customer: "Mixed Co", name: "Card", collectionMethod: "stripe_autocharge" });
+  const recurring = sub({ id: "r", customerId: "mix", customer: "Mixed Co", name: "Invoice", collectionMethod: "manual_invoice" });
+  const mixed = customerGroupView(workspace([stripe, recurring]).groups[0], formatters);
+  assert.deepEqual(mixed.collectionKinds, ["stripe", "recurring"]);
+  const byId = Object.fromEntries(mixed.subscriptions.map((row) => [row.id, row.collectionKinds]));
+  assert.deepEqual(byId.s, ["stripe"]);
+  assert.deepEqual(byId.r, ["recurring"]);
+
+  const onlyStripe = customerGroupView(workspace([sub({ customerId: "a", customer: "A", collectionMethod: "stripe_autocharge" })]).groups[0], formatters);
+  assert.deepEqual(onlyStripe.collectionKinds, ["stripe"]);
+  const onlyRecurring = customerGroupView(workspace([sub({ customerId: "b", customer: "B", collectionMethod: "manual_invoice" })]).groups[0], formatters);
+  assert.deepEqual(onlyRecurring.collectionKinds, ["recurring"]);
+  const unset = customerGroupView(workspace([sub({ customerId: "c", customer: "C", collectionMethod: null })]).groups[0], formatters);
+  assert.deepEqual(unset.collectionKinds, []);
+});
+
 test("grouping uses the canonical customer id, never the display name", () => {
   const rows = [
     sub({ customerId: "a", customer: "Same Name Ltd" }),

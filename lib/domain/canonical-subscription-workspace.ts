@@ -172,6 +172,28 @@ export function collectionMethodLabel(value: string | null): string {
   return (value && COLLECTION_LABELS[value]) || "Not configured";
 }
 
+/**
+ * Icon keys shown beside a subscription name: `stripe` = automatic card billing,
+ * `recurring` = recurring invoices issued by TL Portal. An empty list means no
+ * collection method has been chosen yet (rendered as a dash).
+ */
+export type CollectionKind = "stripe" | "recurring";
+
+const COLLECTION_KINDS: Record<string, CollectionKind> = {
+  stripe_autocharge: "stripe",
+  manual_invoice: "recurring",
+};
+
+/** Distinct kinds in a stable order (Stripe first) so a customer with both always reads the same. */
+export function collectionKinds(methods: ReadonlyArray<string | null | undefined>): CollectionKind[] {
+  const found = new Set<CollectionKind>();
+  for (const method of methods) {
+    const kind = method ? COLLECTION_KINDS[method] : undefined;
+    if (kind) found.add(kind);
+  }
+  return (["stripe", "recurring"] as const).filter((kind) => found.has(kind));
+}
+
 /** `@db.Date` values are UTC midnights; format in UTC so the calendar day never shifts. */
 export function formatWorkspaceDate(value: Date | null): string | null {
   if (!value) return null;
@@ -387,6 +409,7 @@ export type SubscriptionRowView = {
   cadence: string;
   reference: string | null;
   collection: string;
+  collectionKinds: CollectionKind[];
   services: number;
   servicesLabel: string;
   recurring: string | null;
@@ -408,6 +431,7 @@ export type CustomerGroupView = {
   recurringPeriod: string | null;
   nextCycle: string;
   collection: string;
+  collectionKinds: CollectionKind[];
   reference: string | null;
   status: WorkspaceStatusView;
   subscriptions: SubscriptionRowView[];
@@ -436,6 +460,7 @@ export function subscriptionRowView(
     cadence: cadenceLabel(row.billingIntervalMonths),
     reference: row.reference,
     collection: collectionMethodLabel(row.collectionMethod),
+    collectionKinds: collectionKinds([row.collectionMethod]),
     services: row.itemCount,
     servicesLabel: plural(row.itemCount, "service"),
     recurring: hasRecurring ? formatters.money(Number(recurringTotal), row.currency) : null,
@@ -469,6 +494,7 @@ export function customerGroupView(group: WorkspaceGroup, formatters: WorkspaceFo
       recurringPeriod: only.recurringPeriod,
       nextCycle: only.nextCycle,
       collection: only.collection,
+      collectionKinds: only.collectionKinds,
       reference: only.reference,
       status: only.status,
     };
@@ -530,6 +556,7 @@ export function customerGroupView(group: WorkspaceGroup, formatters: WorkspaceFo
     recurringPeriod: null,
     nextCycle,
     collection: collections.length === 1 ? collections[0] : collections.length ? "Mixed" : "\u2014",
+    collectionKinds: collectionKinds(current.map((row) => row.collectionMethod)),
     reference: null,
     status,
   };

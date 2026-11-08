@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import type {
+  CollectionKind,
   CustomerGroupView,
   SubscriptionRowView,
   WorkspaceSortDirection,
@@ -72,10 +73,51 @@ function Icon({ path, className = "size-4" }: { path: string; className?: string
     </svg>
   );
 }
+const REPEAT = "M17 2l4 4-4 4M3 11V10a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3";
 const CHEVRON_RIGHT = "m9 5 7 7-7 7";
 const CHEVRON_DOWN = "m6 9 6 6 6-6";
 const SEARCH = "M21 21l-4.3-4.3M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0z";
 const COLUMNS = "M4 5h16v14H4zM9.5 5v14M14.5 5v14";
+
+/**
+ * How the subscription is collected: Stripe (automatic card billing), Recurring
+ * (recurring invoices from TL Portal), both for a customer that uses each, or a
+ * dash when nothing has been chosen yet. Sits above the row's stretched link so
+ * the tooltips stay reachable.
+ */
+const COLLECTION_KIND_META: Record<CollectionKind, { label: string }> = {
+  stripe: { label: "Stripe \u2014 automatic card billing" },
+  recurring: { label: "Recurring \u2014 recurring invoices" },
+};
+
+function CollectionIcons({ kinds }: { kinds: CollectionKind[] }) {
+  if (kinds.length === 0) {
+    return (
+      <span role="img" aria-label="No collection method set" title="No collection method set" className="relative z-10 shrink-0 text-xs leading-none text-zinc-400 dark:text-zinc-600">
+        {"\u2014"}
+      </span>
+    );
+  }
+  return (
+    <span className="relative z-10 flex shrink-0 items-center gap-1">
+      {kinds.map((kind) => (
+        <span
+          key={kind}
+          role="img"
+          aria-label={COLLECTION_KIND_META[kind].label}
+          title={COLLECTION_KIND_META[kind].label}
+          className={
+            kind === "stripe"
+              ? "grid size-5 place-items-center rounded bg-[#635bff] text-[11px] font-bold leading-none text-white"
+              : "grid size-5 place-items-center rounded bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
+          }
+        >
+          {kind === "stripe" ? "S" : <Icon path={REPEAT} className="size-3.5" />}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Layout                                                              */
@@ -185,10 +227,13 @@ function SingleRow({ group, extra }: { group: CustomerGroupView; extra: ExtraCol
         <span className="size-4 shrink-0" aria-hidden="true" />
         <Avatar initials={group.initials} tint={avatarTint(group.key)} />
         <div className="min-w-0">
-          <Link href={subscription.href} className={`block text-sm font-semibold text-zinc-900 dark:text-zinc-50 ${NAME} ${STRETCH}`}>
-            {group.customer}
-            <span className="sr-only">, open subscription {subscription.name}</span>
-          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <Link href={subscription.href} className={`block min-w-0 text-sm font-semibold text-zinc-900 dark:text-zinc-50 ${NAME} ${STRETCH}`}>
+              {group.customer}
+              <span className="sr-only">, open subscription {subscription.name}</span>
+            </Link>
+            <CollectionIcons kinds={group.collectionKinds} />
+          </div>
           <p className="text-xs text-zinc-500 lg:truncate dark:text-zinc-400">{group.context}</p>
         </div>
       </div>
@@ -212,9 +257,12 @@ function ChildRow({ subscription, extra, last }: { subscription: SubscriptionRow
           <span className="absolute left-[0.75rem] top-1/2 h-px w-4 bg-zinc-200 dark:bg-zinc-700" />
         </span>
         <div className="min-w-0">
-          <Link href={subscription.href} className={`block text-sm font-medium text-zinc-800 dark:text-zinc-100 ${NAME} ${STRETCH}`}>
-            {subscription.name}
-          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <Link href={subscription.href} className={`block min-w-0 text-sm font-medium text-zinc-800 dark:text-zinc-100 ${NAME} ${STRETCH}`}>
+              {subscription.name}
+            </Link>
+            <CollectionIcons kinds={subscription.collectionKinds} />
+          </div>
           <p className="text-xs text-zinc-500 lg:truncate dark:text-zinc-400">{subscription.cadence}</p>
         </div>
       </div>
@@ -243,16 +291,19 @@ function GroupRows({
           <Icon path={open ? CHEVRON_DOWN : CHEVRON_RIGHT} className="size-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
           <Avatar initials={group.initials} tint={avatarTint(group.key)} />
           <div className="min-w-0">
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-expanded={open}
-              aria-controls={panelId}
-              className={`block max-w-full text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50 ${NAME} ${STRETCH}`}
-            >
-              {group.customer}
-              <span className="sr-only">, {open ? "collapse" : "expand"} subscriptions</span>
-            </button>
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-expanded={open}
+                aria-controls={panelId}
+                className={`block min-w-0 max-w-full text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50 ${NAME} ${STRETCH}`}
+              >
+                {group.customer}
+                <span className="sr-only">, {open ? "collapse" : "expand"} subscriptions</span>
+              </button>
+              <CollectionIcons kinds={group.collectionKinds} />
+            </div>
             <p className="text-xs text-zinc-500 lg:truncate dark:text-zinc-400">{group.context}</p>
           </div>
         </div>
