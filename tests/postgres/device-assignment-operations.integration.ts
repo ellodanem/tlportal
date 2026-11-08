@@ -50,20 +50,20 @@ test("legacy replacement is atomic, auditable, and does not create financial rec
   assert.match(JSON.stringify(event.payload), /H9 replacement/);
 });
 
-test("keep_replacement keeps the replacement device's own SIM and frees the old device's SIM", async () => {
+test("keep_replacement is a straight swap: each device keeps its own SIM", async () => {
   const row = await fixture("keep-replacement-sim");
   await prisma.device.update({ where: { id: row.replacement.id }, data: { simCardId: row.alternateSim.id } });
   const result = await replaceDeviceForExistingAssignment({ assignmentId: row.assignment.id, replacementDeviceId: row.replacement.id, effectiveDate: "2026-10-20", simDisposition: "keep_replacement", oldHardwareDisposition: "in_stock", actorUserId: "test-staff" });
-  const [newAssignment, oldDevice, newDevice, freedSim] = await Promise.all([
+  const [newAssignment, oldDevice, newDevice] = await Promise.all([
     prisma.serviceAssignment.findUniqueOrThrow({ where: { id: result.assignmentId } }),
     prisma.device.findUniqueOrThrow({ where: { id: row.oldDevice.id } }),
     prisma.device.findUniqueOrThrow({ where: { id: row.replacement.id } }),
-    prisma.simCard.findUniqueOrThrow({ where: { id: row.sim.id }, include: { device: true } }),
   ]);
   assert.equal(newAssignment.simCardId, row.alternateSim.id);
   assert.equal(newDevice.simCardId, row.alternateSim.id);
-  assert.equal(oldDevice.simCardId, null);
-  assert.equal(freedSim.device, null);
+  assert.equal(newDevice.status, "assigned");
+  assert.equal(oldDevice.simCardId, row.sim.id);
+  assert.equal(oldDevice.status, "in_stock");
 });
 
 test("keep_replacement is rejected when the replacement device has no SIM", async () => {

@@ -91,7 +91,7 @@ export async function replaceDeviceForExistingAssignment(input: {
     if (input.simDisposition === "keep_replacement" && !replacement.simCardId) {
       throw new DeviceAssignmentOperationError("The replacement device has no SIM to keep.");
     }
-    // keep_replacement: the replacement device's own SIM stays; the old device's SIM is unlinked below.
+    // keep_replacement: the replacement device keeps its own SIM; the old device keeps its SIM too (a swap).
     const nextSimId = input.simDisposition === "move_current"
       ? current.device.simCardId
       : input.simDisposition === "keep_replacement"
@@ -140,13 +140,16 @@ export async function replaceDeviceForExistingAssignment(input: {
     }
 
     await tx.device.update({ where: { id: replacement.id }, data: { status: "assigned", simCardId: nextSimId } });
+    // keep_replacement is a straight swap: each tracker keeps the SIM physically inside it, so the
+    // old device's SIM link is left alone. Other dispositions move/replace the SIM, so the old device is cleared.
+    const oldSimLink = input.simDisposition === "keep_replacement" ? {} : { simCardId: null };
     await tx.device.update({
       where: { id: current.deviceId },
       data: input.oldHardwareDisposition === "lost"
-        ? { status: "lost", simCardId: null }
+        ? { status: "lost", ...oldSimLink }
         : input.oldHardwareDisposition === "faulty_returned"
-          ? { status: "returned", condition: "faulty", simCardId: null }
-          : { status: "in_stock", simCardId: null },
+          ? { status: "returned", condition: "faulty", ...oldSimLink }
+          : { status: "in_stock", ...oldSimLink },
     });
     await tx.operationalEvent.create({
       data: {
