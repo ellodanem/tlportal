@@ -51,7 +51,6 @@ export type CustomerDetailProps = {
   events: ActivityEventRow[];
   subscriptionsHref: string;
   createSubscriptionHref: string;
-  listHref: string;
   className?: string;
 };
 
@@ -64,7 +63,7 @@ const TONE: Record<SnapshotSubscription["tone"], string> = {
 
 /*
  * Layout note: this view is responsive to the width of its own pane (container queries: `@lg`, `@3xl`, …),
- * not just the viewport, because the admin sidebar and the customer list take a variable share of the screen.
+ * not just the viewport, because it renders inside the slide-over, which is either ~65% wide or expanded.
  */
 const cardClass =
   "rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900";
@@ -163,7 +162,6 @@ export function CustomerDetail({
   events,
   subscriptionsHref,
   createSubscriptionHref,
-  listHref,
   className = "",
 }: CustomerDetailProps) {
   const statusPill = customer.archived ? (
@@ -177,24 +175,7 @@ export function CustomerDetail({
   return (
     <div className={`min-w-0 ${className}`}>
       <div className="@container flex w-full min-w-0 flex-col gap-4 @lg:gap-5">
-        {/* Phones / tablets: a clear back button to the list. Side-by-side layout: breadcrumb. */}
-        <nav aria-label="Breadcrumb" className="text-sm text-zinc-500 dark:text-zinc-400">
-          <Link
-            href={listHref}
-            className="-ml-2 inline-flex min-h-11 items-center gap-1 rounded-md px-2 font-medium text-emerald-700 hover:bg-emerald-50 xl:hidden dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-          >
-            <CnIcon name="arrow" className="size-4 rotate-180" />
-            All customers
-          </Link>
-          <span className="hidden xl:inline">
-            <Link href={listHref} className="text-emerald-700 hover:underline dark:text-emerald-400">
-              Customers
-            </Link>
-            <span className="mx-2 text-zinc-300 dark:text-zinc-600">/</span>
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">{customer.name}</span>
-          </span>
-        </nav>
-
+        {/* Back / close / previous / next live in the slide-over chrome (customer-panel.tsx). */}
         <header className="flex flex-col gap-4 @2xl:flex-row @2xl:items-start @2xl:justify-between">
           <div className="flex min-w-0 gap-3 @lg:gap-4">
             <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-semibold text-emerald-900 @lg:size-16 @lg:text-xl dark:bg-emerald-950/60 dark:text-emerald-200">

@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { CustomerDetail, type SnapshotSubscription } from "@/components/admin/customer-new/customer-detail";
 import { customerSubscriptionsPath } from "@/lib/admin/customer-subscriptions-path";
 import { CustomerListPane, type CustomerListRow } from "@/components/admin/customer-new/customer-list-pane";
+import { CustomerPanel } from "@/components/admin/customer-new/customer-panel";
 import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerInitials } from "@/lib/admin/customer-list";
@@ -71,26 +72,49 @@ export default async function CustomerNewPage({ searchParams }: Props) {
       firstName: true,
       lastName: true,
       email: true,
-      customerSubscriptions: { where: currentSubscriptionWhere, select: { id: true }, take: 1 },
+      phone: true,
+      customerSubscriptions: { where: currentSubscriptionWhere, select: { id: true } },
     },
   });
 
+  // Open balance per listed customer (one grouped query, not one per row).
+  const balances = await prisma.invoice.groupBy({
+    by: ["customerId", "currency"],
+    where: {
+      customerId: { in: listed.map((c) => c.id) },
+      status: { in: ["open", "partially_paid", "overdue"] },
+    },
+    _sum: { amountDue: true },
+  });
+  const balancesByCustomer = new Map<string, { amount: number; currency: string }[]>();
+  for (const b of balances) {
+    if (!b.customerId) continue;
+    const list = balancesByCustomer.get(b.customerId) ?? [];
+    list.push({ amount: Number(b._sum.amountDue ?? 0), currency: b.currency });
+    balancesByCustomer.set(b.customerId, list);
+  }
+
   const allRows: CustomerListRow[] = listed
-    .map((c) => ({
-      id: c.id,
-      name: customerDisplayName(c),
-      email: c.email,
-      initials: customerInitials(c),
-      hasSubscription: c.customerSubscriptions.length > 0,
-    }))
+    .map((c) => {
+      const owed = balancesByCustomer.get(c.id) ?? [];
+      return {
+        id: c.id,
+        name: customerDisplayName(c),
+        email: c.email,
+        phone: c.phone?.trim() || null,
+        initials: customerInitials(c),
+        hasSubscription: c.customerSubscriptions.length > 0,
+        subscriptionCount: c.customerSubscriptions.length,
+        outstanding: sumByCurrency(owed),
+        hasOutstanding: owed.some((o) => o.amount > 0),
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   const rows = allRows.slice(0, CUSTOMER_NEW_LIST_LIMIT);
 
-  // The two-pane layout needs `xl` width (the admin sidebar takes 14rem). Below that the list and the
-  // detail are separate screens: the list shows until a customer is chosen, then the detail with a back link.
-  // At `xl` the first customer is selected by default.
-  const explicitSelection = Boolean(rawSelected);
-  const selectedId = rawSelected ?? rows[0]?.id ?? null;
+  // The list is always the page. A customer opens in a slide-over only when `?c=` is present
+  // (full screen on phones), so the URL is shareable and Back / refresh work.
+  const selectedId = rawSelected ?? null;
 
   const customer = selectedId
     ? await prisma.customer.findUnique({
@@ -104,14 +128,16 @@ export default async function CustomerNewPage({ searchParams }: Props) {
     : null;
 
   const listHref = customerNewHref({ q, filter });
+  const selectedIndex = selectedId ? rows.findIndex((r) => r.id === selectedId) : -1;
+  const prevId = selectedIndex > 0 ? rows[selectedIndex - 1].id : null;
+  const nextId = selectedIndex >= 0 && selectedIndex < rows.length - 1 ? rows[selectedIndex + 1].id : null;
 
   let detail: React.ReactNode = (
-    <div
-      className={`${explicitSelection ? "" : "hidden xl:block"} rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500 sm:p-10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400`}
-    >
-      {selectedId ? "Customer not found." : "No customers to show. Create one with “New customer”."}
+    <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500 sm:p-10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+      Customer not found.
     </div>
   );
+  let panelTitle = "Customer";
 
   if (customer) {
     const [loaded, openInvoices, events] = await Promise.all([
@@ -145,11 +171,10 @@ export default async function CustomerNewPage({ searchParams }: Props) {
     const createSubscriptionHref = `/admin/subscriptions/new?customerId=${encodeURIComponent(customer.id)}`;
 
     const contact = customer.contacts[0] ?? null;
+    panelTitle = customerDisplayName(customer);
 
     detail = (
       <CustomerDetail
-        className={explicitSelection ? "" : "hidden xl:block"}
-        listHref={listHref}
         subscriptionsHref={subscriptionsHref}
         createSubscriptionHref={createSubscriptionHref}
         hasSubscription={subs.length > 0}
@@ -197,20 +222,22 @@ export default async function CustomerNewPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start">
-      <CustomerListPane
-        className={explicitSelection ? "hidden xl:block" : ""}
-        rows={rows}
-        total={allRows.length}
-        selectedId={selectedId}
-        q={q}
-        filter={filter}
-      />
-      {detail}
+    <div className="flex flex-col gap-4">
+      <CustomerListPane rows={rows} total={allRows.length} selectedId={selectedId} q={q} filter={filter} />
       {allRows.length > rows.length ? (
-        <p className={`${explicitSelection ? "hidden xl:block" : ""} text-xs text-zinc-500 xl:col-start-1`}>
+        <p className="text-xs text-zinc-500">
           Showing the first {rows.length} of {allRows.length} customers. Use search to narrow the list.
         </p>
+      ) : null}
+      {selectedId ? (
+        <CustomerPanel
+          title={panelTitle}
+          closeHref={listHref}
+          prevHref={prevId ? customerNewHref({ c: prevId, q, filter }) : null}
+          nextHref={nextId ? customerNewHref({ c: nextId, q, filter }) : null}
+        >
+          {detail}
+        </CustomerPanel>
       ) : null}
     </div>
   );
