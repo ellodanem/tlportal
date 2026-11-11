@@ -125,9 +125,14 @@ function isDevicesSection(pathname: string): boolean {
   return pathname.startsWith("/admin/devices") || pathname.startsWith("/admin/device-models");
 }
 
-/** Customers + registration queue share one nav group. */
-function isCustomerSection(pathname: string): boolean {
-  return pathname.startsWith("/admin/customers") || pathname.startsWith("/admin/registration-requests");
+/** The legacy Customers workspace remains separate from the new customer workspace. */
+function isCustomersSection(pathname: string): boolean {
+  return pathname.startsWith("/admin/customers");
+}
+
+/** Customer (New) + registration queue share one nav group. */
+function isCustomerNewSection(pathname: string): boolean {
+  return pathname.startsWith("/admin/customer-new") || pathname.startsWith("/admin/registration-requests");
 }
 
 /** Settings + subscription plan prices + billing cutover share one nav group. */
@@ -231,12 +236,22 @@ export function AdminSidebar({
 
   function renderNavLink({ href, label, Icon }: NavLink): ReactNode {
     if (href === "/admin/customers") {
-      const customerParentActive = isCustomerSection(pathname);
+      const customerParentActive = isCustomersSection(pathname);
+      return (
+        <Link key={href} href={href} className={navClass(customerParentActive, collapsed)} title={collapsed ? label : undefined}>
+          <NavIcon Icon={Icon} />
+          <span className={collapsed ? "sr-only" : ""}>{label}</span>
+        </Link>
+      );
+    }
+
+    if (href === "/admin/customer-new") {
+      const customerNewParentActive = isCustomerNewSection(pathname);
       const registrationsActive = pathname.startsWith("/admin/registration-requests");
-      const showSub = isCustomerSection(pathname) && !collapsed;
+      const showSub = isCustomerNewSection(pathname) && !collapsed;
       return (
         <div key={href} className="flex flex-col gap-0.5">
-          <Link href={href} className={navClass(customerParentActive, collapsed)} title={collapsed ? label : undefined}>
+          <Link href={href} className={navClass(customerNewParentActive, collapsed)} title={collapsed ? label : undefined}>
             <NavIcon Icon={Icon} />
             <span className={collapsed ? "sr-only" : ""}>{label}</span>
           </Link>
