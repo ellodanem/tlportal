@@ -5,7 +5,10 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 
-import { CARD_ON_FILE_PROVIDER_MODE } from "@/lib/domain/canonical-stripe-card-on-file";
+import {
+  CARD_ON_FILE_PROVIDER_MODE,
+  cardOnFileDelayedChargeParams,
+} from "@/lib/domain/canonical-stripe-card-on-file";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
 import {
   canonicalStripeRateGroupFingerprint,
@@ -129,8 +132,7 @@ export async function createCardOnFileCheckout(input: {
     cancel_url: `${getAppBaseUrl()}/pay/cancel`,
     metadata,
     subscription_data: {
-      billing_cycle_anchor: Math.floor(input.nextBillingDate.getTime() / 1000),
-      proration_behavior: "none",
+      ...cardOnFileDelayedChargeParams(input.nextBillingDate),
       metadata,
     },
   }, { idempotencyKey: input.idempotencyKey });

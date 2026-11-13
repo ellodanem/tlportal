@@ -74,7 +74,7 @@ export function CollectCardOnFileControls({
       <input type="hidden" name="subscriptionId" value={subscriptionId} />
       <h3 className="text-sm font-semibold">Collect card, bill later</h3>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-        Send a Stripe Checkout link. The customer saves a card now. The first charge is {amount} on {firstCharge}. Service can start today.
+        Send a Stripe Checkout link. The customer saves a card now. The first charge is {amount} on {firstCharge}. Stripe Checkout may show $0 due today (sometimes labeled as a trial). Service can start today.
       </p>
       {state.leftoverSummary ? (
         <p className={`mt-3 rounded-lg p-3 text-sm ${state.requiresExplicitCancel ? "bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" : "bg-zinc-50 text-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"}`}>

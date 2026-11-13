@@ -2,6 +2,8 @@ import { startOfUtcDay } from "@/lib/billing/recurring-period";
 
 export const CARD_ON_FILE_PROVIDER_MODE = "card_on_file";
 export const CARD_ON_FILE_OPERATION_PREFIX = "canonical-card-on-file:";
+/** Bump when Checkout params change so Stripe does not replay a failed idempotent create. */
+export const CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION = "v2-trial-end";
 
 export const LIVE_STRIPE_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due", "unpaid"] as const;
 
@@ -55,6 +57,16 @@ export function isCardOnFileOperationKey(operationKey: string | null | undefined
 
 export function isCardOnFileProviderMode(value: string | null | undefined): boolean {
   return value?.trim() === CARD_ON_FILE_PROVIDER_MODE;
+}
+
+/**
+ * Stripe refuses `billing_cycle_anchor` after the next natural billing date
+ * (typically now + one interval). A complimentary first period until an explicit
+ * renewal date is `trial_end`, which Stripe allows up to two years ahead. The
+ * customer is not charged until that timestamp; later invoices follow that day.
+ */
+export function cardOnFileDelayedChargeParams(nextBillingDate: Date): { trial_end: number } {
+  return { trial_end: Math.floor(nextBillingDate.getTime() / 1000) };
 }
 
 /** Reasons Checkout must not be created. Empty means the local subscription is eligible. */

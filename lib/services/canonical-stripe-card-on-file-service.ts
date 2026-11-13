@@ -7,6 +7,7 @@ import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
 import {
+  CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION,
   CARD_ON_FILE_PROVIDER_MODE,
   CanonicalStripeCardOnFileError,
   cardOnFileCheckoutBlockers,
@@ -344,15 +345,30 @@ export async function startStripeCardOnFileCheckout(input: {
     });
   });
 
-  const checkout = await createCardOnFileCheckout({
-    stripeCustomerId,
-    operationKey,
-    subscriptionId: configuration.id,
-    customerId: configuration.customerId,
-    nextBillingDate: configuration.nextBillingDate!,
-    groups,
-    idempotencyKey: `tl-card-on-file-checkout:${fingerprint}`,
-  });
+  let checkout: { id: string; url: string; status: string };
+  try {
+    checkout = await createCardOnFileCheckout({
+      stripeCustomerId,
+      operationKey,
+      subscriptionId: configuration.id,
+      customerId: configuration.customerId,
+      nextBillingDate: configuration.nextBillingDate!,
+      groups,
+      idempotencyKey: `tl-card-on-file-checkout:${CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION}:${fingerprint}`,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Stripe could not create Checkout.";
+    await prisma.billingOperation.update({
+      where: { operationKey },
+      data: {
+        status: "failed",
+        failureCode: "CHECKOUT_CREATE_FAILED",
+        failureMessage: message,
+        activeKey: null,
+      },
+    });
+    fail("CHECKOUT_CREATE_FAILED", message);
+  }
   await prisma.billingOperation.update({
     where: { operationKey },
     data: { providerReference: checkout.id, status: "in_progress" },

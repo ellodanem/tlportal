@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION,
   cardOnFileCheckoutBlockers,
+  cardOnFileDelayedChargeParams,
   cardOnFileOperationKey,
   isCardOnFileOperationKey,
   isCardOnFileProviderMode,
@@ -97,4 +99,11 @@ test("card-on-file operation keys are namespaced so canonical execution webhooks
   assert.equal(isCardOnFileOperationKey("canonical-stripe:sub-1"), false);
   assert.equal(isCardOnFileProviderMode("card_on_file"), true);
   assert.equal(isCardOnFileProviderMode("live_canary"), false);
+});
+
+test("a complimentary first period uses trial_end so Stripe accepts a renewal after the next natural billing date", () => {
+  const params = cardOnFileDelayedChargeParams(new Date("2026-12-14T00:00:00.000Z"));
+  assert.equal(params.trial_end, Date.parse("2026-12-14T00:00:00.000Z") / 1000);
+  assert.equal("billing_cycle_anchor" in params, false);
+  assert.match(CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION, /trial-end/);
 });
