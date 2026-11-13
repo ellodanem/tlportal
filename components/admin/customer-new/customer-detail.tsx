@@ -7,6 +7,7 @@ import {
   type ActivityEventRow,
 } from "@/components/admin/customer-activity-event";
 import { CnIcon, type CustomerNewIconName } from "@/components/admin/customer-new/icons";
+import { RestoreCustomerButton } from "@/components/admin/customer-new/restore-customer-button";
 import { CUSTOMER_WORKSPACE_TABS, customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 export type SnapshotSubscription = {
@@ -51,6 +52,8 @@ export type CustomerDetailProps = {
   events: ActivityEventRow[];
   subscriptionsHref: string;
   createSubscriptionHref: string;
+  /** Error from a failed restore attempt, shown in the archived banner. */
+  restoreError?: string | null;
   className?: string;
 };
 
@@ -162,6 +165,7 @@ export function CustomerDetail({
   events,
   subscriptionsHref,
   createSubscriptionHref,
+  restoreError = null,
   className = "",
 }: CustomerDetailProps) {
   const statusPill = customer.archived ? (
@@ -175,6 +179,23 @@ export function CustomerDetail({
   return (
     <div className={`min-w-0 ${className}`}>
       <div className="@container flex w-full min-w-0 flex-col gap-4 @lg:gap-5">
+        {customer.archived ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 @lg:flex-row @lg:items-center @lg:justify-between dark:border-amber-900 dark:bg-amber-950/30">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">This customer is archived</p>
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                Hidden from the active list and billing reminders. Restore to bring them back.
+              </p>
+              {restoreError ? (
+                <p role="alert" className="mt-1 text-xs font-medium text-red-700 dark:text-red-400">
+                  {restoreError}
+                </p>
+              ) : null}
+            </div>
+            <RestoreCustomerButton customerId={customer.id} displayName={customer.name} />
+          </div>
+        ) : null}
+
         {/* Back / close / previous / next live in the slide-over chrome (customer-panel.tsx). */}
         <header className="flex flex-col gap-4 @2xl:flex-row @2xl:items-start @2xl:justify-between">
           <div className="flex min-w-0 gap-3 @lg:gap-4">

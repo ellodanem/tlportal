@@ -14,12 +14,14 @@ export type CustomerListRow = {
   /** Formatted open balance, e.g. "EC$0.00". */
   outstanding: string;
   hasOutstanding: boolean;
+  archived?: boolean;
 };
 
 const FILTERS: { id: CustomerNewFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "subscribed", label: "With subscription" },
   { id: "none", label: "No subscription" },
+  { id: "archived", label: "Archived" },
 ];
 
 /** Shared column template so the header and every row line up from `md` up. */
@@ -98,7 +100,9 @@ export function CustomerListPane({
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {rows.length === 0 ? (
-          <p className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">No customers match.</p>
+          <p className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            {filter === "archived" ? "No archived customers match." : "No customers match."}
+          </p>
         ) : (
           <>
             <div
@@ -162,12 +166,14 @@ export function CustomerListPane({
                       </span>
                       <span
                         className={`shrink-0 justify-self-start whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          row.hasSubscription
-                            ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
-                            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                          row.archived
+                            ? "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200"
+                            : row.hasSubscription
+                              ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
+                              : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
                         }`}
                       >
-                        {row.hasSubscription ? "Active" : "No subscription"}
+                        {row.archived ? "Archived" : row.hasSubscription ? "Active" : "No subscription"}
                       </span>
                       <span className="hidden justify-self-end text-sm font-medium text-emerald-700 group-hover:underline md:inline dark:text-emerald-400">
                         View →

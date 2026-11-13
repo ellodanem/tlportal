@@ -4,7 +4,7 @@ import { CustomerDetail, type SnapshotSubscription } from "@/components/admin/cu
 import { customerSubscriptionsPath } from "@/lib/admin/customer-subscriptions-path";
 import { CustomerListPane, type CustomerListRow } from "@/components/admin/customer-new/customer-list-pane";
 import { CustomerPanel } from "@/components/admin/customer-new/customer-panel";
-import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
+import { activeCustomerWhere, archivedCustomerWhere } from "@/lib/admin/active-customer-filter";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { customerInitials } from "@/lib/admin/customer-list";
 import {
@@ -22,7 +22,7 @@ import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { getCanonicalSubscriptionAdminDetail } from "@/lib/services/canonical-subscription-admin-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
 
-type Props = { searchParams: Promise<{ c?: string; q?: string; filter?: string }> };
+type Props = { searchParams: Promise<{ c?: string; q?: string; filter?: string; restoreError?: string }> };
 
 type SubscriptionDetail = NonNullable<Awaited<ReturnType<typeof getCanonicalSubscriptionAdminDetail>>>;
 
@@ -43,12 +43,12 @@ function snapshotTone(sub: SubscriptionDetail): Pick<SnapshotSubscription, "stat
 }
 
 export default async function CustomerNewPage({ searchParams }: Props) {
-  const { c: rawSelected, q: rawQuery, filter: rawFilter } = await searchParams;
+  const { c: rawSelected, q: rawQuery, filter: rawFilter, restoreError } = await searchParams;
   const q = rawQuery?.trim() ?? "";
   const filter = parseCustomerNewFilter(rawFilter);
 
   const where: Prisma.CustomerWhereInput = {
-    ...activeCustomerWhere,
+    ...(filter === "archived" ? archivedCustomerWhere : activeCustomerWhere),
     ...(q
       ? {
           OR: [
@@ -73,6 +73,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
       lastName: true,
       email: true,
       phone: true,
+      archivedAt: true,
       customerSubscriptions: { where: currentSubscriptionWhere, select: { id: true } },
     },
   });
@@ -107,6 +108,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
         subscriptionCount: c.customerSubscriptions.length,
         outstanding: sumByCurrency(owed),
         hasOutstanding: owed.some((o) => o.amount > 0),
+        archived: c.archivedAt != null,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
@@ -178,6 +180,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
         subscriptionsHref={subscriptionsHref}
         createSubscriptionHref={createSubscriptionHref}
         hasSubscription={subs.length > 0}
+        restoreError={restoreError ?? null}
         customer={{
           id: customer.id,
           name: customerDisplayName(customer),

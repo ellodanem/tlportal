@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { customerFormInitialState, type CustomerFormActionState } from "@/app/admin/customers/customer-form-state";
+import { customerNewHref } from "@/lib/admin/customer-new";
+import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
+import { unarchiveCustomer } from "@/lib/services/customer-archive-service";
 import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 
 function text(formData: FormData, key: string): string | null {
@@ -74,4 +77,24 @@ export async function createCustomerNew(
   revalidatePath("/admin/customer-new");
   revalidatePath("/admin/customers");
   redirect(`/admin/customer-new?c=${customerId}`);
+}
+
+/** Restores an archived customer from the "Customer (New)" workspace and keeps the user there. */
+export async function restoreCustomerNew(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) return;
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+
+  const result = await unarchiveCustomer(id, session.sub ?? null);
+  if (!result.ok) {
+    redirect(customerNewHref({ c: id, filter: "archived", restoreError: result.error }));
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/customer-new");
+  revalidatePath("/admin/customers");
+  revalidatePath(`/admin/customers/${id}`);
+  redirect(customerNewHref({ c: id }));
 }
