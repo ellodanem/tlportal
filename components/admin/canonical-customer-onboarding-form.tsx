@@ -406,7 +406,7 @@ export function CanonicalCustomerOnboardingForm({
           </label>
           <label className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border p-4 ${collection === "stripe_autocharge" ? "border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-zinc-200 dark:border-zinc-700"}`}>
             <input type="radio" name="collectionMethod" value="stripe_autocharge" checked={collection === "stripe_autocharge"} onChange={() => setCollection("stripe_autocharge")} className="mt-1" />
-            <span><span className="block font-semibold">Card billing (Stripe)</span><span className="block text-sm text-zinc-500">Saved locally only. No Stripe customer, charge or subscription is created from this screen.</span></span>
+            <span><span className="block font-semibold">Card billing (Stripe)</span><span className="block text-sm text-zinc-500">Saved locally here. After you create the draft, open Billing to send a Checkout link — the card is stored now and the first charge is the renewal date.</span></span>
           </label>
         </div>
         <label className="mt-4 block max-w-xs text-sm font-medium">Grace days before an unpaid invoice needs attention<input name="gracePeriodDays" type="number" min="0" value={graceDays} onChange={(event) => setGraceDays(event.target.value)} className={inputClass} /></label>
@@ -419,7 +419,7 @@ export function CanonicalCustomerOnboardingForm({
           <div><dt className="text-zinc-500">Plan</dt><dd className="font-semibold">{effectiveName} · {cadenceLabel(interval)}</dd></div>
           <div><dt className="text-zinc-500">Recurring total</dt><dd className="font-semibold tabular-nums">EC${formatCents(cycleTotalCents)} per {unit} · {services.length} service{services.length === 1 ? "" : "s"}</dd></div>
           <div><dt className="text-zinc-500">{alignment === "align_to_renewal" ? "Starts → joins renewal" : "Starts → first renewal"}</dt><dd className="font-semibold">{displayDate(startDate)} → {displayDate(nextBillingDate)}</dd></div>
-          <div><dt className="text-zinc-500">Billing method</dt><dd className="font-semibold">{collection === "stripe_autocharge" ? "Card billing (Stripe), not connected" : "Manual invoice"}</dd></div>
+          <div><dt className="text-zinc-500">Billing method</dt><dd className="font-semibold">{collection === "stripe_autocharge" ? "Card billing (Stripe) — collect card from Billing after save" : "Manual invoice"}</dd></div>
           <div><dt className="text-zinc-500">Hardware</dt><dd className="font-semibold">{services.filter((service) => service.deviceId || adoptedId(service)).length} of {services.length} assigned</dd></div>
         </dl>
         <ul className="mt-4 divide-y divide-emerald-200 rounded-lg bg-white text-sm dark:divide-zinc-800 dark:bg-zinc-900">

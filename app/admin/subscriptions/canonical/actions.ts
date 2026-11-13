@@ -49,6 +49,10 @@ import {
   linkExistingStripeSubscription,
   type LinkableStripeResult,
 } from "@/lib/services/canonical-stripe-link-service";
+import {
+  CanonicalStripeCardOnFileError,
+  startStripeCardOnFileCheckout,
+} from "@/lib/services/canonical-stripe-card-on-file-service";
 
 export type CanonicalSubscriptionFormState = {
   error?: string;
@@ -79,6 +83,7 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
     || error instanceof CanonicalSubscriptionActivationError
     || error instanceof CanonicalStripeAdoptionError
     || error instanceof CanonicalStripeLinkError
+    || error instanceof CanonicalStripeCardOnFileError
     || error instanceof CanonicalAnnualAdjustmentError
     || error instanceof SubscriptionProrationError
   ) {
@@ -137,6 +142,43 @@ export async function findLinkableStripeSubscriptionsAction(subscriptionId: stri
     return await findLinkableStripeSubscriptions(subscriptionId);
   } catch (error) {
     return { blockers: [], stripeCustomerId: null, candidates: [], error: actionError(error).error };
+  }
+}
+
+/**
+ * Create a Stripe Checkout that stores the card now and charges on the subscription's
+ * next renewal date. Cancels leftover live Stripe subscriptions only when staff confirm.
+ */
+export async function startStripeCardOnFileCheckoutAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const session = await requireStaff();
+    if (text(formData, "confirmDelayedCharge") !== "yes") {
+      return { error: "Confirm that Stripe will not charge today and the first charge is the renewal date." };
+    }
+    const result = await startStripeCardOnFileCheckout({
+      subscriptionId,
+      staffUserId: session.sub,
+      confirmCancelExisting: text(formData, "confirmCancelExisting") === "yes",
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}/billing`);
+    const closed = [
+      result.canceledCount ? `${result.canceledCount} Stripe subscription${result.canceledCount === 1 ? "" : "s"} canceled` : null,
+      result.voidedCount ? `${result.voidedCount} open invoice${result.voidedCount === 1 ? "" : "s"} voided` : null,
+    ].filter(Boolean).join(" and ");
+    return {
+      message: result.reused
+        ? "This Checkout link is still open. Send it to the customer to save their card."
+        : closed
+          ? `${closed}. Checkout is ready — send the link so the customer can save a card. Nothing is charged until the renewal date.`
+          : "Checkout is ready — send the link so the customer can save a card. Nothing is charged until the renewal date.",
+    };
+  } catch (error) {
+    return actionError(error);
   }
 }
 

@@ -9,6 +9,7 @@ import {
 } from "@/components/admin/canonical-subscription/format";
 import { CanonicalBillingDatesDialog } from "@/components/admin/canonical-billing-dates-dialog";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
+import { CollectCardOnFilePanel } from "@/components/admin/canonical-subscription/collect-card-on-file-panel";
 import { StripeCanaryPanel } from "@/components/admin/canonical-subscription/stripe-canary-panel";
 import { SwitchToStripe } from "@/components/admin/canonical-subscription/switch-to-stripe";
 import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
@@ -152,6 +153,7 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
             <CanonicalSubscriptionCollectionForm subscriptionId={subscription.id} value={subscription.collectionMethod} />
           </div>
         ) : null}
+        {permissions.canManage ? <CollectCardOnFilePanel subscription={subscription} permissions={permissions} /> : null}
         {permissions.canManage
           && subscription.controlMode === "canonical"
           && subscription.lifecycleStatus === "active"
