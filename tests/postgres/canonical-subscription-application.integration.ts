@@ -278,6 +278,25 @@ test("hardware replacement keeps one commercial item and both assignment records
   assert.equal(await prisma.subscriptionItem.count({ where: { id: itemId } }), 1);
 });
 
+test("transferring the last live service from an active subscription ends the emptied agreement", async () => {
+  const customer = await createCustomer("last-service-transfer");
+  const sourceSubscription = await createMonthlySubscription(customer.id, "About to empty", [
+    { label: "Only vehicle", serviceActivatedDate: "2026-10-01", billingEffectiveFrom: "2026-10-01" },
+  ]);
+  await transitionCanonicalSubscriptionLifecycle(sourceSubscription.id, "pending_activation");
+  await transitionCanonicalSubscriptionLifecycle(sourceSubscription.id, "active");
+  const targetSubscription = await createMonthlySubscription(customer.id, "Receiving");
+  await transferSubscriptionItem({
+    sourceSubscriptionItemId: sourceSubscription.items[0].id,
+    targetSubscriptionId: targetSubscription.id,
+    transferDate: "2026-10-20",
+    agreedAmountPerCycle: "25.00",
+    changeReason: "Last vehicle moved",
+  });
+  const source = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: sourceSubscription.id } });
+  assert.equal(source.lifecycleStatus, "ended");
+});
+
 test("item transfer creates a successor and preserves predecessor ownership and rates", async () => {
   const customer = await createCustomer("item-transfer");
   const assignment = await createAssignment(customer.id, "transfer-device");

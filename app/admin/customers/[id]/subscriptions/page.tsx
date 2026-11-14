@@ -3,8 +3,9 @@ import { notFound, redirect } from "next/navigation";
 
 import { CustomerSubnav } from "@/components/admin/customer-subnav";
 import { CustomerCollectionSummary } from "@/components/admin/customer-collection-summary";
+import { RetireEmptiedSubscriptionsForm } from "@/components/admin/canonical-subscription-merge-form";
 import { countBillableServices } from "@/lib/domain/canonical-service-lifecycle";
-import { HIDE_EMPTY_RETIRED_SUBSCRIPTIONS, suggestedMergeGroups } from "@/lib/domain/canonical-subscription-merge";
+import { HIDE_EMPTY_RETIRED_SUBSCRIPTIONS, subscriptionIsEmptied, suggestedMergeGroups } from "@/lib/domain/canonical-subscription-merge";
 import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
 import { CustomerAssignmentServiceActions } from "@/components/admin/customer-assignment-service-actions";
 import {
@@ -160,7 +161,11 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
   const addableSubscriptions = subscriptions.filter((subscription) => subscription.controlMode === "canonical" && ["pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? ""));
   const soleAddableSubscription = addableSubscriptions.length === 1 ? addableSubscriptions[0] : null;
   // Cheap hint only: the merge screen re-checks everything (including "never invoiced") before offering it.
-  const mergeSuggestion = suggestedMergeGroups(currentSubscriptions.map((subscription) => ({
+  const emptiedAgreements = currentSubscriptions.filter((subscription) => (
+    ["pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? "")
+    && subscriptionIsEmptied(subscription.items)
+  ));
+  const mergeSuggestion = suggestedMergeGroups(currentSubscriptions.filter((subscription) => !subscriptionIsEmptied(subscription.items)).map((subscription) => ({
     id: subscription.id,
     controlMode: subscription.controlMode,
     collectionMethod: subscription.collectionMethod,
@@ -227,6 +232,7 @@ export default async function CustomerSubscriptionsPage({ params }: Props) {
           </div>;
         })}</div>
       </section> : null}
+      {emptiedAgreements.length ? <RetireEmptiedSubscriptionsForm customerId={customer.id} count={emptiedAgreements.length} /> : null}
       {mergeSuggestion ? <section role="note" className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900/60 dark:bg-emerald-950/20">
         <p className="max-w-3xl text-emerald-950 dark:text-emerald-100"><span className="font-semibold">{mergeSuggestion.length} subscriptions have identical terms</span> ({canonicalIntervalLabel(mergeSuggestion[0].billingIntervalMonths)}, renewing {date(mergeSuggestion[0].nextBillingDate)}). Kept separate, each is invoiced separately; merged, {customerName(customer)} gets one invoice with a line per service.</p>
         <Link href={`/admin/subscriptions/canonical/merge?customerId=${customer.id}`} className="inline-flex min-h-11 w-fit shrink-0 items-center rounded-lg bg-emerald-700 px-3.5 py-2.5 font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950">Review merge</Link>

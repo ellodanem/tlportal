@@ -115,7 +115,15 @@ export function mergeBlockers(snapshot: MergeSubscriptionSnapshot): string[] {
   }
   if (snapshot.schedules.some((schedule) => schedule.hasGeneratedInvoice)) blockers.push("Its recurring schedule has already generated an invoice.");
   if (snapshot.schedules.length > 1) blockers.push("It has more than one open recurring schedule; resolve that first.");
+  if (subscriptionIsEmptied(snapshot.items)) {
+    blockers.push("It has no live services. Close the empty agreement instead of merging.");
+  }
   return blockers;
+}
+
+/** True when every service has already ended or been canceled (or there are none). */
+export function subscriptionIsEmptied(items: { status: string }[]): boolean {
+  return items.every((item) => ["ended", "canceled"].includes(item.status));
 }
 
 /** Subscriptions can only be merged when this is identical: it is the term the customer agreed to. */

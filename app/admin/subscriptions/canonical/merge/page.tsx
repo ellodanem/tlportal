@@ -49,7 +49,7 @@ export default async function MergeSubscriptionsPage({ searchParams }: { searchP
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">Merge subscriptions</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">Combine subscriptions that share the same cycle and renewal date so {label} gets one invoice instead of one per vehicle. Only subscriptions that have never been invoiced can be merged; nothing is invoiced, charged or sent by merging.</p>
       </div>
-      <CanonicalSubscriptionMergeForm customerLabel={label} candidates={candidates} />
+      <CanonicalSubscriptionMergeForm customerId={customer.id} customerLabel={label} candidates={candidates} />
     </div>
   );
 }

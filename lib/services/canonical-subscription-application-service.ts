@@ -1231,7 +1231,64 @@ export async function transferSubscriptionItem(input: {
     }
     await syncCanonicalScheduleLines(tx, sourceSubscription.id);
     await syncCanonicalScheduleLines(tx, targetSubscription.id);
+    await retireEmptiedSubscriptionInTransaction(tx, sourceSubscription);
     return successor.id;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+const RETIREABLE_EMPTY_LIFECYCLES = ["pending_activation", "active", "paused"] as const;
+
+/**
+ * Close a canonical subscription that no longer has any live services (for example after
+ * its last vehicle was transferred). Ends open recurring schedules so it cannot invoice.
+ * Drafts being set up are left alone.
+ */
+async function retireEmptiedSubscriptionInTransaction(
+  tx: Prisma.TransactionClient,
+  subscription: Pick<EditableSubscription, "id" | "lifecycleStatus">,
+): Promise<boolean> {
+  if (!subscription.lifecycleStatus || !(RETIREABLE_EMPTY_LIFECYCLES as readonly string[]).includes(subscription.lifecycleStatus)) {
+    return false;
+  }
+  const live = await tx.subscriptionItem.count({
+    where: {
+      customerSubscriptionId: subscription.id,
+      status: { notIn: ["ended", "canceled"] },
+    },
+  });
+  if (live > 0) return false;
+  await tx.recurringInvoiceSchedule.updateMany({
+    where: { customerSubscriptionId: subscription.id, status: { in: ["active", "paused"] } },
+    data: { status: "ended" },
+  });
+  await tx.customerSubscription.update({
+    where: { id: subscription.id },
+    data: { lifecycleStatus: "ended" },
+  });
+  return true;
+}
+
+/** Ends every emptied live canonical subscription for a customer (0 live services). */
+export async function retireEmptiedCanonicalSubscriptions(input: {
+  customerId: string;
+}): Promise<{ retiredIds: string[] }> {
+  return prisma.$transaction(async (tx) => {
+    const subscriptions = await tx.customerSubscription.findMany({
+      where: {
+        customerId: input.customerId,
+        controlMode: "canonical",
+        lifecycleStatus: { in: [...RETIREABLE_EMPTY_LIFECYCLES] },
+      },
+      select: { id: true, lifecycleStatus: true },
+    });
+    const retiredIds: string[] = [];
+    for (const subscription of subscriptions) {
+      if (await retireEmptiedSubscriptionInTransaction(tx, subscription)) retiredIds.push(subscription.id);
+    }
+    if (!retiredIds.length) {
+      validation("NOTHING_TO_RETIRE", "There are no empty agreements to close.");
+    }
+    return { retiredIds };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

@@ -97,6 +97,10 @@ test("only manual-invoice canonical draft/pending/active subscriptions take part
     { id: "2", hasGeneratedInvoice: false, dueDaysAfterIssue: 7, autoEmail: true, emailTo: null },
   ] })).join(" "), /more than one/);
   assert.deepEqual(mergeBlockers(blueTaxi("x", { lifecycleStatus: "draft", schedules: [] })), []);
+  assert.match(
+    mergeBlockers(blueTaxi("x", { items: [{ id: "old", status: "canceled", invoiceSnapshotCount: 0, adjustmentInvoiceId: null }] })).join(" "),
+    /no live services/,
+  );
 });
 
 test("subscriptions with different terms are refused with the reason named", () => {
@@ -167,12 +171,24 @@ test("the action is staff-guarded, needs a reason, and is audited without touchi
   assert.match(body, /reason/);
   assert.doesNotMatch(body, /stripe\.|getStripeClient|createAnnualServiceAdjustmentInvoice|setRecurringScheduleStatus/);
 
+  assert.match(actions, /retireEmptiedCanonicalSubscriptionsAction/);
+  assert.match(actions, /retireEmptiedCanonicalSubscriptions\(/);
+
   const service = await read("lib/services/canonical-subscription-merge-service.ts");
   assert.ok(service.includes("TransactionIsolationLevel.Serializable"), "the merge must be one serializable transaction");
   assert.ok(service.includes("planSubscriptionMerge("), "rules are re-checked on fresh data inside the transaction");
   assert.doesNotMatch(service, /stripe|\.invoice\.create|sendMail|whatsapp/i);
   // The merge retires sources and their schedules; it must never delete financial records.
   assert.doesNotMatch(service, /\.delete(Many)?\(/);
+});
+
+test("empty agreements are closed instead of merged", async () => {
+  const form = await read("components/admin/canonical-subscription-merge-form.tsx");
+  assert.match(form, /RetireEmptiedSubscriptionsForm/);
+  assert.match(form, /Close \$\{count\} empty agreements/);
+  assert.match(form, /liveServiceCount === 0/);
+  const mergePage = await read("app/admin/subscriptions/canonical/merge/page.tsx");
+  assert.match(mergePage, /customerId=\{customer\.id\}/);
 });
 
 test("the customer page points at the merge screen when same-term subscriptions exist", async () => {
@@ -182,6 +198,8 @@ test("the customer page points at the merge screen when same-term subscriptions 
   // A permanent entry point, so the screen is reachable even when the hint's strict grouping finds nothing.
   assert.match(page, /currentSubscriptions\.length > 1/);
   assert.match(page, /Merge subscriptions/);
+  assert.match(page, /RetireEmptiedSubscriptionsForm/);
+  assert.match(page, /subscriptionIsEmptied/);
   const workspace = await read("components/admin/subscriptions-workspace.tsx");
   assert.match(workspace, /canonical\/merge\?customerId=\$\{group\.key\}/);
 });

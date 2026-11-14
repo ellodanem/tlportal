@@ -27,6 +27,7 @@ import {
   replaceSubscriptionItemHardware,
   transferSubscriptionItem,
   adoptPredecessorHardware,
+  retireEmptiedCanonicalSubscriptions,
   transitionCanonicalSubscriptionLifecycle,
   updateDraftSubscriptionCollectionMethod,
   updateDraftSubscriptionItemCommercialDetails,
@@ -369,6 +370,43 @@ export async function mergeCanonicalSubscriptionsAction(
     return {
       message: `Merged ${result.plan.movedLiveServiceCount} service${result.plan.movedLiveServiceCount === 1 ? "" : "s"} into one subscription. No invoice, charge, provider change or notification was made.`,
       next: `/admin/subscriptions/canonical/${targetId}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function retireEmptiedCanonicalSubscriptionsAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const customerId = text(formData, "customerId");
+  try {
+    const session = await requireStaff();
+    const candidates = await prisma.customerSubscription.findMany({
+      where: {
+        customerId,
+        controlMode: "canonical",
+        lifecycleStatus: { in: ["pending_activation", "active", "paused"] },
+      },
+      select: { id: true },
+    });
+    for (const candidate of candidates) await requireManageableCanonicalSubscription(candidate.id);
+    const result = await retireEmptiedCanonicalSubscriptions({ customerId });
+    await recordOperationalEvent({
+      category: "subscription.empty_agreements_retired",
+      summary: `${result.retiredIds.length} empty subscription${result.retiredIds.length === 1 ? "" : "s"} closed after their services were moved away.`,
+      customerId,
+      actorUserId: session.sub,
+      payload: { retiredSubscriptionIds: result.retiredIds },
+    });
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath(`/admin/customers/${customerId}/subscriptions`);
+    revalidatePath(`/admin/subscriptions/canonical/merge`);
+    return {
+      message: result.retiredIds.length === 1
+        ? "Closed the empty agreement. It is no longer invoiced."
+        : `Closed ${result.retiredIds.length} empty agreements. They are no longer invoiced.`,
     };
   } catch (error) {
     return actionError(error);

@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { mergeCanonicalSubscriptionsAction, type CanonicalSubscriptionFormState } from "@/app/admin/subscriptions/canonical/actions";
+import { mergeCanonicalSubscriptionsAction, retireEmptiedCanonicalSubscriptionsAction, type CanonicalSubscriptionFormState } from "@/app/admin/subscriptions/canonical/actions";
 import { cadenceLabel, formatCents } from "@/lib/domain/subscription-proration";
 
 export type MergeFormCandidate = {
@@ -43,7 +43,33 @@ function money(cents: number, currency: string) {
   return `${currency === "XCD" ? "EC$" : `${currency} `}${formatCents(cents)}`;
 }
 
-export function CanonicalSubscriptionMergeForm({ customerLabel, candidates }: { customerLabel: string; candidates: MergeFormCandidate[] }) {
+export function RetireEmptiedSubscriptionsForm({
+  customerId,
+  count,
+}: {
+  customerId: string;
+  count: number;
+}) {
+  const [state, action, pending] = useActionState(retireEmptiedCanonicalSubscriptionsAction, initialState);
+  const router = useRouter();
+  useEffect(() => { if (state.message) router.refresh(); }, [router, state.message]);
+  return (
+    <form action={action} className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-sm shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+      <input type="hidden" name="customerId" value={customerId} />
+      <p className="text-amber-950 dark:text-amber-100">
+        <span className="font-semibold">{count} empty agreement{count === 1 ? "" : "s"}</span>
+        {count === 1 ? " has" : " have"} no live services. Merge cannot combine them: they have nothing to move, and different renewal dates stay separate agreements. Closing them stops future invoices and hides them from the active list.
+      </p>
+      <button disabled={pending || Boolean(state.message)} className="mt-3 min-h-11 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+        {pending ? "Closing…" : count === 1 ? "Close empty agreement" : `Close ${count} empty agreements`}
+      </button>
+      {state.error ? <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p> : null}
+      {state.message ? <p role="status" className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">{state.message}</p> : null}
+    </form>
+  );
+}
+
+export function CanonicalSubscriptionMergeForm({ customerId, customerLabel, candidates }: { customerId: string; customerLabel: string; candidates: MergeFormCandidate[] }) {
   const [state, action, pending] = useActionState(mergeCanonicalSubscriptionsAction, initialState);
   const router = useRouter();
   useEffect(() => { if (state.next) router.push(state.next); }, [router, state.next]);
@@ -68,11 +94,14 @@ export function CanonicalSubscriptionMergeForm({ customerLabel, candidates }: { 
     setExcluded(new Set());
   }
 
+  const emptied = candidates.filter((candidate) => candidate.liveServiceCount === 0);
+
   if (!group) {
     return (
       <div className={cardClass}>
         <h2 className="text-lg font-semibold">Nothing to merge</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{customerLabel} has no two subscriptions with identical terms (same cycle, renewal date, collection method, status and grace period) that have never been billed.</p>
+        {emptied.length ? <div className="mt-4"><RetireEmptiedSubscriptionsForm customerId={customerId} count={emptied.length} /></div> : null}
         {candidates.length ? (
           <div className="mt-4">
             <h3 className="text-sm font-semibold">Terms compared</h3>
