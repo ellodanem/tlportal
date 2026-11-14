@@ -14,7 +14,9 @@ import {
   computeProration,
   cycleUnitLabel,
   formatCents,
+  isFirstPeriodTooLong,
   parseMoneyToCents,
+  SubscriptionProrationError,
   type SubscriptionProrationMethod,
 } from "@/lib/domain/subscription-proration";
 
@@ -128,6 +130,7 @@ export function CanonicalCustomerOnboardingForm({
 
   const effectiveName = subscriptionName.trim() || `${cadenceLabel(interval)} GPS tracking`;
   const nextBillingDate = alignment === "align_to_renewal" && alignedRenewal ? alignedRenewal : addMonthsClamped(startDate, interval);
+  const extraGoodwill = alignment === "align_to_renewal" && Boolean(alignedRenewal) && startDate < addMonthsClamped(alignedRenewal, -interval);
   const unit = cycleUnitLabel(interval);
   const selectedDeviceIds = new Set(services.map((service) => service.deviceId).filter(Boolean));
   const customerInstalled = useMemo(
@@ -156,7 +159,11 @@ export function CanonicalCustomerOnboardingForm({
           reason: service.adjustmentReason,
         });
       } catch (error) {
-        prorationError = error instanceof Error ? error.message : "Check the partial-period amount.";
+        if (error instanceof SubscriptionProrationError && error.code === "START_BEFORE_CYCLE") {
+          prorationError = "A partial-period charge can only cover the last billing cycle before the renewal. For extra months of grace, choose “No partial-period charge”.";
+        } else {
+          prorationError = error instanceof Error ? error.message : "Check the partial-period amount.";
+        }
       }
     }
     return { cents, proration, prorationError };
@@ -194,6 +201,9 @@ export function CanonicalCustomerOnboardingForm({
       if (computed.some((entry) => entry.cents == null || entry.cents <= 0)) return `Every service needs an agreed price per ${unit}.`;
       if (alignment === "align_to_renewal") {
         if (!alignedRenewal) return "Choose the renewal date to align with.";
+        if (isFirstPeriodTooLong(startDate, alignedRenewal, interval)) {
+          return "The aligned renewal cannot be more than two billing intervals after the start date. Extra unpaid months within that window are allowed as goodwill.";
+        }
         const first = computed.find((entry) => entry.prorationError);
         if (first?.prorationError) return first.prorationError;
       }
@@ -333,7 +343,8 @@ export function CanonicalCustomerOnboardingForm({
             ) : null}
           </div>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">{alignment === "align_to_renewal" ? "Services start on the date above and join full recurring billing on the renewal date. The time in between is an agreed partial-period charge, recorded but not invoiced." : `First renewal: ${displayDate(nextBillingDate)}. Matching renewal dates do not merge this with another subscription.`}</p>
+        <p className="mt-2 text-xs text-zinc-500">{alignment === "align_to_renewal" ? "Services start on the date above and join full recurring billing on the renewal date. Time within one cycle can be an agreed partial-period charge (recorded, not invoiced). Extra months beyond that are unpaid goodwill — choose “No partial-period charge”." : `First renewal: ${displayDate(nextBillingDate)}. Matching renewal dates do not merge this with another subscription.`}</p>
+        {extraGoodwill ? <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">This first period is longer than one {unit}. Extra time until {displayDate(alignedRenewal)} is unpaid goodwill — use “No partial-period charge” on each service.</p> : null}
 
         <div className="mt-5 space-y-4">
           {services.map((service, index) => (
@@ -427,7 +438,7 @@ export function CanonicalCustomerOnboardingForm({
           <div><dt className="text-zinc-500">Customer</dt><dd className="font-semibold">{customerName || "—"}{customerMode === "new" ? " (new)" : ""}</dd></div>
           <div><dt className="text-zinc-500">Plan</dt><dd className="font-semibold">{effectiveName} · {cadenceLabel(interval)}</dd></div>
           <div><dt className="text-zinc-500">Recurring total</dt><dd className="font-semibold tabular-nums">EC${formatCents(cycleTotalCents)} per {unit} · {services.length} service{services.length === 1 ? "" : "s"}</dd></div>
-          <div><dt className="text-zinc-500">{alignment === "align_to_renewal" ? "Starts → joins renewal" : "Starts → first renewal"}</dt><dd className="font-semibold">{displayDate(startDate)} → {displayDate(nextBillingDate)}</dd></div>
+          <div><dt className="text-zinc-500">{alignment === "align_to_renewal" ? "Starts → joins renewal" : "Starts → first renewal"}</dt><dd className="font-semibold">{displayDate(startDate)} → {displayDate(nextBillingDate)}{extraGoodwill ? " · extra unpaid goodwill" : ""}</dd></div>
           <div><dt className="text-zinc-500">Billing method</dt><dd className="font-semibold">{collection === "stripe_autocharge" ? "Card billing (Stripe) — collect card from Billing after save" : "Manual invoice"}</dd></div>
           <div><dt className="text-zinc-500">Hardware</dt><dd className="font-semibold">{services.filter((service) => service.deviceId || adoptedId(service)).length} of {services.length} assigned</dd></div>
         </dl>

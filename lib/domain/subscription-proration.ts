@@ -57,6 +57,25 @@ export function addMonthsClamped(value: string, months: number): string {
   return toDateString(target.getTime());
 }
 
+/**
+ * A first period may run longer than one cadence so several services can share a
+ * renewal date (unpaid goodwill). Two intervals covers a couple of extra months
+ * on an annual plan and still catches a year-typo on the renewal date.
+ * Partial-period *charges* remain capped at one cycle by {@link computeProration}.
+ */
+export const MAX_FIRST_PERIOD_INTERVALS = 2;
+
+export function earliestStartForFirstRenewal(renewalDate: string, intervalMonths: number): string {
+  if (!Number.isInteger(intervalMonths) || intervalMonths < 1 || intervalMonths > 12) {
+    fail("INVALID_INTERVAL", "Billing interval must be between 1 and 12 months.");
+  }
+  return addMonthsClamped(renewalDate, -intervalMonths * MAX_FIRST_PERIOD_INTERVALS);
+}
+
+export function isFirstPeriodTooLong(startDate: string, renewalDate: string, intervalMonths: number): boolean {
+  return startDate < earliestStartForFirstRenewal(renewalDate, intervalMonths);
+}
+
 export function daysBetween(start: string, end: string): number {
   return Math.round((parseDate(end, "end") - parseDate(start, "start")) / DAY_MS);
 }

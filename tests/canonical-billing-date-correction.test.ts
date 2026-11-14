@@ -97,11 +97,26 @@ test("impossible or unchanged dates are rejected with a readable reason", () => 
   assert.throws(() => plan("2026-06-23", "2026-12-23"), /already the saved dates/);
   assert.throws(() => plan("2026-05-23", "2026-05-23"), /after the start date/);
   assert.throws(() => plan("2026-05-23", "2026-05-01"), /after the start date/);
-  assert.throws(() => plan("2026-01-23", "2026-11-23"), /within one billing interval/);
+  assert.throws(() => plan("2025-10-23", "2026-11-23"), /two billing intervals/);
   assert.throws(() => plan("not-a-date", "2026-11-23"), /YYYY-MM-DD/);
   assert.throws(() => plan("2026-02-30", "2026-11-23"), /valid calendar date/);
   // The renewal may be less than a full interval after the start (aligned renewals).
   assert.equal(plan("2026-08-01", "2026-11-23").next.nextBillingDate, "2026-11-23");
+  // Extra unpaid months (up to two intervals) are allowed so several services can share a renewal.
+  assert.equal(plan("2026-01-23", "2026-11-23").next.nextBillingDate, "2026-11-23");
+});
+
+test("an annual first period may run past the anniversary so several services share one renewal", () => {
+  const annual = wrongSubscription({
+    billingIntervalMonths: 12,
+    commercialStartDate: d("2026-02-21"),
+    billingAnchorDate: d("2026-02-21"),
+    nextBillingDate: d("2027-02-21"),
+    items: [{ id: "aqua", label: "HU5852", serviceActivatedDate: d("2026-02-21"), billingEffectiveFrom: d("2026-02-21"), hasInitialAdjustment: false, invoiceSnapshotCount: 0 }],
+  });
+  const aligned = planBillingDateCorrection(annual, { commercialStartDate: "2026-02-21", nextBillingDate: "2027-04-24" });
+  assert.equal(aligned.next.commercialStartDate, "2026-02-21");
+  assert.equal(aligned.next.nextBillingDate, "2027-04-24");
 });
 
 test("the action is staff-guarded, needs a reason, and is audited without touching billing providers", async () => {
@@ -119,4 +134,8 @@ test("the action is staff-guarded, needs a reason, and is audited without touchi
   assert.ok(service.includes("TransactionIsolationLevel.Serializable"), "the correction must be one serializable transaction");
   assert.ok(service.includes("planBillingDateCorrection("), "rules are re-checked on fresh data inside the transaction");
   assert.doesNotMatch(service, /stripe|\.invoice\.create|sendMail|whatsapp/i);
+
+  const form = await read("components/admin/canonical-billing-dates-form.tsx");
+  assert.match(form, /Extra unpaid months are allowed/);
+  assert.doesNotMatch(form, /Must fall within/);
 });

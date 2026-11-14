@@ -342,6 +342,8 @@ test("canonical workflow confirms commercial changes and never adds direct billi
   assert.match(onboarding, /key="create"/);
   assert.match(onboarding, /event\.preventDefault\(\);\s*goNext\(\);/);
   assert.match(onboarding, /does not activate billing, create an invoice, contact Stripe, or notify anyone/);
+  assert.match(onboarding, /No partial-period charge/);
+  assert.match(onboarding, /two billing intervals after the start date/);
   assert.doesNotMatch(onboarding, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
 });
 

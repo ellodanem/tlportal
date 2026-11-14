@@ -4,6 +4,8 @@ import { test } from "node:test";
 import {
   computeProration,
   cycleWindowForRenewal,
+  earliestStartForFirstRenewal,
+  isFirstPeriodTooLong,
   parseMoneyToCents,
   recurringTotalsAfterAddition,
   roundedMonthsBetween,
@@ -124,4 +126,13 @@ test("the recurring total adds only the services of the SAME subscription", () =
   assert.equal(totals.futureCents, 66_000);
   // A monthly EC$30 service on a different subscription is never part of this call.
   assert.equal(recurringTotalsAfterAddition(["330.00", "330.00"], "0.00").futureCents, 66_000);
+});
+
+test("a first period may run up to two intervals so extra unpaid months can share a renewal date", () => {
+  assert.equal(earliestStartForFirstRenewal("2027-04-24", 12), "2025-04-24");
+  assert.equal(isFirstPeriodTooLong("2026-02-21", "2027-04-24", 12), false);
+  assert.equal(isFirstPeriodTooLong("2025-04-24", "2027-04-24", 12), false);
+  assert.equal(isFirstPeriodTooLong("2025-04-23", "2027-04-24", 12), true);
+  assert.equal(isFirstPeriodTooLong("2026-01-23", "2026-11-23", 6), false);
+  assert.equal(isFirstPeriodTooLong("2025-10-23", "2026-11-23", 6), true);
 });

@@ -25,7 +25,7 @@ import {
   type ExactMoneyInput,
 } from "@/lib/domain/canonical-subscription-application";
 import { syncCanonicalScheduleLines } from "@/lib/services/canonical-schedule-line-sync-service";
-import { addMonthsClamped, computeProration, type SubscriptionProrationMethod } from "@/lib/domain/subscription-proration";
+import { computeProration, isFirstPeriodTooLong, type SubscriptionProrationMethod } from "@/lib/domain/subscription-proration";
 import {
   assertNoOverlappingItemRates,
   assertValidEffectiveRatePeriod,
@@ -461,9 +461,11 @@ export async function createCanonicalOnboarding(
     if (dates.nextBillingDate <= dates.commercialStartDate) {
       validation("ALIGNED_RENEWAL_NOT_AFTER_START", "The aligned renewal date must be after the service start date.");
     }
-    const earliestCycleStart = commercialDate(addMonthsClamped(commercialDateString(dates.nextBillingDate), -billingIntervalMonths), "alignedRenewal");
-    if (dates.commercialStartDate < earliestCycleStart) {
-      validation("ALIGNED_RENEWAL_TOO_FAR", "The aligned renewal must be within one billing interval after the service start date.");
+    if (isFirstPeriodTooLong(commercialDateString(dates.commercialStartDate), commercialDateString(dates.nextBillingDate), billingIntervalMonths)) {
+      validation(
+        "ALIGNED_RENEWAL_TOO_FAR",
+        "The aligned renewal cannot be more than two billing intervals after the service start date. Extra unpaid months within that window are allowed as goodwill.",
+      );
     }
   }
 

@@ -11,7 +11,7 @@
  */
 
 import { CanonicalSubscriptionValidationError, commercialDate, commercialDateString } from "./canonical-subscription-application";
-import { addMonthsClamped } from "./subscription-proration";
+import { isFirstPeriodTooLong } from "./subscription-proration";
 
 export const BILLING_DATE_CORRECTION_LIFECYCLES = ["draft", "pending_activation", "active", "paused"] as const;
 
@@ -107,11 +107,10 @@ export function planBillingDateCorrection(
   if (sameDay(newStart, oldStart) && sameDay(newNext, oldNext)) fail("NO_CHANGE", "Those are already the saved dates.");
   if (newNext <= newStart) fail("RENEWAL_NOT_AFTER_START", "The renewal date must be after the start date.");
 
-  const earliestStart = commercialDate(addMonthsClamped(commercialDateString(newNext), -interval), "Start date");
-  if (newStart < earliestStart) {
+  if (isFirstPeriodTooLong(commercialDateString(newStart), commercialDateString(newNext), interval)) {
     fail(
       "RENEWAL_TOO_FAR",
-      `The renewal must be within one billing interval (${interval} month${interval === 1 ? "" : "s"}) after the start date.`,
+      `The renewal cannot be more than two billing intervals (${interval * 2} months) after the start date. Extra unpaid months within that window are allowed as goodwill.`,
     );
   }
 

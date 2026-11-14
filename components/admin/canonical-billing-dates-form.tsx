@@ -34,7 +34,7 @@ export function CanonicalBillingDatesForm({
         <label className="text-sm font-medium">
           Next renewal date
           <input type="date" name="nextBillingDate" defaultValue={renewalDate} required className={inputClass} />
-          <span className="mt-1 block text-xs font-normal text-zinc-500">Must fall within {intervalMonths} month{intervalMonths === 1 ? "" : "s"} after the start date.</span>
+          <span className="mt-1 block text-xs font-normal text-zinc-500">Must be after the start date. Extra unpaid months are allowed so renewals can line up, up to {intervalMonths * 2} months later.</span>
         </label>
       </div>
       <label className="text-sm font-medium">
