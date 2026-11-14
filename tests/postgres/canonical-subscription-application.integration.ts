@@ -310,6 +310,84 @@ test("item transfer creates a successor and preserves predecessor ownership and 
   assert.equal(successor.rates[0].agreedAmountPerCycle.toFixed(2), "20.00");
 });
 
+test("an unbilled mid-cycle add transfers by canceling the source and moving the tracker", async () => {
+  const customer = await createCustomer("unbilled-transfer");
+  const assignment = await createAssignment(customer.id, "unbilled-device");
+  const sourceSubscription = await createMonthlySubscription(customer.id, "Annual GPS tracking", [
+    {
+      label: "HU2472- Honda Vezel",
+      serviceActivatedDate: "2026-04-21",
+      billingEffectiveFrom: "2026-11-01",
+      serviceAssignmentId: assignment.id,
+    },
+  ]);
+  const targetSubscription = await createDraftCanonicalSubscription({
+    customerId: customer.id,
+    name: "DCAT Annual Subscription",
+    reference: `dcat-${randomUUID()}`,
+    billingIntervalMonths: 12,
+    collectionMethod: "manual_invoice",
+    currency: "XCD",
+    defaultAgreedAmountPerCycle: "300.00",
+    commercialStartDate: "2026-04-24",
+    billingAnchorDate: "2026-04-24",
+    nextBillingDate: "2027-04-24",
+  });
+  const sourceItemId = sourceSubscription.items[0].id;
+
+  const successorId = await transferSubscriptionItem({
+    sourceSubscriptionItemId: sourceItemId,
+    targetSubscriptionId: targetSubscription.id,
+    transferDate: "2026-10-15",
+    agreedAmountPerCycle: "300.00",
+    changeReason: "Confirmed",
+  });
+  const [source, successor, moved] = await Promise.all([
+    prisma.subscriptionItem.findUniqueOrThrow({
+      where: { id: sourceItemId },
+      include: { rates: true },
+    }),
+    prisma.subscriptionItem.findUniqueOrThrow({
+      where: { id: successorId },
+      include: { rates: true },
+    }),
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: assignment.id } }),
+  ]);
+  assert.equal(source.status, "canceled");
+  assert.equal(source.billingEffectiveUntil, null);
+  assert.equal(source.rates[0].effectiveUntil?.toISOString().slice(0, 10), "2026-10-15");
+  assert.equal(successor.predecessorItemId, source.id);
+  assert.equal(successor.customerSubscriptionId, targetSubscription.id);
+  assert.equal(successor.serviceActivatedDate?.toISOString().slice(0, 10), "2026-10-15");
+  assert.equal(successor.billingEffectiveFrom?.toISOString().slice(0, 10), "2027-04-24");
+  assert.equal(successor.rates[0].agreedAmountPerCycle.toFixed(2), "300.00");
+  assert.equal(moved.subscriptionItemId, successor.id);
+});
+
+test("a future-dated source rate does not block an unbilled transfer", async () => {
+  const customer = await createCustomer("unbilled-future-rate");
+  const sourceSubscription = await createMonthlySubscription(customer.id, "Source waiting to bill", [
+    { label: "Added mid-cycle", billingEffectiveFrom: "2026-11-01" },
+  ]);
+  const targetSubscription = await createMonthlySubscription(customer.id, "Target agreement");
+  const sourceItemId = sourceSubscription.items[0].id;
+  assert.equal(
+    sourceSubscription.items[0].rates[0].effectiveFrom.toISOString().slice(0, 10),
+    "2026-11-01",
+  );
+
+  const successorId = await transferSubscriptionItem({
+    sourceSubscriptionItemId: sourceItemId,
+    targetSubscriptionId: targetSubscription.id,
+    transferDate: "2026-10-15",
+    agreedAmountPerCycle: "25.00",
+    changeReason: "Wrong parent subscription",
+  });
+  const source = await prisma.subscriptionItem.findUniqueOrThrow({ where: { id: sourceItemId } });
+  assert.equal(source.status, "canceled");
+  assert.ok(successorId);
+});
+
 test("cross-customer assignments are rejected without creating an item", async () => {
   const customer = await createCustomer("assignment-owner");
   const otherCustomer = await createCustomer("assignment-other");

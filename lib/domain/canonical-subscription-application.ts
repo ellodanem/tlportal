@@ -171,6 +171,30 @@ export function assertLifecycleTransition(
   }
 }
 
+export type SubscriptionItemTransferMode = "end_billing_period" | "cancel_unbilled";
+
+/**
+ * Transfer closes a billing period only after the source has started billing.
+ * A mid-cycle add that still waits for the next renewal has nothing to close, so
+ * the source is canceled (never billed) and a successor starts on the target.
+ */
+export function subscriptionItemTransferMode(input: {
+  transferDate: Date;
+  billingEffectiveFrom: Date | null;
+  hasInvoiceSnapshots: boolean;
+}): SubscriptionItemTransferMode {
+  if (input.billingEffectiveFrom && input.transferDate <= input.billingEffectiveFrom) {
+    if (input.hasInvoiceSnapshots) {
+      throw new CanonicalSubscriptionValidationError(
+        "INVALID_TRANSFER_DATE",
+        "This service already has invoices, so the transfer date must be after it started billing.",
+      );
+    }
+    return "cancel_unbilled";
+  }
+  return "end_billing_period";
+}
+
 export function itemStatusForSubscription(
   lifecycle: SubscriptionLifecycleStatus,
 ): SubscriptionItemStatus {

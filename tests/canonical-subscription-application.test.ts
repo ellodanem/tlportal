@@ -9,6 +9,7 @@ import {
   normalizedMonthlyRecurringRevenue,
   previewAnnualProration,
   recurringEffectiveDateForAddition,
+  subscriptionItemTransferMode,
   sumExactCycleAmounts,
 } from "../lib/domain/canonical-subscription-application";
 
@@ -120,4 +121,57 @@ test("commercial lifecycle transitions reject backwards activation changes", () 
       && error.code === "INVALID_LIFECYCLE_TRANSITION",
   );
   assert.throws(() => assertLifecycleTransition("ended", "active"), /cannot move/);
+});
+
+const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
+
+test("a service that has not reached billing effective date transfers as an unbilled cancel", () => {
+  assert.equal(
+    subscriptionItemTransferMode({
+      transferDate: day("2026-11-14"),
+      billingEffectiveFrom: day("2027-03-01"),
+      hasInvoiceSnapshots: false,
+    }),
+    "cancel_unbilled",
+  );
+  assert.equal(
+    subscriptionItemTransferMode({
+      transferDate: day("2027-03-01"),
+      billingEffectiveFrom: day("2027-03-01"),
+      hasInvoiceSnapshots: false,
+    }),
+    "cancel_unbilled",
+  );
+});
+
+test("a service already in a billing period ends that period on transfer", () => {
+  assert.equal(
+    subscriptionItemTransferMode({
+      transferDate: day("2026-11-14"),
+      billingEffectiveFrom: day("2026-03-01"),
+      hasInvoiceSnapshots: false,
+    }),
+    "end_billing_period",
+  );
+  assert.equal(
+    subscriptionItemTransferMode({
+      transferDate: day("2026-11-14"),
+      billingEffectiveFrom: null,
+      hasInvoiceSnapshots: false,
+    }),
+    "end_billing_period",
+  );
+});
+
+test("an unbilled transfer is refused when the source already has invoices", () => {
+  assert.throws(
+    () => subscriptionItemTransferMode({
+      transferDate: day("2026-11-14"),
+      billingEffectiveFrom: day("2027-03-01"),
+      hasInvoiceSnapshots: true,
+    }),
+    (error) => error instanceof CanonicalSubscriptionValidationError
+      && error.code === "INVALID_TRANSFER_DATE"
+      && /already has invoices/i.test(error.message),
+  );
 });

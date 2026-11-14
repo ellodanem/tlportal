@@ -140,6 +140,13 @@ test("asset loss needs an explicit acknowledgement before the destructive button
   assert.match(loss, /className=\{dangerButton\}/);
 });
 
+test("transfer review explains the unbilled cancel path", async () => {
+  const panels = await read(PANELS);
+  assert.match(panels, /If this service is already billing, it ends here on the transfer date/);
+  assert.match(panels, /If it has not started billing yet, it is canceled here with no charge/);
+  assert.match(panels, /joins that agreement.s next renewal/);
+});
+
 test("date rules are untouched: no default dates and no new client-side date limits on sale, loss or transfer", async () => {
   const panels = await read(PANELS);
   assert.match(panels, /effectiveUntil: ""/);

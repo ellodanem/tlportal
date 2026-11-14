@@ -211,8 +211,9 @@ function TransferDialog({ subscriptionId, itemId, serviceLabel, subscriptionLabe
                 ["Reason", values.changeReason],
               ]} />
               <Consequences items={[
-                "The service ends here on the transfer date and a successor service starts under the chosen subscription.",
-                "Historical invoices, rates and assignments are not rewritten.",
+                "If this service is already billing, it ends here on the transfer date. If it has not started billing yet, it is canceled here with no charge.",
+                "A successor service starts under the chosen subscription and joins that agreement’s next renewal.",
+                "Historical invoices are not rewritten.",
               ]} />
               <Feedback state={state} />
               <Footer>

@@ -21,6 +21,7 @@ import {
   normalizeCurrency,
   previewAnnualProration,
   recurringEffectiveDateForAddition,
+  subscriptionItemTransferMode,
   type AnnualProrationPreview,
   type ExactMoneyInput,
 } from "@/lib/domain/canonical-subscription-application";
@@ -1059,6 +1060,7 @@ export async function transferSubscriptionItem(input: {
       include: {
         rates: { orderBy: { effectiveFrom: "asc" } },
         successorItem: { select: { id: true } },
+        _count: { select: { invoiceSnapshots: true } },
       },
     });
     if (!source) validation("ITEM_NOT_FOUND", "Source subscription item not found.");
@@ -1076,10 +1078,12 @@ export async function transferSubscriptionItem(input: {
       validation("CROSS_CUSTOMER_TRANSFER", "Subscriptions in a transfer must share one customer.");
     }
     const targetFields = requireCanonicalCommercialFields(targetSubscription);
-    if (source.billingEffectiveFrom && transferDate <= source.billingEffectiveFrom) {
-      validation("INVALID_TRANSFER_DATE", "Transfer must follow the source billing effective date.");
-    }
-    if (source.rates.some((rate) => rate.effectiveFrom >= transferDate)) {
+    const transferMode = subscriptionItemTransferMode({
+      transferDate,
+      billingEffectiveFrom: source.billingEffectiveFrom,
+      hasInvoiceSnapshots: source._count.invoiceSnapshots > 0,
+    });
+    if (transferMode === "end_billing_period" && source.rates.some((rate) => rate.effectiveFrom >= transferDate)) {
       validation("FUTURE_RATE_CONFLICT", "Future source rates must be resolved before transfer.");
     }
     if (input.successorAssignmentId) {
@@ -1132,12 +1136,24 @@ export async function transferSubscriptionItem(input: {
     });
     await tx.subscriptionItem.update({
       where: { id: source.id },
-      data: {
-        billingEffectiveUntil: transferDate,
-        status: "ended",
-        endedAt: new Date(),
-      },
+      data: transferMode === "cancel_unbilled"
+        ? { status: "canceled", endedAt: new Date() }
+        : {
+          billingEffectiveUntil: transferDate,
+          status: "ended",
+          endedAt: new Date(),
+        },
     });
+    if (transferMode === "cancel_unbilled") {
+      await tx.serviceAssignment.updateMany({
+        where: {
+          subscriptionItemId: source.id,
+          endDate: null,
+          status: { not: "cancelled" },
+        },
+        data: { subscriptionItemId: successor.id },
+      });
+    }
     if (input.successorAssignmentId) {
       await tx.serviceAssignment.update({
         where: { id: input.successorAssignmentId },
