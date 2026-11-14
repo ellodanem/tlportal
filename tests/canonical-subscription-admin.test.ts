@@ -11,6 +11,9 @@ import {
   canonicalSubscriptionDisplayName,
   canonicalSubscriptionWorkspacePresentation,
   isOperationalCanonicalSubscription,
+  isRetiredSubscriptionLifecycle,
+  retiredSubscriptionSiblingCount,
+  visibleSubscriptionSiblings,
   canonicalSubscriptionUiAccess,
   canonicalSubscriptionUiEnabled,
   canonicalSubscriptionUiVisible,
@@ -204,6 +207,24 @@ test("overview filters preserve one row per subscription and combine operational
   const stripe = row({ id: "sub-stripe", collectionMethod: "stripe_autocharge", lifecycleStatus: "paused", controlMode: "shadow", providerStatus: "attention" });
   assert.deepEqual(filterCanonicalSubscriptionAdminRows([monthly, stripe], { collectionMethod: "stripe_autocharge", providerStatus: "attention" }).map((entry) => entry.id), ["sub-stripe"]);
   assert.deepEqual(filterCanonicalSubscriptionAdminRows([monthly, stripe], { query: "Fleet A", controlMode: "canonical" }).map((entry) => entry.id), ["sub-monthly"]);
+});
+
+test("ended sibling agreements stay hidden until staff asks to see them", () => {
+  const siblings = [
+    { id: "live", isCurrent: true, lifecycleStatus: "active" },
+    { id: "ended-a", isCurrent: false, lifecycleStatus: "ended" },
+    { id: "ended-b", isCurrent: false, lifecycleStatus: "canceled" },
+    { id: "paused", isCurrent: false, lifecycleStatus: "paused" },
+  ];
+  assert.equal(isRetiredSubscriptionLifecycle("ended"), true);
+  assert.equal(isRetiredSubscriptionLifecycle("active"), false);
+  assert.equal(retiredSubscriptionSiblingCount(siblings), 2);
+  assert.deepEqual(visibleSubscriptionSiblings(siblings, false).map((row) => row.id), ["live", "paused"]);
+  assert.deepEqual(visibleSubscriptionSiblings(siblings, true).map((row) => row.id), ["live", "ended-a", "ended-b", "paused"]);
+  assert.deepEqual(
+    visibleSubscriptionSiblings([{ id: "ended-this", isCurrent: true, lifecycleStatus: "ended" }, { id: "ended-other", isCurrent: false, lifecycleStatus: "ended" }], false).map((row) => row.id),
+    ["ended-this"],
+  );
 });
 
 test("current and history views distinguish terminated arrangements without combining them", () => {

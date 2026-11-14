@@ -239,6 +239,19 @@ test("service history is compact on the screen and complete on its own route", a
 
 // ---- Subscription summary and Stripe status ------------------------------------------------------
 
+test("ended sibling agreements are hidden on the detail header until staff unhides them", async () => {
+  const [header, nav] = await Promise.all([
+    read("components/admin/canonical-subscription/subscription-header.tsx"),
+    read("components/admin/canonical-subscription/subscription-siblings-nav.tsx"),
+  ]);
+  assert.match(header, /SubscriptionSiblingsNav/);
+  assert.doesNotMatch(header, /This customer has \{subscription\.siblings\.length\} subscriptions/);
+  assert.match(nav, /Show \$\{endedCount\} ended agreement/);
+  assert.match(nav, /Hide ended agreements/);
+  assert.match(nav, /visibleSubscriptionSiblings\(siblings, showEnded\)/);
+  assert.match(nav, /useState\(false\)/);
+});
+
 test("the subscription summary is one strip with the five required facts", async () => {
   const [header, strip] = await Promise.all([
     read("components/admin/canonical-subscription/subscription-header.tsx"),

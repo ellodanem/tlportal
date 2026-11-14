@@ -1,19 +1,19 @@
 import Link from "next/link";
 
 import { SubscriptionLifecycleDialog } from "@/components/admin/canonical-subscription/subscription-lifecycle-dialog";
+import { SubscriptionSiblingsNav } from "@/components/admin/canonical-subscription/subscription-siblings-nav";
 import { SubscriptionTabsNav } from "@/components/admin/canonical-subscription/subscription-tabs-nav";
 import { SummaryStrip } from "@/components/admin/canonical-subscription/summary-strip";
-import { authorityLabel, billsOnDate, collectionLabel, displayDate, money } from "@/components/admin/canonical-subscription/format";
+import { authorityLabel, billsOnDate, collectionLabel, money } from "@/components/admin/canonical-subscription/format";
 import {
   canonicalIntervalLabel,
   canonicalSubscriptionDisplayName,
 } from "@/lib/domain/canonical-subscription-admin";
 import {
   subscriptionAddServicePath,
-  subscriptionBasePath,
   subscriptionTabs,
 } from "@/lib/domain/canonical-subscription-navigation";
-import { cadenceLabel, cycleUnitLabel } from "@/lib/domain/subscription-proration";
+import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
 import { customerNewHref } from "@/lib/admin/customer-new";
 
@@ -62,21 +62,7 @@ export function SubscriptionHeader({ subscription, permissions }: { subscription
         </div>
       </div>
 
-      {subscription.siblings.length > 1 ? (
-        <nav aria-label="Other subscriptions for this customer" className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">This customer has {subscription.siblings.length} subscriptions. Each bills on its own schedule.</p>
-          <ul className="mt-2 flex gap-2 overflow-x-auto pb-1">
-            {subscription.siblings.map((sibling) => (
-              <li key={sibling.id} className="shrink-0">
-                <Link href={subscriptionBasePath(sibling.id)} aria-current={sibling.isCurrent ? "page" : undefined} className={`block rounded-lg border px-3 py-2 text-sm ${sibling.isCurrent ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"}`}>
-                  <span className="block font-semibold">{cadenceLabel(sibling.billingIntervalMonths)} · {sibling.serviceCount} service{sibling.serviceCount === 1 ? "" : "s"}{sibling.isCurrent ? " · this one" : ""}</span>
-                  <span className="block text-xs text-zinc-500">{sibling.nextBillingDate ? `Renews ${displayDate(sibling.nextBillingDate)}` : "No renewal date"} · {(sibling.lifecycleStatus ?? "unclassified").replaceAll("_", " ")}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      ) : null}
+      <SubscriptionSiblingsNav siblings={subscription.siblings} />
 
       <SummaryStrip
         total={money(subscription.summary?.recurringCycleTotal, currency)}

@@ -479,11 +479,17 @@ function initialsOf(name: string): string {
 export const MULTIPLE_SCHEDULES_LABEL = "Multiple schedules";
 
 export function customerGroupView(group: WorkspaceGroup, formatters: WorkspaceFormatters): CustomerGroupView {
-  const subscriptions = group.rows.map((row) => subscriptionRowView(row, formatters));
+  const hasCurrent = group.rows.some((row) => !row.historical);
+  // Ended/canceled husks stay in the database and on the history filter. They are omitted from the
+  // live customer group so a current agreement is not buried under empty predecessors.
+  const displayRows = hasCurrent ? group.rows.filter((row) => !row.historical) : group.rows;
+  const subscriptions = displayRows.map((row) => subscriptionRowView(row, formatters));
   const base = { key: group.customerId, customer: group.customer, initials: initialsOf(group.customer), subscriptions };
+  const omittedByFilter = group.rows.length < group.totalSubscriptionCount;
 
-  // A customer with one subscription in total stays a single, directly navigable row.
-  if (group.totalSubscriptionCount <= 1 && group.rows.length === 1) {
+  // A customer with one visible subscription opens Details directly, unless a filter is hiding
+  // other current agreements of the same customer (those stay a group: "1 of 2 subscriptions").
+  if (subscriptions.length === 1 && !omittedByFilter) {
     const only = subscriptions[0];
     return {
       ...base,
@@ -501,19 +507,17 @@ export function customerGroupView(group: WorkspaceGroup, formatters: WorkspaceFo
   }
 
   const current = currentRows(group);
-  const hasCurrent = group.rows.some((row) => !row.historical);
   const services = current.reduce((sum, row) => sum + row.itemCount, 0);
-  const endedCount = hasCurrent ? group.rows.filter((row) => row.historical).length : 0;
 
   const cadences = [...new Set(current.map((row) => row.billingIntervalMonths))]
     .sort((a, b) => (b ?? 0) - (a ?? 0))
     .map((months) => cadenceLabel(months));
-  const subscriptionPart = group.rows.length === group.totalSubscriptionCount
-    ? plural(group.rows.length, "subscription")
-    : `${group.rows.length} of ${group.totalSubscriptionCount} subscriptions`;
+  const subscriptionPart = omittedByFilter
+    ? `${group.rows.length} of ${group.totalSubscriptionCount} subscriptions`
+    : plural(displayRows.length, "subscription");
   const context = [
     plural(services, "service"),
-    subscriptionPart + (endedCount ? ` (${endedCount} ended)` : ""),
+    subscriptionPart,
     cadences.join(" + "),
   ].filter(Boolean).join(" \u00b7 ");
 

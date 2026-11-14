@@ -291,20 +291,39 @@ test("sorting orders customer groups and stays coherent with pagination", () => 
   assert.deepEqual(workspace(rows, { sort: "customer", pageSize: 1, page: 2 }).groups.map((group) => group.customerId), ["b"]);
 });
 
-test("ended subscriptions stay visible under their customer without distorting the group summary", () => {
+test("ended subscriptions are omitted from the live customer group and collapse to a single row", () => {
   const rows = [
-    sub({ id: "now", customerId: "h", customer: "History Co", itemCount: 2 }),
-    sub({ id: "then", customerId: "h", customer: "History Co", lifecycleStatus: "ended", itemCount: 7 }),
+    sub({ id: "now", customerId: "h", customer: "History Co", name: "DCAT Annual Subscription", billingIntervalMonths: 12, itemCount: 2 }),
+    sub({ id: "then", customerId: "h", customer: "History Co", name: "Annual GPS tracking", billingIntervalMonths: 12, lifecycleStatus: "ended", itemCount: 7 }),
   ];
   const view = customerGroupView(workspace(rows).groups[0], formatters);
-  assert.equal(view.context, "2 services \u00b7 2 subscriptions (1 ended) \u00b7 Monthly");
+  assert.equal(view.kind, "single");
+  assert.equal(view.context, "DCAT Annual Subscription \u00b7 Annual");
   assert.equal(view.status.label, "Active");
-  assert.deepEqual(view.subscriptions.map((row) => row.id), ["now", "then"]);
-  assert.equal(view.subscriptions[1].status.label, "Ended");
+  assert.deepEqual(view.subscriptions.map((row) => row.id), ["now"]);
+  assert.equal(view.servicesLabel, "2 services");
+
+  const history = customerGroupView(workspace(rows, { status: "history" }).groups[0], formatters);
+  assert.deepEqual(history.subscriptions.map((row) => row.id), ["then"]);
+  assert.equal(history.status.label, "Ended");
+  assert.match(history.context, /1 of 2 subscriptions/);
+});
+
+test("two current subscriptions still group together when ended husks exist", () => {
+  const rows = [
+    sub({ id: "annual", customerId: "h", customer: "History Co", billingIntervalMonths: 12, itemCount: 5 }),
+    sub({ id: "monthly", customerId: "h", customer: "History Co", billingIntervalMonths: 1, itemCount: 1 }),
+    sub({ id: "ended-a", customerId: "h", customer: "History Co", lifecycleStatus: "ended", itemCount: 1 }),
+    sub({ id: "ended-b", customerId: "h", customer: "History Co", lifecycleStatus: "canceled", itemCount: 2 }),
+  ];
+  const view = customerGroupView(workspace(rows).groups[0], formatters);
+  assert.equal(view.kind, "group");
+  assert.equal(view.context, "6 services \u00b7 2 subscriptions \u00b7 Annual + Monthly");
+  assert.deepEqual(view.subscriptions.map((row) => row.id), ["annual", "monthly"]);
 });
 
 test("search params normalise safely and keep older view bookmarks working", () => {
-  assert.deepEqual(parseWorkspaceSearchParams({}), { query: "", status: "all", cadence: null, sort: "customer", direction: "asc", page: 1 });
+  assert.deepEqual(parseWorkspaceSearchParams({}), { query: "", customerId: "", status: "all", cadence: null, sort: "customer", direction: "asc", page: 1 });
   assert.equal(parseWorkspaceSearchParams({ status: "paused" }).status, "paused");
   assert.equal(parseWorkspaceSearchParams({ view: "alerts" }).status, "attention");
   assert.equal(parseWorkspaceSearchParams({ view: "setup" }).status, "attention");

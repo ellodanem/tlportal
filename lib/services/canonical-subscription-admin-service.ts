@@ -296,9 +296,10 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
       }
     }));
   // Other canonical arrangements of the same customer, so one subscription can be
-  // reached from another. Totals are intentionally NOT combined across cadences.
+  // reached from another. Ended husks are included so the header can reveal them on demand.
+  // Totals are intentionally NOT combined across cadences.
   const siblingRows = await prisma.customerSubscription.findMany({
-    where: { customerId: subscription.customerId, controlMode: { not: "legacy" }, OR: [{ id: subscription.id }, HIDE_EMPTY_RETIRED_SUBSCRIPTIONS] },
+    where: { customerId: subscription.customerId, controlMode: { not: "legacy" } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
       id: true,

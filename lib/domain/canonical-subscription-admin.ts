@@ -271,6 +271,26 @@ export function buildCanonicalSubscriptionAdminRow(
   };
 }
 
+/** Ended or canceled: kept for audit, not day-to-day switching. */
+export function isRetiredSubscriptionLifecycle(lifecycleStatus: string | null | undefined): boolean {
+  return lifecycleStatus === "ended" || lifecycleStatus === "canceled";
+}
+
+/** Current agreement stays visible; other ended/canceled siblings hide until staff asks to see them. */
+export function visibleSubscriptionSiblings<T extends { isCurrent: boolean; lifecycleStatus: string | null }>(
+  siblings: T[],
+  showEnded: boolean,
+): T[] {
+  if (showEnded) return siblings;
+  return siblings.filter((sibling) => sibling.isCurrent || !isRetiredSubscriptionLifecycle(sibling.lifecycleStatus));
+}
+
+export function retiredSubscriptionSiblingCount<T extends { isCurrent: boolean; lifecycleStatus: string | null }>(
+  siblings: T[],
+): number {
+  return siblings.filter((sibling) => !sibling.isCurrent && isRetiredSubscriptionLifecycle(sibling.lifecycleStatus)).length;
+}
+
 export function deriveCanonicalProviderStatus(input: {
   controlMode: "legacy" | "shadow" | "canonical";
   collectionMethod: string | null;
