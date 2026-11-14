@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 import {
+  adoptPredecessorHardwareAction,
   recordCanonicalAssetLossAction,
   removeCanonicalServiceForVehicleSaleAction,
   transferCanonicalServiceAction,
@@ -213,6 +214,7 @@ function TransferDialog({ subscriptionId, itemId, serviceLabel, subscriptionLabe
               <Consequences items={[
                 "If this service is already billing, it ends here on the transfer date. If it has not started billing yet, it is canceled here with no charge.",
                 "A successor service starts under the chosen subscription and joins that agreement’s next renewal.",
+                "The tracker and its SIM move with the service.",
                 "Historical invoices are not rewritten.",
               ]} />
               <Feedback state={state} />
@@ -609,5 +611,28 @@ export function ServiceStatusControl({ subscriptionId, itemId, assignmentId, tra
         </ServiceActionDialog>
       ) : null}
     </>
+  );
+}
+
+/** Shown on a transferred-in service whose tracker is still sitting on the predecessor. */
+export function AdoptPredecessorHardwareButton({
+  subscriptionId,
+  itemId,
+}: {
+  subscriptionId: string;
+  itemId: string;
+}) {
+  const [state, action, pending] = useActionState(adoptPredecessorHardwareAction, initialState);
+  const guard = useSingleSubmit(state);
+  useRefreshOnSuccess(state);
+  return (
+    <form action={action} onSubmit={guard} className="mt-2 space-y-2">
+      <input type="hidden" name="subscriptionId" value={subscriptionId} />
+      <input type="hidden" name="subscriptionItemId" value={itemId} />
+      <button type="submit" disabled={pending} className="text-sm font-semibold text-emerald-700 hover:underline disabled:opacity-50 dark:text-emerald-400">
+        {pending ? "Moving tracker…" : "Bring tracker and SIM from previous service"}
+      </button>
+      <Feedback state={state} />
+    </form>
   );
 }

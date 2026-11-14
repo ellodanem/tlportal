@@ -121,7 +121,7 @@ test("dialogs are accessible: labelled, modal, focus-trapped, dismissible, and r
 
 test("transfer, vehicle sale and asset loss each review before executing and cannot double-submit", async () => {
   const panels = await read(PANELS);
-  assert.equal((panels.match(/useSingleSubmit\(state\)/g) ?? []).length, 3);
+  assert.equal((panels.match(/useSingleSubmit\(state\)/g) ?? []).length, 4);
   assert.equal((panels.match(/useState<Step>\("edit"\)/g) ?? []).length, 3);
   for (const label of ["Review transfer", "Confirm transfer", "End service and remove tracker", "Record asset as lost"]) assert.match(panels, new RegExp(label));
   // Entering the review step never submits; only the review step's form submission reaches the server action.
@@ -145,6 +145,16 @@ test("transfer review explains the unbilled cancel path", async () => {
   assert.match(panels, /If this service is already billing, it ends here on the transfer date/);
   assert.match(panels, /If it has not started billing yet, it is canceled here with no charge/);
   assert.match(panels, /joins that agreement.s next renewal/);
+  assert.match(panels, /The tracker and its SIM move with the service/);
+});
+
+test("a transferred service missing its tracker can bring hardware from the predecessor", async () => {
+  const [details, panels, actions] = await Promise.all([read(DETAILS), read(PANELS), read(ACTIONS)]);
+  assert.match(details, /AdoptPredecessorHardwareButton/);
+  assert.match(details, /predecessorItemId/);
+  assert.match(panels, /Bring tracker and SIM from previous service/);
+  assert.match(actions, /adoptPredecessorHardwareAction/);
+  assert.match(functionBody(actions, "adoptPredecessorHardwareAction"), /requireManageableCanonicalItem\(/);
 });
 
 test("date rules are untouched: no default dates and no new client-side date limits on sale, loss or transfer", async () => {
@@ -191,7 +201,7 @@ test("operations still cannot reach another service or subscription", async () =
   const actions = await read(ACTIONS);
   const itemGuard = actions.slice(actions.indexOf("async function requireManageableCanonicalItem("), actions.indexOf("function revalidateCanonicalServiceOperation("));
   assert.match(itemGuard, /item\.customerSubscriptionId !== subscriptionId/);
-  for (const name of ["transferCanonicalServiceAction", "removeCanonicalServiceForVehicleSaleAction", "recordCanonicalAssetLossAction", "pauseCanonicalServiceAssignmentAction", "resumeCanonicalServiceAssignmentAction", "scheduleCanonicalDraftRateAction", "replaceCanonicalServiceHardwareAction"]) {
+  for (const name of ["transferCanonicalServiceAction", "adoptPredecessorHardwareAction", "removeCanonicalServiceForVehicleSaleAction", "recordCanonicalAssetLossAction", "pauseCanonicalServiceAssignmentAction", "resumeCanonicalServiceAssignmentAction", "scheduleCanonicalDraftRateAction", "replaceCanonicalServiceHardwareAction"]) {
     assert.match(functionBody(actions, name), /requireManageableCanonicalItem\(/, `${name} must verify the service belongs to the subscription`);
   }
   for (const name of ["removeCanonicalServiceForVehicleSaleAction", "recordCanonicalAssetLossAction"]) {

@@ -1042,6 +1042,79 @@ export async function replaceSubscriptionItemHardware(input: {
   );
 }
 
+const openAssignmentOnItem = {
+  endDate: null,
+  status: { not: "cancelled" as const },
+};
+
+async function moveOpenAssignmentsToSuccessor(
+  tx: Prisma.TransactionClient,
+  sourceItemId: string,
+  successorItemId: string,
+  alignment: { intervalMonths: number; nextDueDate: Date | null },
+): Promise<number> {
+  const result = await tx.serviceAssignment.updateMany({
+    where: {
+      subscriptionItemId: sourceItemId,
+      ...openAssignmentOnItem,
+    },
+    data: {
+      subscriptionItemId: successorItemId,
+      intervalMonths: alignment.intervalMonths,
+      nextDueDate: alignment.nextDueDate,
+    },
+  });
+  return result.count;
+}
+
+/**
+ * After a transfer that left the tracker on the predecessor, bring the open
+ * device (and the SIM on that assignment) onto the successor service.
+ */
+export async function adoptPredecessorHardware(input: {
+  successorItemId: string;
+}): Promise<{ deviceId: string | null; simCardId: string | null }> {
+  return prisma.$transaction(async (tx) => {
+    const successor = await tx.subscriptionItem.findUnique({
+      where: { id: input.successorItemId },
+      select: {
+        id: true,
+        status: true,
+        predecessorItemId: true,
+        customerSubscriptionId: true,
+      },
+    });
+    if (!successor) validation("ITEM_NOT_FOUND", "Subscription item not found.");
+    if (["ended", "canceled"].includes(successor.status)) {
+      validation("ITEM_CLOSED", "A closed item cannot receive hardware.");
+    }
+    if (!successor.predecessorItemId) {
+      validation("NO_PREDECESSOR", "This service was not transferred from another agreement.");
+    }
+    const target = await requireEditableSubscription(tx, successor.customerSubscriptionId);
+    const fields = requireCanonicalCommercialFields(target);
+    const alreadyOpen = await tx.serviceAssignment.findFirst({
+      where: { subscriptionItemId: successor.id, ...openAssignmentOnItem },
+      select: { id: true },
+    });
+    if (alreadyOpen) validation("ASSIGNMENT_CONFLICT", "This service already has a tracker.");
+    const moved = await moveOpenAssignmentsToSuccessor(
+      tx,
+      successor.predecessorItemId,
+      successor.id,
+      { intervalMonths: fields.billingIntervalMonths, nextDueDate: fields.nextBillingDate },
+    );
+    if (moved === 0) {
+      validation("ASSIGNMENT_NOT_FOUND", "The previous service has no open tracker to bring across.");
+    }
+    const assignment = await tx.serviceAssignment.findFirst({
+      where: { subscriptionItemId: successor.id, ...openAssignmentOnItem },
+      select: { deviceId: true, simCardId: true },
+    });
+    return { deviceId: assignment?.deviceId ?? null, simCardId: assignment?.simCardId ?? null };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function transferSubscriptionItem(input: {
   sourceSubscriptionItemId: string;
   targetSubscriptionId: string;
@@ -1144,16 +1217,12 @@ export async function transferSubscriptionItem(input: {
           endedAt: new Date(),
         },
     });
-    if (transferMode === "cancel_unbilled") {
-      await tx.serviceAssignment.updateMany({
-        where: {
-          subscriptionItemId: source.id,
-          endDate: null,
-          status: { not: "cancelled" },
-        },
-        data: { subscriptionItemId: successor.id },
-      });
-    }
+    await moveOpenAssignmentsToSuccessor(
+      tx,
+      source.id,
+      successor.id,
+      { intervalMonths: targetFields.billingIntervalMonths, nextDueDate: targetFields.nextBillingDate },
+    );
     if (input.successorAssignmentId) {
       await tx.serviceAssignment.update({
         where: { id: input.successorAssignmentId },

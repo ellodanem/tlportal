@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cycleUnit, displayDate, iso, money, serviceStatusLabel, servicePillClass } from "@/components/admin/canonical-subscription/format";
 import { ArrowLeftIcon, BoatIcon, CalendarIcon, CoinsIcon, PinIcon, SimIcon } from "@/components/admin/canonical-subscription/icons";
 import { ServiceHistorySummary } from "@/components/admin/canonical-subscription/service-history";
-import { OtherServiceActions, ServiceQuickActions, ServiceStatusControl } from "@/components/admin/canonical-subscription/service-action-panels";
+import { AdoptPredecessorHardwareButton, OtherServiceActions, ServiceQuickActions, ServiceStatusControl } from "@/components/admin/canonical-subscription/service-action-panels";
 import { ServiceTiming } from "@/components/admin/canonical-subscription/service-timing";
 import { EditCanonicalDraftItemForm } from "@/components/admin/canonical-subscription-draft-forms";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
@@ -64,7 +64,7 @@ export function SubscriptionServiceDetails({
   const open = item.serviceAssignments.find((entry) => entry.endDate == null && entry.status !== "cancelled");
   const device = open?.device;
   const trackerLabel = device ? device.label?.trim() || device.deviceModel.name : "the tracker";
-  const sim = device?.simCard ?? null;
+  const sim = open?.simCard ?? device?.simCard ?? null;
   const live = !["ended", "canceled"].includes(item.status);
   const status = serviceStatusLabel(item, today);
   const started = item.serviceActivatedDate ?? item.billingEffectiveFrom;
@@ -142,7 +142,14 @@ export function SubscriptionServiceDetails({
                   <Link href={`/admin/devices/${device.id}/edit?tab=assignment`} className={`font-semibold ${linkClass}`}>{trackerLabel}</Link>
                   {device.imei ? <span className="block break-all text-xs text-zinc-500">{device.imei}</span> : null}
                 </>
-              ) : <span className="font-semibold">Not assigned</span>}
+              ) : (
+                <>
+                  <span className="font-semibold">Not assigned</span>
+                  {permissions.canManage && live && item.predecessorItemId ? (
+                    <AdoptPredecessorHardwareButton subscriptionId={subscription.id} itemId={item.id} />
+                  ) : null}
+                </>
+              )}
             </Field>
             <Field icon={<SimIcon className="size-4" />} label="SIM">
               {sim ? (

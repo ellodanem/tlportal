@@ -26,6 +26,7 @@ import {
   scheduleSubscriptionItemRate,
   replaceSubscriptionItemHardware,
   transferSubscriptionItem,
+  adoptPredecessorHardware,
   transitionCanonicalSubscriptionLifecycle,
   updateDraftSubscriptionCollectionMethod,
   updateDraftSubscriptionItemCommercialDetails,
@@ -1084,6 +1085,30 @@ export async function transferCanonicalServiceAction(
     revalidatePath(`/admin/subscriptions/canonical/${targetSubscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
     return { message: "Service transferred. Historical service and pricing attribution were preserved." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function adoptPredecessorHardwareAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    const hardware = await adoptPredecessorHardware({ successorItemId: subscriptionItemId });
+    await recordOperationalEvent({
+      category: "subscription.hardware_adopted_from_predecessor",
+      summary: "Tracker and SIM brought across from the previous service after a transfer.",
+      customerId: subscription.customerId,
+      actorUserId: session.sub,
+      payload: { subscriptionId, subscriptionItemId, deviceId: hardware.deviceId, simCardId: hardware.simCardId },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    return { message: "Tracker and SIM are now on this service." };
   } catch (error) {
     return actionError(error);
   }

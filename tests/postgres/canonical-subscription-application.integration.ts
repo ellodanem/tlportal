@@ -22,6 +22,7 @@ import {
   scheduleSubscriptionItemEnd,
   scheduleSubscriptionItemRate,
   transferSubscriptionItem,
+  adoptPredecessorHardware,
   transitionCanonicalSubscriptionLifecycle,
 } from "../../lib/services/canonical-subscription-application-service";
 import { activateCanonicalManualSubscription } from "../../lib/services/canonical-subscription-activation-service";
@@ -279,8 +280,14 @@ test("hardware replacement keeps one commercial item and both assignment records
 
 test("item transfer creates a successor and preserves predecessor ownership and rates", async () => {
   const customer = await createCustomer("item-transfer");
+  const assignment = await createAssignment(customer.id, "transfer-device");
   const sourceSubscription = await createMonthlySubscription(customer.id, "Transfer source", [
-    { label: "Vehicle T", serviceActivatedDate: "2026-10-01", billingEffectiveFrom: "2026-10-01" },
+    {
+      label: "Vehicle T",
+      serviceActivatedDate: "2026-10-01",
+      billingEffectiveFrom: "2026-10-01",
+      serviceAssignmentId: assignment.id,
+    },
   ]);
   const targetSubscription = await createMonthlySubscription(customer.id, "Transfer target");
   const sourceItemId = sourceSubscription.items[0].id;
@@ -292,7 +299,7 @@ test("item transfer creates a successor and preserves predecessor ownership and 
     agreedAmountPerCycle: "20.00",
     changeReason: "Moved to negotiated fleet agreement",
   });
-  const [source, successor] = await Promise.all([
+  const [source, successor, moved] = await Promise.all([
     prisma.subscriptionItem.findUniqueOrThrow({
       where: { id: sourceItemId },
       include: { rates: true },
@@ -301,6 +308,7 @@ test("item transfer creates a successor and preserves predecessor ownership and 
       where: { id: successorId },
       include: { rates: true },
     }),
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: assignment.id } }),
   ]);
   assert.equal(source.status, "ended");
   assert.equal(source.billingEffectiveUntil?.toISOString().slice(0, 10), "2026-10-20");
@@ -308,6 +316,32 @@ test("item transfer creates a successor and preserves predecessor ownership and 
   assert.equal(successor.predecessorItemId, source.id);
   assert.equal(successor.customerSubscriptionId, targetSubscription.id);
   assert.equal(successor.rates[0].agreedAmountPerCycle.toFixed(2), "20.00");
+  assert.equal(moved.subscriptionItemId, successor.id);
+});
+
+test("a successor left without hardware can adopt the predecessor tracker", async () => {
+  const customer = await createCustomer("adopt-hardware");
+  const assignment = await createAssignment(customer.id, "stranded-device");
+  const sourceSubscription = await createMonthlySubscription(customer.id, "Source", [
+    { label: "Vehicle", serviceActivatedDate: "2026-10-01", billingEffectiveFrom: "2026-10-01" },
+  ]);
+  const targetSubscription = await createMonthlySubscription(customer.id, "Target");
+  const sourceItemId = sourceSubscription.items[0].id;
+  const successorId = await transferSubscriptionItem({
+    sourceSubscriptionItemId: sourceItemId,
+    targetSubscriptionId: targetSubscription.id,
+    transferDate: "2026-10-20",
+    agreedAmountPerCycle: "25.00",
+    changeReason: "Transfer without linked hardware",
+  });
+  await prisma.serviceAssignment.update({
+    where: { id: assignment.id },
+    data: { subscriptionItemId: sourceItemId },
+  });
+  const hardware = await adoptPredecessorHardware({ successorItemId: successorId });
+  const moved = await prisma.serviceAssignment.findUniqueOrThrow({ where: { id: assignment.id } });
+  assert.equal(moved.subscriptionItemId, successorId);
+  assert.equal(hardware.deviceId, assignment.deviceId);
 });
 
 test("an unbilled mid-cycle add transfers by canceling the source and moving the tracker", async () => {
