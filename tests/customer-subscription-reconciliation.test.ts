@@ -120,6 +120,9 @@ test("subscription service flows never create invoices, contact Stripe, or notif
     assert.doesNotMatch(text, /invoice\.create\(/, path);
   }
   assert.match(source("components/admin/canonical-customer-onboarding-form.tsx"), /Create draft/);
+  assert.match(source("components/admin/subscription-add-service-flow.tsx"), /key="continue"/);
+  assert.match(source("components/admin/subscription-add-service-flow.tsx"), /key="create"/);
+  assert.match(source("components/admin/subscription-add-service-flow.tsx"), /event\.preventDefault\(\);\s*goNext\(\);/);
   assert.match(source("lib/services/subscription-service-addition-service.ts"), /FOR UPDATE/);
   assert.match(source("lib/services/subscription-service-addition-service.ts"), /creationKey/);
 });

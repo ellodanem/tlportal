@@ -333,9 +333,14 @@ test("canonical workflow confirms commercial changes and never adds direct billi
   assert.match(onboarding, /Vehicle \/ asset name/);
   assert.match(onboarding, /selectServiceDevice/);
   assert.match(onboarding, /labelTouched/);
-  assert.match(onboarding, /Assign hardware later/);
+  assert.match(onboarding, /assign hardware later/);
   assert.match(onboarding, /name="creationKey"/);
   assert.match(onboarding, /Create draft/);
+  // Continue must not become a submit button mid-click: that submits the draft and redirects
+  // off Review. Advance in onSubmit (step still Billing) and remount Create draft with a new key.
+  assert.match(onboarding, /key="continue"/);
+  assert.match(onboarding, /key="create"/);
+  assert.match(onboarding, /event\.preventDefault\(\);\s*goNext\(\);/);
   assert.match(onboarding, /does not activate billing, create an invoice, contact Stripe, or notify anyone/);
   assert.doesNotMatch(onboarding, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
 });

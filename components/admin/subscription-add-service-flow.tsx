@@ -195,7 +195,16 @@ export function SubscriptionAddServiceFlow({
   }
 
   return (
-    <form action={action} className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+    <form
+      action={action}
+      onSubmit={(event) => {
+        if (step !== steps.length - 1) {
+          event.preventDefault();
+          goNext();
+        }
+      }}
+      className="mx-auto flex w-full max-w-3xl flex-col gap-5"
+    >
       <input type="hidden" name="subscriptionId" value={subscription.id} />
       <input type="hidden" name="creationKey" value={creationKey} />
       <input type="hidden" name="hardwareKind" value={hardwareKind} />
@@ -332,9 +341,9 @@ export function SubscriptionAddServiceFlow({
           <button type="button" onClick={() => { setStepError(null); setStep((current) => current - 1); }} className="min-h-11 rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-semibold dark:border-zinc-700">Back</button>
         )}
         {step < steps.length - 1 ? (
-          <button type="button" onClick={goNext} className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white">Continue</button>
+          <button key="continue" type="submit" className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white">Continue</button>
         ) : (
-          <button type="submit" disabled={pending || Boolean(state.next)} className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{pending ? "Adding service…" : "Add service"}</button>
+          <button key="create" type="submit" disabled={pending || Boolean(state.next)} className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{pending ? "Adding service…" : "Add service"}</button>
         )}
       </div>
     </form>

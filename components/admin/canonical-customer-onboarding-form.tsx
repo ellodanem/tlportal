@@ -223,7 +223,16 @@ export function CanonicalCustomerOnboardingForm({
   }
 
   return (
-    <form action={action} className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+    <form
+      action={action}
+      onSubmit={(event) => {
+        if (step !== steps.length - 1) {
+          event.preventDefault();
+          goNext();
+        }
+      }}
+      className="mx-auto flex w-full max-w-4xl flex-col gap-5"
+    >
       <input type="hidden" name="creationKey" value={creationKey} />
       <input type="hidden" name="customerMode" value={customerMode} />
       <input type="hidden" name="billingIntervalMonths" value={interval} />
@@ -440,9 +449,9 @@ export function CanonicalCustomerOnboardingForm({
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
         <button type="button" disabled={step === 0} onClick={() => { setStepError(null); setStep((current) => Math.max(0, current - 1)); }} className="min-h-11 rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-semibold disabled:invisible dark:border-zinc-700">Back</button>
         {step < steps.length - 1 ? (
-          <button type="button" onClick={goNext} className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white">Continue</button>
+          <button key="continue" type="submit" className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white">Continue</button>
         ) : (
-          <button type="submit" disabled={pending || Boolean(state.next)} className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{pending ? "Creating draft…" : "Create draft"}</button>
+          <button key="create" type="submit" disabled={pending || Boolean(state.next)} className="min-h-11 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{pending ? "Creating draft…" : "Create draft"}</button>
         )}
       </div>
     </form>
