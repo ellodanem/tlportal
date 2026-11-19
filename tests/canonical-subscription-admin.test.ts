@@ -303,6 +303,8 @@ test("customer billing keeps financial history separate from subscription renewa
   assert.match(customerSubscriptions, /different billing cycles are never added together/);
   assert.match(customerSubscriptions, /\/add-service/);
   assert.match(customerSubscriptions, /Manage subscription/);
+  assert.match(customerSubscriptions, /partitionServicesByBilling/);
+  assert.match(customerSubscriptions, /kept for audit/);
   assert.doesNotMatch(customerSubscriptions, /CustomerServiceManagementModal/);
   assert.match(customerSubscriptions, /CustomerAssignmentServiceActions/);
   assert.match(customerSubscriptions, /Paused device assignments/);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { activeSubscriptionTab, subscriptionServicePath, subscriptionTabs } from "../lib/domain/canonical-subscription-navigation";
+import { activeSubscriptionTab, subscriptionEndedServicesPath, subscriptionServicePath, subscriptionServicesPath, subscriptionTabs } from "../lib/domain/canonical-subscription-navigation";
 
 const read = (path: string) => readFile(path, "utf8");
 
@@ -30,6 +30,8 @@ test("Services stays the active tab on the service screen and its history, and e
   // /services, /services/:id and /services/:id/history alike.
   assert.equal(activeSubscriptionTab("services"), "services");
   assert.equal(subscriptionServicePath("sub-1", "item-1"), "/admin/subscriptions/canonical/sub-1/services/item-1");
+  assert.equal(subscriptionServicesPath("sub-1"), "/admin/subscriptions/canonical/sub-1/services");
+  assert.equal(subscriptionEndedServicesPath("sub-1"), "/admin/subscriptions/canonical/sub-1/services?view=ended");
 });
 
 test("the service screen and its history only show a service that belongs to the subscription", async () => {
@@ -47,9 +49,18 @@ test("the service screen and its history only show a service that belongs to the
 test("a subscription with several services can reach every one of them and the full list", async () => {
   const details = await read(DETAILS);
   assert.match(details, /aria-label="Services in this subscription"/);
-  assert.match(details, /subscription\.items\.map\(/);
+  assert.match(details, /liveItems\.map\(/);
   assert.match(details, /aria-label="Back to all services"/);
   assert.match(details, /subscriptionServicePath\(subscription\.id, candidate\.id\)/);
+});
+
+test("ended and canceled services leave the live switcher and are kept on the Ended tab for audit", async () => {
+  const details = await read(DETAILS);
+  assert.match(details, /isServiceBillingEnded/);
+  assert.match(details, /subscriptionEndedServicesPath/);
+  assert.match(details, /Kept for audit/);
+  assert.match(details, /View ended services/);
+  assert.doesNotMatch(details, /subscription\.items\.map\(/);
 });
 
 // ---- Layout and presentation --------------------------------------------------------------------

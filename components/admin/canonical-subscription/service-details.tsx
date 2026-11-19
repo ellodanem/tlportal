@@ -13,8 +13,13 @@ import {
   scheduledServiceRate,
 } from "@/lib/domain/canonical-service-presentation";
 import type { ServiceHistoryRow } from "@/lib/domain/canonical-service-history";
+import { isServiceBillingEnded } from "@/lib/domain/canonical-service-lifecycle";
 import { canonicalSubscriptionDisplayName } from "@/lib/domain/canonical-subscription-admin";
-import { subscriptionBasePath, subscriptionServicePath } from "@/lib/domain/canonical-subscription-navigation";
+import {
+  subscriptionEndedServicesPath,
+  subscriptionServicePath,
+  subscriptionServicesPath,
+} from "@/lib/domain/canonical-subscription-navigation";
 
 type Item = SubscriptionDetail["items"][number];
 type Option = { id: string; label: string };
@@ -66,10 +71,13 @@ export function SubscriptionServiceDetails({
   const trackerLabel = device ? device.label?.trim() || device.deviceModel.name : "the tracker";
   const sim = open?.simCard ?? device?.simCard ?? null;
   const live = !["ended", "canceled"].includes(item.status);
+  const ended = isServiceBillingEnded(item, today);
+  const liveItems = subscription.items.filter((candidate) => !isServiceBillingEnded(candidate, today));
   const status = serviceStatusLabel(item, today);
   const started = item.serviceActivatedDate ?? item.billingEffectiveFrom;
   const subscriptionLabel = canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths);
-  const servicesHref = `${subscriptionBasePath(subscription.id)}/services`;
+  const servicesHref = ended ? subscriptionEndedServicesPath(subscription.id) : subscriptionServicesPath(subscription.id);
+  const showSwitcher = liveItems.length > 1 || (ended && liveItems.length > 0);
   const rateText = rate ? `${money(rate.agreedAmountPerCycle.toString(), rate.currency)} / ${cycleUnit(rate.billingIntervalMonths)}` : "Not set";
   const scheduledRateText = scheduledRate
     ? `${money(scheduledRate.agreedAmountPerCycle.toString(), scheduledRate.currency)} / ${cycleUnit(scheduledRate.billingIntervalMonths)} from ${displayDate(scheduledRate.effectiveFrom)}`
@@ -100,15 +108,21 @@ export function SubscriptionServiceDetails({
           <p className="mt-0.5 text-sm text-zinc-500">
             {started ? `Started ${displayDate(started)} · ` : ""}{subscriptionLabel}
           </p>
+          {ended ? (
+            <p className="mt-1 text-sm text-zinc-500">
+              Kept for audit.{" "}
+              <Link href={subscriptionEndedServicesPath(subscription.id)} className={linkClass}>View ended services</Link>
+            </p>
+          ) : null}
         </div>
       </div>
 
-      {subscription.items.length > 1 ? (
+      {showSwitcher ? (
         <nav aria-label="Services in this subscription" className="-mt-1">
           <ul className="flex gap-2 overflow-x-auto pb-1">
-            {subscription.items.map((candidate, index) => {
+            {liveItems.map((candidate) => {
               const current = candidate.id === item.id;
-              const closed = ["ended", "canceled"].includes(candidate.status);
+              const index = subscription.items.findIndex((entry) => entry.id === candidate.id);
               return (
                 <li key={candidate.id} className="shrink-0">
                   <Link
@@ -116,8 +130,8 @@ export function SubscriptionServiceDetails({
                     aria-current={current ? "page" : undefined}
                     className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${current ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100" : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"}`}
                   >
-                    {serviceName(candidate, index)}
-                    {closed ? <span className="text-xs font-normal text-zinc-500">{candidate.status === "canceled" ? "canceled" : "ended"}</span> : candidate.status === "paused" ? <span className="text-xs font-normal text-amber-700 dark:text-amber-300">paused</span> : null}
+                    {serviceName(candidate, Math.max(index, 0))}
+                    {candidate.status === "paused" ? <span className="text-xs font-normal text-amber-700 dark:text-amber-300">paused</span> : null}
                   </Link>
                 </li>
               );

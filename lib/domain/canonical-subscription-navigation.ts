@@ -23,6 +23,15 @@ export function subscriptionServicePath(subscriptionId: string, itemId: string):
   return `${subscriptionBasePath(subscriptionId)}/services/${itemId}`;
 }
 
+/** Billable services list. Ended/canceled services live on the Ended tab for audit. */
+export function subscriptionServicesPath(subscriptionId: string): string {
+  return `${subscriptionBasePath(subscriptionId)}/services`;
+}
+
+export function subscriptionEndedServicesPath(subscriptionId: string): string {
+  return `${subscriptionServicesPath(subscriptionId)}?view=ended`;
+}
+
 /** The single entry point for adding a service, for both draft and active subscriptions. */
 export function subscriptionAddServicePath(subscriptionId: string): string {
   return `${subscriptionBasePath(subscriptionId)}/add-service`;
