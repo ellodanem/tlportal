@@ -27,8 +27,8 @@ export default async function EditCustomerNewPage({ params }: Props) {
         </Link>
         <h1 className="mt-1 text-xl font-semibold text-zinc-900 sm:mt-2 sm:text-2xl dark:text-zinc-50">Edit profile</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Identity, billing address, legal info, and invoice emails. GPS, portal users, and contacts stay on the
-          customer page.
+          Identity, billing address, legal info, and invoice emails. GPS, portal users, and contacts each have their own
+          tab on the customer page.
         </p>
       </div>
       <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5 dark:border-zinc-800 dark:bg-zinc-900">

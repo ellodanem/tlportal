@@ -15,6 +15,7 @@ import {
   customerNewCollectionLabel,
   customerNewHref,
   parseCustomerNewFilter,
+  parseCustomerNewTab,
 } from "@/lib/admin/customer-new";
 import { prisma } from "@/lib/db";
 import { canonicalIntervalLabel, canonicalSubscriptionDisplayName, canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
@@ -22,7 +23,7 @@ import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { getCanonicalSubscriptionAdminDetail } from "@/lib/services/canonical-subscription-admin-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
 
-type Props = { searchParams: Promise<{ c?: string; q?: string; filter?: string; restoreError?: string; archiveError?: string }> };
+type Props = { searchParams: Promise<{ c?: string; q?: string; filter?: string; tab?: string; restoreError?: string; archiveError?: string }> };
 
 type SubscriptionDetail = NonNullable<Awaited<ReturnType<typeof getCanonicalSubscriptionAdminDetail>>>;
 
@@ -43,9 +44,10 @@ function snapshotTone(sub: SubscriptionDetail): Pick<SnapshotSubscription, "stat
 }
 
 export default async function CustomerNewPage({ searchParams }: Props) {
-  const { c: rawSelected, q: rawQuery, filter: rawFilter, restoreError, archiveError } = await searchParams;
+  const { c: rawSelected, q: rawQuery, filter: rawFilter, tab: rawTab, restoreError, archiveError } = await searchParams;
   const q = rawQuery?.trim() ?? "";
   const filter = parseCustomerNewFilter(rawFilter);
+  const tab = parseCustomerNewTab(rawTab);
 
   const where: Prisma.CustomerWhereInput = {
     ...(filter === "archived" ? archivedCustomerWhere : activeCustomerWhere),
@@ -186,6 +188,8 @@ export default async function CustomerNewPage({ searchParams }: Props) {
         hasSubscription={subs.length > 0}
         restoreError={restoreError ?? null}
         archiveError={archiveError ?? null}
+        activeTab={tab}
+        tabHref={(nextTab) => customerNewHref({ c: customer.id, q, filter, tab: nextTab })}
         customer={{
           id: customer.id,
           name: customerDisplayName(customer),
@@ -254,8 +258,8 @@ export default async function CustomerNewPage({ searchParams }: Props) {
         <CustomerPanel
           title={panelTitle}
           closeHref={listHref}
-          prevHref={prevId ? customerNewHref({ c: prevId, q, filter }) : null}
-          nextHref={nextId ? customerNewHref({ c: nextId, q, filter }) : null}
+          prevHref={prevId ? customerNewHref({ c: prevId, q, filter, tab }) : null}
+          nextHref={nextId ? customerNewHref({ c: nextId, q, filter, tab }) : null}
         >
           {detail}
         </CustomerPanel>

@@ -1,5 +1,7 @@
 import type { Prisma, SubscriptionLifecycleStatus } from "@prisma/client";
 
+import { parseQueryTab } from "@/lib/admin/query-tab";
+
 /**
  * Helpers for the "Customer (New)" workspace (/admin/customer-new).
  * Kept separate from the existing customers page so the two never share behaviour.
@@ -19,6 +21,13 @@ export const currentSubscriptionWhere: Prisma.CustomerSubscriptionWhereInput = {
 
 export type CustomerNewFilter = "all" | "subscribed" | "none" | "archived";
 
+export const CUSTOMER_NEW_TABS = ["overview", "gps", "portal", "contacts"] as const;
+export type CustomerNewTab = (typeof CUSTOMER_NEW_TABS)[number];
+
+export function parseCustomerNewTab(raw: string | undefined): CustomerNewTab {
+  return parseQueryTab(raw, CUSTOMER_NEW_TABS, "overview");
+}
+
 export const CUSTOMER_NEW_LIST_LIMIT = 300;
 
 export function parseCustomerNewFilter(raw: string | undefined): CustomerNewFilter {
@@ -29,6 +38,7 @@ export function customerNewHref(opts: {
   c?: string | null;
   q?: string;
   filter?: CustomerNewFilter;
+  tab?: CustomerNewTab;
   restoreError?: string | null;
   archiveError?: string | null;
 }): string {
@@ -36,6 +46,7 @@ export function customerNewHref(opts: {
   if (opts.q?.trim()) params.set("q", opts.q.trim());
   if (opts.filter && opts.filter !== "all") params.set("filter", opts.filter);
   if (opts.c) params.set("c", opts.c);
+  if (opts.tab && opts.tab !== "overview") params.set("tab", opts.tab);
   if (opts.restoreError) params.set("restoreError", opts.restoreError);
   if (opts.archiveError) params.set("archiveError", opts.archiveError);
   const qs = params.toString();

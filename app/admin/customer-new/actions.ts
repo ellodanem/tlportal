@@ -187,7 +187,7 @@ export async function updateCustomerNew(
   }
 
   revalidateCustomerNew(id);
-  redirect(customerNewHref({ c: id }));
+  redirect(customerNewHref({ c: id, tab: section === "gps" ? "gps" : "overview" }));
 }
 
 export async function archiveCustomerNew(formData: FormData): Promise<void> {

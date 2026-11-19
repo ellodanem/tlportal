@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { customerNewEditHref, customerNewHref } from "../lib/admin/customer-new";
+import { customerNewEditHref, customerNewHref, parseCustomerNewTab } from "../lib/admin/customer-new";
 
 const root = new URL("../", import.meta.url);
 
@@ -13,6 +13,10 @@ async function source(path: string) {
 test("Customer (New) edit stays in the new workspace", () => {
   assert.equal(customerNewEditHref("abc"), "/admin/customer-new/abc/edit");
   assert.equal(customerNewHref({ c: "abc", archiveError: "busy" }), "/admin/customer-new?c=abc&archiveError=busy");
+  assert.equal(customerNewHref({ c: "abc", tab: "gps" }), "/admin/customer-new?c=abc&tab=gps");
+  assert.equal(customerNewHref({ c: "abc", tab: "overview" }), "/admin/customer-new?c=abc");
+  assert.equal(parseCustomerNewTab("portal"), "portal");
+  assert.equal(parseCustomerNewTab("nope"), "overview");
 });
 
 test("Customer (New) create stays lean and edit covers the old tab jobs", async () => {
@@ -25,7 +29,7 @@ test("Customer (New) create stays lean and edit covers the old tab jobs", async 
     source("app/admin/customer-new/actions.ts"),
   ]);
 
-  assert.match(createPage, /GPS, portal users, contacts/);
+  assert.match(createPage, /GPS, portal users, and contacts/);
   assert.match(createForm, /After you create/);
   assert.doesNotMatch(createForm, /traqcareClientId|Portal users|Archive customer/);
 
@@ -40,6 +44,10 @@ test("Customer (New) create stays lean and edit covers the old tab jobs", async 
   assert.match(detail, /CustomerContactsPanel/);
   assert.match(detail, /ArchiveCustomerNewButton/);
   assert.match(detail, /Finish setup/);
+  assert.match(detail, /aria-label="Customer record"/);
+  assert.match(detail, /activeTab === "gps"/);
+  assert.match(detail, /activeTab === "portal"/);
+  assert.match(detail, /activeTab === "contacts"/);
   assert.match(detail, /customerNewEditHref\(customer\.id\)/);
   assert.doesNotMatch(detail, /\/admin\/customers\/\$\{customer\.id\}\/edit/);
 
@@ -47,6 +55,7 @@ test("Customer (New) create stays lean and edit covers the old tab jobs", async 
   assert.match(actions, /export async function archiveCustomerNew/);
   assert.match(actions, /export async function deleteCustomerNew/);
   assert.match(actions, /redirect\(customerNewHref\(\{ c: id \}\)\)/);
+  assert.match(actions, /tab: section === "gps" \? "gps" : "overview"/);
 });
 
 test("portal and contact mutations refresh Customer (New)", async () => {

@@ -99,7 +99,8 @@ export function CreateCustomerForm() {
       <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-300">
         <p className="font-medium text-zinc-900 dark:text-zinc-50">After you create</p>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          GPS, portal users, and contacts are added on the customer page. They need a saved customer first.
+          GPS, portal users, and contacts are added on their own tabs on the customer page. They need a saved customer
+          first.
         </p>
       </div>
 

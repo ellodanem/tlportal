@@ -12,7 +12,7 @@ import { ArchiveCustomerNewButton, DeleteCustomerNewButton } from "@/components/
 import { CustomerGpsCard } from "@/components/admin/customer-new/customer-gps-card";
 import { CnIcon, type CustomerNewIconName } from "@/components/admin/customer-new/icons";
 import { RestoreCustomerButton } from "@/components/admin/customer-new/restore-customer-button";
-import { customerNewEditHref } from "@/lib/admin/customer-new";
+import { customerNewEditHref, type CustomerNewTab } from "@/lib/admin/customer-new";
 import { CUSTOMER_WORKSPACE_TABS, customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 export type SnapshotSubscription = {
@@ -65,6 +65,8 @@ export type CustomerDetailProps = {
   restoreError?: string | null;
   /** Error from a failed archive attempt, shown in the archive section. */
   archiveError?: string | null;
+  activeTab: CustomerNewTab;
+  tabHref: (tab: CustomerNewTab) => string;
   className?: string;
 };
 
@@ -178,6 +180,8 @@ export function CustomerDetail({
   createSubscriptionHref,
   restoreError = null,
   archiveError = null,
+  activeTab,
+  tabHref,
   className = "",
 }: CustomerDetailProps) {
   const needsGps = !customer.gps.clientId && !customer.gps.portalUrl;
@@ -264,7 +268,77 @@ export function CustomerDetail({
           </div>
         </header>
 
-        <nav aria-label="Customer workspace" className="-mt-1 flex flex-wrap items-center gap-2">
+        <nav
+          aria-label="Customer record"
+          className="-mb-1 flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800"
+        >
+          {(
+            [
+              { id: "overview", label: "Overview" },
+              { id: "gps", label: "GPS" },
+              {
+                id: "portal",
+                label: customer.portalUsers.length > 0 ? `Portal (${customer.portalUsers.length})` : "Portal",
+              },
+              {
+                id: "contacts",
+                label: customer.contacts.length > 0 ? `Contacts (${customer.contacts.length})` : "Contacts",
+              },
+            ] as const
+          ).map((tab) => {
+            const isActive = tab.id === activeTab;
+            return (
+              <Link
+                key={tab.id}
+                href={tabHref(tab.id)}
+                scroll={false}
+                aria-current={isActive ? "page" : undefined}
+                className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium ${
+                  isActive
+                    ? "border-emerald-600 text-emerald-800 dark:border-emerald-500 dark:text-emerald-300"
+                    : "border-transparent text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+                }`}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {activeTab === "overview" && showSetup ? (
+          <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Finish setup</h3>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              GPS, portal users, and contacts each have their own tab on this customer.
+            </p>
+            <ul className="mt-3 space-y-2">
+              {needsGps ? (
+                <li>
+                  <Link href={tabHref("gps")} scroll={false} className={`${linkClass} inline-flex min-h-10 items-center`}>
+                    Add GPS →
+                  </Link>
+                </li>
+              ) : null}
+              {needsPortal ? (
+                <li>
+                  <Link href={tabHref("portal")} scroll={false} className={`${linkClass} inline-flex min-h-10 items-center`}>
+                    Add portal user →
+                  </Link>
+                </li>
+              ) : null}
+              {needsContacts ? (
+                <li>
+                  <Link href={tabHref("contacts")} scroll={false} className={`${linkClass} inline-flex min-h-10 items-center`}>
+                    Add contact →
+                  </Link>
+                </li>
+              ) : null}
+            </ul>
+          </section>
+        ) : null}
+
+        {activeTab === "overview" ? (
+        <nav aria-label="Customer workspace" className="flex flex-wrap items-center gap-2">
           {CUSTOMER_WORKSPACE_TABS.map((tab) => (
             <Link
               key={tab.key}
@@ -275,39 +349,26 @@ export function CustomerDetail({
             </Link>
           ))}
         </nav>
+        ) : null}
 
-        {showSetup ? (
-          <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Finish setup</h3>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Add GPS, portal users, and contacts here so you never leave this customer page.
-            </p>
-            <ul className="mt-3 space-y-2">
-              {needsGps ? (
-                <li>
-                  <a href="#customer-gps" className={`${linkClass} inline-flex min-h-10 items-center`}>
-                    Add GPS →
-                  </a>
-                </li>
-              ) : null}
-              {needsPortal ? (
-                <li>
-                  <a href="#customer-portal" className={`${linkClass} inline-flex min-h-10 items-center`}>
-                    Add portal user →
-                  </a>
-                </li>
-              ) : null}
-              {needsContacts ? (
-                <li>
-                  <a href="#customer-contacts" className={`${linkClass} inline-flex min-h-10 items-center`}>
-                    Add contact →
-                  </a>
-                </li>
-              ) : null}
-            </ul>
+        {activeTab === "gps" ? (
+          <CustomerGpsCard customerId={customer.id} clientId={customer.gps.clientId} portalUrl={customer.gps.portalUrl} />
+        ) : null}
+
+        {activeTab === "portal" ? (
+          <section className={`${cardClass} p-4 @lg:p-5`}>
+            <CustomerPortalUsersPanel customerId={customer.id} showTopBorder={false} users={customer.portalUsers} />
           </section>
         ) : null}
 
+        {activeTab === "contacts" ? (
+          <section className={`${cardClass} p-4 @lg:p-5`}>
+            <CustomerContactsPanel customerId={customer.id} contacts={customer.contacts} />
+          </section>
+        ) : null}
+
+        {activeTab === "overview" ? (
+        <>
         {/* 2×2 on narrow panes (1px gaps act as dividers), one row of four when there is room. */}
         <section
           aria-label="Summary"
@@ -409,17 +470,19 @@ export function CustomerDetail({
                 {customer.billingMethod}
               </Field>
               <Field icon="monitor" label="Portal Status">
-                {customer.portalEnabled ? (
-                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
-                    <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                    Enabled
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 font-medium text-red-600 dark:text-red-400">
-                    <span className="size-2 rounded-full bg-red-500" aria-hidden="true" />
-                    Disabled
-                  </span>
-                )}
+                <Link href={tabHref("portal")} scroll={false} className="inline-flex items-center gap-1.5 hover:underline">
+                  {customer.portalEnabled ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                      <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                      Enabled
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-red-600 dark:text-red-400">
+                      <span className="size-2 rounded-full bg-red-500" aria-hidden="true" />
+                      Disabled
+                    </span>
+                  )}
+                </Link>
               </Field>
               <div className="@lg:col-span-2">
                 <Field icon="note" label="Notes">
@@ -427,16 +490,6 @@ export function CustomerDetail({
                 </Field>
               </div>
             </dl>
-          </section>
-
-          <CustomerGpsCard customerId={customer.id} clientId={customer.gps.clientId} portalUrl={customer.gps.portalUrl} />
-
-          <section id="customer-portal" className={`${cardClass} p-4 @lg:p-5`}>
-            <CustomerPortalUsersPanel customerId={customer.id} showTopBorder={false} users={customer.portalUsers} />
-          </section>
-
-          <section id="customer-contacts" className={`${cardClass} p-4 @lg:p-5`}>
-            <CustomerContactsPanel customerId={customer.id} contacts={customer.contacts} />
           </section>
           </div>
 
@@ -562,6 +615,8 @@ export function CustomerDetail({
             <DeleteCustomerNewButton customerId={customer.id} />
           </div>
         </section>
+        </>
+        ) : null}
       </div>
     </div>
   );
