@@ -5,7 +5,9 @@ import { processInvoiceNotificationReminders } from "@/lib/billing/invoice-notif
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-/** Daily invoice-based customer billing notices (Email + WhatsApp; no customer SMS). */
+/** Daily invoice-based customer billing notices (Email + WhatsApp; no customer SMS).
+ *  Scheduled sends are currently disabled (`SCHEDULED_PAYMENT_REMINDERS_ENABLED`).
+ *  Stripe paid/failed webhooks are not invoked from this cron. */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {

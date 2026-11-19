@@ -4,13 +4,13 @@ export const runtime = "nodejs";
 
 /**
  * GET /api/integrations/once/sims?page=&pageSize=
- * Proxies to 1NCE GET /v1/sims (requires ONCE_CLIENT_ID / ONCE_CLIENT_SECRET).
+ * Proxies to 1NCE GET /v2/sims (requires ONCE_CLIENT_ID / ONCE_CLIENT_SECRET).
  */
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const qs = url.searchParams.toString();
-    const path = qs ? `/v1/sims?${qs}` : "/v1/sims";
+    const path = qs ? `/v2/sims?${qs}` : "/v2/sims";
     const data = await nceJson<unknown>(path);
     return Response.json({ source: "1nce", data });
   } catch (e) {

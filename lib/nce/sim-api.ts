@@ -13,20 +13,33 @@ const SIM_LIST_MAX_PAGES = 200;
  */
 export async function fetchAllOneNceSimsFromList(): Promise<unknown[]> {
   const out: unknown[] = [];
+  const seenIccids = new Set<string>();
   let page = 1;
 
   while (page <= SIM_LIST_MAX_PAGES) {
+    // v2 uses camelCase `pageSize` (max 100).
     const qs = new URLSearchParams({
       page: String(page),
-      page_size: String(SIM_LIST_PAGE_SIZE),
+      pageSize: String(SIM_LIST_PAGE_SIZE),
     });
-    const body = await nceJson<unknown>(`/v1/sims?${qs.toString()}`);
+    const body = await nceJson<unknown>(`/v2/sims?${qs.toString()}`);
     const batch = extractSimsArrayFromListResponse(body);
 
     if (batch.length === 0) {
       break;
     }
-    out.push(...batch);
+    // Guard: if the API ignores `page`, we'd loop on the same rows forever.
+    const fresh = batch.filter((row) => {
+      const iccid = iccidFromSimPayload(row);
+      if (!iccid) return true;
+      if (seenIccids.has(iccid)) return false;
+      seenIccids.add(iccid);
+      return true;
+    });
+    if (fresh.length === 0) {
+      break;
+    }
+    out.push(...fresh);
 
     if (shouldStopSimListPagination(body, page)) {
       break;
@@ -78,15 +91,15 @@ export function iccidFromSimPayload(row: unknown): string | null {
   return null;
 }
 
-/** GET /v1/sims/:iccid — raw payload (shape varies by product). */
+/** GET /v2/sims/:iccid — raw payload (shape varies by product). */
 export async function fetchOneNceSimByIccid(iccid: string): Promise<unknown> {
-  const path = `/v1/sims/${encodeURIComponent(iccid)}`;
+  const path = `/v2/sims/${encodeURIComponent(iccid)}`;
   return nceJson<unknown>(path);
 }
 
-/** GET /v1/sims/:iccid/quota/data — data allowance / usage (often populated when list rows omit volumes). */
+/** GET /v2/sims/:iccid/quota/data — data allowance / usage (often populated when list rows omit volumes). */
 export async function fetchOneNceSimDataQuota(iccid: string): Promise<unknown> {
-  return nceJson<unknown>(`/v1/sims/${encodeURIComponent(iccid)}/quota/data`);
+  return nceJson<unknown>(`/v2/sims/${encodeURIComponent(iccid)}/quota/data`);
 }
 
 /**
@@ -243,7 +256,8 @@ export function summarizeUsageSeries(points: UsageSeriesPoint[]): {
 }
 
 /**
- * GET /v1/sims/:iccid/usage — daily stats for chart (1NCE limits history; we request up to ~6 months).
+ * GET /v2/sims/:iccid/usage — daily stats for chart (1NCE limits history; we request up to ~6 months).
+ * Note: usage is not in the documented v2 set yet; callers must tolerate failure (the SIM page uses allSettled).
  */
 export async function fetchOneNceSimUsageSeries(
   iccid: string,
@@ -254,7 +268,7 @@ export async function fetchOneNceSimUsageSeries(
     start_dt: start.toISOString().slice(0, 10),
     end_dt: end.toISOString().slice(0, 10),
   });
-  const path = `/v1/sims/${encodeURIComponent(iccid)}/usage?${qs.toString()}`;
+  const path = `/v2/sims/${encodeURIComponent(iccid)}/usage?${qs.toString()}`;
   const body = await nceJson<unknown>(path);
   return parseUsageSeries(body);
 }

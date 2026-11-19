@@ -4,6 +4,10 @@ import { formatInTimeZone } from "date-fns-tz";
 
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/domain/native-billing";
+import {
+  SCHEDULED_PAYMENT_REMINDERS_ENABLED,
+  customerIsDueScheduledPaymentReminder,
+} from "@/lib/domain/payment-reminders";
 import { sendAppEmail } from "@/lib/email/send-mail";
 import { getPortalTimezone } from "@/lib/portal/timezone-settings";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
@@ -35,8 +39,16 @@ function greeting(customer: { firstName: string | null; lastName: string | null;
   return customer.firstName?.trim() || customer.company?.trim() || [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() || "there";
 }
 
-function isReminderEnabled(customer: { paymentReminders: "auto" | "on" | "off" }): boolean {
-  return customer.paymentReminders !== "off";
+function isReminderEnabled(customer: {
+  billingMode: "manual_legacy" | "stripe_subscription";
+  paymentReminders: "auto" | "on" | "off";
+  customerSubscriptions?: { id: string }[];
+}): boolean {
+  return customerIsDueScheduledPaymentReminder({
+    billingMode: customer.billingMode,
+    paymentReminders: customer.paymentReminders,
+    stripeAutoCharge: (customer.customerSubscriptions?.length ?? 0) > 0,
+  });
 }
 
 function eventFor(invoice: EligibleInvoice, diff: number): InvoiceNotificationEvent | null {
@@ -93,7 +105,30 @@ function emailCopy(input: { invoice: EligibleInvoice; event: InvoiceNotification
 async function loadEligibleInvoices() {
   return prisma.invoice.findMany({
     where: { dueDate: { not: null }, amountDue: { gt: 0 }, status: { in: ["open", "partially_paid", "overdue"] }, archivedAt: null, customerId: { not: null }, customer: { archivedAt: null } },
-    include: { customer: { select: { id: true, firstName: true, lastName: true, company: true, email: true, phone: true, billingMode: true, paymentReminders: true } }, billingInvoice: { select: { hostedInvoiceUrl: true, displayNumber: true } } },
+    include: {
+      customer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          company: true,
+          email: true,
+          phone: true,
+          billingMode: true,
+          paymentReminders: true,
+          customerSubscriptions: {
+            where: {
+              controlMode: "canonical",
+              lifecycleStatus: { in: ["active", "paused"] },
+              collectionMethod: "stripe_autocharge",
+            },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      },
+      billingInvoice: { select: { hostedInvoiceUrl: true, displayNumber: true } },
+    },
   });
 }
 
@@ -145,6 +180,12 @@ async function recordAttempt(input: { invoice: EligibleInvoice; event: InvoiceNo
 
 export async function processInvoiceNotificationReminders(now = new Date()) {
   const timezone = await getPortalTimezone();
+  if (!SCHEDULED_PAYMENT_REMINDERS_ENABLED) {
+    // Stripe paid-invoice webhooks, payment-received confirmations, and decline
+    // follow-up are unchanged. Royal Delivery's Zoho/Stripe inbound charge still
+    // updates the customer workspace and subscription renewal dates.
+    return { ok: true, timezone, invoicesChecked: 0, sent: 0, failed: 0, suppressed: 0, pausePending: 0, disabled: true };
+  }
   const invoices = await loadEligibleInvoices();
   const totals = { sent: 0, failed: 0, suppressed: 0, pausePending: 0 };
   for (const invoice of invoices) {
@@ -174,7 +215,28 @@ export async function retryBillingNotificationDelivery(deliveryId: string, actor
     include: {
       invoice: {
         include: {
-          customer: { select: { id: true, firstName: true, lastName: true, company: true, email: true, phone: true, billingMode: true, paymentReminders: true, archivedAt: true } },
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              company: true,
+              email: true,
+              phone: true,
+              billingMode: true,
+              paymentReminders: true,
+              archivedAt: true,
+              customerSubscriptions: {
+                where: {
+                  controlMode: "canonical",
+                  lifecycleStatus: { in: ["active", "paused"] },
+                  collectionMethod: "stripe_autocharge",
+                },
+                select: { id: true },
+                take: 1,
+              },
+            },
+          },
           billingInvoice: { select: { hostedInvoiceUrl: true, displayNumber: true } },
         },
       },

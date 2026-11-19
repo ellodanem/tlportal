@@ -5,7 +5,11 @@ import { formatInTimeZone } from "date-fns-tz";
 
 import { getBroadcastSupportEmail } from "@/lib/broadcast/support-contact";
 import { prisma } from "@/lib/db";
-import { customerReceivesPaymentReminders } from "@/lib/domain/payment-reminders";
+import {
+  SCHEDULED_PAYMENT_REMINDERS_ENABLED,
+  customerIsDueScheduledPaymentReminder,
+  customerReceivesPaymentReminders,
+} from "@/lib/domain/payment-reminders";
 import { getPortalTimezone } from "@/lib/portal/timezone-settings";
 import { formatXcd } from "@/lib/subscription-options/display";
 import {
@@ -132,6 +136,20 @@ export async function processBillingWhatsAppReminders(
   const at = now.toISOString();
   const details: ProcessBillingWhatsAppRemindersResult["details"] = [];
 
+  if (!SCHEDULED_PAYMENT_REMINDERS_ENABLED) {
+    return {
+      ok: true,
+      at,
+      timezone: tz,
+      configured: isTwilioWhatsAppConfigured(),
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      adminAlertsSent: 0,
+      details: [{ customerId: "-", kind: "due_5d", status: "scheduled_reminders_disabled" }],
+    };
+  }
+
   if (!isTwilioWhatsAppConfigured()) {
     return {
       ok: false,
@@ -190,7 +208,7 @@ export async function processBillingWhatsAppReminders(
   let adminAlertsSent = 0;
 
   for (const [customerId, group] of byCustomer) {
-    if (!customerReceivesPaymentReminders(group.customer)) {
+    if (!customerIsDueScheduledPaymentReminder(group.customer)) {
       skipped += 1;
       details.push({ customerId, kind: "due_5d", status: "skipped_reminders_off" });
       continue;

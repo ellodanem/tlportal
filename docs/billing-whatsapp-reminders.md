@@ -1,6 +1,10 @@
 # Billing invoice notifications (Email + Twilio WhatsApp)
 
-> **Current program:** invoice notices are Email + WhatsApp only; customer SMS is intentionally not used. The daily scheduler selects eligible unpaid invoices by actual `dueDate`: manual payers receive -5/-3/-1/+1/+3/+7/+8; Stripe payers receive -3 then +1/+3/+7/+8 if still unpaid. At +8 it creates a staff-review `billing.pause_pending` event rather than silently suspending service. Delivery history is stored per invoice, event, and channel; failed deliveries can be retried from Customer → Billing.
+> **Current program:** invoice notices are Email + WhatsApp only; customer SMS is intentionally not used.
+>
+> **Scheduled due/overdue/upcoming reminders are disabled** (`SCHEDULED_PAYMENT_REMINDERS_ENABLED = false` in `lib/domain/payment-reminders.ts`). The daily cron still runs and returns `disabled: true` without sending. Staff can still send a one-off outstanding-invoice reminder. Stripe **payment-received** confirmations, **card-decline** follow-up, and Stripe webhooks that record a paid invoice and advance renewals stay on — including Zoho-originated Stripe charges (Royal Delivery) after the move to the subscription page.
+>
+> When the flag is turned back on, the daily scheduler selects eligible unpaid invoices by actual `dueDate`: manual payers receive -5/-3/-1/+1/+3/+7/+8; Stripe payers receive -3 then +1/+3/+7/+8 if still unpaid. At +8 it creates a staff-review `billing.pause_pending` event rather than silently suspending service. Delivery history is stored per invoice, event, and channel; failed deliveries can be retried from Customer → Billing.
 
 Automated subscription payment nudges via **Twilio Content** templates, separate from **Invoiless email** reminders.
 
@@ -18,10 +22,12 @@ Cron: `GET /api/cron/billing-whatsapp-reminders` daily **04:15 UTC** (`vercel.js
 
 ## Who gets a message
 
-- Active `ServiceAssignment` with `nextDueDate` matching the offset.
+Scheduled due/overdue/upcoming reminders are **not sent** while `SCHEDULED_PAYMENT_REMINDERS_ENABLED` is false. The rules below apply only if that flag is turned back on:
+
+- Active `ServiceAssignment` with `nextDueDate` matching the offset (legacy ladder) or an unpaid native invoice on the invoice scheduler.
 - `Customer.phone` set (sent as `whatsapp:+…`).
 - **`Customer.paymentReminders` preference** (all reminder channels):
-  - **`auto` (default):** manual/cash customers **on**; Stripe customers **off** (card failures use the payment-declined series instead).
+  - **`auto` (default):** manual/cash customers **on**; Stripe customers **off** (card failures use the payment-declined series instead). Adopted/linked Stripe auto-charge (including Zoho-originated Royal Delivery) is treated as Stripe even if `billingMode` is still `manual_legacy`.
   - **`on`:** always eligible (staff override).
   - **`off`:** never.
 - Staff can change this on **Customer → Billing → Payment reminders**. The billing status strip shows the effective state.

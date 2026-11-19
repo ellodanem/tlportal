@@ -8,7 +8,10 @@ import {
   type BillingActionState,
 } from "@/app/admin/customers/billing-actions";
 import type { PaymentRemindersPreference } from "@prisma/client";
-import { customerReceivesPaymentReminders } from "@/lib/domain/payment-reminders";
+import {
+  SCHEDULED_PAYMENT_REMINDERS_ENABLED,
+  customerIsDueScheduledPaymentReminder,
+} from "@/lib/domain/payment-reminders";
 import type { CustomerBillingMode } from "@prisma/client";
 
 const initial: BillingActionState = { error: null };
@@ -36,13 +39,14 @@ export function PaymentRemindersPreferenceForm({
   paymentReminders: PaymentRemindersPreference;
 }) {
   const [state, action] = useActionState(setPaymentRemindersAction, initial);
-  const effective = customerReceivesPaymentReminders({ billingMode, paymentReminders });
+  const effective = customerIsDueScheduledPaymentReminder({ billingMode, paymentReminders });
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Scheduled due/overdue nudges (WhatsApp today; same setting for all channels). Stripe card failures use the
-        decline follow-up series instead — Auto keeps reminders off for Stripe customers.
+        {SCHEDULED_PAYMENT_REMINDERS_ENABLED
+          ? "Scheduled due/overdue nudges (WhatsApp today; same setting for all channels). Stripe card failures use the decline follow-up series instead — Auto keeps reminders off for Stripe customers."
+          : "The daily reminder program is turned off, so this preference is stored but not sent. Stripe card failures still use the decline follow-up series, and a successful charge still updates the portal."}
       </p>
 
       <form action={action} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">

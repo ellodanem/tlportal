@@ -5,7 +5,10 @@ import { useState, type ReactNode } from "react";
 import { PaymentRemindersPreferenceForm } from "@/components/admin/payment-reminders-preference-form";
 import { OutstandingInvoiceReminderPanel } from "@/components/admin/outstanding-invoice-reminder-panel";
 import { BillingNotificationHistory } from "@/components/admin/billing-notification-history";
-import { customerReceivesPaymentReminders } from "@/lib/domain/payment-reminders";
+import {
+  SCHEDULED_PAYMENT_REMINDERS_ENABLED,
+  customerIsDueScheduledPaymentReminder,
+} from "@/lib/domain/payment-reminders";
 import type { OutstandingInvoiceReminderCandidate } from "@/lib/billing/outstanding-invoice-reminder";
 import type { CustomerBillingMode, PaymentRemindersPreference } from "@prisma/client";
 
@@ -97,7 +100,7 @@ export function PaymentRemindersSection({
 }) {
   const [preferenceOpen, setPreferenceOpen] = useState(false);
   const [outstandingOpen, setOutstandingOpen] = useState(false);
-  const effective = customerReceivesPaymentReminders({ billingMode, paymentReminders });
+  const effective = customerIsDueScheduledPaymentReminder({ billingMode, paymentReminders });
 
   const preferenceLabel =
     paymentReminders === "auto"
@@ -115,8 +118,15 @@ export function PaymentRemindersSection({
       >
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Collection &amp; notifications</h2>
         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-          Manage reminder preferences and send a one-off nudge only for an eligible invoice.
+          {SCHEDULED_PAYMENT_REMINDERS_ENABLED
+            ? "Manage reminder preferences and send a one-off nudge only for an eligible invoice."
+            : "Automatic due and overdue reminders are turned off. You can still send a one-off nudge. Stripe charges, payment confirmations, and card-decline notices are unchanged."}
         </p>
+        {SCHEDULED_PAYMENT_REMINDERS_ENABLED ? null : (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            Daily reminder emails and WhatsApp are disabled. A Stripe card charge still updates this customer’s subscription and renewal dates.
+          </p>
+        )}
 
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <div>

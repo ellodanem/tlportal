@@ -234,7 +234,7 @@ export async function buildMessageTemplateCatalog(): Promise<MessageTemplateCata
       name: "Payment reminders (WhatsApp)",
       channel: "whatsapp",
       audience: "customer",
-      trigger: "Scheduled subscription nudges: 5/3/0 days before due and 3/5 days overdue.",
+      trigger: "Scheduled subscription nudges (currently disabled): 5/3/0 days before due and 3/5 days overdue.",
       variables: [
         { token: "{{1}}", meaning: "First name" },
         { token: "{{2}}", meaning: "Due date" },

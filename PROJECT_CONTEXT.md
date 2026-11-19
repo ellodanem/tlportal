@@ -5773,3 +5773,343 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - 改善(billing): streamline subscription billing workflow
 
+
+### 2026-11-02 21:14 UTC — commit `d18f87e`
+
+- 改善(billing): streamline subscription billing workflow
+
+
+### 2026-11-02 21:14 UTC — pre-push (`main` → origin) @ `d18f87e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-02 21:30 UTC — commit `05d81b0`
+
+- fix(billing): show saving state and saved confirmation on recurring schedule and invoice forms
+
+
+- Agent notes: saving an existing recurring schedule or invoice stayed on the same URL with no feedback (router.push to the same path). Both forms now show 'Saving�' on the button and a green 'Changes saved' / 'Invoice saved' confirmation for 6s, and refresh the data. Quote form already had 'Quote saved.'. Other forms (proposal, vendor, etc.) not audited. tsc and eslint clean. Not pushed.
+
+
+### 2026-11-03 12:30 UTC — commit `01ac46d`
+
+- feat(vehicle): public /vehicle QR landing page with WhatsApp CTA, visit/click tracking and admin QR generator
+
+
+### 2026-11-03 12:30 UTC — pre-push (`main` → origin) @ `01ac46d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-05 01:01 UTC — commit `b0feb9c`
+
+- feat(service): add 'left in vehicle' tracker disposition for pause and vehicle-sold flows
+
+
+### 2026-11-05 01:01 UTC — pre-push (`main` → origin) @ `b0feb9c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-05 01:15 UTC — commit `96790ed`
+
+- fix(subscriptions): show active device count
+
+
+### 2026-11-05 01:15 UTC — pre-push (`main` → origin) @ `96790ed`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-05 01:19 UTC — commit `e575f7b`
+
+- 改善(invoices): refine record payment panel
+
+
+### 2026-11-05 01:19 UTC — pre-push (`main` → origin) @ `e575f7b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-08 11:36 UTC — commit `d56f06b`
+
+- feat(devices): preserve replacement device SIM
+
+
+### 2026-11-08 11:36 UTC — pre-push (`main` → origin) @ `d56f06b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-08 11:52 UTC — commit `49a4b58`
+
+- fix(devices): make keep-SIM replacement a straight swap
+
+
+### 2026-11-08 11:52 UTC — pre-push (`main` → origin) @ `49a4b58`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-08 14:00 UTC — commit `e6c331c`
+
+- feat(invoices): append charges to issued invoices
+
+
+### 2026-11-08 14:00 UTC — pre-push (`main` → origin) @ `e6c331c`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-08 14:05 UTC — commit `b8d8dc9`
+
+- feat(subscriptions): show Stripe / Recurring icon (or dash) beside each subscription
+
+
+### 2026-11-08 14:05 UTC — commit `7cafafb`
+
+- fix(stripe): record and advance paid renewals for adopted canonical subscriptions (inbound-only)
+
+
+### 2026-11-08 14:05 UTC — pre-push (`main` → origin) @ `7cafafb`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-08 14:06 UTC - Agent notes for `b8d8dc9` / `7cafafb` (pushed to origin/main)
+
+- `b8d8dc9`: Subscriptions list shows a Stripe icon, a Recurring icon, both (customer with one of each), or a dash (no collection method) beside each customer/subscription name. View-model field `collectionKinds` in `lib/domain/canonical-subscription-workspace.ts`.
+- `7cafafb`: Unlocked INBOUND Stripe handling for adopted canonical `stripe_autocharge` subscriptions. Root cause of +Venture ATV's stuck Nov 5 renewal: the canonical execution guard ("disabled in production during Phase 3B2") also rejected inbound events, and the legacy advance skips canonical-linked assignments. New: `lib/services/adopted-stripe-inbound-service.ts` + `lib/domain/adopted-stripe-renewal.ts`; routed from `lib/stripe/webhook-handlers.ts`; daily `backfillRecentPaidStripeInvoices` cron also applies missed paid invoices oldest-first. OUTBOUND Stripe changes remain behind the execution guard.
+- Expected after deploy: the next daily cron advances +Venture ATV from Nov 5 to Dec 5; the 4 stuck `customer.subscription.updated` webhook retries should complete. Plastic Solutions renews Nov 9 and is the first live test of the webhook path.
+- Not done yet: per-subscription "Collection method" control on the Billing tab (set client to Stripe).
+
+### 2026-11-08 14:08 UTC — commit `9f35c0d`
+
+- refactor(invoices): move record payment and add charges into modals
+
+
+### 2026-11-08 14:08 UTC — pre-push (`main` → origin) @ `9f35c0d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-08 14:15 UTC — commit `fa2c332`
+
+- Switch an active subscription to Stripe by linking an existing Stripe subscription
+
+
+### 2026-11-08 14:15 UTC — pre-push (`main` → origin) @ `fa2c332`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-11-08 � Agent notes for fa2c332 (switch to Stripe by linking)
+
+- Pushed main 9f35c0d..fa2c332. New: Subscription -> Billing tab "Switch to Stripe" (links an existing Stripe subscription; read-only on Stripe; exact-match reconciliation; ends recurring invoice schedules; sets collectionMethod stripe_autocharge; derives Customer.billingMode).
+- Files: lib/domain/canonical-stripe-link.ts, lib/services/canonical-stripe-link-service.ts, canonical/actions.ts (find/link actions), components/admin/canonical-subscription/switch-to-stripe.tsx, billing-settings-modal (no per-customer radios for subscription-managed customers), scripts/sync-customer-billing-mode.ts (dry-run default; NOT yet applied: Canis Moise, Nicholas Benjamin, Louann Thompson would flip stripe_subscription -> manual_legacy).
+- Tests: tests/canonical-stripe-link.test.ts. 2 pre-existing failures unchanged (search params normalise; canonical workflow onboarding copy).
+
+
+### 2026-11-08 14:18 UTC — commit `bd0e647`
+
+- Place subscription collection icons in separate columns
+
+
+### 2026-11-08 14:18 UTC — pre-push (`main` → origin) @ `bd0e647`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-11-08 � Agent notes for bd0e647
+
+- Pushed main fa2c332..bd0e647. Stripe and Recurring collection indicators now occupy separate columns in the subscriptions workspace; unset methods show a dash.
+- Unrelated pre-existing modifications remain unstaged: pp/api/integrations/once/sims/route.ts and lib/nce/sim-api.ts.
+
+
+### 2026-11-08 14:33 UTC — commit `797cf0f`
+
+- Live canary: configurable charge cap and owner-run runner for a single-customer Stripe subscription
+
+
+### 2026-11-08 14:33 UTC — commit `630997e`
+
+- fix(subscriptions): combine collection method icons
+
+### 2026-11-08 � Agent notes for 797cf0f (live canary: cap setting + owner runner) - NOT pushed
+
+- Live canary charge cap is now CANONICAL_STRIPE_LIVE_CANARY_MAX_RECURRING_AMOUNT (default EC$5.00, hard ceiling EC$100.00); must also be set in Vercel Production because the webhook re-checks it.
+- New owner-run runner scripts/canonical-stripe-live-canary.ts (check/convert/prepare/sign/approve/execute/status/finalize/revert/cancel); acts only on the allowlisted subscription. New lib/services/canonical-stripe-canary-collection-service.ts (convert pauses recurring schedules, revert resumes, finalize ends). Run sheet appended to docs/canonical-stripe-live-canary-runbook.md. .canary/ is git-ignored.
+- Target: Nicholas Benjamin (customer e63eea04-2fcb-4504-9f1b-1621fb853ce0, subscription 07bbdcbe-e7f4-4947-b4f9-48b7ab56fbd0, 2 x EC$25 monthly, renews 2026-11-21). Nothing has been run against Stripe or production data; canary env vars are NOT set anywhere.
+- Heads-up: components/admin/subscriptions-workspace.tsx has uncommitted edits made outside this session (single combined collection column); left untouched.
+
+
+### 2026-11-08 14:33 UTC — pre-push (`main` → origin) @ `630997e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-08 14:35 UTC — pre-push (`main` → origin) @ `630997e`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+### 2026-11-08 � Agent notes for push of live-canary tooling
+
+- main was already up to date on origin at 630997e; the requested push completed with no additional upload. The live-canary commit 797cf0f is included in the pushed history.
+- No canary environment variables were configured and no Stripe or production operation was run.
+
+
+### 2026-11-08 15:05 UTC — commit `64a3166`
+
+- Owner-only Billing tab screen for the live Stripe canary
+
+### 2026-11-08 � Agent notes: owner-only live-canary screen (committed, NOT pushed)
+
+- Billing tab panel (components/admin/canonical-subscription/stripe-canary-panel.tsx) visible only to the user whose email equals CANONICAL_STRIPE_LIVE_CANARY_OWNER_EMAIL and only on CANONICAL_STRIPE_LIVE_CANARY_SUBSCRIPTION_ID. Actions in app/admin/subscriptions/canonical/stripe-canary-actions.ts (start / finalize / undo); one guarded start step = convert + sign + approve + execute, auto-revert if it fails before approval exists. Shared signer buildSignedCanonicalStripeLiveCanaryAuthorization now used by both screen and scripts/canonical-stripe-live-canary.ts. Revert is refused once a Checkout exists.
+- Nothing run against Stripe or production; canary env vars still unset.
+
+
+### 2026-11-11 10:49 UTC — pre-push (`main` → origin) @ `64a3166`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-11 10:50 UTC — commit `5116c3d`
+
+- fix(admin): nest registration queue under new customer
+
+
+### 2026-11-11 10:50 UTC — pre-push (`main` → origin) @ `5116c3d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-11 11:15 UTC — commit `80ede06`
+
+- feat(admin): customers list page with slide-over detail panel
+
+
+### 2026-11-11 11:15 UTC — pre-push (`main` → origin) @ `80ede06`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-13 14:02 UTC — commit `c176dd6`
+
+- feat(admin): view and restore archived customers
+
+
+### 2026-11-13 14:02 UTC — pre-push (`main` → origin) @ `c176dd6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-13 14:45 UTC — commit `b85a40a`
+
+- feat(billing): collect a Stripe card now and charge on the renewal date
+- Agent notes: Billing tab “Collect card on file” sends Stripe Checkout (`mode=subscription`, delayed `billing_cycle_anchor`, `proration_behavior=none`, always collect card). First charge is `nextBillingDate`, not today. Canceled leftover Stripe with $0 invoices starts fresh; live leftover cancel+void only with explicit confirm. Foreign live Stripe subs linked to another TL agreement are blockers. Webhook intercept `tl_provider_mode=card_on_file` before legacy sync. Persist BillingOperation before creating Checkout.
+
+
+### 2026-11-13 14:45 UTC — pre-push (`main` → origin) @ `b85a40a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-13 15:44 UTC — commit `c5dd995`
+
+- fix(billing): delay Stripe first charge with trial_end
+- Agent notes: Stripe rejects `billing_cycle_anchor` after the next natural monthly date (Dec 14 vs ~Dec 13 from a Nov 13 Checkout). Card-on-file now uses `trial_end` = `nextBillingDate`. Checkout may show $0 / trial until that date; first real charge stays the renewal. Idempotency key bumped to `v2-trial-end` so the failed create is not replayed.
+
+
+### 2026-11-13 15:44 UTC — pre-push (`main` → origin) @ `c5dd995`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+
+
+### 2026-11-14 10:14 UTC — commit `1418e16`
+
+- fix(subscriptions): keep the Review step instead of auto-creating the draft
+- Agent notes: Continue on Billing reused the same button as Create draft (`type="submit"`) in one click, so the wizard submitted and redirected off Review. New subscription and Add service now advance in `onSubmit` (preventDefault until Review) and remount the confirm button with a distinct key. Unrelated unstaged: `lib/nce/sim-api.ts`, `app/api/integrations/once/sims/route.ts`.
+
+
+### 2026-11-14 10:14 UTC — pre-push (`main` → origin) @ `1418e16`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `c5dd995..1418e16` to origin/main.
+
+
+### 2026-11-14 10:26 UTC — commit `6de0f11`
+
+- fix(subscriptions): allow extra unpaid months when aligning a first renewal
+- Agent notes: First period may run up to two billing intervals so a start like 2026-02-21 can join a shared renewal on 2027-04-24. Partial-period charges stay capped at one cycle; extra months are unpaid goodwill (choose “No partial-period charge”). Same window applies to “Wrong date?” corrections. Left unstaged: `lib/nce/sim-api.ts`, `app/api/integrations/once/sims/route.ts`.
+
+
+### 2026-11-14 10:26 UTC — pre-push (`main` → origin) @ `6de0f11`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `1418e16..6de0f11` to origin/main.
+
+
+### 2026-11-14 11:01 UTC — commit `763140a`
+
+- fix(subscriptions): allow transferring a service that has not started billing
+- Agent notes: Mid-cycle add (HU2472 Honda Vezel) was blocked because billing starts at the next renewal. Transfer now cancels an unbilled source (no charge, tracker moves) and starts a successor on the target’s next renewal. Billed transfers are unchanged. Invoices on the source still refuse an early date. Left unstaged: `lib/nce/sim-api.ts`, `app/api/integrations/once/sims/route.ts`.
+
+
+### 2026-11-14 11:01 UTC — pre-push (`main` → origin) @ `763140a`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `6de0f11..763140a` to origin/main.
+
+
+### 2026-11-14 11:05 UTC — commit `1f355d3`
+
+- fix(subscriptions): move tracker and SIM with the service on transfer
+- Agent notes: Open assignment (device + SIM) now follows every transfer, not only unbilled cancels. A successor that already transferred without hardware can use “Bring tracker and SIM from previous service”. Left unstaged: `lib/nce/sim-api.ts`, `app/api/integrations/once/sims/route.ts`.
+
+
+### 2026-11-14 11:05 UTC — pre-push (`main` → origin) @ `1f355d3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `763140a..1f355d3` to origin/main.
+
+
+### 2026-11-14 11:14 UTC — commit `526f19d`
+
+- fix(subscriptions): close emptied agreements instead of leaving them active
+- Agent notes: Merge is for same-term subscriptions that still have services. DC Auto’s three Annual GPS tracking rows (renew Feb 23 / Mar 1 / Mar 11) are empty husks after transfers, so merge correctly found nothing. Transferring the last live service now ends the source agreement. Staff can close existing empties from the customer Subscriptions page or the merge screen.
+
+
+### 2026-11-14 11:14 UTC — pre-push (`main` → origin) @ `526f19d`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `1f355d3..526f19d` to origin/main.
+
+
+### 2026-11-14 12:31 UTC — commit `64ab961`
+
+- fix(subscriptions): hide ended agreements from the live list
+- Agent notes: Ended/canceled husks stay in the database. The main Subscriptions page no longer nests them under a current agreement (DC Auto collapses to DCAT Annual). The detail header hides them behind Show ended agreements / Hide ended agreements. Ended / history filter, customer Past subscriptions, and direct URLs still reach them.
+
+
+### 2026-11-14 12:31 UTC — pre-push (`main` → origin) @ `64ab961`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `526f19d..64ab961` to origin/main.
+
+
+### 2026-11-19 00:58 UTC — commit `95534aa`
+
+- feat(customers): keep GPS, portal, contacts, and archive in Customer (New)
+- Agent notes: Customer (New) Edit now opens `/admin/customer-new/[id]/edit` for profile (including legal info and invoice Cc/Bcc). GPS, portal users, contacts (now with edit), and archive/delete live on the customer page so staff never go back to the old tabbed editor. Create stays identity + address, with an after-create note. Unrelated billing/reminder working-tree changes were left unstaged.
+
+
+### 2026-11-19 00:59 UTC — pre-push (`main` → origin) @ `95534aa`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `64ab961..95534aa` to origin/main.
+
+
+### 2026-11-19 01:02 UTC — commit `0afa70b`
+
+- fix(subscriptions): end transferred-in services before billing starts
+- Agent notes: HQ3879 (transferred onto DCAT Annual, billing from May 20, 2027) could not be ended on Nov 18 via Vehicle sold. Ending on or before `billingEffectiveFrom` now cancels as unbilled (same idea as an unbilled transfer). Vehicle sold also closes the assignment so the tracker is actually pooled, and no longer requires Resume first. Left unstaged: billing/reminder and SIM working-tree changes.
+
