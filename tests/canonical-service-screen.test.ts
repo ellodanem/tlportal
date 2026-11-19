@@ -157,6 +157,14 @@ test("a transferred service missing its tracker can bring hardware from the pred
   assert.match(functionBody(actions, "adoptPredecessorHardwareAction"), /requireManageableCanonicalItem\(/);
 });
 
+test("vehicle sale explains an unbilled transferred-in service and closes the assignment", async () => {
+  const [panels, actions] = await Promise.all([read(PANELS), read(ACTIONS)]);
+  assert.match(panels, /cancels the service here without a charge on this agreement/);
+  assert.match(panels, /The tracker assignment is closed so the unit can be assigned again/);
+  assert.match(functionBody(actions, "removeCanonicalServiceForVehicleSaleAction"), /endServiceAssignmentForRemoval/);
+  assert.match(functionBody(actions, "removeCanonicalServiceForVehicleSaleAction"), /cancel_unbilled/);
+});
+
 test("date rules are untouched: no default dates and no new client-side date limits on sale, loss or transfer", async () => {
   const panels = await read(PANELS);
   assert.match(panels, /effectiveUntil: ""/);

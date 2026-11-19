@@ -98,9 +98,19 @@ test("only the plain pause and resume actions change the service; sale and loss 
   assert.match(body("pauseCanonicalServiceAssignmentAction"), /pauseSubscriptionItem: true/);
   assert.match(body("resumeCanonicalServiceAssignmentAction"), /resumeSubscriptionItem: true/);
   assert.doesNotMatch(body("removeCanonicalServiceForVehicleSaleAction"), /pauseSubscriptionItem/);
+  assert.doesNotMatch(body("removeCanonicalServiceForVehicleSaleAction"), /pauseServiceAssignment/);
+  assert.match(body("removeCanonicalServiceForVehicleSaleAction"), /endServiceAssignmentForRemoval/);
   assert.doesNotMatch(body("recordCanonicalAssetLossAction"), /pauseSubscriptionItem/);
   // A sold, lost or scheduled-to-end service stops billing by date; resuming the tracker must not undo that.
   assert.match(body("resumeCanonicalServiceAssignmentAction"), /item\.billingEffectiveUntil/);
+});
+
+test("vehicle sale closes the assignment even when it is already paused", async () => {
+  const source = await read("lib/services/service-pause-service.ts");
+  const removal = source.slice(source.indexOf("export async function endServiceAssignmentForRemoval"));
+  assert.match(removal, /status: "cancelled"/);
+  assert.match(removal, /endDate/);
+  assert.doesNotMatch(removal, /Service is already paused/);
 });
 
 test("the add-service preview and the reconciliation totals leave paused services out", async () => {

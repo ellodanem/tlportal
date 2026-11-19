@@ -233,12 +233,18 @@ export function buildServiceHistory({ item, events = [], simLabels = {}, today =
       case "subscription.vehicle_sold_tracker_removed": {
         const until = isoDate(payload.effectiveUntil);
         const disposition = dispositionText(payload.deviceDisposition);
+        const canceledUnbilled = payload.canceledUnbilled === true;
         add({
           id: `event-${event.id}`,
           date: until ?? event.occurredAt,
           source: "audit",
           event: "Vehicle sold, tracker removed",
-          details: [until ? `Billing ends ${formatHistoryDate(until)}` : null, disposition ? `Tracker ${disposition}` : null].filter(Boolean).join(" · "),
+          details: [
+            canceledUnbilled
+              ? (until ? `Canceled before billing (${formatHistoryDate(until)})` : "Canceled without billing on this subscription")
+              : (until ? `Billing ends ${formatHistoryDate(until)}` : null),
+            disposition ? `Tracker ${disposition}` : null,
+          ].filter(Boolean).join(" · "),
         });
         break;
       }

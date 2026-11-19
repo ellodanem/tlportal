@@ -132,6 +132,20 @@ test("a vehicle sale reports billing end and disposition once, without a duplica
   assert.ok(!rows.some((row) => row.event === "Billing ended" || row.event === "Billing end scheduled"));
 });
 
+test("a vehicle sale that never billed on this subscription says so", () => {
+  const rows = buildServiceHistory({
+    item: item({ status: "canceled" }),
+    today,
+    events: [event("s1", "subscription.vehicle_sold_tracker_removed", "2026-11-18T10:00:00Z", {
+      effectiveUntil: "2026-11-18",
+      deviceDisposition: "in_stock",
+      canceledUnbilled: true,
+    })],
+  });
+  const sold = rows.find((row) => row.event === "Vehicle sold, tracker removed");
+  assert.equal(sold?.details, "Canceled before billing (Nov 18, 2026) · Tracker in stock");
+});
+
 test("an asset loss is one event naming the reason and the write-off", () => {
   const rows = buildServiceHistory({
     item: item({

@@ -223,6 +223,7 @@ export function SubscriptionServiceDetails({
               transferTargets={transferTargets}
               assignment={open && device ? { id: open.id, trackerLabel, simLabel: sim ? `SIM ${sim.iccid}` : null } : null}
               billingEndsOn={iso(item.billingEffectiveUntil) || null}
+              billingStartsOn={iso(item.billingEffectiveFrom) || null}
               availability={availability}
             />
           </div>

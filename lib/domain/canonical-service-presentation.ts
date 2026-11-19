@@ -108,7 +108,7 @@ export function resolveServiceActionAvailability(context: ServiceActionContext):
         : context.transferTargetCount === 0
           ? denied("No other active subscription exists for this customer to receive the service.")
           : allowed),
-    vehicleSold: withTracker ?? (paused ? denied("Resume the paused service before recording a vehicle sale.") : allowed),
+    vehicleSold: withTracker ?? allowed,
     assetLost: withTracker ?? allowed,
   };
 }

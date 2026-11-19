@@ -21,9 +21,11 @@ import {
   normalizeCurrency,
   previewAnnualProration,
   recurringEffectiveDateForAddition,
+  subscriptionItemEndMode,
   subscriptionItemTransferMode,
   type AnnualProrationPreview,
   type ExactMoneyInput,
+  type SubscriptionItemEndMode,
 } from "@/lib/domain/canonical-subscription-application";
 import { syncCanonicalScheduleLines } from "@/lib/services/canonical-schedule-line-sync-service";
 import { computeProration, isFirstPeriodTooLong, type SubscriptionProrationMethod } from "@/lib/domain/subscription-proration";
@@ -845,21 +847,24 @@ export async function updateDraftSubscriptionItemCommercialDetails(input: {
 export async function scheduleSubscriptionItemEndInTransaction(
   tx: Prisma.TransactionClient,
   input: { subscriptionItemId: string; effectiveUntil: string },
-): Promise<void> {
+): Promise<{ mode: SubscriptionItemEndMode }> {
   const effectiveUntil = commercialDate(input.effectiveUntil, "effectiveUntil");
   const item = await tx.subscriptionItem.findUnique({
     where: { id: input.subscriptionItemId },
     include: {
       customerSubscription: true,
       rates: { orderBy: { effectiveFrom: "asc" } },
+      _count: { select: { invoiceSnapshots: true } },
     },
   });
   if (!item) validation("ITEM_NOT_FOUND", "Subscription item not found.");
   await requireEditableSubscription(tx, item.customerSubscriptionId);
-  if (item.billingEffectiveFrom && effectiveUntil <= item.billingEffectiveFrom) {
-    validation("INVALID_ITEM_DATES", "Item end must be later than billingEffectiveFrom.");
-  }
-  if (item.rates.some((rate) => rate.effectiveFrom >= effectiveUntil)) {
+  const mode = subscriptionItemEndMode({
+    effectiveUntil,
+    billingEffectiveFrom: item.billingEffectiveFrom,
+    hasInvoiceSnapshots: item._count.invoiceSnapshots > 0,
+  });
+  if (mode === "end_billing_period" && item.rates.some((rate) => rate.effectiveFrom >= effectiveUntil)) {
     validation(
       "FUTURE_RATE_CONFLICT",
       "Remove or reschedule future rates before ending this item.",
@@ -876,16 +881,19 @@ export async function scheduleSubscriptionItemEndInTransaction(
   });
   await tx.subscriptionItem.update({
     where: { id: item.id },
-    data: { billingEffectiveUntil: effectiveUntil },
+    data: mode === "cancel_unbilled"
+      ? { status: "canceled", endedAt: new Date() }
+      : { billingEffectiveUntil: effectiveUntil },
   });
   await syncCanonicalScheduleLines(tx, item.customerSubscriptionId);
+  return { mode };
 }
 
 export async function scheduleSubscriptionItemEnd(input: {
   subscriptionItemId: string;
   effectiveUntil: string;
-}): Promise<void> {
-  await prisma.$transaction(
+}): Promise<{ mode: SubscriptionItemEndMode }> {
+  return prisma.$transaction(
     (tx) => scheduleSubscriptionItemEndInTransaction(tx, input),
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );

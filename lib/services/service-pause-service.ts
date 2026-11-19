@@ -244,3 +244,84 @@ export async function resumeServiceAssignment(
     subscriptionItemResumed,
   };
 }
+
+export type EndServiceAssignmentForRemovalInput = {
+  assignmentId: string;
+  note: string;
+  deviceDisposition: ServicePauseDeviceDisposition;
+  /** `YYYY-MM-DD` commercial end date written onto the assignment. */
+  endDate: string;
+};
+
+export type EndServiceAssignmentForRemovalResult =
+  | {
+      ok: true;
+      assignmentId: string;
+      customerId: string;
+      deviceId: string;
+      pausedRecurringSchedules: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Permanent tracker removal (vehicle sold / write-off with recovered hardware). Closes the
+ * assignment so the unit is actually assignable again. Works on a paused assignment — unlike
+ * pause itself, which rejects "already paused".
+ */
+export async function endServiceAssignmentForRemoval(
+  input: EndServiceAssignmentForRemovalInput,
+): Promise<EndServiceAssignmentForRemovalResult> {
+  const endDate = new Date(`${input.endDate}T00:00:00.000Z`);
+  if (Number.isNaN(endDate.getTime()) || endDate.toISOString().slice(0, 10) !== input.endDate) {
+    return { ok: false, error: "Choose the date on which billing ends." };
+  }
+
+  const assignment = await prisma.serviceAssignment.findFirst({
+    where: {
+      id: input.assignmentId,
+      ...openAssignmentWhere,
+    },
+    include: {
+      device: { select: { id: true, status: true, imei: true, label: true } },
+      customer: { select: { id: true, archivedAt: true } },
+    },
+  });
+
+  if (!assignment) {
+    return { ok: false, error: "Open assignment not found." };
+  }
+  if (assignment.customer.archivedAt) {
+    return { ok: false, error: "Cannot end service for an archived customer." };
+  }
+  if (assignment.device.status === "decommissioned" || assignment.device.status === "lost") {
+    return { ok: false, error: "Cannot return a decommissioned or lost device to inventory this way." };
+  }
+
+  const note = input.note.trim() || null;
+  const deviceStatus = deviceStatusForDisposition(input.deviceDisposition);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.serviceAssignment.update({
+      where: { id: assignment.id },
+      data: {
+        status: "cancelled",
+        endDate,
+        pauseNote: note,
+      },
+    });
+    await tx.device.update({
+      where: { id: assignment.deviceId },
+      data: { status: deviceStatus },
+    });
+  });
+
+  const pausedRecurringSchedules = await pauseRecurringSchedulesForAssignment(assignment.id);
+
+  return {
+    ok: true,
+    assignmentId: assignment.id,
+    customerId: assignment.customerId,
+    deviceId: assignment.deviceId,
+    pausedRecurringSchedules,
+  };
+}

@@ -69,11 +69,11 @@ test("an active service with a tracker offers every operation except resume", ()
   assert.deepEqual(enabledKeys(live), ["assetLost", "manageRate", "pause", "replaceTracker", "swapSim", "transfer", "vehicleSold"]);
 });
 
-test("a paused service offers resume and rate changes but not a vehicle sale, and explains why", () => {
+test("a paused service offers resume, vehicle sale, and rate changes, and explains why pause is unavailable", () => {
   const context = { ...live, itemStatus: "paused", openAssignment: { status: "suspended" } };
   const result = resolveServiceActionAvailability(context);
-  assert.deepEqual(enabledKeys(context), ["assetLost", "manageRate", "replaceTracker", "resume", "swapSim", "transfer"]);
-  assert.match(result.vehicleSold.reason ?? "", /Resume the paused service/);
+  assert.deepEqual(enabledKeys(context), ["assetLost", "manageRate", "replaceTracker", "resume", "swapSim", "transfer", "vehicleSold"]);
+  assert.equal(result.vehicleSold.enabled, true);
   assert.match(result.pause.reason ?? "", /already paused/);
 });
 

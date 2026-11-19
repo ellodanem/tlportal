@@ -232,13 +232,14 @@ function TransferDialog({ subscriptionId, itemId, serviceLabel, subscriptionLabe
 
 // ---- Vehicle sold / remove tracker ---------------------------------------------------------------
 
-function VehicleSoldDialog({ subscriptionId, itemId, assignmentId, serviceLabel, trackerLabel, billingEndsOn, fallbackFocusId, onClose }: {
+function VehicleSoldDialog({ subscriptionId, itemId, assignmentId, serviceLabel, trackerLabel, billingEndsOn, billingStartsOn, fallbackFocusId, onClose }: {
   subscriptionId: string;
   itemId: string;
   assignmentId: string;
   serviceLabel: string;
   trackerLabel: string;
   billingEndsOn: string | null;
+  billingStartsOn: string | null;
   fallbackFocusId: string;
   onClose: () => void;
 }) {
@@ -249,6 +250,7 @@ function VehicleSoldDialog({ subscriptionId, itemId, assignmentId, serviceLabel,
   const [values, setValues] = useState({ effectiveUntil: "", deviceDisposition: "returned", removalNote: "" });
   const set = (key: keyof typeof values) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setValues((current) => ({ ...current, [key]: event.target.value }));
   const disposition = SERVICE_PAUSE_DISPOSITION_LABEL[values.deviceDisposition as keyof typeof SERVICE_PAUSE_DISPOSITION_LABEL] ?? values.deviceDisposition;
+  const endsBeforeBillingStarts = Boolean(billingStartsOn && values.effectiveUntil && values.effectiveUntil <= billingStartsOn);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     if (step === "edit") {
@@ -277,6 +279,9 @@ function VehicleSoldDialog({ subscriptionId, itemId, assignmentId, serviceLabel,
           <input type="hidden" name="removalNote" value={values.removalNote} />
           {step === "edit" ? (
             <>
+              {billingStartsOn ? (
+                <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">Billing on this subscription starts {calendarDate(billingStartsOn)}. An end date on or before that cancels the service here without a charge on this agreement.</p>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-sm font-medium">End billing on<input required type="date" value={values.effectiveUntil} onChange={set("effectiveUntil")} className={inputClass} /></label>
                 <label className="text-sm font-medium">Tracker disposition<select required value={values.deviceDisposition} onChange={set("deviceDisposition")} className={inputClass}>{Object.entries(SERVICE_PAUSE_DISPOSITION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -292,12 +297,15 @@ function VehicleSoldDialog({ subscriptionId, itemId, assignmentId, serviceLabel,
               <ReviewList rows={[
                 ["Service", serviceLabel],
                 ["Tracker", trackerLabel],
-                ["Billing ends", calendarDate(values.effectiveUntil)],
+                [endsBeforeBillingStarts ? "Service ends" : "Billing ends", calendarDate(values.effectiveUntil)],
                 ["Tracker disposition", disposition],
                 ...(values.removalNote.trim() ? [["Notes", values.removalNote.trim()] as [string, ReactNode]] : []),
               ]} />
               <Consequences items={[
-                "Billing for this service stops on the chosen date and the tracker is recorded as removed.",
+                endsBeforeBillingStarts && billingStartsOn
+                  ? `This service has not started billing on this subscription yet (from ${calendarDate(billingStartsOn)}). Ending now cancels it here with no charge on this agreement.`
+                  : "Billing for this service stops on the chosen date and the tracker is recorded as removed.",
+                "The tracker assignment is closed so the unit can be assigned again.",
                 "Historical billing and assignment records are not changed.",
                 ...(billingEndsOn ? [`Billing is currently scheduled to end on ${calendarDate(billingEndsOn)}.`] : []),
               ]} />
@@ -425,6 +433,7 @@ export type OtherServiceActionsProps = {
   /** The open assignment, when the service has a tracker that can be sold or lost. */
   assignment: { id: string; trackerLabel: string; simLabel: string | null } | null;
   billingEndsOn: string | null;
+  billingStartsOn: string | null;
   availability: { transfer: ServiceActionAvailability; vehicleSold: ServiceActionAvailability; assetLost: ServiceActionAvailability };
 };
 
@@ -445,7 +454,7 @@ export function OtherServiceActions(props: OtherServiceActionsProps) {
         <TransferDialog subscriptionId={props.subscriptionId} itemId={props.itemId} serviceLabel={props.serviceLabel} subscriptionLabel={props.subscriptionLabel} currentAmount={props.currentAmount} currency={props.currency} targets={props.transferTargets} fallbackFocusId={ids.transfer} onClose={close} />
       ) : null}
       {active === "sold" && assignment ? (
-        <VehicleSoldDialog subscriptionId={props.subscriptionId} itemId={props.itemId} assignmentId={assignment.id} serviceLabel={props.serviceLabel} trackerLabel={assignment.trackerLabel} billingEndsOn={props.billingEndsOn} fallbackFocusId={ids.sold} onClose={close} />
+        <VehicleSoldDialog subscriptionId={props.subscriptionId} itemId={props.itemId} assignmentId={assignment.id} serviceLabel={props.serviceLabel} trackerLabel={assignment.trackerLabel} billingEndsOn={props.billingEndsOn} billingStartsOn={props.billingStartsOn} fallbackFocusId={ids.sold} onClose={close} />
       ) : null}
       {active === "lost" && assignment ? (
         <AssetLostDialog subscriptionId={props.subscriptionId} itemId={props.itemId} assignmentId={assignment.id} serviceLabel={props.serviceLabel} trackerLabel={assignment.trackerLabel} simLabel={assignment.simLabel} fallbackFocusId={ids.lost} onClose={close} />

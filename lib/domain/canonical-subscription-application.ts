@@ -195,6 +195,30 @@ export function subscriptionItemTransferMode(input: {
   return "end_billing_period";
 }
 
+export type SubscriptionItemEndMode = "end_billing_period" | "cancel_unbilled";
+
+/**
+ * Ending a service before it starts billing on this subscription has nothing to close.
+ * Cancel it as never billed (same idea as an unbilled transfer). An end date after
+ * billingEffectiveFrom still closes the billing window.
+ */
+export function subscriptionItemEndMode(input: {
+  effectiveUntil: Date;
+  billingEffectiveFrom: Date | null;
+  hasInvoiceSnapshots: boolean;
+}): SubscriptionItemEndMode {
+  if (input.billingEffectiveFrom && input.effectiveUntil <= input.billingEffectiveFrom) {
+    if (input.hasInvoiceSnapshots) {
+      throw new CanonicalSubscriptionValidationError(
+        "INVALID_ITEM_DATES",
+        `This service already has invoices, so the end date must be after it started billing (${commercialDateString(input.billingEffectiveFrom)}).`,
+      );
+    }
+    return "cancel_unbilled";
+  }
+  return "end_billing_period";
+}
+
 export function itemStatusForSubscription(
   lifecycle: SubscriptionLifecycleStatus,
 ): SubscriptionItemStatus {

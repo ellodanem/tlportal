@@ -245,6 +245,29 @@ test("scheduling an item end closes its open rate without deleting history", asy
   assert.equal(item.rates[0].effectiveUntil?.toISOString().slice(0, 10), "2026-12-01");
 });
 
+test("ending an item before billing starts cancels it as unbilled", async () => {
+  const customer = await createCustomer("unbilled-end");
+  const subscription = await createMonthlySubscription(customer.id, "Waiting to bill", [
+    { label: "Transferred in", serviceActivatedDate: "2026-10-15" },
+  ]);
+  const itemId = subscription.items[0].id;
+  const waiting = await prisma.subscriptionItem.findUniqueOrThrow({ where: { id: itemId } });
+  assert.equal(waiting.billingEffectiveFrom?.toISOString().slice(0, 10), "2026-11-01");
+
+  const result = await scheduleSubscriptionItemEnd({
+    subscriptionItemId: itemId,
+    effectiveUntil: "2026-10-20",
+  });
+  assert.equal(result.mode, "cancel_unbilled");
+  const ended = await prisma.subscriptionItem.findUniqueOrThrow({
+    where: { id: itemId },
+    include: { rates: true },
+  });
+  assert.equal(ended.status, "canceled");
+  assert.equal(ended.billingEffectiveUntil, null);
+  assert.equal(ended.rates[0].effectiveUntil?.toISOString().slice(0, 10), "2026-10-20");
+});
+
 test("hardware replacement keeps one commercial item and both assignment records", async () => {
   const customer = await createCustomer("hardware-replacement");
   const original = await createAssignment(customer.id, "original-device");

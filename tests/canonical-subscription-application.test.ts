@@ -9,6 +9,7 @@ import {
   normalizedMonthlyRecurringRevenue,
   previewAnnualProration,
   recurringEffectiveDateForAddition,
+  subscriptionItemEndMode,
   subscriptionItemTransferMode,
   sumExactCycleAmounts,
 } from "../lib/domain/canonical-subscription-application";
@@ -173,5 +174,57 @@ test("an unbilled transfer is refused when the source already has invoices", () 
     (error) => error instanceof CanonicalSubscriptionValidationError
       && error.code === "INVALID_TRANSFER_DATE"
       && /already has invoices/i.test(error.message),
+  );
+});
+
+test("ending a service before it starts billing on this subscription cancels it as unbilled", () => {
+  assert.equal(
+    subscriptionItemEndMode({
+      effectiveUntil: day("2026-11-18"),
+      billingEffectiveFrom: day("2027-05-20"),
+      hasInvoiceSnapshots: false,
+    }),
+    "cancel_unbilled",
+  );
+  assert.equal(
+    subscriptionItemEndMode({
+      effectiveUntil: day("2027-05-20"),
+      billingEffectiveFrom: day("2027-05-20"),
+      hasInvoiceSnapshots: false,
+    }),
+    "cancel_unbilled",
+  );
+});
+
+test("ending a service after billing has started closes the billing period", () => {
+  assert.equal(
+    subscriptionItemEndMode({
+      effectiveUntil: day("2026-11-18"),
+      billingEffectiveFrom: day("2026-05-20"),
+      hasInvoiceSnapshots: false,
+    }),
+    "end_billing_period",
+  );
+  assert.equal(
+    subscriptionItemEndMode({
+      effectiveUntil: day("2026-11-18"),
+      billingEffectiveFrom: null,
+      hasInvoiceSnapshots: false,
+    }),
+    "end_billing_period",
+  );
+});
+
+test("an unbilled end is refused when the service already has invoices", () => {
+  assert.throws(
+    () => subscriptionItemEndMode({
+      effectiveUntil: day("2026-11-18"),
+      billingEffectiveFrom: day("2027-05-20"),
+      hasInvoiceSnapshots: true,
+    }),
+    (error) => error instanceof CanonicalSubscriptionValidationError
+      && error.code === "INVALID_ITEM_DATES"
+      && /already has invoices/i.test(error.message)
+      && /2027-05-20/.test(error.message),
   );
 });

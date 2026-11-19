@@ -41,7 +41,7 @@ import { addServiceToSubscription } from "@/lib/services/subscription-service-ad
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
 import { CanonicalSubscriptionActivationError } from "@/lib/domain/canonical-subscription-activation";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
-import { pauseServiceAssignment, resumeServiceAssignment } from "@/lib/services/service-pause-service";
+import { endServiceAssignmentForRemoval, pauseServiceAssignment, resumeServiceAssignment } from "@/lib/services/service-pause-service";
 import { parseAssetLossReason } from "@/lib/domain/asset-loss";
 import { formatOpenInvoicesNotice, recordCanonicalAssetLoss } from "@/lib/services/asset-loss-service";
 import { adoptExistingStripeSubscription, CanonicalStripeAdoptionError } from "@/lib/services/canonical-stripe-adoption-service";
@@ -1007,9 +1007,14 @@ export async function removeCanonicalServiceForVehicleSaleAction(
     if (!deviceDisposition) return { error: "Select a tracker disposition." };
     const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
     const assignment = await requireOpenCanonicalServiceAssignment(subscriptionItemId, assignmentId);
-    await scheduleSubscriptionItemEnd({ subscriptionItemId, effectiveUntil });
+    const ended = await scheduleSubscriptionItemEnd({ subscriptionItemId, effectiveUntil });
     const note = ["Vehicle sold; tracker removal.", optionalText(formData, "removalNote")].filter(Boolean).join(" ");
-    const result = await pauseServiceAssignment({ assignmentId, reason: "other", note, deviceDisposition, actorUserId: session.sub });
+    const result = await endServiceAssignmentForRemoval({
+      assignmentId,
+      note,
+      deviceDisposition,
+      endDate: effectiveUntil,
+    });
     if (!result.ok) return { error: result.error };
     await recordOperationalEvent({
       category: "subscription.vehicle_sold_tracker_removed",
@@ -1017,11 +1022,22 @@ export async function removeCanonicalServiceForVehicleSaleAction(
       customerId: subscription.customerId,
       deviceId: assignment.deviceId,
       actorUserId: session.sub,
-      payload: { subscriptionId, subscriptionItemId, assignmentId, effectiveUntil, deviceDisposition, note },
+      payload: {
+        subscriptionId,
+        subscriptionItemId,
+        assignmentId,
+        effectiveUntil,
+        deviceDisposition,
+        note,
+        canceledUnbilled: ended.mode === "cancel_unbilled",
+      },
     });
     revalidateCanonicalServiceOperation({ subscriptionId, customerId: subscription.customerId, deviceId: assignment.deviceId, simCardId: assignment.device.simCardId });
     const scheduleNote = result.pausedRecurringSchedules ? ` Paused ${result.pausedRecurringSchedules} linked recurring invoice schedule${result.pausedRecurringSchedules === 1 ? "" : "s"}.` : "";
-    return { message: `Billing ends on ${effectiveUntil}; tracker ${SERVICE_PAUSE_DISPOSITION_OUTCOME[deviceDisposition]}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
+    const billingNote = ended.mode === "cancel_unbilled"
+      ? "This service was canceled without billing on this subscription"
+      : `Billing ends on ${effectiveUntil}`;
+    return { message: `${billingNote}; tracker ${SERVICE_PAUSE_DISPOSITION_OUTCOME[deviceDisposition]}.${scheduleNote}${pauseBillingNotice(subscription.collectionMethod)}` };
   } catch (error) {
     return actionError(error);
   }
