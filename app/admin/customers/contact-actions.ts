@@ -39,6 +39,12 @@ async function requireCustomer(customerId: string) {
   return prisma.customer.findUnique({ where: { id: customerId }, select: { id: true } });
 }
 
+function revalidateCustomerContacts(customerId: string) {
+  revalidatePath("/admin/customer-new");
+  revalidatePath(`/admin/customers/${customerId}/edit`);
+  revalidatePath(`/admin/customers/${customerId}`);
+}
+
 export async function createCustomerContactAction(
   _prev: CustomerContactActionState,
   formData: FormData,
@@ -53,8 +59,30 @@ export async function createCustomerContactAction(
   if (!(await requireCustomer(customerId))) return { error: "Customer not found." };
 
   await prisma.customerContact.create({ data: { customerId, ...contact } });
-  revalidatePath(`/admin/customers/${customerId}/edit`);
-  revalidatePath(`/admin/customers/${customerId}`);
+  revalidateCustomerContacts(customerId);
+  return { error: null, ok: true };
+}
+
+export async function updateCustomerContactAction(
+  _prev: CustomerContactActionState,
+  formData: FormData,
+): Promise<CustomerContactActionState> {
+  const session = await getSession();
+  if (!session) return { error: "You must be signed in." };
+  const customerId = text(formData, "customerId");
+  const contactId = text(formData, "contactId");
+  if (!customerId || !contactId) return { error: "Missing contact." };
+  const contact = readContact(formData);
+  const error = validate(contact);
+  if (error) return { error };
+
+  const result = await prisma.customerContact.updateMany({
+    where: { id: contactId, customerId },
+    data: contact,
+  });
+  if (result.count === 0) return { error: "Contact not found." };
+
+  revalidateCustomerContacts(customerId);
   return { error: null, ok: true };
 }
 
@@ -65,6 +93,5 @@ export async function deleteCustomerContactAction(formData: FormData): Promise<v
   const contactId = text(formData, "contactId");
   if (!customerId || !contactId) return;
   await prisma.customerContact.deleteMany({ where: { id: contactId, customerId } });
-  revalidatePath(`/admin/customers/${customerId}/edit`);
-  revalidatePath(`/admin/customers/${customerId}`);
+  revalidateCustomerContacts(customerId);
 }

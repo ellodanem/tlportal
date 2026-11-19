@@ -22,7 +22,7 @@ import { formatExpenseAmount } from "@/lib/domain/expenses";
 import { getCanonicalSubscriptionAdminDetail } from "@/lib/services/canonical-subscription-admin-service";
 import { listOperationalEventsForCustomer } from "@/lib/services/operational-event-service";
 
-type Props = { searchParams: Promise<{ c?: string; q?: string; filter?: string; restoreError?: string }> };
+type Props = { searchParams: Promise<{ c?: string; q?: string; filter?: string; restoreError?: string; archiveError?: string }> };
 
 type SubscriptionDetail = NonNullable<Awaited<ReturnType<typeof getCanonicalSubscriptionAdminDetail>>>;
 
@@ -43,7 +43,7 @@ function snapshotTone(sub: SubscriptionDetail): Pick<SnapshotSubscription, "stat
 }
 
 export default async function CustomerNewPage({ searchParams }: Props) {
-  const { c: rawSelected, q: rawQuery, filter: rawFilter, restoreError } = await searchParams;
+  const { c: rawSelected, q: rawQuery, filter: rawFilter, restoreError, archiveError } = await searchParams;
   const q = rawQuery?.trim() ?? "";
   const filter = parseCustomerNewFilter(rawFilter);
 
@@ -122,9 +122,13 @@ export default async function CustomerNewPage({ searchParams }: Props) {
     ? await prisma.customer.findUnique({
         where: { id: selectedId },
         include: {
-          contacts: { orderBy: [{ isBillingContact: "desc" }, { createdAt: "asc" }], take: 1 },
+          contacts: { orderBy: [{ isBillingContact: "desc" }, { name: "asc" }, { createdAt: "asc" }] },
+          portalUsers: { orderBy: [{ name: "asc" }, { createdAt: "asc" }] },
           customerSubscriptions: { where: currentSubscriptionWhere, select: { id: true }, orderBy: { createdAt: "asc" } },
-          _count: { select: { portalUsers: true } },
+          serviceAssignments: {
+            where: { endDate: null, status: { not: "cancelled" } },
+            select: { id: true },
+          },
         },
       })
     : null;
@@ -172,7 +176,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
       : `/admin/subscriptions/${customer.id}`;
     const createSubscriptionHref = `/admin/subscriptions/new?customerId=${encodeURIComponent(customer.id)}`;
 
-    const contact = customer.contacts[0] ?? null;
+    const contact = customer.contacts.find((row) => row.isBillingContact) ?? customer.contacts[0] ?? null;
     panelTitle = customerDisplayName(customer);
 
     detail = (
@@ -181,6 +185,7 @@ export default async function CustomerNewPage({ searchParams }: Props) {
         createSubscriptionHref={createSubscriptionHref}
         hasSubscription={subs.length > 0}
         restoreError={restoreError ?? null}
+        archiveError={archiveError ?? null}
         customer={{
           id: customer.id,
           name: customerDisplayName(customer),
@@ -191,10 +196,23 @@ export default async function CustomerNewPage({ searchParams }: Props) {
           phone: customer.phone,
           address: customerNewAddress(customer),
           billingMethod: customerNewBillingMethod(customer.billingMode),
-          portalEnabled: customer._count.portalUsers > 0 || Boolean(customer.traqcareClientId?.trim()),
+          portalEnabled: customer.portalUsers.length > 0 || Boolean(customer.traqcareClientId?.trim()),
           notes: customer.notes,
           tags: customer.tags,
           archived: customer.archivedAt != null,
+          gps: { clientId: customer.traqcareClientId, portalUrl: customer.traqcarePortalUrl },
+          portalUsers: customer.portalUsers.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            traqcareUsername: u.traqcareUsername,
+            hasPassword: Boolean(u.traqcarePassword),
+            role: u.role,
+            notes: u.notes,
+          })),
+          contacts: customer.contacts,
+          openAssignmentCount: customer.serviceAssignments.length,
           primaryContact: contact
             ? { name: contact.name, role: contact.role, email: contact.email, phone: contact.phone }
             : null,

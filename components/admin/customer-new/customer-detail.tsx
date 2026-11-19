@@ -6,8 +6,13 @@ import {
   CustomerActivityEventTime,
   type ActivityEventRow,
 } from "@/components/admin/customer-activity-event";
+import { CustomerContactsPanel, type CustomerContactRow } from "@/components/admin/customer-contacts-panel";
+import { CustomerPortalUsersPanel, type PortalUserRow } from "@/components/admin/customer-portal-users-panel";
+import { ArchiveCustomerNewButton, DeleteCustomerNewButton } from "@/components/admin/customer-new/archive-customer-new-button";
+import { CustomerGpsCard } from "@/components/admin/customer-new/customer-gps-card";
 import { CnIcon, type CustomerNewIconName } from "@/components/admin/customer-new/icons";
 import { RestoreCustomerButton } from "@/components/admin/customer-new/restore-customer-button";
+import { customerNewEditHref } from "@/lib/admin/customer-new";
 import { CUSTOMER_WORKSPACE_TABS, customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 export type SnapshotSubscription = {
@@ -34,6 +39,10 @@ export type CustomerDetailData = {
   notes: string | null;
   tags: string[];
   archived: boolean;
+  gps: { clientId: string | null; portalUrl: string | null };
+  portalUsers: PortalUserRow[];
+  contacts: CustomerContactRow[];
+  openAssignmentCount: number;
   primaryContact: { name: string | null; role: string | null; email: string | null; phone: string | null } | null;
 };
 
@@ -54,6 +63,8 @@ export type CustomerDetailProps = {
   createSubscriptionHref: string;
   /** Error from a failed restore attempt, shown in the archived banner. */
   restoreError?: string | null;
+  /** Error from a failed archive attempt, shown in the archive section. */
+  archiveError?: string | null;
   className?: string;
 };
 
@@ -166,8 +177,13 @@ export function CustomerDetail({
   subscriptionsHref,
   createSubscriptionHref,
   restoreError = null,
+  archiveError = null,
   className = "",
 }: CustomerDetailProps) {
+  const needsGps = !customer.gps.clientId && !customer.gps.portalUrl;
+  const needsPortal = customer.portalUsers.length === 0;
+  const needsContacts = customer.contacts.length === 0;
+  const showSetup = !customer.archived && (needsGps || needsPortal || needsContacts);
   const statusPill = customer.archived ? (
     <Pill tone="zinc">Archived</Pill>
   ) : hasSubscription ? (
@@ -239,11 +255,11 @@ export function CustomerDetail({
               </a>
             ) : null}
             <Link
-              href={`/admin/customers/${customer.id}/edit`}
+              href={customerNewEditHref(customer.id)}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 @lg:min-h-10 @2xl:flex-none dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
             >
               <CnIcon name="pencil" className="size-4" />
-              Edit
+              Edit profile
             </Link>
           </div>
         </header>
@@ -259,6 +275,38 @@ export function CustomerDetail({
             </Link>
           ))}
         </nav>
+
+        {showSetup ? (
+          <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Finish setup</h3>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Add GPS, portal users, and contacts here so you never leave this customer page.
+            </p>
+            <ul className="mt-3 space-y-2">
+              {needsGps ? (
+                <li>
+                  <a href="#customer-gps" className={`${linkClass} inline-flex min-h-10 items-center`}>
+                    Add GPS →
+                  </a>
+                </li>
+              ) : null}
+              {needsPortal ? (
+                <li>
+                  <a href="#customer-portal" className={`${linkClass} inline-flex min-h-10 items-center`}>
+                    Add portal user →
+                  </a>
+                </li>
+              ) : null}
+              {needsContacts ? (
+                <li>
+                  <a href="#customer-contacts" className={`${linkClass} inline-flex min-h-10 items-center`}>
+                    Add contact →
+                  </a>
+                </li>
+              ) : null}
+            </ul>
+          </section>
+        ) : null}
 
         {/* 2×2 on narrow panes (1px gaps act as dividers), one row of four when there is room. */}
         <section
@@ -315,6 +363,7 @@ export function CustomerDetail({
         </section>
 
         <div className="grid gap-4 @lg:gap-5 @3xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-4 @lg:gap-5">
           <section className={`${cardClass} h-fit overflow-hidden`}>
             <h3 className="border-b border-zinc-100 px-4 py-3.5 text-base font-semibold text-zinc-900 @lg:px-5 @lg:py-4 dark:border-zinc-800 dark:text-zinc-50">
               Customer Information
@@ -379,6 +428,17 @@ export function CustomerDetail({
               </div>
             </dl>
           </section>
+
+          <CustomerGpsCard customerId={customer.id} clientId={customer.gps.clientId} portalUrl={customer.gps.portalUrl} />
+
+          <section id="customer-portal" className={`${cardClass} p-4 @lg:p-5`}>
+            <CustomerPortalUsersPanel customerId={customer.id} showTopBorder={false} users={customer.portalUsers} />
+          </section>
+
+          <section id="customer-contacts" className={`${cardClass} p-4 @lg:p-5`}>
+            <CustomerContactsPanel customerId={customer.id} contacts={customer.contacts} />
+          </section>
+          </div>
 
           <div className="flex min-w-0 flex-col gap-4 @lg:gap-5">
             <section className={`${cardClass} p-4 @lg:p-5`}>
@@ -474,6 +534,34 @@ export function CustomerDetail({
             </section>
           </div>
         </div>
+
+        <section
+          id="customer-archive"
+          className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm @lg:p-5 dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Archive</h3>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Archive churned customers who will not renew. They stay in the system for history but stop receiving
+            reminders and disappear from the active customer list.
+          </p>
+          {archiveError ? (
+            <p role="alert" className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+              {archiveError}
+            </p>
+          ) : null}
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            {customer.archived ? (
+              <RestoreCustomerButton customerId={customer.id} displayName={customer.name} />
+            ) : (
+              <ArchiveCustomerNewButton
+                customerId={customer.id}
+                displayName={customer.name}
+                openAssignmentCount={customer.openAssignmentCount}
+              />
+            )}
+            <DeleteCustomerNewButton customerId={customer.id} />
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -158,6 +158,8 @@ test("entry points open the Subscriptions customer workspace and Customer (New),
   assert.match(detail, /CUSTOMER_WORKSPACE_TABS\.map/);
   assert.match(detail, /customerWorkspacePath\(customer\.id, "billing"\)/);
   assert.match(detail, /customerWorkspacePath\(customer\.id, "activity"\)/);
+  assert.match(detail, /customerNewEditHref\(customer\.id\)/);
+  assert.doesNotMatch(detail, /\/admin\/customers\/\$\{customer\.id\}\/edit/);
   // Subscription breadcrumb: the customer name opens Customer (New), not the old overview.
   assert.match(subscriptionHeader, /customerNewHref\(\{ c: subscription\.customerId \}\)/);
   assert.doesNotMatch(subscriptionHeader, /\/admin\/customers\/\$\{subscription\.customerId\}/);

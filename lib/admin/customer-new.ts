@@ -30,14 +30,20 @@ export function customerNewHref(opts: {
   q?: string;
   filter?: CustomerNewFilter;
   restoreError?: string | null;
+  archiveError?: string | null;
 }): string {
   const params = new URLSearchParams();
   if (opts.q?.trim()) params.set("q", opts.q.trim());
   if (opts.filter && opts.filter !== "all") params.set("filter", opts.filter);
   if (opts.c) params.set("c", opts.c);
   if (opts.restoreError) params.set("restoreError", opts.restoreError);
+  if (opts.archiveError) params.set("archiveError", opts.archiveError);
   const qs = params.toString();
   return qs ? `/admin/customer-new?${qs}` : "/admin/customer-new";
+}
+
+export function customerNewEditHref(customerId: string): string {
+  return `/admin/customer-new/${encodeURIComponent(customerId)}/edit`;
 }
 
 export function customerNewAddress(c: {

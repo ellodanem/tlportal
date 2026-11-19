@@ -40,6 +40,7 @@ function validatePortalUser(fields: ReturnType<typeof readPortalUserFields>): st
 }
 
 function revalidateCustomer(customerId: string) {
+  revalidatePath("/admin/customer-new");
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/edit`);
   revalidatePath("/admin/customers");
