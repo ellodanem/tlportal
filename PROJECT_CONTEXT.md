@@ -6173,3 +6173,15 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 - Pushed `6ae7779..dadcc44` to origin/main.
 
+
+### 2026-11-20 10:56 UTC — commit `64e31ce`
+
+- feat(subscriptions): add Collection tab with delayed card-on-file and pay-now
+- Agent notes: Card-billing agreements get a Collection tab. Arming sends card-on-file Checkout each day in the 3-day lead window, then a subscription-owned pay-now Checkout on the due date if no card is saved. Completing Checkout ends the program. Daily job rides `/api/cron/billing-whatsapp-reminders` and is not gated on `SCHEDULED_PAYMENT_REMINDERS_ENABLED`. Requires migration `20261120120000_subscription_collection_program`.
+
+
+### 2026-11-20 10:56 UTC — pre-push (`main` → origin) @ `64e31ce`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `dadcc44..64e31ce` to origin/main.
+

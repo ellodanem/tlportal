@@ -73,7 +73,12 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
     <div className="flex flex-col gap-5">
       {subscription.summary?.attentionRequired ? (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">
-          <span className="font-semibold">Review collection.</span> An open balance is beyond grace or a provider operation needs review.{outstanding && outstanding.amount > 0 ? ` ${formatMoney(outstanding.amount, outstanding.currency)} is outstanding on this subscription.` : ""} Open invoices are listed below.
+          <span className="font-semibold">Review collection.</span> An open balance is beyond grace or a provider operation needs review.{outstanding && outstanding.amount > 0 ? ` ${formatMoney(outstanding.amount, outstanding.currency)} is outstanding on this subscription.` : ""}{" "}
+          {openRows.length > 0 ? "Open invoices are listed below." : (
+            <>
+              <Link href={customerBillingHref} className="font-semibold underline">Review open invoices on Customer billing</Link>.
+            </>
+          )}
         </div>
       ) : null}
 
