@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { addServiceAction, type CanonicalSubscriptionFormState } from "@/app/admin/subscriptions/canonical/actions";
 import {
@@ -105,7 +104,6 @@ export function SubscriptionAddServiceFlow({
 }) {
   const preselected = context.unlinkedAssignments.find((assignment) => assignment.id === initialAssignmentId);
   const [state, action, pending] = useActionState(addServiceAction, initialState);
-  const router = useRouter();
   const { subscription, cycle } = context;
   const currency = subscription.currency;
   const defaultStart = today < cycle.cycleStart ? cycle.cycleStart : today > subscription.nextBillingDate ? subscription.nextBillingDate : today;
@@ -125,7 +123,9 @@ export function SubscriptionAddServiceFlow({
   const [notes, setNotes] = useState("");
   const [stepError, setStepError] = useState<string | null>(null);
 
-  useEffect(() => { if (state.next) router.push(state.next); }, [router, state.next]);
+  useEffect(() => {
+    if (state.next) window.location.assign(state.next);
+  }, [state.next]);
 
   const priceCents = useMemo(() => {
     try { return parseMoneyToCents(price || "0"); } catch { return null; }

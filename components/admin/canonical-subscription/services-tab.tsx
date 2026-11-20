@@ -159,7 +159,7 @@ function EndedServices({ subscription, items }: { subscription: SubscriptionDeta
   );
 }
 
-export function SubscriptionServicesTab({
+export async function SubscriptionServicesTab({
   subscription,
   permissions,
   error,

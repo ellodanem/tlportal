@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
+import { subscriptionServicesPath } from "@/lib/domain/canonical-subscription-navigation";
 import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 import {
   assertCanonicalSubscriptionOnboardingAllowed,
@@ -588,6 +590,7 @@ export async function createCanonicalOnboardingAction(
   _previous: CanonicalSubscriptionFormState,
   formData: FormData,
 ): Promise<CanonicalSubscriptionFormState> {
+  let destination: string;
   try {
     const staff = await requireStaff();
     const customerMode = text(formData, "customerMode");
@@ -668,13 +671,14 @@ export async function createCanonicalOnboardingAction(
     revalidatePath(`/admin/customers/${result.customerId}`);
     revalidatePath("/admin/devices");
     revalidatePath("/admin/subscriptions/canonical");
-    return {
-      message: "Customer onboarding draft created. Billing remains inactive until a later explicit activation.",
-      next: `/admin/subscriptions/canonical/${result.subscription.id}`,
-    };
+    destination = subscriptionServicesPath(result.subscription.id);
   } catch (error) {
     return actionError(error);
   }
+  // Leave this wizard with a server redirect. Returning `{ next }` plus client `router.push`
+  // re-sends the large `/new` RSC payload on the action response, so `useActionState` stays
+  // pending on Review even though the draft was saved.
+  redirect(destination);
 }
 
 export async function addCanonicalDraftItemAction(
@@ -721,6 +725,7 @@ export async function addServiceAction(
   formData: FormData,
 ): Promise<CanonicalSubscriptionFormState> {
   const subscriptionId = text(formData, "subscriptionId");
+  let destination: string;
   try {
     const { session, subscription } = await requireManageableCanonicalSubscription(subscriptionId);
     const hardwareKind = text(formData, "hardwareKind");
@@ -763,15 +768,13 @@ export async function addServiceAction(
     revalidatePath("/admin/subscriptions/canonical");
     revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
     revalidatePath("/admin/devices");
-    return {
-      message: result.created
-        ? "Service added. It joins recurring billing on the next renewal. No invoice, charge or notification was created."
-        : "This service was already added; nothing was duplicated.",
-      next: `/admin/subscriptions/canonical/${subscriptionId}`,
-    };
+    destination = subscriptionServicesPath(subscriptionId);
   } catch (error) {
     return actionError(error);
   }
+  // Same as onboarding: a returned `{ next }` keeps this wizard pending while the current
+  // page's RSC payload is flushed. Redirect skips that append and lands on Services.
+  redirect(destination);
 }
 
 /**

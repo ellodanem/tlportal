@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import {
   createCanonicalOnboardingAction,
@@ -84,7 +83,6 @@ export function CanonicalCustomerOnboardingForm({
   creationKey: string;
 }) {
   const [state, action, pending] = useActionState(createCanonicalOnboardingAction, initialState);
-  const router = useRouter();
   const [step, setStep] = useState(0);
   const [stepError, setStepError] = useState<string | null>(null);
 
@@ -113,7 +111,9 @@ export function CanonicalCustomerOnboardingForm({
   const [collection, setCollection] = useState("manual_invoice");
   const [graceDays, setGraceDays] = useState("7");
 
-  useEffect(() => { if (state.next) router.push(state.next); }, [router, state.next]);
+  useEffect(() => {
+    if (state.next) window.location.assign(state.next);
+  }, [state.next]);
 
   const chosenCustomer = customers.find((customer) => customer.id === customerId);
   const customerName = customerMode === "existing"

@@ -113,6 +113,13 @@ test("the subscription index redirects to Services and keeps the query string", 
   assert.match(tab, /<SubscriptionNotices /);
 });
 
+test("card-billing drafts collect a live card on the Services tab instead of default-deny", async () => {
+  const notices = await readFile("components/admin/canonical-subscription/subscription-notices.tsx", "utf8");
+  assert.match(notices, /CollectCardOnFilePanel/);
+  assert.doesNotMatch(notices, /Live Stripe remains default-deny/);
+  assert.doesNotMatch(notices, /isolated test-provider/);
+});
+
 test("manual-invoice customers with no provider history never see provider pages", () => {
   const sections = advancedSectionsFor({ controlMode: "canonical", collectionMethod: "manual_invoice", providerLinkCount: 0, billingOperationCount: 0, migrationSourceKind: null });
   assert.deepEqual(sections, { provider: false, stripeAdoption: false, pilotTransfer: false, any: false });

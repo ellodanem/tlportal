@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CanonicalManualActivationForm } from "@/components/admin/canonical-subscription-activation-form";
+import { CollectCardOnFilePanel } from "@/components/admin/canonical-subscription/collect-card-on-file-panel";
 import { cardClass, collectionLabel, displayDate, iso, nativeBillingReadinessIssues } from "@/components/admin/canonical-subscription/format";
 import {
   subscriptionAdvancedPath,
@@ -13,7 +14,7 @@ import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/ca
  * authority warnings, and the activation checklist for a draft. Renders nothing when there is
  * nothing to say, so a healthy subscription goes straight to its services.
  */
-export function SubscriptionNotices({
+export async function SubscriptionNotices({
   subscription,
   permissions,
   error,
@@ -84,11 +85,18 @@ export function SubscriptionNotices({
 
       {isActivationDraft ? (
         <section aria-labelledby="initial-billing-heading" className={`${cardClass} p-5`}>
-          <div><h2 id="initial-billing-heading" className="text-lg font-semibold">Initial billing decision</h2><p className="mt-1 text-sm text-zinc-500">Choose how to handle the first service period, then complete the activation review.</p></div>
+          <div>
+            <h2 id="initial-billing-heading" className="text-lg font-semibold">Initial billing decision</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              {subscription.collectionMethod === "manual_invoice"
+                ? "Choose how to handle the first service period, then complete the activation review."
+                : "Send a Stripe Checkout link. The customer saves a card now; the first charge is the renewal date, not today."}
+            </p>
+          </div>
           {subscription.collectionMethod === "manual_invoice" ? (
             <CanonicalManualActivationForm subscriptionId={subscription.id} commercialStartDate={iso(subscription.commercialStartDate)} nextBillingDate={nextBillingDate} gracePeriodDays={subscription.gracePeriodDays} cycleTotal={subscription.summary?.recurringCycleTotal ?? null} serviceCount={subscription.items.length} billingIntervalMonths={subscription.billingIntervalMonths} />
           ) : (
-            <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-100">Only the isolated test-provider Checkout workflow is available. Live Stripe remains default-deny.</p>
+            <CollectCardOnFilePanel subscription={subscription} permissions={permissions} />
           )}
           <p className="mt-4 text-sm text-zinc-500">Need a different billing method? <Link href={`${base}/billing`} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Change it in Billing</Link>.</p>
         </section>

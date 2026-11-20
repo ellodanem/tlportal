@@ -6113,3 +6113,51 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - fix(subscriptions): end transferred-in services before billing starts
 - Agent notes: HQ3879 (transferred onto DCAT Annual, billing from May 20, 2027) could not be ended on Nov 18 via Vehicle sold. Ending on or before `billingEffectiveFrom` now cancels as unbilled (same idea as an unbilled transfer). Vehicle sold also closes the assignment so the tracker is actually pooled, and no longer requires Resume first. Left unstaged: billing/reminder and SIM working-tree changes.
 
+
+### 2026-11-19 01:02 UTC — pre-push (`main` → origin) @ `0afa70b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `95534aa..0afa70b` to origin/main.
+
+
+### 2026-11-19 01:02 UTC — commit `ffc5244`
+
+- fix(billing): stop scheduled reminders and close unbilled vehicle sales
+- Agent notes: Daily due/overdue Email + WhatsApp are off (`SCHEDULED_PAYMENT_REMINDERS_ENABLED`). Cron still runs and returns `disabled: true`. Stripe paid/failed webhooks, payment-received confirmations, decline follow-up, and one-off outstanding nudges stay on. 1NCE SIM list/detail/quota/usage calls use `/v2/sims` with camelCase `pageSize` and duplicate-page protection. Vehicle-sale unbilled cancel shipped earlier in `0afa70b`.
+
+
+### 2026-11-19 01:04 UTC — pre-push (`main` → origin) @ `ffc5244`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `0afa70b..ffc5244` to origin/main.
+
+
+### 2026-11-19 01:03 UTC — pre-push (`main` → origin) @ `ffc5244`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `0afa70b..ffc5244` to origin/main.
+
+
+### 2026-11-19 01:12 UTC — commit `ce041e8`
+
+- feat(customers): put GPS, portal, and contacts on their own tabs
+- Agent notes: Customer (New) record tabs are Overview, GPS, Portal, and Contacts (`?tab=`). Overview keeps billing pills, stats, profile, and archive. GPS save returns to the GPS tab. Unrelated subscription-navigation working-tree files were left unstaged.
+
+
+### 2026-11-19 01:12 UTC — pre-push (`main` → origin) @ `ce041e8`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `ffc5244..ce041e8` to origin/main.
+
+
+### 2026-11-19 01:28 UTC — commit `6ae7779`
+
+- fix(subscriptions): hide ended services from the live list
+- Agent notes: Canceled/ended services (HQ3879 after vehicle sold) drop out of the live service chips and the customer Subscriptions list. They stay on All services → Ended for audit; the service page links there. Direct URLs still open the record.
+
+
+### 2026-11-19 01:28 UTC — pre-push (`main` → origin) @ `6ae7779`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `ce041e8..6ae7779` to origin/main.
+

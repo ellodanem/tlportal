@@ -368,6 +368,7 @@ test("canonical workflow confirms commercial changes and never adds direct billi
   assert.match(onboarding, /does not activate billing, create an invoice, contact Stripe, or notify anyone/);
   assert.match(onboarding, /No partial-period charge/);
   assert.match(onboarding, /two billing intervals after the start date/);
+  assert.match(onboarding, /window\.location\.assign\(state\.next\)/);
   assert.doesNotMatch(onboarding, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
 });
 
@@ -377,4 +378,10 @@ test("onboarding actions stay within canonical draft services and do not invoke 
   assert.match(actions, /createCanonicalOnboarding/);
   assert.match(actions, /requireEditableDraft/);
   assert.doesNotMatch(actions, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.subscriptions\.create/);
+  const onboardingFn = actions.slice(actions.indexOf("export async function createCanonicalOnboardingAction"), actions.indexOf("export async function addCanonicalDraftItemAction"));
+  assert.match(onboardingFn, /redirect\(destination\)/);
+  assert.doesNotMatch(onboardingFn, /\bnext:/);
+  const addServiceFn = actions.slice(actions.indexOf("export async function addServiceAction"), actions.indexOf("export async function createServiceAdjustmentInvoiceAction"));
+  assert.match(addServiceFn, /redirect\(destination\)/);
+  assert.doesNotMatch(addServiceFn, /\bnext:/);
 });
