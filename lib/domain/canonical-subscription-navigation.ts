@@ -5,7 +5,7 @@
  * anchors, so a link can never point at hidden content.
  */
 
-export type SubscriptionTabKey = "services" | "billing" | "activity" | "advanced";
+export type SubscriptionTabKey = "services" | "billing" | "collection" | "activity" | "advanced";
 
 export type SubscriptionTab = {
   key: SubscriptionTabKey;
@@ -39,6 +39,10 @@ export function subscriptionAddServicePath(subscriptionId: string): string {
 
 export function subscriptionBillingPath(subscriptionId: string): string {
   return `${subscriptionBasePath(subscriptionId)}/billing`;
+}
+
+export function subscriptionCollectionPath(subscriptionId: string): string {
+  return `${subscriptionBasePath(subscriptionId)}/collection`;
 }
 
 export function subscriptionAnnualAdjustmentPath(subscriptionId: string): string {
@@ -75,13 +79,14 @@ export function advancedSectionsFor(facts: AdvancedFacts): AdvancedSections {
   return { provider, stripeAdoption, pilotTransfer, any: provider || stripeAdoption || pilotTransfer };
 }
 
-export function subscriptionTabs(subscriptionId: string, options: { showAdvanced: boolean }): SubscriptionTab[] {
+export function subscriptionTabs(subscriptionId: string, options: { showAdvanced: boolean; showCollection?: boolean }): SubscriptionTab[] {
   const base = subscriptionBasePath(subscriptionId);
   const tabs: SubscriptionTab[] = [
     { key: "services", label: "Services", segment: "services", href: `${base}/services` },
     { key: "billing", label: "Billing", segment: "billing", href: `${base}/billing` },
-    { key: "activity", label: "Activity", segment: "activity", href: `${base}/activity` },
   ];
+  if (options.showCollection) tabs.push({ key: "collection", label: "Collection", segment: "collection", href: `${base}/collection` });
+  tabs.push({ key: "activity", label: "Activity", segment: "activity", href: `${base}/activity` });
   if (options.showAdvanced) tabs.push({ key: "advanced", label: "Advanced", segment: "advanced", href: `${base}/advanced` });
   return tabs;
 }
@@ -91,6 +96,7 @@ export function activeSubscriptionTab(segment: string | null | undefined): Subsc
   switch (segment) {
     case "services": return "services";
     case "billing": return "billing";
+    case "collection": return "collection";
     // The old Invoices & payments route redirects to Billing; keep it highlighted while it does.
     case "invoices": return "billing";
     case "activity": return "activity";

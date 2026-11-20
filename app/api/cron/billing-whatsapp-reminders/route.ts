@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { processInvoiceNotificationReminders } from "@/lib/billing/invoice-notifications";
+import { processCanonicalCollectionPrograms } from "@/lib/services/canonical-collection-program-service";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-/** Daily invoice-based customer billing notices (Email + WhatsApp; no customer SMS).
- *  Scheduled sends are currently disabled (`SCHEDULED_PAYMENT_REMINDERS_ENABLED`).
+/** Daily invoice notices and Collection Checkout sends (Email + WhatsApp; no customer SMS).
+ *  Scheduled payment reminders are currently disabled (`SCHEDULED_PAYMENT_REMINDERS_ENABLED`).
+ *  Collection programs are not gated on that flag.
  *  Stripe paid/failed webhooks are not invoked from this cron. */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -25,6 +27,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const result = await processInvoiceNotificationReminders();
-  return NextResponse.json(result);
+  const [reminders, collection] = await Promise.all([
+    processInvoiceNotificationReminders(),
+    processCanonicalCollectionPrograms(),
+  ]);
+  return NextResponse.json({ ...reminders, collection });
 }

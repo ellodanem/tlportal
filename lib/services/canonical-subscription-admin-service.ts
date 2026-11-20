@@ -122,8 +122,9 @@ export async function getCanonicalSubscriptionAdminDetail(subscriptionId: string
     where: { id: subscriptionId },
     include: {
       customer: {
-        select: { id: true, company: true, firstName: true, lastName: true, email: true },
+        select: { id: true, company: true, firstName: true, lastName: true, email: true, phone: true },
       },
+      collectionProgram: true,
       canonicalMigrationLedger: { select: { id: true, status: true, sourceKind: true } },
       operationalActivation: {
         select: {

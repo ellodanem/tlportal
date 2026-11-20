@@ -9,6 +9,7 @@ import {
   canonicalIntervalLabel,
   canonicalSubscriptionDisplayName,
 } from "@/lib/domain/canonical-subscription-admin";
+import { showSubscriptionCollectionTab } from "@/lib/domain/canonical-collection-program";
 import {
   subscriptionAddServicePath,
   subscriptionTabs,
@@ -31,7 +32,13 @@ export function SubscriptionHeader({ subscription, permissions }: { subscription
   const canAddService = permissions.canManage
     && subscription.controlMode === "canonical"
     && ["draft", "pending_activation", "active", "paused"].includes(subscription.lifecycleStatus ?? "");
-  const tabs = subscriptionTabs(subscription.id, { showAdvanced: permissions.advanced.any });
+  const tabs = subscriptionTabs(subscription.id, {
+    showAdvanced: permissions.advanced.any,
+    showCollection: showSubscriptionCollectionTab({
+      collectionMethod: subscription.collectionMethod,
+      hasCollectionProgram: Boolean(subscription.collectionProgram),
+    }),
+  });
 
   return (
     <header className="flex flex-col gap-4">

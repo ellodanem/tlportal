@@ -9,14 +9,13 @@ import {
 } from "@/components/admin/canonical-subscription/format";
 import { CanonicalBillingDatesDialog } from "@/components/admin/canonical-billing-dates-dialog";
 import { CanonicalSubscriptionCollectionForm } from "@/components/admin/canonical-subscription-collection-form";
-import { CollectCardOnFilePanel } from "@/components/admin/canonical-subscription/collect-card-on-file-panel";
 import { StripeCanaryPanel } from "@/components/admin/canonical-subscription/stripe-canary-panel";
 import { SwitchToStripe } from "@/components/admin/canonical-subscription/switch-to-stripe";
 import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
 import { canonicalAnnualAdjustmentExecutionEnabled } from "@/lib/domain/canonical-annual-adjustment";
 import { daysUntil } from "@/lib/domain/canonical-service-presentation";
-import { subscriptionAnnualAdjustmentPath, subscriptionBillingPath } from "@/lib/domain/canonical-subscription-navigation";
+import { subscriptionAnnualAdjustmentPath, subscriptionBillingPath, subscriptionCollectionPath } from "@/lib/domain/canonical-subscription-navigation";
 import { NOT_LINKED_LABEL } from "@/lib/domain/financial-ledger";
 import { formatMoney } from "@/lib/domain/native-billing";
 import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
@@ -153,7 +152,12 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
             <CanonicalSubscriptionCollectionForm subscriptionId={subscription.id} value={subscription.collectionMethod} />
           </div>
         ) : null}
-        {permissions.canManage ? <CollectCardOnFilePanel subscription={subscription} permissions={permissions} /> : null}
+        {permissions.canManage && subscription.collectionMethod === "stripe_autocharge" ? (
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-300">
+            Collect or schedule the card on{" "}
+            <Link href={subscriptionCollectionPath(subscription.id)} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Collection</Link>.
+          </p>
+        ) : null}
         {permissions.canManage
           && subscription.controlMode === "canonical"
           && subscription.lifecycleStatus === "active"

@@ -6161,3 +6161,15 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 - Pushed `ce041e8..6ae7779` to origin/main.
 
+
+### 2026-11-20 09:53 UTC — commit `dadcc44`
+
+- feat(billing): offer live card-on-file Checkout from the Services draft screen
+- Agent notes: Card-billing drafts on Services now render `CollectCardOnFilePanel` (same live Checkout as Billing) instead of “Live Stripe remains default-deny.” First charge stays `nextBillingDate`. Onboarding create and add-service finish with `redirect()` so Review does not hang while `useActionState` flushes the wizard RSC payload; client `window.location.assign` remains a fallback if `{ next }` is returned.
+
+
+### 2026-11-20 09:53 UTC — pre-push (`main` → origin) @ `dadcc44`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `6ae7779..dadcc44` to origin/main.
+

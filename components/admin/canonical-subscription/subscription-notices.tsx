@@ -1,11 +1,11 @@
 import Link from "next/link";
 
 import { CanonicalManualActivationForm } from "@/components/admin/canonical-subscription-activation-form";
-import { CollectCardOnFilePanel } from "@/components/admin/canonical-subscription/collect-card-on-file-panel";
 import { cardClass, collectionLabel, displayDate, iso, nativeBillingReadinessIssues } from "@/components/admin/canonical-subscription/format";
 import {
   subscriptionAdvancedPath,
   subscriptionBasePath,
+  subscriptionCollectionPath,
 } from "@/lib/domain/canonical-subscription-navigation";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
 
@@ -90,13 +90,15 @@ export async function SubscriptionNotices({
             <p className="mt-1 text-sm text-zinc-500">
               {subscription.collectionMethod === "manual_invoice"
                 ? "Choose how to handle the first service period, then complete the activation review."
-                : "Send a Stripe Checkout link. The customer saves a card now; the first charge is the renewal date, not today."}
+                : "Collect the card from Collection: send Checkout now, or ask three days before the first charge."}
             </p>
           </div>
           {subscription.collectionMethod === "manual_invoice" ? (
             <CanonicalManualActivationForm subscriptionId={subscription.id} commercialStartDate={iso(subscription.commercialStartDate)} nextBillingDate={nextBillingDate} gracePeriodDays={subscription.gracePeriodDays} cycleTotal={subscription.summary?.recurringCycleTotal ?? null} serviceCount={subscription.items.length} billingIntervalMonths={subscription.billingIntervalMonths} />
           ) : (
-            <CollectCardOnFilePanel subscription={subscription} permissions={permissions} />
+            <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-100">
+              Card billing is collected on <Link href={subscriptionCollectionPath(subscription.id)} className="font-semibold underline">Collection</Link>. The first charge stays the renewal date unless pay-now Checkout is sent because the due date has arrived.
+            </p>
           )}
           <p className="mt-4 text-sm text-zinc-500">Need a different billing method? <Link href={`${base}/billing`} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Change it in Billing</Link>.</p>
         </section>

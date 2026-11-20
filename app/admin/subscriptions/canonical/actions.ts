@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
-import { subscriptionServicesPath } from "@/lib/domain/canonical-subscription-navigation";
+import { subscriptionCollectionPath, subscriptionServicesPath } from "@/lib/domain/canonical-subscription-navigation";
 import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 import {
   assertCanonicalSubscriptionOnboardingAllowed,
@@ -57,6 +57,11 @@ import {
   CanonicalStripeCardOnFileError,
   startStripeCardOnFileCheckout,
 } from "@/lib/services/canonical-stripe-card-on-file-service";
+import {
+  CanonicalCollectionProgramError,
+  armCollectionProgram,
+  cancelCollectionProgram,
+} from "@/lib/services/canonical-collection-program-service";
 
 export type CanonicalSubscriptionFormState = {
   error?: string;
@@ -88,6 +93,7 @@ function actionError(error: unknown): CanonicalSubscriptionFormState {
     || error instanceof CanonicalStripeAdoptionError
     || error instanceof CanonicalStripeLinkError
     || error instanceof CanonicalStripeCardOnFileError
+    || error instanceof CanonicalCollectionProgramError
     || error instanceof CanonicalAnnualAdjustmentError
     || error instanceof SubscriptionProrationError
   ) {
@@ -170,6 +176,7 @@ export async function startStripeCardOnFileCheckoutAction(
     });
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
     revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}/billing`);
+    revalidatePath(subscriptionCollectionPath(subscriptionId));
     const closed = [
       result.canceledCount ? `${result.canceledCount} Stripe subscription${result.canceledCount === 1 ? "" : "s"} canceled` : null,
       result.voidedCount ? `${result.voidedCount} open invoice${result.voidedCount === 1 ? "" : "s"} voided` : null,
@@ -181,6 +188,43 @@ export async function startStripeCardOnFileCheckoutAction(
           ? `${closed}. Checkout is ready — send the link so the customer can save a card. Nothing is charged until the renewal date.`
           : "Checkout is ready — send the link so the customer can save a card. Nothing is charged until the renewal date.",
     };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function armCollectionProgramAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const session = await requireStaff();
+    const result = await armCollectionProgram({ subscriptionId, staffUserId: session.sub });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(subscriptionCollectionPath(subscriptionId));
+    if (result.sentNow) {
+      return { message: result.action === "send_pay_now"
+        ? "The first charge is due, so pay-now Checkout was sent."
+        : "Card-on-file Checkout was sent because the first charge is within three days." };
+    }
+    return { message: "Collection is armed. Checkout will be sent three days before the first charge." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function cancelCollectionProgramAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const session = await requireStaff();
+    await cancelCollectionProgram({ subscriptionId, staffUserId: session.sub });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(subscriptionCollectionPath(subscriptionId));
+    return { message: "Collection was canceled. No automatic Checkout will be sent." };
   } catch (error) {
     return actionError(error);
   }

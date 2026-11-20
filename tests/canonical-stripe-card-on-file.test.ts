@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -6,9 +7,13 @@ import {
   cardOnFileCheckoutBlockers,
   cardOnFileDelayedChargeParams,
   cardOnFileOperationKey,
+  isCanonicalCheckoutProviderMode,
   isCardOnFileOperationKey,
   isCardOnFileProviderMode,
+  isPayNowOperationKey,
   leftoverStripeStartFreshDecision,
+  payNowCheckoutBlockers,
+  payNowOperationKey,
   type CardOnFileSubject,
   type LeftoverStripeInvoice,
   type LeftoverStripeSubscription,
@@ -99,6 +104,16 @@ test("card-on-file operation keys are namespaced so canonical execution webhooks
   assert.equal(isCardOnFileOperationKey("canonical-stripe:sub-1"), false);
   assert.equal(isCardOnFileProviderMode("card_on_file"), true);
   assert.equal(isCardOnFileProviderMode("live_canary"), false);
+  assert.equal(isCanonicalCheckoutProviderMode("card_on_file"), true);
+  assert.equal(isCanonicalCheckoutProviderMode("pay_now"), true);
+  assert.equal(isCanonicalCheckoutProviderMode("live_canary"), false);
+});
+
+test("pay-now Checkout uses a separate operation key and is allowed on the due date", () => {
+  assert.equal(payNowOperationKey("sub-1"), "canonical-pay-now:sub-1");
+  assert.equal(isPayNowOperationKey("canonical-pay-now:sub-1"), true);
+  assert.deepEqual(payNowCheckoutBlockers({ ...eligible, nextBillingDate: new Date("2026-11-13T00:00:00.000Z") }), []);
+  assert.match(cardOnFileCheckoutBlockers({ ...eligible, nextBillingDate: new Date("2026-11-13T00:00:00.000Z") })[0], /after today/);
 });
 
 test("a complimentary first period uses trial_end so Stripe accepts a renewal after the next natural billing date", () => {
@@ -106,4 +121,15 @@ test("a complimentary first period uses trial_end so Stripe accepts a renewal af
   assert.equal(params.trial_end, Date.parse("2026-12-14T00:00:00.000Z") / 1000);
   assert.equal("billing_cycle_anchor" in params, false);
   assert.match(CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION, /trial-end/);
+});
+
+test("pay-now Checkout omits trial_end so Stripe charges when the customer completes it", async () => {
+  const source = await readFile("lib/stripe/canonical-card-on-file-checkout.ts", "utf8");
+  assert.match(source, /kind === "card_on_file" \? cardOnFileDelayedChargeParams\(input\.nextBillingDate\) : \{\}/);
+});
+
+test("an expired Checkout does not revert the subscription if a newer session owns the operation", async () => {
+  const source = await readFile("lib/services/canonical-stripe-card-on-file-service.ts", "utf8");
+  assert.match(source, /operation\.providerReference !== input\.checkoutSessionId/);
+  assert.match(source, /operation\.status === "completed" \|\| operation\.status === "failed"/);
 });

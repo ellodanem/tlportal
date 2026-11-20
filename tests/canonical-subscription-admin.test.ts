@@ -244,6 +244,7 @@ const SUBSCRIPTION_DETAIL_SOURCES = [
   "components/admin/canonical-subscription/subscription-notices.tsx",
   "components/admin/canonical-subscription/services-tab.tsx",
   "components/admin/canonical-subscription/billing-tab.tsx",
+  "components/admin/canonical-subscription/collection-tab.tsx",
   "components/admin/canonical-subscription/activity-tab.tsx",
   "components/admin/canonical-subscription/advanced-tab.tsx",
   "lib/domain/canonical-subscription-navigation.ts",

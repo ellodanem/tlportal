@@ -10,9 +10,14 @@ import {
   CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION,
   CARD_ON_FILE_PROVIDER_MODE,
   CanonicalStripeCardOnFileError,
+  PAY_NOW_CHECKOUT_IDEMPOTENCY_VERSION,
+  PAY_NOW_PROVIDER_MODE,
   cardOnFileCheckoutBlockers,
   cardOnFileOperationKey,
   leftoverStripeStartFreshDecision,
+  payNowCheckoutBlockers,
+  payNowOperationKey,
+  type CanonicalCheckoutKind,
   type LeftoverStripeInvoice,
   type LeftoverStripeSubscription,
 } from "@/lib/domain/canonical-stripe-card-on-file";
@@ -47,7 +52,7 @@ const configurationInclude = {
 type Configuration = Prisma.CustomerSubscriptionGetPayload<{ include: typeof configurationInclude }>;
 
 type OperationMetadata = {
-  kind: typeof CARD_ON_FILE_PROVIDER_MODE;
+  kind: typeof CARD_ON_FILE_PROVIDER_MODE | typeof PAY_NOW_PROVIDER_MODE;
   previousCollectionMethod: "manual_invoice" | "stripe_autocharge" | null;
   previousLifecycleStatus: string | null;
   pausedScheduleIds: string[];
@@ -89,8 +94,8 @@ async function loadConfiguration(subscriptionId: string): Promise<Configuration>
   return subscription;
 }
 
-function localBlockers(configuration: Configuration): string[] {
-  return cardOnFileCheckoutBlockers({
+function localBlockers(configuration: Configuration, kind: CanonicalCheckoutKind = "card_on_file"): string[] {
+  const subject = {
     controlMode: configuration.controlMode,
     lifecycleStatus: configuration.lifecycleStatus,
     collectionMethod: configuration.collectionMethod,
@@ -100,7 +105,8 @@ function localBlockers(configuration: Configuration): string[] {
     hasOpenStripeLink: openStripeLink(configuration),
     customerEmail: configuration.customer.email,
     stripeBillingEnabled: isStripeBillingEnabled(),
-  });
+  };
+  return kind === "pay_now" ? payNowCheckoutBlockers(subject) : cardOnFileCheckoutBlockers(subject);
 }
 
 function plannedRateGroups(configuration: Configuration) {
@@ -226,11 +232,14 @@ export async function inspectStripeCardOnFileReadiness(subscriptionId: string): 
 
 export async function startStripeCardOnFileCheckout(input: {
   subscriptionId: string;
-  staffUserId: string;
+  staffUserId?: string | null;
   confirmCancelExisting: boolean;
-}): Promise<{ checkoutUrl: string; reused: boolean; canceledCount: number; voidedCount: number }> {
+  kind?: CanonicalCheckoutKind;
+  sendDay?: string;
+}): Promise<{ checkoutUrl: string; reused: boolean; canceledCount: number; voidedCount: number; checkoutSessionId: string; kind: CanonicalCheckoutKind }> {
+  const kind = input.kind ?? "card_on_file";
   const configuration = await loadConfiguration(input.subscriptionId);
-  const blockers = localBlockers(configuration);
+  const blockers = localBlockers(configuration, kind);
   if (blockers.length) fail("NOT_ELIGIBLE", blockers.join(" "));
 
   const planned = plannedRateGroups(configuration);
@@ -244,7 +253,11 @@ export async function startStripeCardOnFileCheckout(input: {
   const fingerprint = requestFingerprint({
     nextBillingDate: configuration.nextBillingDate!,
     recurringTotal: planned.expectedRecurringTotal.toFixed(2),
-    groupFingerprints: groups.map((group) => `${group.fingerprint}:${group.quantity}`),
+    groupFingerprints: [
+      ...groups.map((group) => `${group.fingerprint}:${group.quantity}`),
+      kind,
+      input.sendDay ?? "staff",
+    ],
   });
 
   const customer = await prisma.customer.findUnique({ where: { id: configuration.customerId } });
@@ -269,21 +282,35 @@ export async function startStripeCardOnFileCheckout(input: {
     }
   }
 
-  const operationKey = cardOnFileOperationKey(configuration.id);
+  const operationKey = kind === "pay_now" ? payNowOperationKey(configuration.id) : cardOnFileOperationKey(configuration.id);
+  const otherKey = kind === "pay_now" ? cardOnFileOperationKey(configuration.id) : payNowOperationKey(configuration.id);
+  const other = await prisma.billingOperation.findUnique({ where: { operationKey: otherKey } });
   const existing = await prisma.billingOperation.findUnique({ where: { operationKey } });
+  if (other && other.status !== "completed") {
+    await prisma.billingOperation.update({
+      where: { id: other.id },
+      data: {
+        status: "failed",
+        activeKey: null,
+        failureCode: "REPLACED",
+        failureMessage: "Replaced by a later Checkout.",
+      },
+    });
+    if (other.providerReference) {
+      try { await expireCheckoutSessionIfOpen(other.providerReference); } catch { /* replaced by this Checkout */ }
+    }
+  }
   if (existing?.providerReference && existing.requestFingerprint === fingerprint && ["pending", "in_progress"].includes(existing.status)) {
     const session = await getStripeClient().checkout.sessions.retrieve(existing.providerReference);
     if (session.status === "open" && session.url) {
-      return { checkoutUrl: session.url, reused: true, canceledCount: canceledStripeSubscriptionIds.length, voidedCount: voidedStripeInvoiceIds.length };
+      return { checkoutUrl: session.url, reused: true, canceledCount: canceledStripeSubscriptionIds.length, voidedCount: voidedStripeInvoiceIds.length, checkoutSessionId: session.id, kind };
     }
   }
-  if (existing?.providerReference && existing.status !== "completed") {
-    try { await expireCheckoutSessionIfOpen(existing.providerReference); } catch { /* replaced below */ }
-  }
+  const previousSessionId = existing?.status !== "completed" ? existing?.providerReference : null;
 
   const pausedScheduleIds = configuration.recurringSchedules.filter((schedule) => schedule.status === "active").map((schedule) => schedule.id);
   const metadata: OperationMetadata = {
-    kind: CARD_ON_FILE_PROVIDER_MODE,
+    kind: kind === "pay_now" ? PAY_NOW_PROVIDER_MODE : CARD_ON_FILE_PROVIDER_MODE,
     previousCollectionMethod: configuration.collectionMethod,
     previousLifecycleStatus: configuration.lifecycleStatus,
     pausedScheduleIds,
@@ -335,6 +362,7 @@ export async function startStripeCardOnFileCheckout(input: {
         status: "pending",
         activeKey: operationKey,
         requestFingerprint: fingerprint,
+        providerReference: null,
         providerSubscriptionReference: null,
         failureCode: null,
         failureMessage: null,
@@ -345,8 +373,13 @@ export async function startStripeCardOnFileCheckout(input: {
     });
   });
 
+  if (previousSessionId) {
+    try { await expireCheckoutSessionIfOpen(previousSessionId); } catch { /* replaced below */ }
+  }
+
   let checkout: { id: string; url: string; status: string };
   try {
+    const version = kind === "pay_now" ? PAY_NOW_CHECKOUT_IDEMPOTENCY_VERSION : CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION;
     checkout = await createCardOnFileCheckout({
       stripeCustomerId,
       operationKey,
@@ -354,7 +387,8 @@ export async function startStripeCardOnFileCheckout(input: {
       customerId: configuration.customerId,
       nextBillingDate: configuration.nextBillingDate!,
       groups,
-      idempotencyKey: `tl-card-on-file-checkout:${CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION}:${fingerprint}`,
+      kind,
+      idempotencyKey: `tl-canonical-checkout:${kind}:${version}:${fingerprint}`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Stripe could not create Checkout.";
@@ -375,12 +409,16 @@ export async function startStripeCardOnFileCheckout(input: {
   });
 
   await recordOperationalEvent({
-    category: "subscription.card_on_file_checkout_created",
-    summary: leftover.requiresExplicitCancel
-      ? "Previous Stripe arrangement closed; card-on-file Checkout sent with first charge on the renewal date."
-      : "Card-on-file Checkout sent with first charge on the renewal date.",
+    category: kind === "pay_now" ? "subscription.pay_now_checkout_created" : "subscription.card_on_file_checkout_created",
+    summary: kind === "pay_now"
+      ? leftover.requiresExplicitCancel
+        ? "Previous Stripe arrangement closed; pay-now Checkout is ready. Stripe charges when the customer completes it."
+        : "Pay-now Checkout is ready. Stripe charges when the customer completes it."
+      : leftover.requiresExplicitCancel
+        ? "Previous Stripe arrangement closed; card-on-file Checkout sent with first charge on the renewal date."
+        : "Card-on-file Checkout sent with first charge on the renewal date.",
     customerId: configuration.customerId,
-    actorUserId: input.staffUserId,
+    actorUserId: input.staffUserId ?? undefined,
     payload: {
       subscriptionId: configuration.id,
       checkoutSessionId: checkout.id,
@@ -395,6 +433,8 @@ export async function startStripeCardOnFileCheckout(input: {
     reused: false,
     canceledCount: canceledStripeSubscriptionIds.length,
     voidedCount: voidedStripeInvoiceIds.length,
+    checkoutSessionId: checkout.id,
+    kind,
   };
 }
 
@@ -407,6 +447,7 @@ export async function completeCardOnFileCheckout(input: {
   if (!operation || operation.type !== "stripe_checkout_activation" || !isCardOnFileMetadata(operation.metadata)) {
     fail("OPERATION_NOT_FOUND", "This Checkout is not a card-on-file activation.");
   }
+  const completedKind = (operation.metadata as OperationMetadata).kind;
   if (operation.status === "completed") {
     return { alreadyComplete: true, subscriptionId: operation.customerSubscriptionId ?? "" };
   }
@@ -489,12 +530,18 @@ export async function completeCardOnFileCheckout(input: {
         failureMessage: null,
       },
     });
+    await tx.subscriptionCollectionProgram.updateMany({
+      where: { customerSubscriptionId: subscriptionId, status: "armed" },
+      data: { status: "completed", completedAt: now },
+    });
     await syncCustomerBillingModeFromSubscriptions(configuration.customerId, tx);
   });
 
   await recordOperationalEvent({
-    category: "subscription.card_on_file_completed",
-    summary: "Customer saved a card. Stripe will charge on the renewal date.",
+    category: completedKind === PAY_NOW_PROVIDER_MODE ? "subscription.pay_now_completed" : "subscription.card_on_file_completed",
+    summary: completedKind === PAY_NOW_PROVIDER_MODE
+      ? "Customer saved a card and paid this cycle. Stripe charged immediately."
+      : "Customer saved a card. Stripe will charge on the renewal date.",
     customerId: configuration.customerId,
     payload: {
       subscriptionId,
@@ -513,7 +560,8 @@ export async function expireCardOnFileCheckout(input: {
 }): Promise<void> {
   const operation = await prisma.billingOperation.findUnique({ where: { operationKey: input.operationKey } });
   if (!operation || operation.type !== "stripe_checkout_activation" || !isCardOnFileMetadata(operation.metadata)) return;
-  if (operation.status === "completed") return;
+  if (operation.status === "completed" || operation.status === "failed") return;
+  if (operation.providerReference !== input.checkoutSessionId) return;
   const metadata = operation.metadata as OperationMetadata;
   await prisma.$transaction(async (tx) => {
     await tx.billingOperation.update({
@@ -532,6 +580,16 @@ export async function expireCardOnFileCheckout(input: {
       select: { id: true },
     });
     if (linked) return;
+    const sibling = await tx.billingOperation.findFirst({
+      where: {
+        customerSubscriptionId: operation.customerSubscriptionId,
+        type: "stripe_checkout_activation",
+        status: { in: ["pending", "in_progress"] },
+        id: { not: operation.id },
+      },
+      select: { id: true },
+    });
+    if (sibling) return;
     if (metadata.pausedScheduleIds.length) {
       await tx.recurringInvoiceSchedule.updateMany({
         where: { id: { in: metadata.pausedScheduleIds }, status: "paused" },
@@ -551,7 +609,9 @@ export async function expireCardOnFileCheckout(input: {
 }
 
 function isCardOnFileMetadata(value: Prisma.JsonValue | null): value is OperationMetadata {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value) && (value as { kind?: unknown }).kind === CARD_ON_FILE_PROVIDER_MODE);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const kind = (value as { kind?: unknown }).kind;
+  return kind === CARD_ON_FILE_PROVIDER_MODE || kind === PAY_NOW_PROVIDER_MODE;
 }
 
 export function cardOnFileMetadataFromStripe(metadata: Stripe.Metadata | null | undefined): {
@@ -560,7 +620,9 @@ export function cardOnFileMetadataFromStripe(metadata: Stripe.Metadata | null | 
   customerId: string | null;
 } {
   return {
-    operationKey: metadata?.tl_card_on_file_operation_key?.trim() || null,
+    operationKey: metadata?.tl_card_on_file_operation_key?.trim()
+      || metadata?.tl_pay_now_operation_key?.trim()
+      || null,
     subscriptionId: metadata?.tl_canonical_subscription_id?.trim() || null,
     customerId: metadata?.tl_customer_id?.trim() || null,
   };

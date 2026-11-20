@@ -7,7 +7,9 @@ import type Stripe from "stripe";
 
 import {
   CARD_ON_FILE_PROVIDER_MODE,
+  PAY_NOW_PROVIDER_MODE,
   cardOnFileDelayedChargeParams,
+  type CanonicalCheckoutKind,
 } from "@/lib/domain/canonical-stripe-card-on-file";
 import { getAppBaseUrl } from "@/lib/stripe/app-url";
 import {
@@ -63,12 +65,16 @@ export function cardOnFileCheckoutMetadata(input: {
   operationKey: string;
   subscriptionId: string;
   customerId: string;
+  kind?: CanonicalCheckoutKind;
 }): Stripe.MetadataParam {
+  const kind = input.kind ?? "card_on_file";
+  const providerMode = kind === "pay_now" ? PAY_NOW_PROVIDER_MODE : CARD_ON_FILE_PROVIDER_MODE;
+  const operationKeyName = kind === "pay_now" ? "tl_pay_now_operation_key" : "tl_card_on_file_operation_key";
   return {
     tl_canonical_subscription_id: metadataValue(input.subscriptionId),
     tl_customer_id: metadataValue(input.customerId),
-    tl_card_on_file_operation_key: metadataValue(input.operationKey),
-    tl_provider_mode: CARD_ON_FILE_PROVIDER_MODE,
+    [operationKeyName]: metadataValue(input.operationKey),
+    tl_provider_mode: providerMode,
   };
 }
 
@@ -118,10 +124,12 @@ export async function createCardOnFileCheckout(input: {
   nextBillingDate: Date;
   groups: CardOnFileRateGroup[];
   idempotencyKey: string;
+  kind?: CanonicalCheckoutKind;
 }): Promise<{ id: string; url: string; status: string }> {
   const stripe = getStripeClient();
   const prices = await ensureCardOnFilePrices(input.groups);
-  const metadata = cardOnFileCheckoutMetadata(input);
+  const kind = input.kind ?? "card_on_file";
+  const metadata = cardOnFileCheckoutMetadata({ ...input, kind });
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: input.stripeCustomerId,
@@ -132,7 +140,7 @@ export async function createCardOnFileCheckout(input: {
     cancel_url: `${getAppBaseUrl()}/pay/cancel`,
     metadata,
     subscription_data: {
-      ...cardOnFileDelayedChargeParams(input.nextBillingDate),
+      ...(kind === "card_on_file" ? cardOnFileDelayedChargeParams(input.nextBillingDate) : {}),
       metadata,
     },
   }, { idempotencyKey: input.idempotencyKey });

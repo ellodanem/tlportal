@@ -4,7 +4,7 @@ import type Stripe from "stripe";
 
 import {
   CARD_ON_FILE_PROVIDER_MODE,
-  isCardOnFileProviderMode,
+  isCanonicalCheckoutProviderMode,
 } from "@/lib/domain/canonical-stripe-card-on-file";
 import {
   cardOnFileMetadataFromStripe,
@@ -21,7 +21,7 @@ function sessionSubscriptionId(session: Stripe.Checkout.Session): string | null 
 export async function tryHandleCardOnFileWebhookEvent(event: Stripe.Event): Promise<boolean> {
   if (event.type === "checkout.session.completed" || event.type === "checkout.session.expired") {
     const session = event.data.object as Stripe.Checkout.Session;
-    if (!isCardOnFileProviderMode(session.metadata?.tl_provider_mode)) return false;
+    if (!isCanonicalCheckoutProviderMode(session.metadata?.tl_provider_mode)) return false;
     const meta = cardOnFileMetadataFromStripe(session.metadata);
     if (!meta.operationKey) return false;
     if (event.type === "checkout.session.expired") {
@@ -44,7 +44,7 @@ export async function tryHandleCardOnFileWebhookEvent(event: Stripe.Event): Prom
     || event.type === "customer.subscription.updated"
   ) {
     const subscription = event.data.object as Stripe.Subscription;
-    if (!isCardOnFileProviderMode(subscription.metadata?.tl_provider_mode)) return false;
+    if (!isCanonicalCheckoutProviderMode(subscription.metadata?.tl_provider_mode)) return false;
     const meta = cardOnFileMetadataFromStripe(subscription.metadata);
     if (!meta.operationKey) return false;
     const expanded = await getStripeClient().subscriptions.retrieve(subscription.id, { expand: ["items.data.price"] });

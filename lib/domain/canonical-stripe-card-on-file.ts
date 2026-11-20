@@ -1,9 +1,13 @@
 import { startOfUtcDay } from "@/lib/billing/recurring-period";
 
 export const CARD_ON_FILE_PROVIDER_MODE = "card_on_file";
+export const PAY_NOW_PROVIDER_MODE = "pay_now";
 export const CARD_ON_FILE_OPERATION_PREFIX = "canonical-card-on-file:";
+export const PAY_NOW_OPERATION_PREFIX = "canonical-pay-now:";
 /** Bump when Checkout params change so Stripe does not replay a failed idempotent create. */
 export const CARD_ON_FILE_CHECKOUT_IDEMPOTENCY_VERSION = "v2-trial-end";
+export const PAY_NOW_CHECKOUT_IDEMPOTENCY_VERSION = "v1-immediate";
+export type CanonicalCheckoutKind = "card_on_file" | "pay_now";
 
 export const LIVE_STRIPE_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due", "unpaid"] as const;
 
@@ -51,12 +55,28 @@ export function cardOnFileOperationKey(subscriptionId: string): string {
   return `${CARD_ON_FILE_OPERATION_PREFIX}${subscriptionId}`;
 }
 
+export function payNowOperationKey(subscriptionId: string): string {
+  return `${PAY_NOW_OPERATION_PREFIX}${subscriptionId}`;
+}
+
 export function isCardOnFileOperationKey(operationKey: string | null | undefined): boolean {
   return Boolean(operationKey?.startsWith(CARD_ON_FILE_OPERATION_PREFIX));
 }
 
+export function isPayNowOperationKey(operationKey: string | null | undefined): boolean {
+  return Boolean(operationKey?.startsWith(PAY_NOW_OPERATION_PREFIX));
+}
+
 export function isCardOnFileProviderMode(value: string | null | undefined): boolean {
   return value?.trim() === CARD_ON_FILE_PROVIDER_MODE;
+}
+
+export function isPayNowProviderMode(value: string | null | undefined): boolean {
+  return value?.trim() === PAY_NOW_PROVIDER_MODE;
+}
+
+export function isCanonicalCheckoutProviderMode(value: string | null | undefined): boolean {
+  return isCardOnFileProviderMode(value) || isPayNowProviderMode(value);
 }
 
 /**
@@ -70,7 +90,7 @@ export function cardOnFileDelayedChargeParams(nextBillingDate: Date): { trial_en
 }
 
 /** Reasons Checkout must not be created. Empty means the local subscription is eligible. */
-export function cardOnFileCheckoutBlockers(subject: CardOnFileSubject): string[] {
+export function cardOnFileCheckoutBlockers(subject: CardOnFileSubject, options?: { allowImmediateCharge?: boolean }): string[] {
   const blockers: string[] = [];
   if (!subject.stripeBillingEnabled) {
     blockers.push("Stripe billing is not enabled in this environment.");
@@ -87,7 +107,7 @@ export function cardOnFileCheckoutBlockers(subject: CardOnFileSubject): string[]
   if (!subject.billingIntervalMonths || !subject.nextBillingDate) {
     blockers.push("Set the billing cadence and first charge date before collecting a card.");
   }
-  if (subject.nextBillingDate) {
+  if (subject.nextBillingDate && !options?.allowImmediateCharge) {
     const today = startOfUtcDay(subject.today ?? new Date());
     if (startOfUtcDay(subject.nextBillingDate).getTime() <= today.getTime()) {
       blockers.push("The first charge date must be after today. For a complimentary month, set the next renewal about one billing cycle from today.");
@@ -100,6 +120,10 @@ export function cardOnFileCheckoutBlockers(subject: CardOnFileSubject): string[]
     blockers.push("The customer needs a billing email before Stripe Checkout can be sent.");
   }
   return blockers;
+}
+
+export function payNowCheckoutBlockers(subject: CardOnFileSubject): string[] {
+  return cardOnFileCheckoutBlockers(subject, { allowImmediateCharge: true });
 }
 
 export function leftoverStripeStartFreshDecision(input: {

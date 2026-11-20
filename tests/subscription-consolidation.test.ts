@@ -89,6 +89,10 @@ test("subscription tabs are real routes and Advanced only appears when relevant"
   assert.equal(without[0].href, "/admin/subscriptions/canonical/sub-1/services");
   assert.ok(without.every((tab) => !tab.href.includes("#")));
   assert.equal(subscriptionTabs("sub-1", { showAdvanced: true }).at(-1)?.href, "/admin/subscriptions/canonical/sub-1/advanced");
+  assert.deepEqual(
+    subscriptionTabs("sub-1", { showAdvanced: false, showCollection: true }).map((tab) => tab.key),
+    ["services", "billing", "collection", "activity"],
+  );
 });
 
 test("active tab resolves from the first child segment", () => {
@@ -96,6 +100,7 @@ test("active tab resolves from the first child segment", () => {
   assert.equal(activeSubscriptionTab(undefined), "services");
   assert.equal(activeSubscriptionTab("services"), "services");
   assert.equal(activeSubscriptionTab("billing"), "billing");
+  assert.equal(activeSubscriptionTab("collection"), "collection");
   // The retired Invoices & payments route redirects to Billing and must not leave no tab active.
   assert.equal(activeSubscriptionTab("invoices"), "billing");
   assert.equal(activeSubscriptionTab("add-service"), "services");
@@ -113,11 +118,12 @@ test("the subscription index redirects to Services and keeps the query string", 
   assert.match(tab, /<SubscriptionNotices /);
 });
 
-test("card-billing drafts collect a live card on the Services tab instead of default-deny", async () => {
+test("card-billing drafts send staff to Collection instead of default-deny", async () => {
   const notices = await readFile("components/admin/canonical-subscription/subscription-notices.tsx", "utf8");
-  assert.match(notices, /CollectCardOnFilePanel/);
+  assert.match(notices, /subscriptionCollectionPath/);
   assert.doesNotMatch(notices, /Live Stripe remains default-deny/);
   assert.doesNotMatch(notices, /isolated test-provider/);
+  assert.doesNotMatch(notices, /CollectCardOnFilePanel/);
 });
 
 test("manual-invoice customers with no provider history never see provider pages", () => {
@@ -240,7 +246,7 @@ test("subscription management surfaces have no collapsed sections or hidden anch
 });
 
 test("each subscription tab has a route and invoices are visible by default on Billing", async () => {
-  for (const segment of ["services", "billing", "activity", "advanced"]) {
+  for (const segment of ["services", "billing", "collection", "activity", "advanced"]) {
     const page = await readFile(`app/admin/subscriptions/canonical/[subscriptionId]/(tabs)/${segment}/page.tsx`, "utf8");
     assert.match(page, /requireSubscriptionPage/);
   }

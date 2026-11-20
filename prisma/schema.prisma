@@ -1214,9 +1214,43 @@ model CustomerSubscription {
   canonicalMigrationLedger       CanonicalMigrationLedger?                   @relation("CanonicalMigrationTarget")
   canonicalManualPilotActivation CanonicalManualPilotActivation?             @relation("CanonicalManualPilotTarget")
   operationalActivation          CanonicalSubscriptionOperationalActivation?
+  collectionProgram              SubscriptionCollectionProgram?
 
   @@index([customerId, updatedAt(sort: Desc)])
   @@index([status])
+}
+
+enum SubscriptionCollectionProgramStatus {
+  armed
+  completed
+  canceled
+}
+
+/// Scheduled card collection for a canonical Stripe agreement: ask 3 days before
+/// the first charge, then send a pay-now Checkout if the card is still missing.
+model SubscriptionCollectionProgram {
+  id                     String                               @id @default(uuid())
+  customerSubscriptionId String                               @unique
+  customerSubscription   CustomerSubscription                 @relation(fields: [customerSubscriptionId], references: [id], onDelete: Cascade)
+  customerId             String
+  status                 SubscriptionCollectionProgramStatus
+  firstChargeDate        DateTime                             @db.Date
+  leadDays               Int                                  @default(3)
+  lastCardLinkSentOn     DateTime?                            @db.Date
+  lastPayNowSentOn       DateTime?                            @db.Date
+  lastCheckoutKind       String?
+  lastCheckoutUrl        String?                              @db.Text
+  lastCheckoutSessionId  String?
+  lastNotifySummary      String?                              @db.Text
+  armedById              String?
+  armedAt                DateTime
+  canceledAt             DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime                             @default(now())
+  updatedAt              DateTime                             @updatedAt
+
+  @@index([status, firstChargeDate])
+  @@index([customerId])
 }
 
 /// Durable staff approval for a normal, newly-onboarded canonical agreement.
