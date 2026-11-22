@@ -529,7 +529,7 @@ test("80: historical partial balance contributes to collection attention without
   assert.equal(summary.outstandingBalance, "50.00");
   assert.equal(summary.collectionHealth, "action_required");
   assert.equal(summary.attentionRequired, true);
-  assert.equal(summary.eligibleForExecution, true);
+  assert.equal(summary.eligibleForExecution, false);
   assert.ok((await prisma.subscriptionItem.findMany({ where: { customerSubscriptionId: migration.targetSubscriptionId } }))
     .every((item) => item.status === "active"));
   assert.ok((await prisma.serviceAssignment.findMany({ where: { id: { in: fixture.assignments.map((assignment) => assignment.id) } } }))

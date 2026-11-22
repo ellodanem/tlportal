@@ -276,8 +276,9 @@ test("33: additions, removals, rate changes, and hardware replacement preserve p
   }
 
   const november = await generateInvoiceFromSchedule(fixture.schedule.id, new Date("2026-11-01T12:00:00.000Z"));
-  const december = await generateInvoiceFromSchedule(fixture.schedule.id, new Date("2026-12-01T12:00:00.000Z"));
   expectGenerated(november);
+  await recordInvoicePayment({ invoiceId: november.invoiceId, amount: 50, method: "cash" });
+  const december = await generateInvoiceFromSchedule(fixture.schedule.id, new Date("2026-12-01T12:00:00.000Z"));
   expectGenerated(december);
   const invoices = await prisma.invoice.findMany({
     where: { id: { in: [november.invoiceId, december.invoiceId] } },
@@ -310,10 +311,42 @@ test("34: partial payment drives outstanding balance and seven-day staff attenti
   assert.equal(summary.attentionRequired, true);
   assert.equal(summary.recurringCycleTotal, "25.00");
   assert.equal(summary.items.length, 1);
-  assert.equal(summary.eligibleForExecution, true);
+  assert.equal(summary.eligibleForExecution, false);
+  assert.ok(summary.validationIssues.some((issue) => issue.code === "PAST_DUE_BILLING_HOLD"));
   const unchanged = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
   assert.equal(unchanged.lifecycleStatus, "active");
   assert.equal((await prisma.subscriptionItem.findUniqueOrThrow({ where: { id: fixture.items[0].id } })).status, "active");
+});
+
+test("past-due invoices skip later recurring cycles instead of stacking bills", async () => {
+  const fixture = await createCanonicalFixture({ dueDaysAfterIssue: 7 });
+  const first = await generateInvoiceFromSchedule(fixture.schedule.id, new Date("2026-11-01T12:00:00.000Z"));
+  expectGenerated(first);
+  const held = await generateInvoiceFromSchedule(
+    fixture.schedule.id,
+    new Date("2026-12-01T12:00:00.000Z"),
+    { skipIfNoLongerDue: true },
+  );
+  assert.equal(held.skipped, true);
+  if (held.skipped) assert.equal(held.reason, "past_due_hold");
+  assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 1);
+  const advanced = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(advanced.nextBillingDate?.toISOString().slice(0, 10), "2027-01-01");
+  assert.equal(advanced.collectionHealth, "action_required");
+  const january = await generateInvoiceFromSchedule(
+    fixture.schedule.id,
+    new Date("2027-01-01T12:00:00.000Z"),
+    { skipIfNoLongerDue: true },
+  );
+  assert.equal(january.skipped, true);
+  if (january.skipped) assert.equal(january.reason, "past_due_hold");
+  assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 1);
+  const skippedAhead = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(skippedAhead.nextBillingDate?.toISOString().slice(0, 10), "2027-02-01");
+  await assert.rejects(
+    generateInvoiceFromSchedule(fixture.schedule.id, new Date("2027-02-01T12:00:00.000Z")),
+    (caught: unknown) => caught instanceof CanonicalNativeBillingError && caught.code === "PAST_DUE_BILLING_HOLD",
+  );
 });
 
 test("35: concurrent generation creates one canonical invoice and one snapshot set", async () => {

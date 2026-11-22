@@ -6,6 +6,7 @@ import type { InvoiceKind, InvoiceStatus, PaymentMethod, Prisma } from "@prisma/
 
 import { allocateInvoiceNumber } from "@/lib/billing/native/numbering";
 import { prisma } from "@/lib/db";
+import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import {
   computeDocumentTotals,
   computeLineTotal,
@@ -429,10 +430,45 @@ export async function deleteDraftInvoice(invoiceId: string): Promise<void> {
   await prisma.invoice.delete({ where: { id: invoiceId } });
 }
 
-/** Write off an invoice (bad debt; preserved for audit). */
-export async function writeOffInvoice(invoiceId: string): Promise<void> {
+/** Write off an invoice (bad debt / uncollectable; preserved for audit, not outstanding). */
+export async function writeOffInvoice(
+  invoiceId: string,
+  input: { note?: string | null } = {},
+): Promise<void> {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: {
+      id: true,
+      status: true,
+      number: true,
+      amountDue: true,
+      notes: true,
+      customerId: true,
+    },
+  });
+  if (!invoice) throw new Error("Invoice not found.");
+  if (invoice.status === "written_off") return;
+  if (invoice.status === "draft") throw new Error("Draft invoices cannot be written off. Delete them instead.");
+  if (invoice.status === "paid") throw new Error("Paid invoices cannot be written off.");
+  if (invoice.status === "void") throw new Error("Void invoices cannot be written off.");
+
+  const note = input.note?.trim() || null;
   await prisma.invoice.update({
     where: { id: invoiceId },
-    data: { status: "written_off" },
+    data: {
+      status: "written_off",
+      amountDue: "0.00",
+      ...(note ? { notes: invoice.notes ? `${invoice.notes}\n${note}` : note } : {}),
+    },
+  });
+  await recordOperationalEvent({
+    category: "invoice.written_off",
+    summary: `Invoice ${invoice.number ?? invoice.id.slice(0, 8)} written off`,
+    customerId: invoice.customerId,
+    payload: {
+      invoiceId: invoice.id,
+      number: invoice.number,
+      amountDue: invoice.amountDue.toFixed(2),
+    },
   });
 }

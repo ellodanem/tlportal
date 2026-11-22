@@ -6185,3 +6185,15 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 - Pushed `dadcc44..64e31ce` to origin/main.
 
+
+### 2026-11-20 11:19 UTC — commit `0a9a7a6`
+
+- fix(billing): point collection alerts at Customer billing when this subscription has no open invoices
+- Agent notes: The Billing tab review banner links to Customer billing when this subscription has no open invoices. When it does, the banner still says those invoices are listed below.
+
+
+### 2026-11-20 11:19 UTC — pre-push (`main` → origin) @ `0a9a7a6`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `64e31ce..0a9a7a6` to origin/main.
+

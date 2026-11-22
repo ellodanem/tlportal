@@ -14,6 +14,7 @@ import { SwitchToStripe } from "@/components/admin/canonical-subscription/switch
 import { SubscriptionLedgerTable } from "@/components/admin/financial-ledger-table";
 import { SubscriptionAdjustmentInvoiceForm } from "@/components/admin/subscription-adjustment-invoice-form";
 import { canonicalAnnualAdjustmentExecutionEnabled } from "@/lib/domain/canonical-annual-adjustment";
+import { collectionHealthHoldsRecurringBilling } from "@/lib/domain/canonical-native-billing";
 import { daysUntil } from "@/lib/domain/canonical-service-presentation";
 import { subscriptionAnnualAdjustmentPath, subscriptionBillingPath, subscriptionCollectionPath } from "@/lib/domain/canonical-subscription-navigation";
 import { NOT_LINKED_LABEL } from "@/lib/domain/financial-ledger";
@@ -61,6 +62,7 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
     : []);
   const adjustmentExecutionEnabled = canonicalAnnualAdjustmentExecutionEnabled();
   const issues = nativeBillingReadinessIssues(subscription);
+  const billingHeld = collectionHealthHoldsRecurringBilling(subscription.summary?.collectionHealth);
   const schedules = subscription.recurringSchedules;
   const showAnnualAdjustment = subscription.billingIntervalMonths === 12 && subscription.controlMode !== "legacy";
   // Date correction is refused once any invoice exists, so only offer it while the ledger is empty.
@@ -71,9 +73,17 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
 
   return (
     <div className="flex flex-col gap-5">
-      {subscription.summary?.attentionRequired ? (
+      {billingHeld || subscription.summary?.attentionRequired ? (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">
-          <span className="font-semibold">Review collection.</span> An open balance is beyond grace or a provider operation needs review.{outstanding && outstanding.amount > 0 ? ` ${formatMoney(outstanding.amount, outstanding.currency)} is outstanding on this subscription.` : ""}{" "}
+          {billingHeld ? (
+            <>
+              <span className="font-semibold">Recurring billing is on hold.</span> An invoice is past due, so no further cycle will be issued until it is paid.{outstanding && outstanding.amount > 0 ? ` ${formatMoney(outstanding.amount, outstanding.currency)} is outstanding on this subscription.` : ""}{" "}
+            </>
+          ) : (
+            <>
+              <span className="font-semibold">Review collection.</span> An open balance is beyond grace or a provider operation needs review.{outstanding && outstanding.amount > 0 ? ` ${formatMoney(outstanding.amount, outstanding.currency)} is outstanding on this subscription.` : ""}{" "}
+            </>
+          )}
           {openRows.length > 0 ? "Open invoices are listed below." : (
             <>
               <Link href={customerBillingHref} className="font-semibold underline">Review open invoices on Customer billing</Link>.
@@ -112,12 +122,14 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
           {showMrr ? <span className="text-zinc-500">· MRR equivalent {money(subscription.normalizedMrr, currency)}</span> : null}
         </p>
         <p className="mt-4 border-t border-zinc-100 pt-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
-          {subscription.collectionMethod === "stripe_autocharge"
-            ? "Stripe charges the saved card automatically on this date. TL Portal does not create an invoice for the cycle."
-            : subscription.collectionMethod === "manual_invoice"
-              ? `TL Portal issues an invoice on this date. It is due ${schedules[0]?.dueDaysAfterIssue != null ? `${schedules[0].dueDaysAfterIssue} days after issue` : "after it is issued"}, with ${subscription.gracePeriodDays ?? 0} days' grace before it needs attention.`
-              : "No collection method has been chosen yet, so nothing will be billed automatically."}
-          {" "}The amount comes from each service&apos;s effective rate.
+          {billingHeld
+            ? "No invoice will be issued on this date while a previous invoice is past due. The date moves forward instead, because service should already have stopped."
+            : subscription.collectionMethod === "stripe_autocharge"
+              ? "Stripe charges the saved card automatically on this date. TL Portal does not create an invoice for the cycle."
+              : subscription.collectionMethod === "manual_invoice"
+                ? `TL Portal issues an invoice on this date. It is due ${schedules[0]?.dueDaysAfterIssue != null ? `${schedules[0].dueDaysAfterIssue} days after issue` : "after it is issued"}, with ${subscription.gracePeriodDays ?? 0} days' grace before it needs attention.`
+                : "No collection method has been chosen yet, so nothing will be billed automatically."}
+          {billingHeld ? null : " The amount comes from each service's effective rate."}
         </p>
         {showAnnualAdjustment ? (
           <p className="mt-3 text-sm text-zinc-500">

@@ -17,17 +17,24 @@ import {
 } from "@/lib/billing/recurring-period";
 import { customerDisplayName } from "@/lib/admin/customer-display";
 import { prisma } from "@/lib/db";
-import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import {
-  assertAssignmentNotCanonical,
-  assertScheduleNotCanonicalOwned,
-} from "@/lib/services/canonical-ownership-guard-service";
+  CanonicalNativeBillingError,
+  deriveCanonicalCollectionHealth,
+  PAST_DUE_BILLING_HOLD_CODE,
+  PAST_DUE_BILLING_HOLD_MESSAGE,
+  recurringBillingHeldForPastDue,
+} from "@/lib/domain/canonical-native-billing";
 import { groupedLinesStillValid } from "@/lib/domain/canonical-schedule-presentation";
+import { isSupportedSubscriptionIntervalMonths } from "@/lib/domain/canonical-subscription";
 import {
   computeLineTotal,
   toMoneyString,
   toQtyString,
 } from "@/lib/domain/native-billing";
+import {
+  assertAssignmentNotCanonical,
+  assertScheduleNotCanonicalOwned,
+} from "@/lib/services/canonical-ownership-guard-service";
 import type { NativeLineInput } from "@/lib/services/native-invoice-service";
 import {
   createDraftInvoiceInTransaction,
@@ -230,6 +237,7 @@ async function commitRecurringInvoicePeriod(
           select: {
             id: true,
             controlMode: true,
+            gracePeriodDays: true,
             canonicalManualPilotActivation: { select: { sourceKind: true, sourceInvoiceId: true } },
           },
         },
@@ -315,6 +323,60 @@ async function commitRecurringInvoicePeriod(
       issueDate,
       schedule.intervalMonths,
     );
+
+    if (!existing) {
+      const collectionInvoices = await tx.invoice.findMany({
+        where: {
+          archivedAt: null,
+          status: { notIn: ["draft", "void", "written_off"] },
+          amountDue: { gt: 0 },
+          OR: [
+            { recurringScheduleId: schedule.id },
+            ...(schedule.customerSubscription
+              ? [{ customerSubscriptionId: schedule.customerSubscription.id }]
+              : []),
+          ],
+        },
+        select: { amountDue: true, dueDate: true },
+      });
+      const collection = deriveCanonicalCollectionHealth({
+        invoices: collectionInvoices,
+        gracePeriodDays: schedule.customerSubscription?.gracePeriodDays ?? 7,
+        asOf,
+      });
+      if (recurringBillingHeldForPastDue(collection)) {
+        if (options?.force || !options?.skipIfNoLongerDue) {
+          throw new CanonicalNativeBillingError(PAST_DUE_BILLING_HOLD_CODE, PAST_DUE_BILLING_HOLD_MESSAGE);
+        }
+        await tx.recurringInvoiceSchedule.update({
+          where: { id: schedule.id },
+          data: { nextIssueDate: advancedDate },
+        });
+        if (schedule.customerSubscription) {
+          await tx.customerSubscription.update({
+            where: { id: schedule.customerSubscription.id },
+            data: {
+              nextBillingDate: advancedDate,
+              collectionHealth: collection.status,
+            },
+          });
+        }
+        await tx.operationalEvent.create({
+          data: {
+            category: "billing.past_due_hold",
+            summary: "Recurring billing skipped because an invoice is past due.",
+            customerId: schedule.customerId,
+            payload: {
+              scheduleId: schedule.id,
+              subscriptionId: schedule.customerSubscription?.id ?? null,
+              advancedTo: advancedDate.toISOString(),
+              collectionHealth: collection.status,
+            },
+          },
+        });
+        return { kind: "past_due_hold" };
+      }
+    }
 
     if (existing) {
       const belongsToCanonicalSubscription = canonicalCycle
@@ -651,7 +713,13 @@ export async function processDueRecurringSchedules(asOf = new Date()): Promise<P
         const result = await generateInvoiceFromSchedule(row.id, asOf, {
           skipIfNoLongerDue: true,
         });
-        if (result.skipped) break;
+        if (result.skipped) {
+          if (result.reason === "past_due_hold") {
+            iterations += 1;
+            continue;
+          }
+          break;
+        }
         if (result.created) invoicesGenerated += 1;
         if (result.emailError) {
           deliveryErrors.push({ invoiceId: result.invoiceId, message: result.emailError });

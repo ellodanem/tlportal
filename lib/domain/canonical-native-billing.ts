@@ -15,6 +15,9 @@ import {
 } from "./canonical-subscription-activation";
 
 export const CANONICAL_NATIVE_BILLING_FLAG = "CANONICAL_NATIVE_BILLING_ENABLED";
+export const PAST_DUE_BILLING_HOLD_CODE = "PAST_DUE_BILLING_HOLD";
+export const PAST_DUE_BILLING_HOLD_MESSAGE =
+  "Recurring billing is on hold because an invoice is past due. Service should already have stopped, so a further cycle is not issued.";
 
 export class CanonicalNativeBillingError extends Error {
   readonly code: string;
@@ -260,4 +263,16 @@ export function deriveCanonicalCollectionHealth(input: {
     attentionRequired: gracePeriodExceeded,
     earliestPastDueDate,
   };
+}
+
+/** An unpaid invoice has already missed its due date, so the next recurring cycle must not be issued. */
+export function recurringBillingHeldForPastDue(
+  collection: Pick<CanonicalCollectionHealth, "hasPastDueBalance">,
+): boolean {
+  return collection.hasPastDueBalance;
+}
+
+/** Past-due and action-required both mean billing should already have stopped. */
+export function collectionHealthHoldsRecurringBilling(status: string | null | undefined): boolean {
+  return status === "past_due" || status === "action_required";
 }

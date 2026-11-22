@@ -8,6 +8,7 @@ import {
   subscriptionCollectionPath,
 } from "@/lib/domain/canonical-subscription-navigation";
 import type { SubscriptionDetail, SubscriptionPermissions } from "@/lib/admin/canonical-subscription-page-data";
+import { collectionHealthHoldsRecurringBilling } from "@/lib/domain/canonical-native-billing";
 
 /**
  * Things that need a person's attention, shown above the services list: errors, collection and
@@ -48,7 +49,9 @@ export async function SubscriptionNotices({
       {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{error}</p> : null}
       {pilot === "shadow-created" ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">The source-controlled subscription was created. Review it on the Advanced page before any authority transfer.</p> : null}
 
-      {subscription.summary?.attentionRequired ? (
+      {collectionHealthHoldsRecurringBilling(subscription.summary?.collectionHealth) ? (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100"><span className="font-semibold">Recurring billing is on hold.</span> An invoice is past due, so no further cycle will be issued until it is paid. <Link href={`${base}/billing`} className="font-semibold underline">See invoices &amp; payments in Billing</Link>.</div>
+      ) : subscription.summary?.attentionRequired ? (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100"><span className="font-semibold">Review collection.</span> An open balance is beyond grace or a provider operation needs review. <Link href={`${base}/billing`} className="font-semibold underline">See invoices &amp; payments in Billing</Link>.</div>
       ) : null}
       {subscription.controlMode === "shadow" ? (

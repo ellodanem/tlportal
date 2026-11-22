@@ -1,5 +1,6 @@
 export type RecurringInvoiceCommitResult =
   | { kind: "not_due" }
+  | { kind: "past_due_hold" }
   | {
       kind: "invoice";
       invoiceId: string;
@@ -9,8 +10,10 @@ export type RecurringInvoiceCommitResult =
       greetingName: string;
     };
 
+export type RecurringInvoiceSkipReason = "not_due" | "past_due_hold";
+
 export type RecurringInvoiceGenerationResult =
-  | { skipped: true; created: false; emailed: false }
+  | { skipped: true; created: false; emailed: false; reason: RecurringInvoiceSkipReason }
   | {
       skipped: false;
       invoiceId: string;
@@ -44,8 +47,8 @@ export async function coordinateRecurringInvoiceGeneration(
   dependencies: RecurringInvoiceCoordinatorDependencies,
 ): Promise<RecurringInvoiceGenerationResult> {
   const committed = await dependencies.commit();
-  if (committed.kind === "not_due") {
-    return { skipped: true, created: false, emailed: false };
+  if (committed.kind === "not_due" || committed.kind === "past_due_hold") {
+    return { skipped: true, created: false, emailed: false, reason: committed.kind };
   }
 
   const base = {

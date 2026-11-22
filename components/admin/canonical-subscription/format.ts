@@ -33,7 +33,8 @@ export function nativeBillingReadinessIssues(subscription: {
   summary?: { validationIssues: { code: string; message: string }[] } | null;
 }): { code: string; message: string }[] {
   if (subscription.collectionMethod !== "manual_invoice") return [];
-  return subscription.summary?.validationIssues ?? [];
+  // Past-due hold is a collection condition, shown as its own banner rather than a readiness defect.
+  return (subscription.summary?.validationIssues ?? []).filter((issue) => issue.code !== "PAST_DUE_BILLING_HOLD");
 }
 
 export function authorityLabel(access: string) {

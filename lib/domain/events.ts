@@ -22,6 +22,7 @@ export const OPERATIONAL_EVENT_CATEGORIES = [
   "customer.unarchived",
   "invoice.archived",
   "invoice.unarchived",
+  "invoice.written_off",
 ] as const;
 
 export type OperationalEventCategory = (typeof OPERATIONAL_EVENT_CATEGORIES)[number];

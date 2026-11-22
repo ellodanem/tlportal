@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { Prisma } from "@prisma/client";
@@ -6,7 +7,10 @@ import { Prisma } from "@prisma/client";
 import {
   assertCanonicalNativeBillingExecutionEnabled,
   CanonicalNativeBillingError,
+  collectionHealthHoldsRecurringBilling,
   deriveCanonicalCollectionHealth,
+  PAST_DUE_BILLING_HOLD_CODE,
+  recurringBillingHeldForPastDue,
   resolveCanonicalBillingCycle,
 } from "../lib/domain/canonical-native-billing";
 
@@ -213,4 +217,32 @@ test("partial balances become staff attention only after the seven-day grace per
   });
   assert.equal(afterGrace.status, "action_required");
   assert.equal(afterGrace.attentionRequired, true);
+});
+
+test("a past-due unpaid invoice holds the next recurring cycle", () => {
+  const current = deriveCanonicalCollectionHealth({
+    invoices: [{ amountDue: "20.00", dueDate: new Date("2026-11-23T00:00:00.000Z") }],
+    gracePeriodDays: 7,
+    asOf: new Date("2026-11-16T00:00:00.000Z"),
+  });
+  assert.equal(current.hasPastDueBalance, false);
+  assert.equal(recurringBillingHeldForPastDue(current), false);
+
+  const pastDue = deriveCanonicalCollectionHealth({
+    invoices: [{ amountDue: "20.00", dueDate: new Date("2026-10-23T00:00:00.000Z") }],
+    gracePeriodDays: 7,
+    asOf: new Date("2026-11-16T00:00:00.000Z"),
+  });
+  assert.equal(pastDue.status, "action_required");
+  assert.equal(recurringBillingHeldForPastDue(pastDue), true);
+  assert.equal(collectionHealthHoldsRecurringBilling("past_due"), true);
+  assert.equal(collectionHealthHoldsRecurringBilling("action_required"), true);
+  assert.equal(collectionHealthHoldsRecurringBilling("current"), false);
+  assert.equal(PAST_DUE_BILLING_HOLD_CODE, "PAST_DUE_BILLING_HOLD");
+});
+
+test("the daily recurring job keeps walking past-due schedules instead of stopping the run", async () => {
+  const source = await readFile(new URL("../lib/services/native-recurring-schedule-service.ts", import.meta.url), "utf8");
+  assert.match(source, /reason === "past_due_hold"/);
+  assert.match(source, /kind: "past_due_hold"/);
 });

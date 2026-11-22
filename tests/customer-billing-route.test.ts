@@ -125,6 +125,10 @@ test("native billing readiness issues only show for manual-invoice subscriptions
   assert.deepEqual(nativeBillingReadinessIssues({ collectionMethod: null, summary }), []);
   assert.equal(nativeBillingReadinessIssues({ collectionMethod: "manual_invoice", summary }).length, 2);
   assert.deepEqual(nativeBillingReadinessIssues({ collectionMethod: "manual_invoice", summary: null }), []);
+  assert.deepEqual(nativeBillingReadinessIssues({
+    collectionMethod: "manual_invoice",
+    summary: { validationIssues: [{ code: "PAST_DUE_BILLING_HOLD", message: "held" }] },
+  }), []);
 });
 
 test("customer billing sends canonical subscriptions to their own Billing tab, legacy rows to the old tools", async () => {

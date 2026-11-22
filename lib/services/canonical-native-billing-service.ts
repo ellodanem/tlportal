@@ -8,6 +8,9 @@ import {
   assertCanonicalNativeBillingExecutionEnabled,
   CanonicalNativeBillingError,
   deriveCanonicalCollectionHealth,
+  PAST_DUE_BILLING_HOLD_CODE,
+  PAST_DUE_BILLING_HOLD_MESSAGE,
+  recurringBillingHeldForPastDue,
   resolveCanonicalBillingCycle,
   type CanonicalBillingCycle,
   type CanonicalNativeBillingEnvironment,
@@ -342,6 +345,9 @@ export async function getCanonicalSubscriptionBillingSummary(
   }
   if (subscription.collectionMethod !== "manual_invoice") {
     validationIssues.push({ code: "WRONG_COLLECTION_METHOD", message: "Native recurring billing requires manual invoice collection." });
+  }
+  if (recurringBillingHeldForPastDue(collection)) {
+    validationIssues.push({ code: PAST_DUE_BILLING_HOLD_CODE, message: PAST_DUE_BILLING_HOLD_MESSAGE });
   }
   if (subscription.recurringSchedules.length !== 1) {
     validationIssues.push({
