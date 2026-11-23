@@ -1773,7 +1773,8 @@ model Invoice {
   /// Cash/bank/cheque payment instructions printed on the PDF (key for non-card payers).
   paymentInstructions String?   @db.Text
   /// When true, the public pay link offers Stripe Checkout for the outstanding balance.
-  allowOnlinePayment  Boolean   @default(false)
+  /// New invoices default on; staff can uncheck for cash/cheque-only bills.
+  allowOnlinePayment  Boolean   @default(true)
 
   publicToken String?   @unique
   sentAt      DateTime?

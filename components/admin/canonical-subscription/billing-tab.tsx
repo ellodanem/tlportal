@@ -169,9 +169,10 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
             <CanonicalSubscriptionCollectionForm subscriptionId={subscription.id} value={subscription.collectionMethod} />
           </div>
         ) : null}
-        {permissions.canManage && subscription.collectionMethod === "stripe_autocharge" ? (
+        {permissions.canManage && (subscription.collectionMethod === "stripe_autocharge"
+          || (subscription.controlMode === "canonical" && ["draft", "pending_activation", "active"].includes(subscription.lifecycleStatus ?? ""))) ? (
           <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-300">
-            Collect or schedule the card on{" "}
+            Send a card Checkout or schedule collection on{" "}
             <Link href={subscriptionCollectionPath(subscription.id)} className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Collection</Link>.
           </p>
         ) : null}

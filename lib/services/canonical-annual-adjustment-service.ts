@@ -451,8 +451,7 @@ async function executeAdjustmentTransaction(
       dueDate: addUtcDays(issueDate, dueDays),
       notes: `Prorated service addition through ${proposal.periodEnd}${proposal.isOverride ? ` (${proposal.method.replaceAll("_", " ")} adjustment agreed with the customer)` : ""}.`,
       paymentInstructions: schedule?.paymentInstructions ?? null,
-      allowOnlinePayment: subscription.collectionMethod === "stripe_autocharge"
-        || input.allowOnlinePayment === true,
+      allowOnlinePayment: input.allowOnlinePayment ?? true,
       createdById: input.authorizedById,
       lineItems: [{
         description: `${proposal.serviceLabel} — prorated ${proposal.billingIntervalMonths === 12 ? "annual " : ""}adjustment`,

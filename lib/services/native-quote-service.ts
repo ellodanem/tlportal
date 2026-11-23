@@ -205,6 +205,7 @@ export async function convertQuoteToInvoice(
         amountDue: toMoneyString(totals.total),
         dueDate: options.dueDate ?? null,
         paymentInstructions: options.paymentInstructions ?? null,
+        allowOnlinePayment: true,
         createdById: options.createdById ?? quote.createdById,
         lineItems: { create: lineCreateData(lines) },
       },

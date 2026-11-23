@@ -61,6 +61,7 @@ import {
   CanonicalCollectionProgramError,
   armCollectionProgram,
   cancelCollectionProgram,
+  sendStaffPayNowCheckout,
 } from "@/lib/services/canonical-collection-program-service";
 
 export type CanonicalSubscriptionFormState = {
@@ -187,6 +188,40 @@ export async function startStripeCardOnFileCheckoutAction(
         : closed
           ? `${closed}. Checkout is ready — send the link so the customer can save a card. Nothing is charged until the renewal date.`
           : "Checkout is ready — send the link so the customer can save a card. Nothing is charged until the renewal date.",
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * Create a Stripe Checkout that charges the recurring amount today, emails/WhatsApps the
+ * customer, and voids open native invoices when staff confirm so the cycle is not billed twice.
+ */
+export async function startStripePayNowCheckoutAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const session = await requireStaff();
+    const result = await sendStaffPayNowCheckout({
+      subscriptionId,
+      staffUserId: session.sub,
+      confirmChargeNow: text(formData, "confirmChargeNow") === "yes",
+      confirmCancelExisting: text(formData, "confirmCancelExisting") === "yes",
+      confirmVoidOpenInvoices: text(formData, "confirmVoidOpenInvoices") === "yes",
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}/billing`);
+    revalidatePath(subscriptionCollectionPath(subscriptionId));
+    const voided = result.voidedInvoiceNumbers.length
+      ? ` Voided ${result.voidedInvoiceNumbers.join(", ")}.`
+      : "";
+    return {
+      message: result.reused
+        ? `This Checkout link is still open. ${result.notifySummary}.${voided}`
+        : `Pay-now Checkout sent. Stripe charges when the customer completes it. ${result.notifySummary}.${voided}`,
     };
   } catch (error) {
     return actionError(error);

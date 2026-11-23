@@ -62,10 +62,31 @@ test("arming on or after the due date goes straight to pay-now", () => {
   assert.equal(collectionDailyAction({ ...armed, today: new Date("2026-12-19T00:00:00.000Z") }), "send_pay_now");
 });
 
-test("the Collection tab is for card billing or an already-armed program", () => {
+test("the Collection tab is for card billing, an armed program, or a live canonical agreement", () => {
   assert.equal(showSubscriptionCollectionTab({ collectionMethod: "stripe_autocharge", hasCollectionProgram: false }), true);
   assert.equal(showSubscriptionCollectionTab({ collectionMethod: "manual_invoice", hasCollectionProgram: true }), true);
   assert.equal(showSubscriptionCollectionTab({ collectionMethod: "manual_invoice", hasCollectionProgram: false }), false);
+  assert.equal(showSubscriptionCollectionTab({
+    collectionMethod: "manual_invoice",
+    hasCollectionProgram: false,
+    controlMode: "canonical",
+    lifecycleStatus: "active",
+  }), true);
+  assert.equal(showSubscriptionCollectionTab({
+    collectionMethod: "manual_invoice",
+    hasCollectionProgram: false,
+    controlMode: "canonical",
+    lifecycleStatus: "ended",
+  }), false);
+});
+
+test("Collection can send pay-now Checkout without switching collection first", async () => {
+  const tab = await readFile("components/admin/canonical-subscription/collection-tab.tsx", "utf8");
+  assert.match(tab, /CollectPayNowPanel/);
+  assert.doesNotMatch(tab, /Set collection to automatic card billing on Billing first/);
+  const actions = await readFile("app/admin/subscriptions/canonical/actions.ts", "utf8");
+  assert.match(actions, /startStripePayNowCheckoutAction/);
+  assert.match(actions, /sendStaffPayNowCheckout/);
 });
 
 test("the daily billing cron sends Collection Checkout without the reminder flag", async () => {

@@ -42,6 +42,10 @@ export function collectionDailyAction(input: {
 export function showSubscriptionCollectionTab(input: {
   collectionMethod: string | null;
   hasCollectionProgram: boolean;
+  controlMode?: string | null;
+  lifecycleStatus?: string | null;
 }): boolean {
-  return input.collectionMethod === "stripe_autocharge" || input.hasCollectionProgram;
+  if (input.collectionMethod === "stripe_autocharge" || input.hasCollectionProgram) return true;
+  return input.controlMode === "canonical"
+    && ["draft", "pending_activation", "active"].includes(input.lifecycleStatus ?? "");
 }

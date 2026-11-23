@@ -13,6 +13,7 @@ import {
   CanonicalStripeCardOnFileError,
   startStripeCardOnFileCheckout,
 } from "@/lib/services/canonical-stripe-card-on-file-service";
+import { voidInvoice } from "@/lib/services/native-invoice-service";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
 import { sendStripePaymentLinkWhatsApp } from "@/lib/billing/customer-whatsapp";
 import { recordOutboundWhatsAppMessage } from "@/lib/communications/whatsapp-conversation-service";
@@ -113,6 +114,98 @@ async function notifyCheckout(input: {
   }
 
   return parts.length ? parts.join("; ") : "Checkout created. Add an email or mobile number to send it automatically.";
+}
+
+const VOIDABLE_INVOICE_STATUSES = ["open", "partially_paid", "overdue"] as const;
+
+export async function listOpenInvoicesForPayNow(subscriptionId: string): Promise<Array<{
+  id: string;
+  number: string | null;
+  amountDue: string;
+  currency: string;
+}>> {
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      customerSubscriptionId: subscriptionId,
+      status: { in: [...VOIDABLE_INVOICE_STATUSES] },
+      kind: { not: "subscription_mirror" },
+      archivedAt: null,
+    },
+    select: { id: true, number: true, amountDue: true, currency: true },
+    orderBy: [{ issueDate: "asc" }, { id: "asc" }],
+  });
+  return invoices.map((invoice) => ({
+    id: invoice.id,
+    number: invoice.number,
+    amountDue: invoice.amountDue.toFixed(2),
+    currency: invoice.currency,
+  }));
+}
+
+/**
+ * Staff pay-now: create Checkout that charges today, email/WhatsApp the customer, and
+ * optionally void open native invoices so the same cycle is not billed twice.
+ */
+export async function sendStaffPayNowCheckout(input: {
+  subscriptionId: string;
+  staffUserId: string;
+  confirmChargeNow: boolean;
+  confirmCancelExisting: boolean;
+  confirmVoidOpenInvoices: boolean;
+}): Promise<{ checkoutUrl: string; reused: boolean; notifySummary: string; voidedInvoiceNumbers: string[] }> {
+  if (!input.confirmChargeNow) fail("CONFIRM_CHARGE_REQUIRED", "Confirm that Stripe will charge today.");
+  const subscription = await loadArmedTarget(input.subscriptionId);
+  if (subscription.controlMode !== "canonical") fail("NOT_CANONICAL", "Only a subscription workspace agreement can send Checkout.");
+  if (subscription.providerLinks.length) fail("ALREADY_LINKED", "This subscription already has a card on file.");
+  if (!subscription.nextBillingDate) fail("NEXT_BILLING_DATE_REQUIRED", "Set the first charge date first.");
+
+  const openInvoices = await listOpenInvoicesForPayNow(input.subscriptionId);
+  if (openInvoices.length && !input.confirmVoidOpenInvoices) {
+    fail(
+      "CONFIRM_VOID_REQUIRED",
+      `Void ${openInvoices.map((invoice) => invoice.number ?? "the open invoice").join(", ")} so the customer is not billed twice.`,
+    );
+  }
+
+  let checkout;
+  try {
+    checkout = await startStripeCardOnFileCheckout({
+      subscriptionId: input.subscriptionId,
+      staffUserId: input.staffUserId,
+      confirmCancelExisting: input.confirmCancelExisting,
+      kind: "pay_now",
+    });
+  } catch (error) {
+    if (error instanceof CanonicalStripeCardOnFileError) fail(error.code, error.message);
+    throw error;
+  }
+
+  const voidedInvoiceNumbers: string[] = [];
+  if (input.confirmVoidOpenInvoices) {
+    for (const invoice of openInvoices) {
+      await voidInvoice(invoice.id);
+      if (invoice.number) voidedInvoiceNumbers.push(invoice.number);
+    }
+  }
+
+  const total = await recurringTotalFor(input.subscriptionId, subscription.nextBillingDate);
+  const notifySummary = await notifyCheckout({
+    customer: subscription.customer,
+    checkoutUrl: checkout.checkoutUrl,
+    checkoutSessionId: checkout.checkoutSessionId,
+    kind: "pay_now",
+    firstChargeDate: subscription.nextBillingDate,
+    billingIntervalMonths: subscription.billingIntervalMonths ?? 1,
+    recurringTotal: total,
+    isResend: false,
+  });
+
+  return {
+    checkoutUrl: checkout.checkoutUrl,
+    reused: checkout.reused,
+    notifySummary,
+    voidedInvoiceNumbers,
+  };
 }
 
 async function recurringTotalFor(subscriptionId: string, nextBillingDate: Date): Promise<string> {

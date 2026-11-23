@@ -156,7 +156,7 @@ export function InvoiceGeneratorForm({
   const [paymentInstructions, setPaymentInstructions] = useState(
     initial?.paymentInstructions || DEFAULT_PAYMENT_INSTRUCTIONS,
   );
-  const [allowOnlinePayment, setAllowOnlinePayment] = useState(initial?.allowOnlinePayment ?? false);
+  const [allowOnlinePayment, setAllowOnlinePayment] = useState(initial?.allowOnlinePayment ?? stripeConfigured);
   const [discountAmount, setDiscountAmount] = useState(
     initial?.discountAmount != null && initial.discountAmount > 0 ? String(initial.discountAmount) : "",
   );
@@ -605,11 +605,14 @@ export function InvoiceGeneratorForm({
               </span>
             </label>
           </div>
-        ) : initial?.allowOnlinePayment ? (
+        ) : (
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Online card payment: <span className="font-medium text-zinc-800 dark:text-zinc-200">enabled</span>
+            Online card payment:{" "}
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {initial?.allowOnlinePayment ? "enabled" : "off"}
+            </span>
           </p>
-        ) : null}
+        )}
 
         <div>
           <label className="block text-sm font-medium">Notes</label>

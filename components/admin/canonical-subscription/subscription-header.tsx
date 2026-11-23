@@ -37,6 +37,8 @@ export function SubscriptionHeader({ subscription, permissions }: { subscription
     showCollection: showSubscriptionCollectionTab({
       collectionMethod: subscription.collectionMethod,
       hasCollectionProgram: Boolean(subscription.collectionProgram),
+      controlMode: subscription.controlMode,
+      lifecycleStatus: subscription.lifecycleStatus,
     }),
   });
 

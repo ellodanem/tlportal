@@ -170,9 +170,12 @@ export type CardOnFilePanelState = {
   checkoutFailure: string | null;
 };
 
-export async function inspectStripeCardOnFileReadiness(subscriptionId: string): Promise<CardOnFilePanelState> {
+export async function inspectStripeCardOnFileReadiness(
+  subscriptionId: string,
+  kind: CanonicalCheckoutKind = "card_on_file",
+): Promise<CardOnFilePanelState> {
   const configuration = await loadConfiguration(subscriptionId);
-  const blockers = localBlockers(configuration);
+  const blockers = localBlockers(configuration, kind);
   const empty: CardOnFilePanelState = {
     blockers,
     firstChargeDate: configuration.nextBillingDate ? utcDay(configuration.nextBillingDate) : null,
@@ -196,7 +199,7 @@ export async function inspectStripeCardOnFileReadiness(subscriptionId: string): 
   }
 
   const operation = await prisma.billingOperation.findUnique({
-    where: { operationKey: cardOnFileOperationKey(subscriptionId) },
+    where: { operationKey: kind === "pay_now" ? payNowOperationKey(subscriptionId) : cardOnFileOperationKey(subscriptionId) },
     select: { status: true, providerReference: true, failureMessage: true },
   });
   let checkout: CardOnFilePanelState["checkout"] = null;

@@ -76,7 +76,7 @@ export function parseInvoiceRequestBody(body: unknown): { payload: InvoiceReques
   const notesRaw = String(b.notes ?? "").trim();
   const paymentRaw = String(b.paymentInstructions ?? "").trim();
   const currency = (String(b.currency ?? "XCD").trim() || "XCD").slice(0, 8).toUpperCase();
-  const allowOnlinePayment = b.allowOnlinePayment === true;
+  const allowOnlinePayment = b.allowOnlinePayment == null ? true : b.allowOnlinePayment === true;
   const discountRaw = Number(b.discountAmount ?? 0);
   const discountAmount = Number.isFinite(discountRaw) && discountRaw > 0 ? discountRaw : 0;
 

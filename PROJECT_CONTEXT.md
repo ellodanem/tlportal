@@ -6197,3 +6197,15 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 - Pushed `64e31ce..0a9a7a6` to origin/main.
 
+
+### 2026-11-22 11:17 UTC — commit `b9a6690`
+
+- fix(billing): stop recurring invoices after a customer is past due
+- Agent notes: Recurring generation skips (and advances) a cycle when a linked invoice is past due, so missed months are not billed later. Write-off now zeros `amountDue` and records `invoice.written_off`. Applied in production: Canis Moise **TL-INV-100952** (16 Nov, extra $20) written off; **TL-INV-100947** (16 Oct, $20 overdue) remains due. Unrelated `app/register/page.tsx` left unstaged.
+
+
+### 2026-11-22 11:18 UTC — pre-push (`main` → origin) @ `b9a6690`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `0a9a7a6..b9a6690` to origin/main.
+

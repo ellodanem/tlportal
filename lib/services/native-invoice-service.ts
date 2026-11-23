@@ -47,6 +47,7 @@ export type CreateDraftInvoiceInput = {
   dueDate?: Date | null;
   notes?: string | null;
   paymentInstructions?: string | null;
+  /** Defaults on. Uncheck only for cash/cheque-only invoices. */
   allowOnlinePayment?: boolean;
   serviceAssignmentId?: string | null;
   createdById?: string | null;
@@ -117,7 +118,7 @@ async function createDraftInvoiceWithClient(
       dueDate: input.dueDate ?? null,
       notes: input.notes ?? null,
       paymentInstructions: input.paymentInstructions ?? null,
-      allowOnlinePayment: input.allowOnlinePayment ?? false,
+      allowOnlinePayment: input.allowOnlinePayment ?? true,
       serviceAssignmentId: input.serviceAssignmentId ?? null,
       createdById: input.createdById ?? null,
       lineItems: { create: lineCreateData(input.lineItems) },
@@ -147,7 +148,7 @@ export async function updateDraftInvoice(invoiceId: string, input: CreateDraftIn
 
   const existing = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    select: { status: true, customerSubscriptionId: true },
+    select: { status: true, customerSubscriptionId: true, allowOnlinePayment: true },
   });
   if (!existing) throw new Error("Invoice not found");
   if (existing.status !== "draft") {
@@ -185,7 +186,7 @@ export async function updateDraftInvoice(invoiceId: string, input: CreateDraftIn
         dueDate: input.dueDate ?? null,
         notes: input.notes ?? null,
         paymentInstructions: input.paymentInstructions ?? null,
-        allowOnlinePayment: input.allowOnlinePayment ?? false,
+        allowOnlinePayment: input.allowOnlinePayment ?? existing.allowOnlinePayment,
         serviceAssignmentId: input.serviceAssignmentId ?? null,
         lineItems: { create: lineCreateData(input.lineItems) },
       },

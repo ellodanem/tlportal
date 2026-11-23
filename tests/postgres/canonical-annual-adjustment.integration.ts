@@ -201,7 +201,7 @@ test("Phase 3P: a standard EC$275 addition creates one exact native adjustment a
   assert.equal(invoice.adjustmentGenerationKey, proposal.generationKey);
   assert.equal(invoice.status, "open");
   assert.equal(invoice.total.toFixed(2), "207.19");
-  assert.equal(invoice.allowOnlinePayment, false);
+  assert.equal(invoice.allowOnlinePayment, true);
   assert.equal(invoice.sentAt, null);
   assert.equal(invoice.lineItems.length, 1);
   assert.equal(invoice.serviceSnapshots.length, 1);
