@@ -6209,3 +6209,9 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 - Pushed `0a9a7a6..b9a6690` to origin/main.
 
+
+### 2026-11-23 23:48 UTC — commit `d2459d8`
+
+- feat(billing): send pay-now Checkout from Collection
+- Agent notes: Collection tab now shows for live canonical invoice clients. **Pay now, then bill monthly** creates Stripe Checkout, emails/WhatsApps the customer, and can void open native invoices. New invoices default `allowOnlinePayment` on. Louann Thompson still needs this sent from production Collection after deploy.
+
