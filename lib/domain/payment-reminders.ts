@@ -12,11 +12,11 @@ export const PAYMENT_REMINDERS_PREFERENCE_LABEL: Record<PaymentRemindersPreferen
  * Kill switch for the daily due/overdue/upcoming reminder program (email + WhatsApp).
  *
  * Staff one-off reminders, Stripe payment-received confirmations, and card-decline
- * follow-up stay on. Stripe webhooks that record a paid invoice and advance renewals
- * are independent of this flag — including Zoho-originated Stripe charges (Royal Delivery)
- * that update the customer workspace after the move to the subscription page.
+ * follow-up stay on regardless. Stripe webhooks that record a paid invoice and advance
+ * renewals are independent of this flag — including Zoho-originated Stripe charges
+ * (Royal Delivery) that update the customer workspace after the move to the subscription page.
  */
-export const SCHEDULED_PAYMENT_REMINDERS_ENABLED = false;
+export const SCHEDULED_PAYMENT_REMINDERS_ENABLED = true;
 
 export type PaymentReminderEligibilityInput = {
   billingMode: CustomerBillingMode;

@@ -280,6 +280,7 @@ test("the subscription summary is one strip with the five required facts", async
   assert.doesNotMatch(header, /aria-label="Subscription summary"/);
   assert.match(strip, /lg:grid-cols-4/);
   for (const label of ["Subscription total", "Next renewal", "Billing method", "Outstanding"]) assert.match(strip, new RegExp(label));
+  assert.match(strip, /Awaiting payment/);
   assert.match(strip, /billable service/, "the number of billable services is shown");
   assert.match(header, /billsOnDate\(item, subscription\.nextBillingDate\)/, "the count still comes from the billing resolver's window");
   assert.match(header, /subscription\.summary\?\.recurringCycleTotal/);

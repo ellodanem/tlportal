@@ -20,6 +20,9 @@ import {
 } from "../../lib/services/canonical-subscription-migration-service";
 import { getCurrentCustomerSubscription } from "../../lib/services/customer-subscription-service";
 import { loadLegacyBillingSnapshot } from "../../lib/services/subscription-migration-analysis-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
 const EXECUTION_ENVIRONMENT = {
@@ -36,6 +39,7 @@ assertLocalMigrationExecutionGuard({
 });
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   await prisma.$disconnect();
 });
 

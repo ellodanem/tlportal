@@ -6215,3 +6215,13 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(billing): send pay-now Checkout from Collection
 - Agent notes: Collection tab now shows for live canonical invoice clients. **Pay now, then bill monthly** creates Stripe Checkout, emails/WhatsApps the customer, and can void open native invoices. New invoices default `allowOnlinePayment` on. Louann Thompson still needs this sent from production Collection after deploy.
 
+
+### 2026-11-23 23:48 UTC — commit `86c737b`
+
+- docs: note Collection pay-now send for invoice clients
+
+
+### 2026-11-23 23:48 UTC — pre-push (`main` → origin) @ `86c737b`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+

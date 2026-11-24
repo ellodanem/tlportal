@@ -20,7 +20,7 @@ It runs once daily at 04:15 UTC in `vercel.json`, which is compatible with the V
 
 The scheduler was changed from an assignment-date WhatsApp-only ladder to an invoice-based Email + WhatsApp process. It evaluates the actual native TL invoice `dueDate`, amount outstanding, invoice status, archive status, customer archive status, and availability of a safe customer payment URL.
 
-**Scheduled reminder sends are currently disabled** via `SCHEDULED_PAYMENT_REMINDERS_ENABLED` in `lib/domain/payment-reminders.ts`. The cron endpoint still authenticates and returns `{ disabled: true }` with zero sends. Do **not** disable Stripe `invoice.paid` / `invoice.payment_failed` webhooks to turn reminders off — those paths record the payment and advance renewals (legacy assignment dates and adopted canonical subscriptions, including Royal Delivery’s Zoho + Stripe inbound charge).
+**Scheduled reminder sends are on** via `SCHEDULED_PAYMENT_REMINDERS_ENABLED` in `lib/domain/payment-reminders.ts`. Set that flag to false to pause daily Email + WhatsApp without stopping the cron. Do **not** disable Stripe `invoice.paid` / `invoice.payment_failed` webhooks to turn reminders off — those paths record the payment and advance renewals (legacy assignment dates and adopted canonical subscriptions, including Royal Delivery’s Zoho + Stripe inbound charge).
 
 ## Notification cadence
 
@@ -45,7 +45,7 @@ The original Stripe payment-declined workflow remains active and uses the existi
 - A paid, voided, written-off, archived, or no-longer-payable invoice is not resent.
 - Day 8 creates a `billing.pause_pending` operational event for staff review. It does **not** automatically suspend service, a SIM, a device, or a Stripe subscription.
 - The customer `paymentReminders` preference of `off` suppresses the scheduled program.
-- The global flag `SCHEDULED_PAYMENT_REMINDERS_ENABLED` currently suppresses the scheduled program for everyone. Re-enable it in `lib/domain/payment-reminders.ts` to resume daily sends. Do not change Stripe webhook handlers to toggle reminders.
+- The global flag `SCHEDULED_PAYMENT_REMINDERS_ENABLED` currently allows the scheduled program. Set it to false in `lib/domain/payment-reminders.ts` to pause daily sends. Do not change Stripe webhook handlers to toggle reminders.
 
 ## Phone-number handling
 

@@ -1,6 +1,7 @@
 export type RecurringInvoiceCommitResult =
   | { kind: "not_due" }
   | { kind: "past_due_hold" }
+  | { kind: "awaiting_payment" }
   | {
       kind: "invoice";
       invoiceId: string;
@@ -10,7 +11,7 @@ export type RecurringInvoiceCommitResult =
       greetingName: string;
     };
 
-export type RecurringInvoiceSkipReason = "not_due" | "past_due_hold";
+export type RecurringInvoiceSkipReason = "not_due" | "past_due_hold" | "awaiting_payment";
 
 export type RecurringInvoiceGenerationResult =
   | { skipped: true; created: false; emailed: false; reason: RecurringInvoiceSkipReason }
@@ -40,14 +41,15 @@ function errorMessage(error: unknown, fallback: string): string {
 
 /**
  * Coordinates the database commit and the external PDF/email side effect.
- * The commit must atomically create/finalize the invoice, claim delivery, and
- * advance the schedule. Delivery happens only after that commit succeeds.
+ * The commit must atomically create/finalize the invoice and claim delivery.
+ * The schedule stays on this period until the invoice is paid.
+ * Delivery happens only after that commit succeeds.
  */
 export async function coordinateRecurringInvoiceGeneration(
   dependencies: RecurringInvoiceCoordinatorDependencies,
 ): Promise<RecurringInvoiceGenerationResult> {
   const committed = await dependencies.commit();
-  if (committed.kind === "not_due" || committed.kind === "past_due_hold") {
+  if (committed.kind !== "invoice") {
     return { skipped: true, created: false, emailed: false, reason: committed.kind };
   }
 

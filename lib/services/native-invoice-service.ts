@@ -7,6 +7,7 @@ import type { InvoiceKind, InvoiceStatus, PaymentMethod, Prisma } from "@prisma/
 import { allocateInvoiceNumber } from "@/lib/billing/native/numbering";
 import { prisma } from "@/lib/db";
 import { recordOperationalEvent } from "@/lib/services/operational-event-service";
+import { advanceRecurringScheduleOnPaidInvoice } from "@/lib/services/recurring-schedule-payment-advance";
 import {
   computeDocumentTotals,
   computeLineTotal,
@@ -265,7 +266,18 @@ export async function recordInvoicePayment(input: RecordPaymentInput): Promise<{
   return prisma.$transaction(async (tx) => {
     const inv = await tx.invoice.findUnique({
       where: { id: input.invoiceId },
-      select: { id: true, customerId: true, currency: true, total: true, status: true },
+      select: {
+        id: true,
+        customerId: true,
+        currency: true,
+        total: true,
+        status: true,
+        kind: true,
+        recurringScheduleId: true,
+        customerSubscriptionId: true,
+        issueDate: true,
+        recurringPeriodStart: true,
+      },
     });
     if (!inv) throw new Error("Invoice not found");
     if (inv.status === "draft") {
@@ -311,6 +323,10 @@ export async function recordInvoicePayment(input: RecordPaymentInput): Promise<{
         paidAt: status === "paid" ? receivedAt : null,
       },
     });
+
+    if (status === "paid" && inv.status !== "paid") {
+      await advanceRecurringScheduleOnPaidInvoice(tx, inv);
+    }
 
     return { paymentId: payment.id, status, amountPaid, amountDue };
   });

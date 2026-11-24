@@ -123,11 +123,11 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
         </p>
         <p className="mt-4 border-t border-zinc-100 pt-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
           {billingHeld
-            ? "No invoice will be issued on this date while a previous invoice is past due. The date moves forward instead, because service should already have stopped."
+            ? "No further invoice will be issued until the outstanding invoice is paid. This date stays on the unpaid period."
             : subscription.collectionMethod === "stripe_autocharge"
               ? "Stripe charges the saved card automatically on this date. TL Portal does not create an invoice for the cycle."
               : subscription.collectionMethod === "manual_invoice"
-                ? `TL Portal issues an invoice on this date. It is due ${schedules[0]?.dueDaysAfterIssue != null ? `${schedules[0].dueDaysAfterIssue} days after issue` : "after it is issued"}, with ${subscription.gracePeriodDays ?? 0} days' grace before it needs attention.`
+                ? `TL Portal issues an invoice on this date. The renewal date stays here until that invoice is paid. It is due ${schedules[0]?.dueDaysAfterIssue != null ? `${schedules[0].dueDaysAfterIssue} days after issue` : "after it is issued"}, with ${subscription.gracePeriodDays ?? 0} days' grace before it needs attention.`
                 : "No collection method has been chosen yet, so nothing will be billed automatically."}
           {billingHeld ? null : " The amount comes from each service's effective rate."}
         </p>

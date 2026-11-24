@@ -5,9 +5,14 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/db";
+import { recordInvoicePayment } from "../../lib/services/native-invoice-service";
 import { generateInvoiceFromSchedule } from "../../lib/services/native-recurring-schedule-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   await prisma.$disconnect();
 });
 
@@ -371,7 +376,7 @@ test("financial snapshots protect billed items and rates while line deletion is 
   assert.equal(preserved.billedAmount.toFixed(2), "275.00");
 });
 
-test("Phase 0B row locking creates one invoice and advances one period under concurrency", async () => {
+test("Phase 0B row locking creates one invoice and keeps the period until it is paid", async () => {
   const customer = await createCustomer("recurring-concurrency");
   const issueDate = new Date("2026-10-15T12:00:00.000Z");
   const schedule = await prisma.recurringInvoiceSchedule.create({
@@ -413,5 +418,11 @@ test("Phase 0B row locking creates one invoice and advances one period under con
   assert.equal(results.filter((result) => !result.skipped && result.created).length, 1);
   assert.equal(results.filter((result) => result.skipped).length, 7);
   assert.equal(refreshed.lastInvoiceId, invoices[0].id);
-  assert.equal(refreshed.nextIssueDate.toISOString(), "2026-11-15T12:00:00.000Z");
+  assert.equal(refreshed.nextIssueDate.toISOString(), issueDate.toISOString());
+
+  await recordInvoicePayment({ invoiceId: invoices[0].id, amount: 25, method: "cash" });
+  const paid = await prisma.recurringInvoiceSchedule.findUniqueOrThrow({
+    where: { id: schedule.id },
+  });
+  assert.equal(paid.nextIssueDate.toISOString(), "2026-11-15T00:00:00.000Z");
 });

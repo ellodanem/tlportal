@@ -29,6 +29,9 @@ import {
   executeCanonicalMigrationPlan,
 } from "../../lib/services/canonical-subscription-migration-service";
 import { generateInvoiceFromSchedule } from "../../lib/services/native-recurring-schedule-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
 
 const originalEnvironment = {
   NODE_ENV: process.env.NODE_ENV,
@@ -48,6 +51,7 @@ const authorizationIssuedAt = new Date(authorizationClock.getTime() - 60_000).to
 const authorizationExpiresAt = new Date(authorizationClock.getTime() + 60 * 60 * 1000).toISOString();
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   for (const [key, value] of Object.entries(originalEnvironment)) {
     if (value == null) delete process.env[key];
     else process.env[key] = value;

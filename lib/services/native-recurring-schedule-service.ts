@@ -11,7 +11,6 @@ import {
 import {
   addUtcDays,
   addUtcMonths,
-  nextRecurringScheduleDate,
   recurringGenerationKey,
   startOfUtcDay,
 } from "@/lib/billing/recurring-period";
@@ -46,6 +45,7 @@ import {
   resolveCanonicalScheduleBillingCycle,
   type CanonicalScheduleBillingCycle,
 } from "@/lib/services/canonical-native-billing-service";
+import { advanceRecurringScheduleOnPaidInvoice } from "@/lib/services/recurring-schedule-payment-advance";
 
 export type RecurringScheduleLineInput = NativeLineInput;
 
@@ -285,17 +285,19 @@ async function commitRecurringInvoicePeriod(
     }
     const claimNow = new Date();
 
+    const existingInvoiceSelect = {
+      id: true,
+      kind: true,
+      status: true,
+      issueDate: true,
+      recurringPeriodStart: true,
+      recurringScheduleId: true,
+      customerSubscriptionId: true,
+    } as const;
+
     let existing = await tx.invoice.findUnique({
       where: { recurringGenerationKey: generationKey },
-      select: {
-        id: true,
-        recurringScheduleId: true,
-        customerSubscriptionId: true,
-        sentAt: true,
-        recurringDeliveryStatus: true,
-        recurringDeliveryClaimedAt: true,
-        recurringDeliveryAttempts: true,
-      },
+      select: existingInvoiceSelect,
     });
 
     // Compatibility guard for invoices generated before the period key existed.
@@ -306,23 +308,10 @@ async function commitRecurringInvoicePeriod(
         issueDate: { gte: periodStart, lt: periodEnd },
       },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: {
-        id: true,
-        recurringScheduleId: true,
-        customerSubscriptionId: true,
-        sentAt: true,
-        recurringDeliveryStatus: true,
-        recurringDeliveryClaimedAt: true,
-        recurringDeliveryAttempts: true,
-      },
+      select: existingInvoiceSelect,
     });
 
     const recipient = resolveRecipientEmail(schedule);
-    const advancedDate = nextRecurringScheduleDate(
-      schedule.nextIssueDate,
-      issueDate,
-      schedule.intervalMonths,
-    );
 
     if (!existing) {
       const collectionInvoices = await tx.invoice.findMany({
@@ -348,32 +337,38 @@ async function commitRecurringInvoicePeriod(
         if (options?.force || !options?.skipIfNoLongerDue) {
           throw new CanonicalNativeBillingError(PAST_DUE_BILLING_HOLD_CODE, PAST_DUE_BILLING_HOLD_MESSAGE);
         }
-        await tx.recurringInvoiceSchedule.update({
-          where: { id: schedule.id },
-          data: { nextIssueDate: advancedDate },
-        });
         if (schedule.customerSubscription) {
           await tx.customerSubscription.update({
             where: { id: schedule.customerSubscription.id },
+            data: { collectionHealth: collection.status },
+          });
+        }
+        const heldPeriod = startOfUtcDay(schedule.nextIssueDate).toISOString();
+        const existingHold = await tx.operationalEvent.findFirst({
+          where: {
+            category: "billing.past_due_hold",
+            AND: [
+              { payload: { path: ["scheduleId"], equals: schedule.id } },
+              { payload: { path: ["heldPeriod"], equals: heldPeriod } },
+            ],
+          },
+          select: { id: true },
+        });
+        if (!existingHold) {
+          await tx.operationalEvent.create({
             data: {
-              nextBillingDate: advancedDate,
-              collectionHealth: collection.status,
+              category: "billing.past_due_hold",
+              summary: "Recurring billing skipped because an invoice is past due.",
+              customerId: schedule.customerId,
+              payload: {
+                scheduleId: schedule.id,
+                subscriptionId: schedule.customerSubscription?.id ?? null,
+                heldPeriod,
+                collectionHealth: collection.status,
+              },
             },
           });
         }
-        await tx.operationalEvent.create({
-          data: {
-            category: "billing.past_due_hold",
-            summary: "Recurring billing skipped because an invoice is past due.",
-            customerId: schedule.customerId,
-            payload: {
-              scheduleId: schedule.id,
-              subscriptionId: schedule.customerSubscription?.id ?? null,
-              advancedTo: advancedDate.toISOString(),
-              collectionHealth: collection.status,
-            },
-          },
-        });
         return { kind: "past_due_hold" };
       }
     }
@@ -385,48 +380,24 @@ async function commitRecurringInvoicePeriod(
         throw new Error("Recurring invoice generation key belongs to another schedule.");
       }
 
-      const shouldDeliver = canClaimDelivery({
-        autoEmail: schedule.autoEmail,
-        sentAt: existing.sentAt,
-        status: existing.recurringDeliveryStatus,
-        claimedAt: existing.recurringDeliveryClaimedAt,
-        now: claimNow,
-      });
-
-      if (shouldDeliver) {
-        await tx.invoice.update({
-          where: { id: existing.id },
-          data: {
-            recurringDeliveryStatus: "sending",
-            recurringDeliveryAttempts: { increment: 1 },
-            recurringDeliveryClaimedAt: claimNow,
-            recurringDeliveryError: null,
-          },
+      if (existing.status === "paid") {
+        await advanceRecurringScheduleOnPaidInvoice(tx, {
+          kind: existing.kind,
+          recurringScheduleId: schedule.id,
+          customerSubscriptionId: existing.customerSubscriptionId ?? canonicalCycle?.subscriptionId ?? null,
+          issueDate: existing.issueDate,
+          recurringPeriodStart: existing.recurringPeriodStart,
         });
+        return {
+          kind: "invoice",
+          invoiceId: existing.id,
+          created: false,
+          shouldDeliver: false,
+          ...recipient,
+        };
       }
 
-      await tx.recurringInvoiceSchedule.update({
-        where: { id: schedule.id },
-        data: {
-          nextIssueDate: advancedDate,
-          lastGeneratedAt: asOf,
-          lastInvoiceId: existing.id,
-        },
-      });
-      if (canonicalCycle) {
-        await tx.customerSubscription.update({
-          where: { id: canonicalCycle.subscriptionId },
-          data: { nextBillingDate: advancedDate },
-        });
-      }
-
-      return {
-        kind: "invoice",
-        invoiceId: existing.id,
-        created: false,
-        shouldDeliver,
-        ...recipient,
-      };
+      return { kind: "awaiting_payment" };
     }
 
     const dueDate = addUtcDays(issueDate, schedule.dueDaysAfterIssue);
@@ -490,17 +461,10 @@ async function commitRecurringInvoicePeriod(
     await tx.recurringInvoiceSchedule.update({
       where: { id: schedule.id },
       data: {
-        nextIssueDate: advancedDate,
         lastGeneratedAt: asOf,
         lastInvoiceId: invoiceId,
       },
     });
-    if (canonicalCycle) {
-      await tx.customerSubscription.update({
-        where: { id: canonicalCycle.subscriptionId },
-        data: { nextBillingDate: advancedDate },
-      });
-    }
 
     return {
       kind: "invoice",
@@ -509,7 +473,7 @@ async function commitRecurringInvoicePeriod(
       shouldDeliver,
       ...recipient,
     };
-  });
+  }, { timeout: 20_000 });
 }
 
 async function markRecurringDeliverySucceeded(invoiceId: string, deliveredAt: Date): Promise<void> {
@@ -714,10 +678,6 @@ export async function processDueRecurringSchedules(asOf = new Date()): Promise<P
           skipIfNoLongerDue: true,
         });
         if (result.skipped) {
-          if (result.reason === "past_due_hold") {
-            iterations += 1;
-            continue;
-          }
           break;
         }
         if (result.created) invoicesGenerated += 1;

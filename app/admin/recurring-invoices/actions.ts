@@ -188,6 +188,12 @@ export async function runRecurringScheduleNowAction(
     revalidatePath(`/admin/recurring-invoices/${scheduleId}`);
     revalidatePath("/admin/tl-invoices");
     if (result.skipped) {
+      if (result.reason === "awaiting_payment") {
+        return { error: "This period already has an unpaid invoice. Record payment before issuing the next cycle." };
+      }
+      if (result.reason === "past_due_hold") {
+        return { error: "Recurring billing is on hold because an invoice is past due." };
+      }
       return { error: "Schedule is no longer due." };
     }
     revalidatePath(`/admin/tl-invoices/${result.invoiceId}`);

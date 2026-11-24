@@ -241,8 +241,10 @@ test("a past-due unpaid invoice holds the next recurring cycle", () => {
   assert.equal(PAST_DUE_BILLING_HOLD_CODE, "PAST_DUE_BILLING_HOLD");
 });
 
-test("the daily recurring job keeps walking past-due schedules instead of stopping the run", async () => {
+test("the daily recurring job continues other schedules when one period is unpaid", async () => {
   const source = await readFile(new URL("../lib/services/native-recurring-schedule-service.ts", import.meta.url), "utf8");
-  assert.match(source, /reason === "past_due_hold"/);
   assert.match(source, /kind: "past_due_hold"/);
+  assert.match(source, /kind: "awaiting_payment"/);
+  assert.match(source, /for \(const row of due\)/);
+  assert.doesNotMatch(source, /nextBillingDate: advancedDate/);
 });

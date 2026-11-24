@@ -33,10 +33,15 @@ import {
 } from "../../lib/services/canonical-stripe-webhook-service";
 import type Stripe from "stripe";
 
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
+
 const originalExecutionFlag = process.env.CANONICAL_STRIPE_EXECUTION_ENABLED;
 process.env.CANONICAL_STRIPE_EXECUTION_ENABLED = "true";
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   if (originalExecutionFlag == null) delete process.env.CANONICAL_STRIPE_EXECUTION_ENABLED;
   else process.env.CANONICAL_STRIPE_EXECUTION_ENABLED = originalExecutionFlag;
   await prisma.$disconnect();

@@ -271,6 +271,7 @@ test("UI routes include detail, empty, loading, error and price-history states",
   assert.match(overview, /No subscriptions yet/);
   assert.match(detail, /label: "Billing"/);
   assert.match(detail, /Next charge/);
+  assert.match(detail, /until that invoice is paid/);
   assert.match(detail, /Recurring billing is on hold/);
   assert.match(detail, /Invoices and payments/);
   assert.match(detail, /Price history/);

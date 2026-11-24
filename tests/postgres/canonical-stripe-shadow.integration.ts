@@ -15,10 +15,15 @@ import {
   getCanonicalStripeShadowReadModel,
 } from "../../lib/services/canonical-stripe-shadow-service";
 
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
+
 const originalFeatureFlag = process.env.CANONICAL_STRIPE_SHADOW_ENABLED;
 process.env.CANONICAL_STRIPE_SHADOW_ENABLED = "true";
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   if (originalFeatureFlag == null) delete process.env.CANONICAL_STRIPE_SHADOW_ENABLED;
   else process.env.CANONICAL_STRIPE_SHADOW_ENABLED = originalFeatureFlag;
   await prisma.$disconnect();

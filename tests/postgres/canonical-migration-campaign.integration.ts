@@ -13,8 +13,12 @@ import {
   getCanonicalMigrationCampaignDetail,
   getCanonicalMigrationProposalReview,
 } from "../../lib/services/canonical-migration-campaign-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   await prisma.$disconnect();
 });
 

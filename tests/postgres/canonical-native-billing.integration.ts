@@ -15,6 +15,9 @@ import {
   retryRecurringInvoiceDelivery,
 } from "../../lib/services/native-recurring-schedule-service";
 import { recordInvoicePayment } from "../../lib/services/native-invoice-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
 
 const originalFeatureFlag = process.env.CANONICAL_NATIVE_BILLING_ENABLED;
 process.env.CANONICAL_NATIVE_BILLING_ENABLED = "true";
@@ -28,6 +31,7 @@ function expectGenerated(
 }
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   if (originalFeatureFlag == null) delete process.env.CANONICAL_NATIVE_BILLING_ENABLED;
   else process.env.CANONICAL_NATIVE_BILLING_ENABLED = originalFeatureFlag;
   await prisma.$disconnect();
@@ -174,6 +178,9 @@ test("29: one canonical item generates one attributed invoice and immutable snap
   assert.equal(await prisma.billingOperation.count(), operationsBefore);
   assert.equal(await prisma.billingInvoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 0);
 
+  const held = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(held.nextBillingDate?.toISOString().slice(0, 10), "2026-11-01");
+  await recordInvoicePayment({ invoiceId: result.invoiceId, amount: 25, method: "cash" });
   const advanced = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
   assert.equal(advanced.nextBillingDate?.toISOString().slice(0, 10), "2026-12-01");
 });
@@ -212,6 +219,9 @@ test("31: quarterly, six-month, and explicit annual arrangements retain approved
     expectGenerated(result);
     const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: result.invoiceId } });
     assert.equal(invoice.total.toFixed(2), amount);
+    const held = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+    assert.equal(held.nextBillingDate?.toISOString().slice(0, 10), "2027-01-01");
+    await recordInvoicePayment({ invoiceId: result.invoiceId, amount: Number(amount), method: "cash" });
     const advanced = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
     const expectedMonth = intervalMonths === 12 ? "2028-01-01" : intervalMonths === 6 ? "2027-07-01" : "2027-04-01";
     assert.equal(advanced.nextBillingDate?.toISOString().slice(0, 10), expectedMonth);
@@ -315,13 +325,56 @@ test("34: partial payment drives outstanding balance and seven-day staff attenti
   assert.ok(summary.validationIssues.some((issue) => issue.code === "PAST_DUE_BILLING_HOLD"));
   const unchanged = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
   assert.equal(unchanged.lifecycleStatus, "active");
+  assert.equal(unchanged.nextBillingDate?.toISOString().slice(0, 10), "2026-11-01");
   assert.equal((await prisma.subscriptionItem.findUniqueOrThrow({ where: { id: fixture.items[0].id } })).status, "active");
 });
 
-test("past-due invoices skip later recurring cycles instead of stacking bills", async () => {
+test("an unpaid recurring invoice keeps the current period until it is paid", async () => {
   const fixture = await createCanonicalFixture({ dueDaysAfterIssue: 7 });
   const first = await generateInvoiceFromSchedule(fixture.schedule.id, new Date("2026-11-01T12:00:00.000Z"));
   expectGenerated(first);
+  const afterIssue = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(afterIssue.nextBillingDate?.toISOString().slice(0, 10), "2026-11-01");
+  const held = await generateInvoiceFromSchedule(
+    fixture.schedule.id,
+    new Date("2026-12-01T12:00:00.000Z"),
+    { skipIfNoLongerDue: true },
+  );
+  assert.equal(held.skipped, true);
+  if (held.skipped) assert.equal(held.reason, "awaiting_payment");
+  assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 1);
+  const stillHeld = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(stillHeld.nextBillingDate?.toISOString().slice(0, 10), "2026-11-01");
+  const january = await generateInvoiceFromSchedule(
+    fixture.schedule.id,
+    new Date("2027-01-01T12:00:00.000Z"),
+    { skipIfNoLongerDue: true },
+  );
+  assert.equal(january.skipped, true);
+  if (january.skipped) assert.equal(january.reason, "awaiting_payment");
+  assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 1);
+  await recordInvoicePayment({ invoiceId: first.invoiceId, amount: 25, method: "cash" });
+  const paid = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(paid.nextBillingDate?.toISOString().slice(0, 10), "2026-12-01");
+  const december = await generateInvoiceFromSchedule(fixture.schedule.id, new Date("2026-12-01T12:00:00.000Z"));
+  expectGenerated(december);
+  assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 2);
+  const nextPeriod = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(nextPeriod.nextBillingDate?.toISOString().slice(0, 10), "2026-12-01");
+});
+
+test("an already-advanced unpaid period does not skip further dates", async () => {
+  const fixture = await createCanonicalFixture({ dueDaysAfterIssue: 0 });
+  const first = await generateInvoiceFromSchedule(fixture.schedule.id, new Date("2026-11-01T12:00:00.000Z"));
+  expectGenerated(first);
+  await prisma.recurringInvoiceSchedule.update({
+    where: { id: fixture.schedule.id },
+    data: { nextIssueDate: new Date("2026-12-01T00:00:00.000Z") },
+  });
+  await prisma.customerSubscription.update({
+    where: { id: fixture.subscription.id },
+    data: { nextBillingDate: new Date("2026-12-01T00:00:00.000Z") },
+  });
   const held = await generateInvoiceFromSchedule(
     fixture.schedule.id,
     new Date("2026-12-01T12:00:00.000Z"),
@@ -330,23 +383,8 @@ test("past-due invoices skip later recurring cycles instead of stacking bills", 
   assert.equal(held.skipped, true);
   if (held.skipped) assert.equal(held.reason, "past_due_hold");
   assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 1);
-  const advanced = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
-  assert.equal(advanced.nextBillingDate?.toISOString().slice(0, 10), "2027-01-01");
-  assert.equal(advanced.collectionHealth, "action_required");
-  const january = await generateInvoiceFromSchedule(
-    fixture.schedule.id,
-    new Date("2027-01-01T12:00:00.000Z"),
-    { skipIfNoLongerDue: true },
-  );
-  assert.equal(january.skipped, true);
-  if (january.skipped) assert.equal(january.reason, "past_due_hold");
-  assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: fixture.subscription.id } }), 1);
-  const skippedAhead = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
-  assert.equal(skippedAhead.nextBillingDate?.toISOString().slice(0, 10), "2027-02-01");
-  await assert.rejects(
-    generateInvoiceFromSchedule(fixture.schedule.id, new Date("2027-02-01T12:00:00.000Z")),
-    (caught: unknown) => caught instanceof CanonicalNativeBillingError && caught.code === "PAST_DUE_BILLING_HOLD",
-  );
+  const still = await prisma.customerSubscription.findUniqueOrThrow({ where: { id: fixture.subscription.id } });
+  assert.equal(still.nextBillingDate?.toISOString().slice(0, 10), "2026-12-01");
 });
 
 test("35: concurrent generation creates one canonical invoice and one snapshot set", async () => {

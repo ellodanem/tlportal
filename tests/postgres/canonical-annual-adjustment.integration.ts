@@ -17,11 +17,15 @@ import {
 } from "../../lib/services/canonical-native-billing-service";
 import { recordInvoicePayment } from "../../lib/services/native-invoice-service";
 import { recordNativeInvoiceStripeCheckout } from "../../lib/services/native-invoice-stripe-payment-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
 
 const originalFlag = process.env.CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED;
 process.env.CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED = "true";
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   if (originalFlag == null) delete process.env.CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED;
   else process.env.CANONICAL_ANNUAL_ADJUSTMENTS_ENABLED = originalFlag;
   await prisma.$disconnect();

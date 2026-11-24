@@ -26,8 +26,12 @@ import {
   transitionCanonicalSubscriptionLifecycle,
 } from "../../lib/services/canonical-subscription-application-service";
 import { activateCanonicalManualSubscription } from "../../lib/services/canonical-subscription-activation-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
+
+assertLocalPostgres();
 
 after(async () => {
+  await cleanupIntegrationFixtures();
   await prisma.$disconnect();
 });
 

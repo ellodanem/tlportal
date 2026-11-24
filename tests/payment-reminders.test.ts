@@ -8,19 +8,23 @@ import {
   paymentRemindersStatusLabel,
 } from "../lib/domain/payment-reminders";
 
-test("scheduled payment reminders are disabled for every customer", () => {
-  assert.equal(SCHEDULED_PAYMENT_REMINDERS_ENABLED, false);
+test("scheduled payment reminders follow the customer preference", () => {
+  assert.equal(SCHEDULED_PAYMENT_REMINDERS_ENABLED, true);
   assert.equal(
     customerIsDueScheduledPaymentReminder({ billingMode: "manual_legacy", paymentReminders: "on" }),
-    false,
+    true,
   );
   assert.equal(
     customerIsDueScheduledPaymentReminder({ billingMode: "stripe_subscription", paymentReminders: "on" }),
+    true,
+  );
+  assert.equal(
+    customerIsDueScheduledPaymentReminder({ billingMode: "manual_legacy", paymentReminders: "off" }),
     false,
   );
   assert.equal(
     paymentRemindersStatusLabel({ billingMode: "manual_legacy", paymentReminders: "auto" }),
-    "Reminders: Off (automatic program disabled)",
+    "Reminders: Auto (on — manual payer)",
   );
 });
 

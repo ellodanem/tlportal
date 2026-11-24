@@ -7,7 +7,7 @@ export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 /** Daily invoice notices and Collection Checkout sends (Email + WhatsApp; no customer SMS).
- *  Scheduled payment reminders are currently disabled (`SCHEDULED_PAYMENT_REMINDERS_ENABLED`).
+ *  Scheduled payment reminders are gated by `SCHEDULED_PAYMENT_REMINDERS_ENABLED`.
  *  Collection programs are not gated on that flag.
  *  Stripe paid/failed webhooks are not invoked from this cron. */
 export async function GET(request: Request) {

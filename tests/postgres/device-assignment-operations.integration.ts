@@ -6,8 +6,14 @@ import { prisma } from "../../lib/db";
 import { recordCanonicalAssetLoss, recordLegacyAssetLoss } from "../../lib/services/asset-loss-service";
 import { createDraftCanonicalSubscription } from "../../lib/services/canonical-subscription-application-service";
 import { changeDeviceSim, replaceDeviceForExistingAssignment } from "../../lib/services/device-assignment-operation-service";
+import { assertLocalPostgres, cleanupIntegrationFixtures } from "./integration-db";
 
-after(async () => prisma.$disconnect());
+assertLocalPostgres();
+
+after(async () => {
+  await cleanupIntegrationFixtures();
+  await prisma.$disconnect();
+});
 
 async function fixture(label: string) {
   const customer = await prisma.customer.create({ data: { company: `${label}-${randomUUID()}` } });

@@ -179,6 +179,23 @@ test("a thrown delivery error is recorded and retries the committed invoice", as
   assert.equal(store.scheduleAdvances, 1);
 });
 
+test("an unpaid current period skips delivery without creating another invoice", async () => {
+  let deliveryCalls = 0;
+  const result = await coordinateRecurringInvoiceGeneration({
+    commit: async () => ({ kind: "awaiting_payment" }),
+    deliver: async () => {
+      deliveryCalls += 1;
+      return { ok: true };
+    },
+    deliverySucceeded: async () => undefined,
+    deliveryFailed: async () => undefined,
+  });
+
+  assert.equal(result.skipped, true);
+  if (result.skipped) assert.equal(result.reason, "awaiting_payment");
+  assert.equal(deliveryCalls, 0);
+});
+
 test("a past-due hold skips delivery without creating an invoice", async () => {
   let deliveryCalls = 0;
   const result = await coordinateRecurringInvoiceGeneration({

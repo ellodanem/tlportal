@@ -82,6 +82,7 @@ export function SubscriptionHeader({ subscription, permissions }: { subscription
         gracePeriodDays={subscription.gracePeriodDays}
         outstanding={money(subscription.summary?.outstandingBalance, currency)}
         outstandingNote={subscription.summary?.openingInvoice ? `Unpaid ${subscription.summary.openingInvoice.number ?? "opening invoice"} (current term)` : `${invoiceCount} linked invoice record${invoiceCount === 1 ? "" : "s"}`}
+        hasOutstanding={Number(subscription.summary?.outstandingBalance ?? 0) > 0}
       />
 
       <SubscriptionTabsNav tabs={tabs} />

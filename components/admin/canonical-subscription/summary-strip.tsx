@@ -4,9 +4,10 @@ import { collectionLabel, displayDate } from "@/components/admin/canonical-subsc
 import { CalendarIcon, CardIcon, DocumentIcon, LayersIcon } from "@/components/admin/canonical-subscription/icons";
 import { daysUntil } from "@/lib/domain/canonical-service-presentation";
 
-function renewalNote(nextBillingDate: Date | null): string {
+function renewalNote(nextBillingDate: Date | null, awaitingPayment = false): string {
   if (!nextBillingDate) return "No renewal date";
   const days = daysUntil(nextBillingDate);
+  if (awaitingPayment && days <= 0) return "Awaiting payment";
   if (days === 0) return "Today";
   if (days === 1) return "Tomorrow";
   if (days > 1) return `In ${days} days`;
@@ -30,7 +31,7 @@ function Cell({ icon, label, children, note }: { icon: ReactNode; label: string;
  * Subscription-level facts in one compact strip: two columns on phones, one row on desktop. The
  * total here is for this subscription only; each service's own rate is shown on its service screen.
  */
-export function SummaryStrip({ total, cycleUnit, serviceCount, nextBillingDate, collectionMethod, gracePeriodDays, outstanding, outstandingNote }: {
+export function SummaryStrip({ total, cycleUnit, serviceCount, nextBillingDate, collectionMethod, gracePeriodDays, outstanding, outstandingNote, hasOutstanding = false }: {
   total: string;
   cycleUnit: string;
   serviceCount: number;
@@ -39,6 +40,7 @@ export function SummaryStrip({ total, cycleUnit, serviceCount, nextBillingDate, 
   gracePeriodDays: number | null;
   outstanding: string;
   outstandingNote: string;
+  hasOutstanding?: boolean;
 }) {
   return (
     <section aria-label="Subscription summary" className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -46,7 +48,7 @@ export function SummaryStrip({ total, cycleUnit, serviceCount, nextBillingDate, 
         <Cell icon={<LayersIcon className="size-5" />} label="Subscription total" note={`${serviceCount} billable service${serviceCount === 1 ? "" : "s"}`}>
           {total}<span className="text-sm font-normal text-zinc-500"> / {cycleUnit}</span>
         </Cell>
-        <Cell icon={<CalendarIcon className="size-5" />} label="Next renewal" note={renewalNote(nextBillingDate)}>
+        <Cell icon={<CalendarIcon className="size-5" />} label="Next renewal" note={renewalNote(nextBillingDate, hasOutstanding)}>
           {displayDate(nextBillingDate)}
         </Cell>
         <Cell icon={<CardIcon className="size-5" />} label="Billing method" note={collectionMethod === "manual_invoice" ? `Grace ${gracePeriodDays} days` : collectionMethod === "stripe_autocharge" ? "Stripe-managed collection" : "Choose in Billing"}>
