@@ -6225,3 +6225,21 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 
+
+### 2026-11-24 09:41 UTC — commit `d5c4a70`
+
+- fix(billing): hold renewal until paid and resume reminder sends
+- Agent notes: Recurring calendars stay on the invoiced period until that invoice is fully paid (`awaiting_payment`); they no longer skip-ahead on past-due hold. Daily Email/WhatsApp reminders are on again (`SCHEDULED_PAYMENT_REMINDERS_ENABLED`). Postgres tests share `tests/postgres/integration-db.ts`. Unrelated `app/register/page.tsx` left unstaged. Already-advanced dates (e.g. Illisha King) were not rolled back.
+
+
+### 2026-11-24 09:41 UTC — pre-push (`main` → origin) @ `d5c4a70`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `86c737b..d5c4a70` to origin/main.
+
+
+### 2026-11-26 02:32 UTC — commit `8ec7316`
+
+- feat(subscriptions): transfer one service to another customer
+- Agent notes: Service page **Transfer to another customer** opens a wizard. Default is a new draft agreement on B (dates/prices still editable). Step 2 can **Add to an existing agreement** of B (joins that renewal; Stripe destinations refused). Tracker `customerId` moves with the service. Same-customer transfer is unchanged. Postgres integration tests not run here (no local DATABASE_URL).
+
