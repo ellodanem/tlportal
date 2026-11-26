@@ -16,6 +16,7 @@ import {
   CarIcon,
   ChevronRightIcon,
   PauseIcon,
+  PersonIcon,
   PlayIcon,
   RefreshIcon,
   SimIcon,
@@ -24,6 +25,7 @@ import {
   WarningIcon,
 } from "@/components/admin/canonical-subscription/icons";
 import { ServiceActionDialog } from "@/components/admin/canonical-subscription/service-action-dialog";
+import { subscriptionServiceTransferToCustomerPath } from "@/lib/domain/canonical-subscription-navigation";
 import { ScheduleCanonicalDraftRateForm } from "@/components/admin/canonical-subscription-draft-forms";
 import {
   CanonicalServiceHardwareReplacementForm,
@@ -135,6 +137,34 @@ function ActionRow({ id, icon, title, description, availability, tone = "neutral
         </span>
         <ChevronRightIcon className={`size-4 shrink-0 text-zinc-400 ${availability.enabled ? "" : "opacity-40"}`} />
       </button>
+    </li>
+  );
+}
+
+function ActionNavRow({ id, href, icon, title, description, availability }: {
+  id: string;
+  href: string;
+  icon: ReactNode;
+  title: string;
+  description: string;
+  availability: ServiceActionAvailability;
+}) {
+  const className = "flex min-h-[4.25rem] w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800";
+  const body = (
+    <>
+      <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 ${availability.enabled ? "" : "opacity-60"}`}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-sm font-semibold ${availability.enabled ? "" : "text-zinc-500"}`}>{title}</span>
+        <span className="mt-0.5 block text-xs text-zinc-500">{availability.enabled ? description : availability.reason}</span>
+      </span>
+      <ChevronRightIcon className={`size-4 shrink-0 text-zinc-400 ${availability.enabled ? "" : "opacity-40"}`} />
+    </>
+  );
+  return (
+    <li>
+      {availability.enabled
+        ? <Link id={id} href={href} className={className}>{body}</Link>
+        : <span id={id} title={availability.reason ?? undefined} className={`${className} cursor-not-allowed bg-zinc-50 dark:bg-zinc-950`}>{body}</span>}
     </li>
   );
 }
@@ -434,7 +464,7 @@ export type OtherServiceActionsProps = {
   assignment: { id: string; trackerLabel: string; simLabel: string | null } | null;
   billingEndsOn: string | null;
   billingStartsOn: string | null;
-  availability: { transfer: ServiceActionAvailability; vehicleSold: ServiceActionAvailability; assetLost: ServiceActionAvailability };
+  availability: { transfer: ServiceActionAvailability; transferToCustomer: ServiceActionAvailability; vehicleSold: ServiceActionAvailability; assetLost: ServiceActionAvailability };
 };
 
 export function OtherServiceActions(props: OtherServiceActionsProps) {
@@ -447,6 +477,7 @@ export function OtherServiceActions(props: OtherServiceActionsProps) {
     <>
       <ul className="space-y-2">
         <ActionRow id={ids.transfer} icon={<SwapIcon />} title="Transfer to another subscription" description="Move this service to another agreement" availability={props.availability.transfer} onOpen={() => setActive("transfer")} />
+        <ActionNavRow id={`transfer-customer-action-${props.itemId}`} href={subscriptionServiceTransferToCustomerPath(props.subscriptionId, props.itemId)} icon={<PersonIcon />} title="Transfer to another customer" description="Move this vehicle to a different customer" availability={props.availability.transferToCustomer} />
         <ActionRow id={ids.sold} icon={<CarIcon />} title="Vehicle sold / remove tracker" description="End billing and record the tracker’s return" availability={props.availability.vehicleSold} onOpen={() => setActive("sold")} />
         <ActionRow id={ids.lost} icon={<WarningIcon />} tone="warning" title="Asset lost / unrecoverable" description="Record loss and end billing for this service" availability={props.availability.assetLost} onOpen={() => setActive("lost")} />
       </ul>

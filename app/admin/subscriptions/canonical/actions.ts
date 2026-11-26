@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
-import { subscriptionCollectionPath, subscriptionServicesPath } from "@/lib/domain/canonical-subscription-navigation";
+import { subscriptionBillingPath, subscriptionCollectionPath, subscriptionServicesPath } from "@/lib/domain/canonical-subscription-navigation";
 import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 import {
   assertCanonicalSubscriptionOnboardingAllowed,
@@ -28,6 +28,7 @@ import {
   scheduleSubscriptionItemRate,
   replaceSubscriptionItemHardware,
   transferSubscriptionItem,
+  transferSubscriptionItemToCustomer,
   adoptPredecessorHardware,
   retireEmptiedCanonicalSubscriptions,
   transitionCanonicalSubscriptionLifecycle,
@@ -1221,6 +1222,86 @@ export async function transferCanonicalServiceAction(
     revalidatePath(`/admin/subscriptions/canonical/${targetSubscriptionId}`);
     revalidatePath("/admin/subscriptions/canonical");
     return { message: "Service transferred. Historical service and pricing attribution were preserved." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function transferCanonicalServiceToCustomerAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const subscriptionItemId = text(formData, "subscriptionItemId");
+    const { session, subscription } = await requireManageableCanonicalItem(subscriptionId, subscriptionItemId);
+    const destinationMode = text(formData, "destinationMode") === "existing_agreement"
+      ? "existing_agreement" as const
+      : "new_agreement" as const;
+    const customerId = optionalText(formData, "customerId");
+    const destination = destinationMode === "existing_agreement"
+      ? {
+        mode: "existing_agreement" as const,
+        customerId: customerId ?? "",
+        targetSubscriptionId: text(formData, "targetSubscriptionId"),
+      }
+      : {
+        mode: "new_agreement" as const,
+        customerId,
+        newCustomer: customerId ? null : {
+          company: optionalText(formData, "newCustomerCompany"),
+          firstName: optionalText(formData, "newCustomerFirstName"),
+          lastName: optionalText(formData, "newCustomerLastName"),
+          email: optionalText(formData, "newCustomerEmail"),
+          phone: optionalText(formData, "newCustomerPhone"),
+        },
+        name: text(formData, "name"),
+        billingIntervalMonths: Number(text(formData, "billingIntervalMonths")),
+        commercialStartDate: text(formData, "commercialStartDate"),
+        nextBillingDate: text(formData, "nextBillingDate"),
+      };
+    const result = await transferSubscriptionItemToCustomer({
+      sourceSubscriptionItemId: subscriptionItemId,
+      transferDate: text(formData, "transferDate"),
+      agreedAmountPerCycle: optionalText(formData, "agreedAmountPerCycle"),
+      rateClassification: text(formData, "classification") === "standard" ? "standard" : "negotiated",
+      changeReason: optionalText(formData, "changeReason"),
+      createdById: session.sub,
+      destination,
+    });
+    const sourceCustomer = await prisma.customer.findUnique({
+      where: { id: subscription.customerId },
+      select: { company: true, firstName: true, lastName: true },
+    });
+    const fromLabel = sourceCustomer?.company?.trim()
+      || [sourceCustomer?.firstName, sourceCustomer?.lastName].filter(Boolean).join(" ").trim()
+      || "the previous customer";
+    await recordOperationalEvent({
+      category: "subscription.service_transferred_to_customer",
+      summary: "Service transferred to another customer by staff.",
+      customerId: result.destinationCustomerId,
+      actorUserId: session.sub,
+      payload: {
+        sourceSubscriptionId: subscriptionId,
+        sourceCustomerId: subscription.customerId,
+        subscriptionItemId,
+        targetSubscriptionId: result.targetSubscriptionId,
+        destinationCustomerId: result.destinationCustomerId,
+        destinationMode,
+        transferDate: text(formData, "transferDate"),
+      },
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(`/admin/subscriptions/canonical/${result.targetSubscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
+    revalidatePath(`/admin/customers/${result.destinationCustomerId}/subscriptions`);
+    revalidatePath("/admin/devices");
+    const notice = new URLSearchParams({ notice: "transferred", from: fromLabel });
+    return {
+      message: "Service transferred to the destination customer. Historical invoices stay with the previous customer.",
+      next: `${subscriptionBillingPath(result.targetSubscriptionId)}?${notice.toString()}`,
+    };
   } catch (error) {
     return actionError(error);
   }

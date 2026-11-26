@@ -4,10 +4,15 @@ import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
+import { activeCustomerWhere } from "@/lib/admin/active-customer-filter";
+import { customerDisplayName } from "@/lib/admin/customer-display";
 import {
+  canonicalIntervalLabel,
+  canonicalSubscriptionDisplayName,
   canonicalSubscriptionUiEnabled,
   canonicalSubscriptionUiVisible,
 } from "@/lib/domain/canonical-subscription-admin";
+import { currentServiceRate } from "@/lib/domain/canonical-service-presentation";
 import {
   buildServiceHistory,
   SERVICE_HISTORY_AUDIT_CATEGORIES,
@@ -133,4 +138,101 @@ export async function loadServiceHistory(item: SubscriptionDetail["items"][numbe
 export async function loadManageableServiceOperationTargets(subscription: SubscriptionDetail, canManage: boolean) {
   if (!canManage) return { transferTargets: [], replacementAssignments: [] };
   return loadServiceOperationTargets(subscription.customerId, subscription.id);
+}
+
+export type TransferToCustomerAgreementOption = {
+  id: string;
+  label: string;
+  intervalLabel: string;
+  nextBillingDate: string | null;
+  billed: boolean;
+  lifecycleStatus: string;
+};
+
+export type TransferToCustomerPageData = {
+  subscriptionId: string;
+  itemId: string;
+  serviceLabel: string;
+  sourceCustomerId: string;
+  sourceCustomerLabel: string;
+  sourceSubscriptionLabel: string;
+  currency: string;
+  currentAmount: string;
+  billingIntervalMonths: number;
+  commercialStartDate: string;
+  nextBillingDate: string;
+  customers: { id: string; name: string; firstName: string; email: string | null; phone: string | null }[];
+  agreementsByCustomerId: Record<string, TransferToCustomerAgreementOption[]>;
+};
+
+function isoDate(value: Date | null | undefined): string {
+  return value ? value.toISOString().slice(0, 10) : "";
+}
+
+export async function loadTransferToCustomerPageData(
+  subscription: SubscriptionDetail,
+  item: SubscriptionDetail["items"][number],
+): Promise<TransferToCustomerPageData> {
+  const rate = currentServiceRate(item.rates);
+  const currency = rate?.currency ?? subscription.currency ?? "XCD";
+  const [customers, agreements] = await Promise.all([
+    prisma.customer.findMany({
+      where: { ...activeCustomerWhere, id: { not: subscription.customerId } },
+      orderBy: [{ company: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
+      select: { id: true, company: true, firstName: true, lastName: true, email: true, phone: true },
+    }),
+    prisma.customerSubscription.findMany({
+      where: {
+        customerId: { not: subscription.customerId },
+        controlMode: "canonical",
+        lifecycleStatus: { in: ["draft", "pending_activation", "active", "paused"] },
+        collectionMethod: { not: "stripe_autocharge" },
+        canonicalMigrationLedger: null,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        customerId: true,
+        name: true,
+        reference: true,
+        billingIntervalMonths: true,
+        nextBillingDate: true,
+        lifecycleStatus: true,
+        _count: { select: { invoices: true, billingInvoices: true } },
+      },
+    }),
+  ]);
+  const agreementsByCustomerId: Record<string, TransferToCustomerAgreementOption[]> = {};
+  for (const agreement of agreements) {
+    const option: TransferToCustomerAgreementOption = {
+      id: agreement.id,
+      label: agreement.name?.trim() || agreement.reference || "Subscription agreement",
+      intervalLabel: canonicalIntervalLabel(agreement.billingIntervalMonths),
+      nextBillingDate: isoDate(agreement.nextBillingDate) || null,
+      billed: agreement._count.invoices > 0 || agreement._count.billingInvoices > 0,
+      lifecycleStatus: agreement.lifecycleStatus ?? "draft",
+    };
+    (agreementsByCustomerId[agreement.customerId] ??= []).push(option);
+  }
+  return {
+    subscriptionId: subscription.id,
+    itemId: item.id,
+    serviceLabel: item.label?.trim() || "this service",
+    sourceCustomerId: subscription.customerId,
+    sourceCustomerLabel: subscription.customerLabel,
+    sourceSubscriptionLabel: canonicalSubscriptionDisplayName(subscription.name, subscription.billingIntervalMonths),
+    currency,
+    currentAmount: rate?.agreedAmountPerCycle.toString() ?? subscription.agreedAmountPerCycle?.toString() ?? "0.00",
+    billingIntervalMonths: subscription.billingIntervalMonths ?? 1,
+    commercialStartDate: isoDate(subscription.commercialStartDate),
+    nextBillingDate: isoDate(subscription.nextBillingDate),
+    customers: customers.map((customer) => ({
+      id: customer.id,
+      name: customerDisplayName(customer),
+      firstName: customer.firstName ?? "",
+      email: customer.email,
+      phone: customer.phone,
+    })),
+    agreementsByCustomerId,
+  };
 }

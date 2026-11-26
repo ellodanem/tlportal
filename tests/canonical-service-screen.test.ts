@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { activeSubscriptionTab, subscriptionEndedServicesPath, subscriptionServicePath, subscriptionServicesPath, subscriptionTabs } from "../lib/domain/canonical-subscription-navigation";
+import { activeSubscriptionTab, subscriptionEndedServicesPath, subscriptionServicePath, subscriptionServiceTransferToCustomerPath, subscriptionServicesPath, subscriptionTabs } from "../lib/domain/canonical-subscription-navigation";
 
 const read = (path: string) => readFile(path, "utf8");
 
@@ -30,6 +30,7 @@ test("Services stays the active tab on the service screen and its history, and e
   // /services, /services/:id and /services/:id/history alike.
   assert.equal(activeSubscriptionTab("services"), "services");
   assert.equal(subscriptionServicePath("sub-1", "item-1"), "/admin/subscriptions/canonical/sub-1/services/item-1");
+  assert.equal(subscriptionServiceTransferToCustomerPath("sub-1", "item-1"), "/admin/subscriptions/canonical/sub-1/services/item-1/transfer");
   assert.equal(subscriptionServicesPath("sub-1"), "/admin/subscriptions/canonical/sub-1/services");
   assert.equal(subscriptionEndedServicesPath("sub-1"), "/admin/subscriptions/canonical/sub-1/services?view=ended");
 });
@@ -85,9 +86,10 @@ test("service details shows the specified fields and the three primary actions, 
   assert.doesNotMatch(details, /<form[\s>]/);
 });
 
-test("other service actions are three labelled rows that open focused dialogs, in neutral styling", async () => {
+test("other service actions are labelled rows that open focused dialogs, in neutral styling", async () => {
   const panels = await read(PANELS);
-  for (const title of ["Transfer to another subscription", "Vehicle sold / remove tracker", "Asset lost / unrecoverable"]) assert.match(panels, new RegExp(title.replace("/", "\\/")));
+  for (const title of ["Transfer to another subscription", "Transfer to another customer", "Vehicle sold / remove tracker", "Asset lost / unrecoverable"]) assert.match(panels, new RegExp(title.replace("/", "\\/")));
+  assert.match(panels, /subscriptionServiceTransferToCustomerPath/);
   const row = panels.slice(panels.indexOf("function ActionRow("), panels.indexOf("// ---- Transfer"));
   assert.match(row, /aria-haspopup="dialog"/);
   assert.match(row, /disabled=\{!availability\.enabled\}/);
@@ -220,7 +222,7 @@ test("operations still cannot reach another service or subscription", async () =
   const actions = await read(ACTIONS);
   const itemGuard = actions.slice(actions.indexOf("async function requireManageableCanonicalItem("), actions.indexOf("function revalidateCanonicalServiceOperation("));
   assert.match(itemGuard, /item\.customerSubscriptionId !== subscriptionId/);
-  for (const name of ["transferCanonicalServiceAction", "adoptPredecessorHardwareAction", "removeCanonicalServiceForVehicleSaleAction", "recordCanonicalAssetLossAction", "pauseCanonicalServiceAssignmentAction", "resumeCanonicalServiceAssignmentAction", "scheduleCanonicalDraftRateAction", "replaceCanonicalServiceHardwareAction"]) {
+  for (const name of ["transferCanonicalServiceAction", "transferCanonicalServiceToCustomerAction", "adoptPredecessorHardwareAction", "removeCanonicalServiceForVehicleSaleAction", "recordCanonicalAssetLossAction", "pauseCanonicalServiceAssignmentAction", "resumeCanonicalServiceAssignmentAction", "scheduleCanonicalDraftRateAction", "replaceCanonicalServiceHardwareAction"]) {
     assert.match(functionBody(actions, name), /requireManageableCanonicalItem\(/, `${name} must verify the service belongs to the subscription`);
   }
   for (const name of ["removeCanonicalServiceForVehicleSaleAction", "recordCanonicalAssetLossAction"]) {

@@ -20,6 +20,7 @@ export const SimIcon = ({ className }: IconProps) => <Icon className={className}
 export const CoinsIcon = ({ className }: IconProps) => <Icon className={className}><ellipse cx="9" cy="7" rx="6" ry="3" /><path d="M3 7v5c0 1.7 2.7 3 6 3M3 12v5c0 1.7 2.7 3 6 3 3.3 0 6-1.3 6-3" /><ellipse cx="16" cy="14" rx="5" ry="2.5" /><path d="M21 14v4c0 1.4-2.2 2.5-5 2.5" /></Icon>;
 export const TagIcon = ({ className }: IconProps) => <Icon className={className}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z" /><circle cx="8" cy="8" r="1.4" /></Icon>;
 export const SwapIcon = ({ className }: IconProps) => <Icon className={className}><path d="M4 8h14l-3-3M20 16H6l3 3" /></Icon>;
+export const PersonIcon = ({ className }: IconProps) => <Icon className={className}><circle cx="12" cy="8" r="3.5" /><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" /></Icon>;
 export const RefreshIcon = ({ className }: IconProps) => <Icon className={className}><path d="M20 11a8 8 0 0 0-14.3-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.5L20 16M20 20v-4h-4" /></Icon>;
 export const CarIcon = ({ className }: IconProps) => <Icon className={className}><path d="M5 16V11l2-5h10l2 5v5M3 16h18v3H3zM7 13h.01M17 13h.01" /></Icon>;
 export const WarningIcon = ({ className }: IconProps) => <Icon className={className}><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v5M12 18h.01" /></Icon>;

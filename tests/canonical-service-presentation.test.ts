@@ -66,13 +66,13 @@ const enabledKeys = (context: ServiceActionContext) =>
   Object.entries(resolveServiceActionAvailability(context)).filter(([, value]) => value.enabled).map(([key]) => key).sort();
 
 test("an active service with a tracker offers every operation except resume", () => {
-  assert.deepEqual(enabledKeys(live), ["assetLost", "manageRate", "pause", "replaceTracker", "swapSim", "transfer", "vehicleSold"]);
+  assert.deepEqual(enabledKeys(live), ["assetLost", "manageRate", "pause", "replaceTracker", "swapSim", "transfer", "transferToCustomer", "vehicleSold"]);
 });
 
 test("a paused service offers resume, vehicle sale, and rate changes, and explains why pause is unavailable", () => {
   const context = { ...live, itemStatus: "paused", openAssignment: { status: "suspended" } };
   const result = resolveServiceActionAvailability(context);
-  assert.deepEqual(enabledKeys(context), ["assetLost", "manageRate", "replaceTracker", "resume", "swapSim", "transfer", "vehicleSold"]);
+  assert.deepEqual(enabledKeys(context), ["assetLost", "manageRate", "replaceTracker", "resume", "swapSim", "transfer", "transferToCustomer", "vehicleSold"]);
   assert.equal(result.vehicleSold.enabled, true);
   assert.match(result.pause.reason ?? "", /already paused/);
 });
@@ -102,7 +102,7 @@ test("read-only subscriptions disable every operation", () => {
 test("tracker operations need an open assignment, but rate changes and transfers do not", () => {
   const context = { ...live, openAssignment: null };
   const result = resolveServiceActionAvailability(context);
-  assert.deepEqual(enabledKeys(context), ["manageRate", "transfer"]);
+  assert.deepEqual(enabledKeys(context), ["manageRate", "transfer", "transferToCustomer"]);
   for (const key of ["replaceTracker", "swapSim", "vehicleSold", "assetLost", "pause"] as const) {
     assert.match(result[key].reason ?? "", /No tracker is currently assigned/);
   }
@@ -112,7 +112,9 @@ test("transfer explains an unavailable destination instead of offering an empty 
   const none = resolveServiceActionAvailability({ ...live, transferTargetCount: 0 });
   assert.equal(none.transfer.enabled, false);
   assert.match(none.transfer.reason ?? "", /No other active subscription/);
+  assert.equal(none.transferToCustomer.enabled, true, "cross-customer transfer does not need a same-customer destination");
   const done = resolveServiceActionAvailability({ ...live, alreadyTransferred: true });
   assert.equal(done.transfer.enabled, false);
+  assert.equal(done.transferToCustomer.enabled, false);
   assert.match(done.transfer.reason ?? "", /already been transferred/);
 });

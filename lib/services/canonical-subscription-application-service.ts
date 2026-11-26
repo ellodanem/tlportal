@@ -66,6 +66,7 @@ type EditableSubscription = {
   commercialStartDate: Date | null;
   billingAnchorDate: Date | null;
   nextBillingDate: Date | null;
+  gracePeriodDays: number;
   controlMode: "legacy" | "shadow" | "canonical";
 };
 
@@ -136,6 +137,7 @@ async function requireEditableSubscription(
       commercialStartDate: true,
       billingAnchorDate: true,
       nextBillingDate: true,
+      gracePeriodDays: true,
       controlMode: true,
     },
   });
@@ -1061,6 +1063,11 @@ async function moveOpenAssignmentsToSuccessor(
   successorItemId: string,
   alignment: { intervalMonths: number; nextDueDate: Date | null },
 ): Promise<number> {
+  const dest = await tx.subscriptionItem.findUnique({
+    where: { id: successorItemId },
+    select: { customerSubscription: { select: { customerId: true } } },
+  });
+  if (!dest) validation("ITEM_NOT_FOUND", "Successor subscription item not found.");
   const result = await tx.serviceAssignment.updateMany({
     where: {
       subscriptionItemId: sourceItemId,
@@ -1068,6 +1075,7 @@ async function moveOpenAssignmentsToSuccessor(
     },
     data: {
       subscriptionItemId: successorItemId,
+      customerId: dest.customerSubscription.customerId,
       intervalMonths: alignment.intervalMonths,
       nextDueDate: alignment.nextDueDate,
     },
@@ -1123,7 +1131,7 @@ export async function adoptPredecessorHardware(input: {
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export async function transferSubscriptionItem(input: {
+type TransferSubscriptionItemInput = {
   sourceSubscriptionItemId: string;
   targetSubscriptionId: string;
   transferDate: string;
@@ -1133,9 +1141,15 @@ export async function transferSubscriptionItem(input: {
   changeReason?: string | null;
   successorAssignmentId?: string | null;
   createdById?: string | null;
-}): Promise<string> {
+  /** Same-customer transfers stay the default. Cross-customer is the dedicated staff path. */
+  allowCrossCustomer?: boolean;
+};
+
+async function transferSubscriptionItemInTransaction(
+  tx: Prisma.TransactionClient,
+  input: TransferSubscriptionItemInput,
+): Promise<string> {
   const transferDate = commercialDate(input.transferDate, "transferDate");
-  return prisma.$transaction(async (tx) => {
     const source = await tx.subscriptionItem.findUnique({
       where: { id: input.sourceSubscriptionItemId },
       include: {
@@ -1156,7 +1170,15 @@ export async function transferSubscriptionItem(input: {
       validation("INVALID_TRANSFER", "Source and target subscriptions must be different.");
     }
     if (sourceSubscription.customerId !== targetSubscription.customerId) {
-      validation("CROSS_CUSTOMER_TRANSFER", "Subscriptions in a transfer must share one customer.");
+      if (!input.allowCrossCustomer) {
+        validation("CROSS_CUSTOMER_TRANSFER", "Subscriptions in a transfer must share one customer.");
+      }
+      if (targetSubscription.collectionMethod === "stripe_autocharge") {
+        validation(
+          "STRIPE_DESTINATION",
+          "The destination agreement bills by card. Choose a recurring-invoice agreement, or create a new one.",
+        );
+      }
     }
     const targetFields = requireCanonicalCommercialFields(targetSubscription);
     const transferMode = subscriptionItemTransferMode({
@@ -1241,6 +1263,218 @@ export async function transferSubscriptionItem(input: {
     await syncCanonicalScheduleLines(tx, targetSubscription.id);
     await retireEmptiedSubscriptionInTransaction(tx, sourceSubscription);
     return successor.id;
+}
+
+export async function transferSubscriptionItem(input: TransferSubscriptionItemInput): Promise<string> {
+  return prisma.$transaction(
+    (tx) => transferSubscriptionItemInTransaction(tx, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export type TransferSubscriptionItemToCustomerInput = {
+  sourceSubscriptionItemId: string;
+  transferDate: string;
+  agreedAmountPerCycle?: ExactMoneyInput | null;
+  rateClassification?: SubscriptionRateClassification;
+  changeReason?: string | null;
+  createdById?: string | null;
+  destination:
+    | {
+      mode: "existing_agreement";
+      customerId: string;
+      targetSubscriptionId: string;
+    }
+    | {
+      mode: "new_agreement";
+      customerId?: string | null;
+      newCustomer?: CanonicalOnboardingCustomerInput | null;
+      name: string;
+      billingIntervalMonths: number;
+      commercialStartDate: string;
+      nextBillingDate: string;
+    };
+};
+
+export type TransferSubscriptionItemToCustomerResult = {
+  successorItemId: string;
+  targetSubscriptionId: string;
+  destinationCustomerId: string;
+};
+
+async function resolveDestinationCustomerId(
+  tx: Prisma.TransactionClient,
+  input: TransferSubscriptionItemToCustomerInput["destination"],
+  sourceCustomerId: string,
+): Promise<string> {
+  if (input.mode === "existing_agreement") {
+    const customerId = cleanRequiredText(input.customerId, "customerId");
+    if (customerId === sourceCustomerId) {
+      validation(
+        "SAME_CUSTOMER_TRANSFER",
+        "Choose a different customer. To move this service between this customer’s agreements, use Transfer to another subscription.",
+      );
+    }
+    const customer = await tx.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, archivedAt: true },
+    });
+    if (!customer) validation("CUSTOMER_NOT_FOUND", "The selected customer no longer exists.");
+    if (customer.archivedAt) validation("CUSTOMER_ARCHIVED", "Restore the selected customer before transferring a service.");
+    return customer.id;
+  }
+
+  const existingId = cleanOptionalText(input.customerId);
+  if (existingId) {
+    if (existingId === sourceCustomerId) {
+      validation(
+        "SAME_CUSTOMER_TRANSFER",
+        "Choose a different customer. To move this service between this customer’s agreements, use Transfer to another subscription.",
+      );
+    }
+    const customer = await tx.customer.findUnique({
+      where: { id: existingId },
+      select: { id: true, archivedAt: true },
+    });
+    if (!customer) validation("CUSTOMER_NOT_FOUND", "The selected customer no longer exists.");
+    if (customer.archivedAt) validation("CUSTOMER_ARCHIVED", "Restore the selected customer before transferring a service.");
+    return customer.id;
+  }
+
+  const created = input.newCustomer ?? {};
+  const company = cleanOptionalText(created.company);
+  const firstName = cleanOptionalText(created.firstName);
+  const lastName = cleanOptionalText(created.lastName);
+  if (!company && !(firstName && lastName)) {
+    validation("CUSTOMER_NAME_REQUIRED", "Enter a company name, or both a first and last name.");
+  }
+  const email = cleanOptionalText(created.email);
+  if (email) {
+    const duplicate = await tx.customer.findFirst({ where: { email }, select: { id: true } });
+    if (duplicate) validation("DUPLICATE_CUSTOMER", "A customer already uses this email. Select the existing customer instead.");
+  }
+  const customer = await tx.customer.create({
+    data: {
+      company,
+      firstName,
+      lastName,
+      email,
+      phone: cleanOptionalText(created.phone),
+    },
+    select: { id: true },
+  });
+  return customer.id;
+}
+
+async function createDestinationAgreementInTransaction(
+  tx: Prisma.TransactionClient,
+  input: Extract<TransferSubscriptionItemToCustomerInput["destination"], { mode: "new_agreement" }>,
+  source: EditableSubscription,
+  destCustomerId: string,
+  agreedAmountPerCycle: Prisma.Decimal,
+): Promise<string> {
+  const billingIntervalMonths = canonicalBillingInterval(input.billingIntervalMonths);
+  const dates = assertSubscriptionDates({
+    commercialStartDate: input.commercialStartDate,
+    billingAnchorDate: input.commercialStartDate,
+    nextBillingDate: input.nextBillingDate,
+  });
+  const subscription = await tx.customerSubscription.create({
+    data: {
+      customerId: destCustomerId,
+      name: cleanRequiredText(input.name, "name"),
+      collectionMethod: "manual_invoice",
+      lifecycleStatus: "draft",
+      collectionHealth: "not_started",
+      billingIntervalMonths,
+      currency: source.currency ?? "XCD",
+      agreedAmountPerCycle,
+      commercialStartDate: dates.commercialStartDate,
+      billingAnchorDate: dates.billingAnchorDate,
+      nextBillingDate: dates.nextBillingDate,
+      gracePeriodDays: canonicalGracePeriodDays(source.gracePeriodDays),
+      controlMode: "canonical",
+      status: "pending_payment",
+      planTermMonths: billingIntervalMonths,
+    },
+    select: { id: true },
+  });
+  return subscription.id;
+}
+
+/**
+ * Moves one live service onto another customer. History stays on the source. The tracker
+ * assignment is re-owned by the destination customer. A new destination agreement is a
+ * canonical draft (empty ledger) so staff can still correct dates and prices; an existing
+ * destination agreement receives the successor on its next renewal.
+ */
+export async function transferSubscriptionItemToCustomer(
+  input: TransferSubscriptionItemToCustomerInput,
+): Promise<TransferSubscriptionItemToCustomerResult> {
+  return prisma.$transaction(async (tx) => {
+    const sourceItem = await tx.subscriptionItem.findUnique({
+      where: { id: input.sourceSubscriptionItemId },
+      select: { customerSubscriptionId: true },
+    });
+    if (!sourceItem) validation("ITEM_NOT_FOUND", "Source subscription item not found.");
+    const sourceSubscription = await requireEditableSubscription(tx, sourceItem.customerSubscriptionId);
+    const destinationCustomerId = await resolveDestinationCustomerId(
+      tx,
+      input.destination,
+      sourceSubscription.customerId,
+    );
+
+    let targetSubscriptionId: string;
+    if (input.destination.mode === "existing_agreement") {
+      targetSubscriptionId = cleanRequiredText(input.destination.targetSubscriptionId, "targetSubscriptionId");
+      const target = await requireEditableSubscription(tx, targetSubscriptionId);
+      if (target.customerId !== destinationCustomerId) {
+        validation("INVALID_TRANSFER", "The destination agreement must belong to the selected customer.");
+      }
+    } else {
+      const amount = exactCycleAmount(input.agreedAmountPerCycle ?? sourceSubscription.agreedAmountPerCycle ?? "0");
+      targetSubscriptionId = await createDestinationAgreementInTransaction(
+        tx,
+        input.destination,
+        sourceSubscription,
+        destinationCustomerId,
+        amount,
+      );
+    }
+
+    if (input.destination.mode === "existing_agreement") {
+      const dest = await tx.customerSubscription.findUnique({
+        where: { id: targetSubscriptionId },
+        select: {
+          controlMode: true,
+          lifecycleStatus: true,
+          collectionMethod: true,
+          canonicalMigrationLedger: { select: { id: true } },
+        },
+      });
+      if (!dest) validation("SUBSCRIPTION_NOT_FOUND", "Destination subscription not found.");
+      if (dest.controlMode !== "canonical") {
+        validation("SUBSCRIPTION_NOT_EDITABLE", "Only canonical agreements can receive a transferred service.");
+      }
+      if (!dest.lifecycleStatus || !["draft", "pending_activation", "active", "paused"].includes(dest.lifecycleStatus)) {
+        validation("SUBSCRIPTION_NOT_EDITABLE", "The destination agreement is not open to receive a service.");
+      }
+      if (dest.canonicalMigrationLedger) {
+        validation("SUBSCRIPTION_NOT_EDITABLE", "A migration-linked agreement cannot receive a transferred service.");
+      }
+    }
+
+    const successorItemId = await transferSubscriptionItemInTransaction(tx, {
+      sourceSubscriptionItemId: input.sourceSubscriptionItemId,
+      targetSubscriptionId,
+      transferDate: input.transferDate,
+      agreedAmountPerCycle: input.agreedAmountPerCycle,
+      rateClassification: input.rateClassification,
+      changeReason: input.changeReason,
+      createdById: input.createdById,
+      allowCrossCustomer: true,
+    });
+    return { successorItemId, targetSubscriptionId, destinationCustomerId };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

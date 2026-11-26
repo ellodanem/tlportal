@@ -23,6 +23,11 @@ export function subscriptionServicePath(subscriptionId: string, itemId: string):
   return `${subscriptionBasePath(subscriptionId)}/services/${itemId}`;
 }
 
+/** Move one live service onto another customer (new or existing agreement). */
+export function subscriptionServiceTransferToCustomerPath(subscriptionId: string, itemId: string): string {
+  return `${subscriptionServicePath(subscriptionId, itemId)}/transfer`;
+}
+
 /** Billable services list. Ended/canceled services live on the Ended tab for audit. */
 export function subscriptionServicesPath(subscriptionId: string): string {
   return `${subscriptionBasePath(subscriptionId)}/services`;

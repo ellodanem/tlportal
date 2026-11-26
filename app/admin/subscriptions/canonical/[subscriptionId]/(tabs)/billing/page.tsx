@@ -3,12 +3,12 @@ import { requireSubscriptionPage } from "@/lib/admin/canonical-subscription-page
 
 type Props = {
   params: Promise<{ subscriptionId: string }>;
-  searchParams: Promise<{ show?: string }>;
+  searchParams: Promise<{ show?: string; notice?: string; from?: string }>;
 };
 
 export default async function CanonicalSubscriptionBillingPage({ params, searchParams }: Props) {
   const { subscriptionId } = await params;
-  const { show } = await searchParams;
+  const { show, notice, from } = await searchParams;
   const { subscription, permissions } = await requireSubscriptionPage(subscriptionId);
-  return <SubscriptionBillingTab subscription={subscription} permissions={permissions} filter={parseLedgerFilter(show)} />;
+  return <SubscriptionBillingTab subscription={subscription} permissions={permissions} filter={parseLedgerFilter(show)} transferredFrom={notice === "transferred" ? from : undefined} />;
 }

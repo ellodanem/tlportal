@@ -160,6 +160,7 @@ export function CustomerServiceManagementModal({
             {assignment ? <li><Link href={`/admin/devices/${assignment.deviceId}/replace`} className={moreLinkClass}>Replace tracker</Link></li> : null}
             {assignment ? <li><Link href={`/admin/devices/${assignment.deviceId}/swap-sim`} className={moreLinkClass}>Swap SIM</Link></li> : null}
             <li><Link href={`${servicePageHref}#transfer-action-${subscriptionItemId}`} className={moreLinkClass}>Transfer</Link></li>
+            <li><Link href={`${servicePageHref}/transfer`} className={moreLinkClass}>Transfer to customer</Link></li>
             {assignment ? <li><Link href={`${servicePageHref}#sold-action-${subscriptionItemId}`} className={moreLinkClass}>Vehicle sold</Link></li> : null}
             <li><Link href={servicePageHref} className={`${moreLinkClass} border-transparent text-emerald-700 hover:underline dark:text-emerald-400`}>Service page</Link></li>
           </ul>

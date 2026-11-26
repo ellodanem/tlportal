@@ -51,6 +51,7 @@ export type ServiceActionKey =
   | "pause"
   | "resume"
   | "transfer"
+  | "transferToCustomer"
   | "vehicleSold"
   | "assetLost";
 
@@ -108,6 +109,10 @@ export function resolveServiceActionAvailability(context: ServiceActionContext):
         : context.transferTargetCount === 0
           ? denied("No other active subscription exists for this customer to receive the service.")
           : allowed),
+    transferToCustomer: rateOrTransfer
+      ?? (context.alreadyTransferred
+        ? denied("This service has already been transferred.")
+        : allowed),
     vehicleSold: withTracker ?? allowed,
     assetLost: withTracker ?? allowed,
   };

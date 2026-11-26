@@ -22,6 +22,7 @@ import {
   scheduleSubscriptionItemEnd,
   scheduleSubscriptionItemRate,
   transferSubscriptionItem,
+  transferSubscriptionItemToCustomer,
   adoptPredecessorHardware,
   transitionCanonicalSubscriptionLifecycle,
 } from "../../lib/services/canonical-subscription-application-service";
@@ -442,6 +443,116 @@ test("an unbilled mid-cycle add transfers by canceling the source and moving the
   assert.equal(successor.billingEffectiveFrom?.toISOString().slice(0, 10), "2027-04-24");
   assert.equal(successor.rates[0].agreedAmountPerCycle.toFixed(2), "300.00");
   assert.equal(moved.subscriptionItemId, successor.id);
+});
+
+test("cross-customer transfer onto an existing agreement re-owns the tracker", async () => {
+  const sourceCustomer = await createCustomer("cross-source");
+  const destCustomer = await createCustomer("cross-dest");
+  const assignment = await createAssignment(sourceCustomer.id, "sold-vehicle");
+  const sourceSubscription = await createMonthlySubscription(sourceCustomer.id, "Seller fleet", [
+    {
+      label: "Sold taxi",
+      serviceActivatedDate: "2026-10-01",
+      billingEffectiveFrom: "2026-10-01",
+      serviceAssignmentId: assignment.id,
+    },
+  ]);
+  const destSubscription = await createDraftCanonicalSubscription({
+    customerId: destCustomer.id,
+    name: "Buyer fleet",
+    reference: `buyer-${randomUUID()}`,
+    billingIntervalMonths: 1,
+    collectionMethod: "manual_invoice",
+    currency: "XCD",
+    defaultAgreedAmountPerCycle: "25.00",
+    commercialStartDate: "2026-01-01",
+    billingAnchorDate: "2026-01-01",
+    nextBillingDate: "2026-11-01",
+    controlMode: "canonical",
+  });
+  const sourceItemId = sourceSubscription.items[0].id;
+
+  await assert.rejects(
+    transferSubscriptionItem({
+      sourceSubscriptionItemId: sourceItemId,
+      targetSubscriptionId: destSubscription.id,
+      transferDate: "2026-10-20",
+      agreedAmountPerCycle: "25.00",
+      changeReason: "Should stay same-customer",
+    }),
+    expectValidationCode("CROSS_CUSTOMER_TRANSFER"),
+  );
+
+  const result = await transferSubscriptionItemToCustomer({
+    sourceSubscriptionItemId: sourceItemId,
+    transferDate: "2026-10-20",
+    agreedAmountPerCycle: "30.00",
+    changeReason: "Vehicle sold to buyer",
+    destination: {
+      mode: "existing_agreement",
+      customerId: destCustomer.id,
+      targetSubscriptionId: destSubscription.id,
+    },
+  });
+  const [source, successor, moved] = await Promise.all([
+    prisma.subscriptionItem.findUniqueOrThrow({ where: { id: sourceItemId } }),
+    prisma.subscriptionItem.findUniqueOrThrow({ where: { id: result.successorItemId } }),
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: assignment.id } }),
+  ]);
+  assert.equal(result.targetSubscriptionId, destSubscription.id);
+  assert.equal(result.destinationCustomerId, destCustomer.id);
+  assert.equal(source.status, "ended");
+  assert.equal(successor.customerSubscriptionId, destSubscription.id);
+  assert.equal(successor.predecessorItemId, sourceItemId);
+  assert.equal(moved.subscriptionItemId, successor.id);
+  assert.equal(moved.customerId, destCustomer.id);
+});
+
+test("cross-customer transfer can create a new destination agreement", async () => {
+  const sourceCustomer = await createCustomer("new-dest-source");
+  const destCustomer = await createCustomer("new-dest-buyer");
+  const assignment = await createAssignment(sourceCustomer.id, "new-dest-device");
+  const sourceSubscription = await createMonthlySubscription(sourceCustomer.id, "Seller remaining fleet", [
+    {
+      label: "Moving taxi",
+      serviceActivatedDate: "2026-10-01",
+      billingEffectiveFrom: "2026-10-01",
+      serviceAssignmentId: assignment.id,
+    },
+    { label: "Staying taxi", serviceActivatedDate: "2026-10-01", billingEffectiveFrom: "2026-10-01" },
+  ]);
+
+  const result = await transferSubscriptionItemToCustomer({
+    sourceSubscriptionItemId: sourceSubscription.items[0].id,
+    transferDate: "2026-10-20",
+    agreedAmountPerCycle: "40.00",
+    changeReason: "New owner keeps the tracker",
+    destination: {
+      mode: "new_agreement",
+      customerId: destCustomer.id,
+      name: "Buyer annual GPS tracking",
+      billingIntervalMonths: 12,
+      commercialStartDate: "2026-10-20",
+      nextBillingDate: "2027-10-20",
+    },
+  });
+  const [dest, successor, sourceAgreement, moved] = await Promise.all([
+    prisma.customerSubscription.findUniqueOrThrow({ where: { id: result.targetSubscriptionId } }),
+    prisma.subscriptionItem.findUniqueOrThrow({
+      where: { id: result.successorItemId },
+      include: { rates: true },
+    }),
+    prisma.customerSubscription.findUniqueOrThrow({ where: { id: sourceSubscription.id } }),
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: assignment.id } }),
+  ]);
+  assert.equal(dest.customerId, destCustomer.id);
+  assert.equal(dest.controlMode, "canonical");
+  assert.equal(dest.lifecycleStatus, "draft");
+  assert.equal(dest.collectionMethod, "manual_invoice");
+  assert.equal(dest.billingIntervalMonths, 12);
+  assert.equal(successor.rates[0].agreedAmountPerCycle.toFixed(2), "40.00");
+  assert.equal(sourceAgreement.lifecycleStatus, "draft");
+  assert.equal(moved.customerId, destCustomer.id);
 });
 
 test("a future-dated source rate does not block an unbilled transfer", async () => {

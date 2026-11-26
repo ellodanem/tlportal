@@ -45,7 +45,7 @@ function relativeDays(date: Date | null): string | null {
  * happens next, how it is collected, then what has already been invoiced and paid. The header
  * summary strip already shows totals on every tab, so they are not repeated here.
  */
-export async function SubscriptionBillingTab({ subscription, permissions, filter = "all" }: { subscription: SubscriptionDetail; permissions: SubscriptionPermissions; filter?: LedgerFilter }) {
+export async function SubscriptionBillingTab({ subscription, permissions, filter = "all", transferredFrom }: { subscription: SubscriptionDetail; permissions: SubscriptionPermissions; filter?: LedgerFilter; transferredFrom?: string }) {
   const ledger = await getSubscriptionFinancials(subscription.id, subscription.customerId);
   const currency = subscription.currency ?? "XCD";
   const customerBillingHref = `/admin/subscriptions/customers/${subscription.customerId}/billing`;
@@ -73,6 +73,11 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
 
   return (
     <div className="flex flex-col gap-5">
+      {transferredFrom ? (
+        <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+          <span className="font-semibold">Transferred from {transferredFrom}.</span> Review dates and prices before the next invoice.{canCorrectDates ? " Use Wrong date? below if the renewal should change." : ""}
+        </p>
+      ) : null}
       {billingHeld || subscription.summary?.attentionRequired ? (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">
           {billingHeld ? (
