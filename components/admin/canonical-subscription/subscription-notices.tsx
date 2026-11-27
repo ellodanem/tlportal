@@ -50,7 +50,9 @@ export async function SubscriptionNotices({
       {pilot === "shadow-created" ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">The source-controlled subscription was created. Review it on the Advanced page before any authority transfer.</p> : null}
 
       {collectionHealthHoldsRecurringBilling(subscription.summary?.collectionHealth) ? (
-        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100"><span className="font-semibold">Recurring billing is on hold.</span> An invoice is past due, so no further cycle will be issued until it is paid. <Link href={`${base}/billing`} className="font-semibold underline">See invoices &amp; payments in Billing</Link>.</div>
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100"><span className="font-semibold">Recurring billing is on hold.</span> An invoice is past due, so no further cycle will be issued until it is paid. <Link href={`${base}/billing`} className="font-semibold underline">See invoices &amp; payments in Billing</Link>
+          {permissions.canManage && subscription.collectionMethod === "manual_invoice" ? <> To renew at a different term and take a card, <Link href={subscriptionCollectionPath(subscription.id)} className="font-semibold underline">open Collection</Link>.</> : null}
+        </div>
       ) : subscription.summary?.attentionRequired ? (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100"><span className="font-semibold">Review collection.</span> An open balance is beyond grace or a provider operation needs review. <Link href={`${base}/billing`} className="font-semibold underline">See invoices &amp; payments in Billing</Link>.</div>
       ) : null}

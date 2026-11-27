@@ -38,7 +38,7 @@ import {
 import { correctSubscriptionBillingDates } from "@/lib/services/canonical-billing-date-correction-service";
 import { mergeSubscriptions } from "@/lib/services/canonical-subscription-merge-service";
 import { CanonicalAnnualAdjustmentError } from "@/lib/domain/canonical-annual-adjustment";
-import { SubscriptionProrationError } from "@/lib/domain/subscription-proration";
+import { cadenceLabel, SubscriptionProrationError } from "@/lib/domain/subscription-proration";
 import { createAnnualServiceAdjustmentInvoice } from "@/lib/services/canonical-annual-adjustment-service";
 import { addServiceToSubscription } from "@/lib/services/subscription-service-addition-service";
 import { activateCanonicalManualSubscription } from "@/lib/services/canonical-subscription-activation-service";
@@ -64,6 +64,8 @@ import {
   cancelCollectionProgram,
   sendStaffPayNowCheckout,
 } from "@/lib/services/canonical-collection-program-service";
+import { isTermRetargetInvoiceDisposition } from "@/lib/domain/canonical-term-retarget";
+import { retargetTermAndCollectByCard } from "@/lib/services/canonical-term-retarget-service";
 
 export type CanonicalSubscriptionFormState = {
   error?: string;
@@ -223,6 +225,62 @@ export async function startStripePayNowCheckoutAction(
       message: result.reused
         ? `This Checkout link is still open. ${result.notifySummary}.${voided}`
         : `Pay-now Checkout sent. Stripe charges when the customer completes it. ${result.notifySummary}.${voided}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * Move live services onto a new cadence, optionally void the old cycle invoice, and send
+ * Stripe pay-now Checkout for the new term. The source agreement is retired when emptied.
+ */
+export async function retargetTermAndPayNowAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  try {
+    const { session, subscription } = await requireManageableCanonicalSubscription(subscriptionId);
+    const targetIntervalMonths = Number(text(formData, "targetIntervalMonths"));
+    const dispositionRaw = optionalText(formData, "invoiceDisposition");
+    const serviceAmounts = [...formData.keys()]
+      .filter((key) => key.startsWith("serviceAmount:"))
+      .map((key) => ({
+        itemId: key.slice("serviceAmount:".length),
+        agreedAmountPerCycle: text(formData, key),
+      }))
+      .filter((row) => row.itemId);
+    const result = await retargetTermAndCollectByCard({
+      subscriptionId,
+      staffUserId: session.sub,
+      targetIntervalMonths,
+      firstChargeDate: optionalText(formData, "firstChargeDate"),
+      invoiceDisposition: isTermRetargetInvoiceDisposition(dispositionRaw) ? dispositionRaw : null,
+      serviceAmounts,
+      confirmChargeNow: text(formData, "confirmChargeNow") === "yes",
+      confirmCancelExisting: text(formData, "confirmCancelExisting") === "yes",
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(`/admin/subscriptions/canonical/${result.targetSubscriptionId}`);
+    revalidatePath("/admin/subscriptions/canonical/[subscriptionId]", "layout");
+    revalidatePath("/admin/subscriptions/canonical");
+    revalidatePath(`/admin/customers/${subscription.customerId}/subscriptions`);
+    revalidatePath(subscriptionCollectionPath(result.targetSubscriptionId));
+    revalidatePath(subscriptionBillingPath(result.targetSubscriptionId));
+    const term = cadenceLabel(result.targetIntervalMonths).toLowerCase();
+    const voided = result.voidedInvoiceNumbers.length
+      ? ` Voided ${result.voidedInvoiceNumbers.join(", ")} on the old agreement.`
+      : "";
+    if (result.checkoutError) {
+      return {
+        next: `${subscriptionCollectionPath(result.targetSubscriptionId)}?term=checkout-failed`,
+        error: `Moved to a ${term} agreement.${voided} Card Checkout could not be sent: ${result.checkoutError} Send it from Collection on the new agreement.`,
+      };
+    }
+    return {
+      next: `${subscriptionCollectionPath(result.targetSubscriptionId)}?term=sent`,
+      message: `Moved to a ${term} agreement and sent pay-now Checkout for ${result.cycleTotal}. ${result.notifySummary ?? ""}${voided}`.trim(),
     };
   } catch (error) {
     return actionError(error);

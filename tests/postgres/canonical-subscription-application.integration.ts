@@ -7,8 +7,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import {
   CanonicalSubscriptionValidationError,
+  commercialDateString,
   sumExactCycleAmounts,
 } from "../../lib/domain/canonical-subscription-application";
+import { planTermRetarget } from "../../lib/domain/canonical-term-retarget";
 import {
   addBillableServiceToSubscription,
   createDraftCanonicalSubscription,
@@ -23,6 +25,7 @@ import {
   scheduleSubscriptionItemRate,
   transferSubscriptionItem,
   transferSubscriptionItemToCustomer,
+  retargetCanonicalSubscriptionTerm,
   adoptPredecessorHardware,
   transitionCanonicalSubscriptionLifecycle,
 } from "../../lib/services/canonical-subscription-application-service";
@@ -956,4 +959,111 @@ test("invalid initial coverage rolls back activation, invoice, and schedule toge
   assert.equal(await prisma.canonicalSubscriptionOperationalActivation.count({ where: { customerSubscriptionId: subscription.id } }), 0);
   assert.equal(await prisma.recurringInvoiceSchedule.count({ where: { customerSubscriptionId: subscription.id } }), 0);
   assert.equal(await prisma.invoice.count({ where: { customerSubscriptionId: subscription.id } }), 0);
+});
+
+test("an overdue 6-month agreement can move live services onto a 3-month agreement and void the cycle invoice", async () => {
+  const customer = await createCustomer("term-retarget");
+  await prisma.customer.update({ where: { id: customer.id }, data: { email: `${customer.id}@example.test` } });
+  const assignment = await createAssignment(customer.id, "term-retarget-device");
+  const source = await createDraftCanonicalSubscription({
+    customerId: customer.id,
+    name: "Every 6 months GPS tracking",
+    reference: `term-6-${randomUUID()}`,
+    billingIntervalMonths: 6,
+    collectionMethod: "manual_invoice",
+    currency: "XCD",
+    defaultAgreedAmountPerCycle: "150.00",
+    commercialStartDate: "2025-11-27",
+    billingAnchorDate: "2025-11-27",
+    nextBillingDate: "2026-05-27",
+    controlMode: "canonical",
+    items: [{
+      label: "HQ1001",
+      serviceActivatedDate: "2025-11-27",
+      billingEffectiveFrom: "2025-11-27",
+      agreedAmountPerCycle: "150.00",
+      serviceAssignmentId: assignment.id,
+    }],
+  });
+  await prisma.customerSubscription.update({
+    where: { id: source.id },
+    data: { lifecycleStatus: "active" },
+  });
+  await prisma.subscriptionItem.update({
+    where: { id: source.items[0].id },
+    data: { status: "active" },
+  });
+  const invoice = await prisma.invoice.create({
+    data: {
+      customerId: customer.id,
+      customerSubscriptionId: source.id,
+      currency: "XCD",
+      status: "overdue",
+      kind: "recurring",
+      total: "150.00",
+      amountDue: "150.00",
+      number: `INV-TR-${randomUUID().slice(0, 8)}`,
+      issueDate: new Date("2026-05-27T00:00:00.000Z"),
+      dueDate: new Date("2026-06-03T00:00:00.000Z"),
+    },
+  });
+  const today = commercialDateString(new Date());
+  const plan = planTermRetarget({
+    id: source.id,
+    name: source.name,
+    customerId: customer.id,
+    controlMode: "canonical",
+    lifecycleStatus: "active",
+    collectionMethod: "manual_invoice",
+    billingIntervalMonths: 6,
+    currency: "XCD",
+    nextBillingDate: new Date("2026-05-27T00:00:00.000Z"),
+    hasMigrationLedger: false,
+    hasOpenStripeLink: false,
+    customerEmail: `${customer.id}@example.test`,
+    stripeBillingEnabled: true,
+    liveServices: [{
+      id: source.items[0].id,
+      label: "HQ1001",
+      status: "active",
+      currentAmount: "150.00",
+      currentIntervalMonths: 6,
+    }],
+    openInvoices: [{
+      id: invoice.id,
+      number: invoice.number,
+      amountDue: "150.00",
+      currency: "XCD",
+      status: "overdue",
+    }],
+  }, {
+    targetIntervalMonths: 3,
+    firstChargeDate: today,
+    invoiceDisposition: "void",
+    serviceAmounts: [{ itemId: source.items[0].id, agreedAmountPerCycle: "75.00" }],
+  });
+  const result = await retargetCanonicalSubscriptionTerm({ plan });
+  const [ended, destination, successor, moved, voided] = await Promise.all([
+    prisma.customerSubscription.findUniqueOrThrow({ where: { id: source.id }, include: { items: true } }),
+    prisma.customerSubscription.findUniqueOrThrow({ where: { id: result.targetSubscriptionId }, include: { items: { include: { rates: true } } } }),
+    prisma.subscriptionItem.findUniqueOrThrow({ where: { id: result.successorItemIds[0] }, include: { rates: true } }),
+    prisma.serviceAssignment.findUniqueOrThrow({ where: { id: assignment.id } }),
+    prisma.invoice.findUniqueOrThrow({ where: { id: invoice.id } }),
+  ]);
+  assert.equal(ended.lifecycleStatus, "ended");
+  assert.equal(ended.items[0].status, "ended");
+  assert.equal(destination.billingIntervalMonths, 3);
+  assert.equal(destination.planTermMonths, 3);
+  assert.equal(destination.lifecycleStatus, "pending_activation");
+  assert.equal(destination.collectionMethod, "manual_invoice");
+  assert.equal(destination.nextBillingDate?.toISOString().slice(0, 10), today);
+  assert.equal(successor.customerSubscriptionId, destination.id);
+  assert.equal(successor.predecessorItemId, source.items[0].id);
+  assert.equal(successor.rates[0].billingIntervalMonths, 3);
+  assert.equal(successor.rates[0].agreedAmountPerCycle.toFixed(2), "75.00");
+  assert.equal(moved.subscriptionItemId, successor.id);
+  assert.equal(moved.intervalMonths, 3);
+  assert.equal(voided.status, "void");
+  assert.ok(voided.voidedAt);
+  assert.deepEqual(result.voidedInvoiceIds, [invoice.id]);
 });

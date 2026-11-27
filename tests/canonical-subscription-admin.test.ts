@@ -331,6 +331,7 @@ test("canonical actions retain server-side authorization and do not directly inv
   assert.match(actions, /adoptPredecessorHardware/);
   assert.match(actions, /transitionCanonicalSubscriptionLifecycle/);
   assert.match(actions, /assertCanonicalSubscriptionManagementAllowed/);
+  assert.match(actions, /retargetTermAndPayNowAction/);
   assert.doesNotMatch(actions, /startStripeCheckout|createRecurringSchedule|generateRecurringInvoice|stripe\.checkout/);
 });
 

@@ -17,6 +17,7 @@ import { canonicalAnnualAdjustmentExecutionEnabled } from "@/lib/domain/canonica
 import { collectionHealthHoldsRecurringBilling } from "@/lib/domain/canonical-native-billing";
 import { daysUntil } from "@/lib/domain/canonical-service-presentation";
 import { subscriptionAnnualAdjustmentPath, subscriptionBillingPath, subscriptionCollectionPath } from "@/lib/domain/canonical-subscription-navigation";
+import { shouldShowTermRetargetPanel } from "@/components/admin/canonical-subscription/term-retarget-pay-now-panel";
 import { NOT_LINKED_LABEL } from "@/lib/domain/financial-ledger";
 import { formatMoney } from "@/lib/domain/native-billing";
 import { cycleUnitLabel } from "@/lib/domain/subscription-proration";
@@ -94,6 +95,13 @@ export async function SubscriptionBillingTab({ subscription, permissions, filter
               <Link href={customerBillingHref} className="font-semibold underline">Review open invoices on Customer billing</Link>.
             </>
           )}
+          {shouldShowTermRetargetPanel(subscription, permissions) ? (
+            <>
+              {" "}If they want a shorter or longer term and to pay by card,{" "}
+              <Link href={`${subscriptionCollectionPath(subscription.id)}#term-retarget`} className="font-semibold underline">change term on Collection</Link>
+              . Pay now on this agreement would still charge the current {subscription.billingIntervalMonths ? `${subscription.billingIntervalMonths}-month` : ""} cycle.
+            </>
+          ) : null}
         </div>
       ) : null}
 

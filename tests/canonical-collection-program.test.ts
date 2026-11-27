@@ -83,6 +83,7 @@ test("the Collection tab is for card billing, an armed program, or a live canoni
 test("Collection can send pay-now Checkout without switching collection first", async () => {
   const tab = await readFile("components/admin/canonical-subscription/collection-tab.tsx", "utf8");
   assert.match(tab, /CollectPayNowPanel/);
+  assert.match(tab, /TermRetargetPayNowPanel/);
   assert.doesNotMatch(tab, /Set collection to automatic card billing on Billing first/);
   const actions = await readFile("app/admin/subscriptions/canonical/actions.ts", "utf8");
   assert.match(actions, /startStripePayNowCheckoutAction/);

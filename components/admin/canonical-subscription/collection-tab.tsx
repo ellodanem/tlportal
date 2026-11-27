@@ -1,5 +1,6 @@
 import { CollectCardOnFilePanel } from "@/components/admin/canonical-subscription/collect-card-on-file-panel";
 import { CollectPayNowPanel } from "@/components/admin/canonical-subscription/collect-pay-now-panel";
+import { TermRetargetPayNowPanel } from "@/components/admin/canonical-subscription/term-retarget-pay-now-panel";
 import {
   ArmCollectionProgramForm,
   CancelCollectionProgramForm,
@@ -16,9 +17,11 @@ function openStripeLink(subscription: SubscriptionDetail) {
 export async function SubscriptionCollectionTab({
   subscription,
   permissions,
+  termNotice,
 }: {
   subscription: SubscriptionDetail;
   permissions: SubscriptionPermissions;
+  termNotice?: string;
 }) {
   const firstCharge = subscription.nextBillingDate;
   const cardLinkDate = firstCharge ? collectionCardLinkStartDate(firstCharge) : null;
@@ -30,6 +33,16 @@ export async function SubscriptionCollectionTab({
 
   return (
     <div className="flex flex-col gap-5">
+      {termNotice === "sent" ? (
+        <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+          This is the new term. Pay-now Checkout was sent — copy or open the link below if they still need it.
+        </p>
+      ) : null}
+      {termNotice === "checkout-failed" ? (
+        <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          Services moved onto this agreement, but card Checkout could not be sent. Use Pay now below.
+        </p>
+      ) : null}
       <section className={`${cardClass} p-5`}>
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">When to ask for the card</h2>
         {linked ? (
@@ -50,7 +63,7 @@ export async function SubscriptionCollectionTab({
         ) : (
           <div>
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
-              Pay now charges today and starts monthly card billing. Collect card, bill later saves a card now and charges on {displayDate(firstCharge)}.
+              Pay now charges today at this agreement&apos;s current term and starts card billing. Collect card, bill later saves a card now and charges on {displayDate(firstCharge)}. To renew at a different length, use Change term and pay by card.
               {subscription.collectionMethod === "stripe_autocharge"
                 ? ` You can also arm Collection so the customer is asked three days before ${displayDate(firstCharge)}.`
                 : " Pay now also switches this agreement off recurring invoices."}
@@ -62,6 +75,7 @@ export async function SubscriptionCollectionTab({
                 firstChargeDate={displayDate(firstCharge)}
               />
             ) : null}
+            {permissions.canManage ? <TermRetargetPayNowPanel subscription={subscription} permissions={permissions} /> : null}
             {permissions.canManage ? <CollectPayNowPanel subscription={subscription} permissions={permissions} /> : null}
             {permissions.canManage && canSendCardOnFileNow ? <CollectCardOnFilePanel subscription={subscription} permissions={permissions} /> : null}
           </div>

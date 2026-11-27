@@ -6243,3 +6243,14 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - feat(subscriptions): transfer one service to another customer
 - Agent notes: Service page **Transfer to another customer** opens a wizard. Default is a new draft agreement on B (dates/prices still editable). Step 2 can **Add to an existing agreement** of B (joins that renewal; Stripe destinations refused). Tracker `customerId` moves with the service. Same-customer transfer is unchanged. Postgres integration tests not run here (no local DATABASE_URL).
 
+
+### 2026-11-26 02:32 UTC — commit `b3a975f`
+
+- docs: note service transfer to another customer
+
+
+### 2026-11-26 02:33 UTC — pre-push (`main` → origin) @ `b3a975f`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `d5c4a70..b3a975f` to origin/main.
+

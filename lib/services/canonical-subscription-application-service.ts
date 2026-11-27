@@ -27,6 +27,7 @@ import {
   type ExactMoneyInput,
   type SubscriptionItemEndMode,
 } from "@/lib/domain/canonical-subscription-application";
+import type { TermRetargetPlan } from "@/lib/domain/canonical-term-retarget";
 import { syncCanonicalScheduleLines } from "@/lib/services/canonical-schedule-line-sync-service";
 import { computeProration, isFirstPeriodTooLong, type SubscriptionProrationMethod } from "@/lib/domain/subscription-proration";
 import {
@@ -1270,6 +1271,103 @@ export async function transferSubscriptionItem(input: TransferSubscriptionItemIn
     (tx) => transferSubscriptionItemInTransaction(tx, input),
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+}
+
+export type RetargetCanonicalSubscriptionTermResult = {
+  targetSubscriptionId: string;
+  successorItemIds: string[];
+  voidedInvoiceIds: string[];
+};
+
+/**
+ * Creates a same-customer agreement at a new cadence, moves every live service onto it,
+ * optionally voids source cycle invoices, and retires the emptied source. Does not contact
+ * Stripe or notify the customer; pay-now Checkout is a separate step on the new agreement.
+ */
+export async function retargetCanonicalSubscriptionTerm(input: {
+  plan: TermRetargetPlan;
+  createdById?: string | null;
+}): Promise<RetargetCanonicalSubscriptionTermResult> {
+  return prisma.$transaction(async (tx) => {
+    const source = await requireEditableSubscription(tx, input.plan.sourceId);
+    if (source.customerId !== input.plan.customerId) {
+      validation("CUSTOMER_MISMATCH", "This agreement no longer belongs to the expected customer.");
+    }
+    if (source.lifecycleStatus !== "pending_activation" && source.lifecycleStatus !== "active") {
+      validation("NOT_ELIGIBLE", "Only a pending or active agreement can change term.");
+    }
+    if (source.collectionMethod !== "manual_invoice") {
+      validation("NOT_ELIGIBLE", "Only a recurring-invoice agreement can change term here.");
+    }
+    const dates = assertSubscriptionDates({
+      commercialStartDate: input.plan.firstChargeDate,
+      billingAnchorDate: input.plan.firstChargeDate,
+      nextBillingDate: input.plan.firstChargeDate,
+    });
+    const cycleTotal = exactCycleAmount(input.plan.cycleTotal, "cycleTotal");
+    const destination = await tx.customerSubscription.create({
+      data: {
+        customerId: source.customerId,
+        name: input.plan.destinationName,
+        collectionMethod: "manual_invoice",
+        lifecycleStatus: "pending_activation",
+        collectionHealth: "not_started",
+        billingIntervalMonths: input.plan.targetIntervalMonths,
+        currency: source.currency ?? input.plan.currency,
+        agreedAmountPerCycle: cycleTotal,
+        commercialStartDate: dates.commercialStartDate,
+        billingAnchorDate: dates.billingAnchorDate,
+        nextBillingDate: dates.nextBillingDate,
+        gracePeriodDays: canonicalGracePeriodDays(source.gracePeriodDays),
+        controlMode: "canonical",
+        status: "pending_payment",
+        planTermMonths: input.plan.targetIntervalMonths,
+      },
+      select: { id: true },
+    });
+
+    const successorItemIds: string[] = [];
+    for (const service of input.plan.services) {
+      const successorId = await transferSubscriptionItemInTransaction(tx, {
+        sourceSubscriptionItemId: service.sourceItemId,
+        targetSubscriptionId: destination.id,
+        transferDate: input.plan.transferDate,
+        agreedAmountPerCycle: service.agreedAmountPerCycle,
+        rateClassification: "negotiated",
+        changeReason: `Term change to ${input.plan.targetIntervalMonths}-month cycle`,
+        createdById: input.createdById ?? null,
+      });
+      successorItemIds.push(successorId);
+    }
+
+    const voidedInvoiceIds: string[] = [];
+    if (input.plan.voidInvoiceIds.length) {
+      const invoices = await tx.invoice.findMany({
+        where: {
+          id: { in: input.plan.voidInvoiceIds },
+          customerSubscriptionId: source.id,
+          status: { in: ["open", "overdue"] },
+          archivedAt: null,
+        },
+        select: { id: true },
+      });
+      if (invoices.length !== input.plan.voidInvoiceIds.length) {
+        validation("INVOICE_STATE_CHANGED", "An open invoice changed before it could be voided. Reload and try again.");
+      }
+      const now = new Date();
+      await tx.invoice.updateMany({
+        where: { id: { in: invoices.map((invoice) => invoice.id) } },
+        data: { status: "void", voidedAt: now },
+      });
+      voidedInvoiceIds.push(...invoices.map((invoice) => invoice.id));
+    }
+
+    return {
+      targetSubscriptionId: destination.id,
+      successorItemIds,
+      voidedInvoiceIds,
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export type TransferSubscriptionItemToCustomerInput = {
