@@ -24,6 +24,7 @@
 | `/admin/subscriptions/canonical/[id]/add-service` | Three-step contextual add-service flow (service and price, hardware, review). |
 | `/admin/customers/[id]/subscriptions` | Compact list of the customer's subscriptions, each linking to its details screen. |
 | Collection → **Change term and pay by card** | When a recurring-invoice agreement is pending or active: create a new agreement at a different cadence, move live services, optionally void the old cycle invoice, and send Stripe pay-now Checkout for the new term. Cadence is never changed in place. |
+| Hardware on a **new** agreement | Trackers still installed for the customer after an agreement ends (or never linked) can be chosen on Hardware / Add service. Live services keep exclusive ownership of their tracker. |
 
 ## Safety contract
 

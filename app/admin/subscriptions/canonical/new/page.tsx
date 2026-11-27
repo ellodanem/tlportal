@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { CanonicalCustomerOnboardingForm, type OnboardingExistingSubscription } from "@/components/admin/canonical-customer-onboarding-form";
 import { prisma } from "@/lib/db";
 import { canonicalSubscriptionUiVisible } from "@/lib/domain/canonical-subscription-admin";
+import { reclaimableOpenAssignmentWhere } from "@/lib/domain/canonical-hardware-reclaim";
 
 export const dynamic = "force-dynamic";
 
@@ -52,11 +53,23 @@ export default async function NewCanonicalSubscriptionPage({
         _count: { select: { items: { where: { status: { notIn: ["ended", "canceled"] } } } } },
       },
     }),
-    // Installed devices not yet linked to a subscription service (the customer page's "legacy assignments").
+    // Installed at the customer and free to join a new agreement: unlinked, or still on an ended service.
     prisma.serviceAssignment.findMany({
-      where: { subscriptionItemId: null, endDate: null, status: { in: ["active", "due_soon", "overdue"] }, customer: { archivedAt: null } },
+      where: { ...reclaimableOpenAssignmentWhere, status: { in: ["active", "due_soon", "overdue"] }, customer: { archivedAt: null } },
       orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
-      select: { id: true, customerId: true, device: { select: { label: true, imei: true, deviceModel: { select: { name: true } } } } },
+      select: {
+        id: true,
+        customerId: true,
+        device: {
+          select: {
+            id: true,
+            label: true,
+            imei: true,
+            deviceModel: { select: { name: true } },
+            simCard: { select: { label: true, msisdn: true, iccid: true } },
+          },
+        },
+      },
     }),
     searchParams,
   ]);
@@ -73,12 +86,15 @@ export default async function NewCanonicalSubscriptionPage({
     });
   }
 
-  const installedDevices: Record<string, { id: string; label: string; imei: string }[]> = {};
+  const installedDevices: Record<string, { id: string; deviceId: string; label: string; imei: string; simLabel: string | null; iccid: string | null }[]> = {};
   for (const assignment of installedAssignments) {
     (installedDevices[assignment.customerId] ??= []).push({
       id: assignment.id,
+      deviceId: assignment.device.id,
       label: assignment.device.label?.trim() || assignment.device.deviceModel.name,
       imei: assignment.device.imei,
+      simLabel: assignment.device.simCard?.label?.trim() || assignment.device.simCard?.msisdn?.trim() || null,
+      iccid: assignment.device.simCard?.iccid ?? null,
     });
   }
 

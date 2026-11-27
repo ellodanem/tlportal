@@ -27,6 +27,7 @@ import {
   type ExactMoneyInput,
   type SubscriptionItemEndMode,
 } from "@/lib/domain/canonical-subscription-application";
+import { openAssignmentJoinBlocker } from "@/lib/domain/canonical-hardware-reclaim";
 import type { TermRetargetPlan } from "@/lib/domain/canonical-term-retarget";
 import { syncCanonicalScheduleLines } from "@/lib/services/canonical-schedule-line-sync-service";
 import { computeProration, isFirstPeriodTooLong, type SubscriptionProrationMethod } from "@/lib/domain/subscription-proration";
@@ -208,24 +209,20 @@ async function validateAssignmentForItem(
     where: { id: assignmentId },
     select: {
       customerId: true,
-      subscriptionItemId: true,
       status: true,
       endDate: true,
+      subscriptionItem: { select: { status: true } },
     },
   });
   if (!assignment) validation("ASSIGNMENT_NOT_FOUND", "Service assignment not found.");
-  if (assignment.customerId !== expectedCustomerId) {
-    validation(
-      "CROSS_CUSTOMER_ASSIGNMENT",
-      "A service assignment must belong to the subscription customer.",
-    );
-  }
-  if (assignment.subscriptionItemId) {
-    validation("ASSIGNMENT_CONFLICT", "Service assignment is already linked to a subscription item.");
-  }
-  if (assignment.endDate || assignment.status === "cancelled") {
-    validation("ASSIGNMENT_CLOSED", "A closed service assignment cannot be linked.");
-  }
+  const blocker = openAssignmentJoinBlocker({
+    assignmentCustomerId: assignment.customerId,
+    expectedCustomerId,
+    endDate: assignment.endDate,
+    assignmentStatus: assignment.status,
+    linkedItemStatus: assignment.subscriptionItem?.status ?? null,
+  });
+  if (blocker) validation(blocker.code, blocker.message);
 }
 
 /**
@@ -246,9 +243,29 @@ export async function createAssignmentForAvailableDeviceInTransaction(
   }
   const openAssignment = await tx.serviceAssignment.findFirst({
     where: { deviceId: device.id, endDate: null, status: { not: "cancelled" } },
-    select: { id: true },
+    select: {
+      id: true,
+      customerId: true,
+      status: true,
+      endDate: true,
+      subscriptionItem: { select: { status: true } },
+    },
   });
-  if (openAssignment) validation("DEVICE_ASSIGNMENT_CONFLICT", "A selected device already has an active service assignment.");
+  if (openAssignment) {
+    const blocker = openAssignmentJoinBlocker({
+      assignmentCustomerId: openAssignment.customerId,
+      expectedCustomerId: input.customerId,
+      endDate: openAssignment.endDate,
+      assignmentStatus: openAssignment.status,
+      linkedItemStatus: openAssignment.subscriptionItem?.status ?? null,
+    });
+    if (blocker) validation(blocker.code, blocker.message);
+    await tx.serviceAssignment.update({
+      where: { id: openAssignment.id },
+      data: { nextDueDate: input.nextDueDate, intervalMonths: input.intervalMonths },
+    });
+    return openAssignment.id;
+  }
   const assignment = await tx.serviceAssignment.create({
     data: {
       customerId: input.customerId,

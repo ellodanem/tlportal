@@ -33,7 +33,14 @@ type ServiceRow = {
   adjustmentAmount: string;
   adjustmentReason: string;
 };
-export type OnboardingInstalledDevice = { id: string; label: string; imei: string };
+export type OnboardingInstalledDevice = {
+  id: string;
+  deviceId: string;
+  label: string;
+  imei: string;
+  simLabel: string | null;
+  iccid: string | null;
+};
 export type OnboardingPlan = { durationMonths: number; priceXcd: string };
 export type OnboardingExistingSubscription = {
   id: string;
@@ -132,14 +139,31 @@ export function CanonicalCustomerOnboardingForm({
   const nextBillingDate = alignment === "align_to_renewal" && alignedRenewal ? alignedRenewal : addMonthsClamped(startDate, interval);
   const extraGoodwill = alignment === "align_to_renewal" && Boolean(alignedRenewal) && startDate < addMonthsClamped(alignedRenewal, -interval);
   const unit = cycleUnitLabel(interval);
-  const selectedDeviceIds = new Set(services.map((service) => service.deviceId).filter(Boolean));
   const customerInstalled = useMemo(
     () => (customerMode === "existing" && customerId ? installedDevices[customerId] ?? [] : []),
     [customerMode, customerId, installedDevices],
   );
+  const hardwareDevices = useMemo(() => {
+    const extras = customerInstalled.map((row) => ({
+      id: row.deviceId,
+      label: row.label,
+      simLabel: row.simLabel,
+      imei: row.imei,
+      iccid: row.iccid,
+    }));
+    const extraIds = new Set(extras.map((row) => row.id));
+    return [...extras, ...devices.filter((device) => !extraIds.has(device.id))];
+  }, [customerInstalled, devices]);
   // Ignore an adoption that belongs to a different customer than the one now selected.
   const adoptedId = (service: ServiceRow) => customerInstalled.some((device) => device.id === service.assignmentId) ? service.assignmentId : "";
   const adoptedIds = new Set(services.map(adoptedId).filter(Boolean));
+  const selectedDeviceIds = new Set([
+    ...services.map((service) => service.deviceId).filter(Boolean),
+    ...services.flatMap((service) => {
+      const installed = customerInstalled.find((device) => device.id === adoptedId(service));
+      return installed ? [installed.deviceId] : [];
+    }),
+  ]);
 
   const computed = services.map((service) => {
     let cents: number | null = null;
@@ -385,7 +409,7 @@ export function CanonicalCustomerOnboardingForm({
 
       <section hidden={step !== 3} className={cardClass}>
         <h2 className="text-lg font-semibold">Assign hardware</h2>
-        <p className="mt-1 text-sm text-zinc-500">Optional. A selected device brings its SIM; unavailable hardware is excluded. You can assign hardware later.</p>
+        <p className="mt-1 text-sm text-zinc-500">Optional. A selected device brings its SIM. Trackers already installed for this customer — including ones left on an ended agreement — can be reused. You can assign hardware later.</p>
         <div className="mt-4 space-y-4">
           {services.map((service, index) => (
             <div key={service.key} className="text-sm font-medium">
@@ -394,7 +418,7 @@ export function CanonicalCustomerOnboardingForm({
               {customerInstalled.length ? (
                 <label className="mb-3 block rounded-lg border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
                   <span className="block font-medium">Use a device this customer already has installed</span>
-                  <span className="block text-xs font-normal text-zinc-500">Links the existing legacy assignment to this service. No device is reassigned.</span>
+                  <span className="block text-xs font-normal text-zinc-500">Including trackers from an ended agreement. The same installation moves onto this service.</span>
                   <select value={adoptedId(service)} onChange={(event) => updateService(service.key, event.target.value ? { assignmentId: event.target.value, deviceId: "" } : { assignmentId: "" })} className={inputClass} aria-label={"Installed device for " + (service.label.trim() || "service " + (index + 1))}>
                     <option value="">None — choose from stock below</option>
                     {customerInstalled.map((device) => {
@@ -406,7 +430,7 @@ export function CanonicalCustomerOnboardingForm({
               ) : null}
               <DevicePicker
                 name="serviceDeviceId"
-                devices={devices}
+                devices={hardwareDevices}
                 value={adoptedId(service) ? "" : service.deviceId}
                 onChange={(deviceId) => { selectServiceDevice(service, deviceId); if (deviceId) updateService(service.key, { assignmentId: "" }); }}
                 disabledIds={selectedDeviceIds}

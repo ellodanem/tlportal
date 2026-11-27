@@ -293,14 +293,14 @@ export function SubscriptionAddServiceFlow({
             <input type="radio" name="hardwareChoice" checked={hardwareKind === "none"} onChange={() => setHardwareKind("none")} className="mt-1" /><span className="font-medium">No hardware yet</span>
           </label>
           <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${hardwareKind === "device" ? "border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-zinc-200 dark:border-zinc-700"}`}>
-            <input type="radio" name="hardwareChoice" checked={hardwareKind === "device"} onChange={() => setHardwareKind("device")} className="mt-1" /><span><span className="font-medium">Assign an available device</span><span className="block text-xs text-zinc-500">{context.availableDevices.length} unassigned device{context.availableDevices.length === 1 ? "" : "s"} in stock. Its SIM comes with it.</span></span>
+            <input type="radio" name="hardwareChoice" checked={hardwareKind === "device"} onChange={() => setHardwareKind("device")} className="mt-1" /><span><span className="font-medium">Assign an available device</span><span className="block text-xs text-zinc-500">{context.availableDevices.length} device{context.availableDevices.length === 1 ? "" : "s"} in stock or already installed for this customer (including an ended agreement). Its SIM comes with it.</span></span>
           </label>
           {hardwareKind === "device" ? (
             <DevicePicker devices={context.availableDevices} value={deviceId} onChange={chooseDevice} />
           ) : null}
           {context.unlinkedAssignments.length ? (
             <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${hardwareKind === "assignment" ? "border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-zinc-200 dark:border-zinc-700"}`}>
-              <input type="radio" name="hardwareChoice" checked={hardwareKind === "assignment"} onChange={() => setHardwareKind("assignment")} className="mt-1" /><span><span className="font-medium">Use a device this customer already has</span><span className="block text-xs text-zinc-500">{context.unlinkedAssignments.length} installed device{context.unlinkedAssignments.length === 1 ? "" : "s"} not yet linked to a service.</span></span>
+              <input type="radio" name="hardwareChoice" checked={hardwareKind === "assignment"} onChange={() => setHardwareKind("assignment")} className="mt-1" /><span><span className="font-medium">Use a device this customer already has</span><span className="block text-xs text-zinc-500">{context.unlinkedAssignments.length} installed device{context.unlinkedAssignments.length === 1 ? "" : "s"} not on a live service, including trackers left on an ended agreement.</span></span>
             </label>
           ) : null}
           {hardwareKind === "assignment" ? (

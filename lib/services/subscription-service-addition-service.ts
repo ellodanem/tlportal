@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma, type SubscriptionRateClassification } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { reclaimableOpenAssignmentWhere } from "@/lib/domain/canonical-hardware-reclaim";
 import {
   CanonicalSubscriptionValidationError,
   commercialDate,
@@ -335,14 +336,17 @@ export async function getServiceAdditionContext(subscriptionId: string): Promise
     prisma.device.findMany({
       where: {
         status: { notIn: ["decommissioned", "lost"] },
-        serviceAssignments: { none: { endDate: null, status: { not: "cancelled" } } },
+        OR: [
+          { serviceAssignments: { none: { endDate: null, status: { not: "cancelled" } } } },
+          { serviceAssignments: { some: { customerId: subscription.customerId, ...reclaimableOpenAssignmentWhere } } },
+        ],
       },
       orderBy: [{ label: "asc" }, { imei: "asc" }],
       select: { id: true, label: true, imei: true, deviceModel: { select: { name: true } }, simCard: { select: { label: true, msisdn: true, iccid: true } } },
       take: 500,
     }),
     prisma.serviceAssignment.findMany({
-      where: { customerId: subscription.customerId, subscriptionItemId: null, endDate: null, status: { not: "cancelled" } },
+      where: { customerId: subscription.customerId, ...reclaimableOpenAssignmentWhere },
       orderBy: [{ startDate: "asc" }, { id: "asc" }],
       select: { id: true, device: { select: { label: true, deviceModel: { select: { name: true } } } } },
     }),
