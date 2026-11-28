@@ -6254,3 +6254,39 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 - Pushed `d5c4a70..b3a975f` to origin/main.
 
+
+### 2026-11-27 16:58 UTC — commit `f24e1c3`
+
+- feat(subscriptions): change term and collect the new cycle by card
+- Agent notes: Collection **Change term and pay by card** creates a new cadence agreement, transfers live services, optionally voids the old cycle invoice, and sends Stripe pay-now Checkout for the new term. Cadence is never rewritten in place. Pay now on the current agreement still charges the current term. Postgres integration test added; not run here (DATABASE_URL is remote Neon). Unrelated outstanding-invoice reminder edits left unstaged.
+
+
+### 2026-11-27 16:59 UTC — pre-push (`main` → origin) @ `f24e1c3`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `b3a975f..f24e1c3` to origin/main.
+
+
+### 2026-11-27 18:29 UTC — commit `5b0bebc`
+
+- fix(subscriptions): reuse trackers left on an ended agreement
+- Agent notes: Hardware step and Add service now list this customer's installed trackers even when the assignment is still on an ended/canceled service. Assigning them to the new draft reuses that assignment instead of treating it as a conflict. Live services stay exclusive. Unrelated outstanding-invoice reminder edits still unstaged.
+
+
+### 2026-11-27 18:29 UTC — pre-push (`main` → origin) @ `5b0bebc`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `f24e1c3..5b0bebc` to origin/main.
+
+
+### 2026-11-28 11:40 UTC — commit `7684244`
+
+- feat(subscriptions): collapse per-service prices when changing term
+- Agent notes: Change term and pay by card folds the per-service amount list. It starts closed when there are more than three services. The new cycle total stays visible, and closed fields still submit.
+
+
+### 2026-11-28 11:40 UTC — pre-push (`main` → origin) @ `7684244`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `5b0bebc..7684244` to origin/main.
+

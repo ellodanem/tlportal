@@ -9,6 +9,13 @@ import {
   type TwilioWhatsAppTemplateKey,
 } from "./config";
 
+/** Fail hung Twilio calls before the Vercel function is killed with no response. */
+export const TWILIO_SEND_TIMEOUT_MS = 8_000;
+
+function twilioClient(accountSid: string, authToken: string) {
+  return twilio(accountSid, authToken, { timeout: TWILIO_SEND_TIMEOUT_MS, autoRetry: false });
+}
+
 export type BillingWhatsAppVariables = {
   firstName: string;
   dueDate: string;
@@ -36,7 +43,7 @@ export async function sendTwilioWhatsAppContent(
     return { ok: false, error: `No Content SID configured for template kind ${kind}.` };
   }
 
-  const client = twilio(accountSid, authToken);
+  const client = twilioClient(accountSid, authToken);
 
   try {
     const message = await client.messages.create({
@@ -81,7 +88,7 @@ export async function sendTwilioWhatsAppFreeform(
     return { ok: false, error: "Message body is required." };
   }
 
-  const client = twilio(accountSid, authToken);
+  const client = twilioClient(accountSid, authToken);
 
   try {
     const message = await client.messages.create({

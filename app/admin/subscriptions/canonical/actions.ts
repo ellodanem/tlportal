@@ -56,6 +56,7 @@ import {
 } from "@/lib/services/canonical-stripe-link-service";
 import {
   CanonicalStripeCardOnFileError,
+  cancelOpenCanonicalCheckout,
   startStripeCardOnFileCheckout,
 } from "@/lib/services/canonical-stripe-card-on-file-service";
 import {
@@ -226,6 +227,31 @@ export async function startStripePayNowCheckoutAction(
         ? `This Checkout link is still open. ${result.notifySummary}.${voided}`
         : `Pay-now Checkout sent. Stripe charges when the customer completes it. ${result.notifySummary}.${voided}`,
     };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function cancelOpenStripeCheckoutAction(
+  _previous: CanonicalSubscriptionFormState,
+  formData: FormData,
+): Promise<CanonicalSubscriptionFormState> {
+  const subscriptionId = text(formData, "subscriptionId");
+  const kind = text(formData, "checkoutKind");
+  try {
+    if (kind !== "pay_now" && kind !== "card_on_file") {
+      return { error: "Choose the Checkout link to cancel." };
+    }
+    const session = await requireStaff();
+    await cancelOpenCanonicalCheckout({
+      subscriptionId,
+      staffUserId: session.sub,
+      kind,
+    });
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}`);
+    revalidatePath(`/admin/subscriptions/canonical/${subscriptionId}/billing`);
+    revalidatePath(subscriptionCollectionPath(subscriptionId));
+    return { message: "Checkout link canceled. It can no longer be opened." };
   } catch (error) {
     return actionError(error);
   }

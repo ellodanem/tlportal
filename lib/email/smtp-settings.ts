@@ -4,6 +4,32 @@ import { prisma } from "@/lib/db";
 
 const SETTINGS_ID = "default" as const;
 
+/** Fail hung SMTP connections before the Vercel function is killed with no response. */
+export const SMTP_CONNECTION_TIMEOUT_MS = 8_000;
+export const SMTP_GREETING_TIMEOUT_MS = 8_000;
+export const SMTP_SOCKET_TIMEOUT_MS = 8_000;
+
+export type SmtpTransportOptions = {
+  host: string;
+  port: number;
+  secure: boolean;
+  auth?: { user: string; pass: string };
+  connectionTimeout: number;
+  greetingTimeout: number;
+  socketTimeout: number;
+};
+
+export function withSmtpSendTimeouts<T extends { host: string; port: number; secure: boolean }>(
+  opts: T,
+): T & Pick<SmtpTransportOptions, "connectionTimeout" | "greetingTimeout" | "socketTimeout"> {
+  return {
+    ...opts,
+    connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+    greetingTimeout: SMTP_GREETING_TIMEOUT_MS,
+    socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
+  };
+}
+
 /** Values for the admin SMTP form (password is never returned). */
 export type SmtpSettingsFormValues = {
   host: string;
@@ -40,12 +66,7 @@ export async function getSmtpSettingsForForm(): Promise<SmtpSettingsFormValues> 
 }
 
 /** Options for `nodemailer.createTransport` when SMTP is configured. */
-export async function getSmtpTransportOptions(): Promise<{
-  host: string;
-  port: number;
-  secure: boolean;
-  auth?: { user: string; pass: string };
-} | null> {
+export async function getSmtpTransportOptions(): Promise<SmtpTransportOptions | null> {
   const row = await prisma.appSettings.findUnique({
     where: { id: SETTINGS_ID },
     select: {
@@ -65,12 +86,7 @@ export async function getSmtpTransportOptions(): Promise<{
   const port = row.smtpPort ?? 587;
   const secure = row.smtpSecure ?? false;
 
-  const opts: {
-    host: string;
-    port: number;
-    secure: boolean;
-    auth?: { user: string; pass: string };
-  } = { host, port, secure };
+  const opts: SmtpTransportOptions = withSmtpSendTimeouts({ host, port, secure });
 
   if (user || pass) {
     opts.auth = { user, pass };

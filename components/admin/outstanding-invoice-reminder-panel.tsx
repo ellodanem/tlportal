@@ -16,6 +16,7 @@ import {
 } from "@/lib/billing/outstanding-invoice-reminder";
 
 const initialState: OutstandingInvoiceReminderState = { error: null };
+const STALL_WARNING_MS = 8_000;
 
 function SendButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
@@ -27,6 +28,30 @@ function SendButton({ disabled }: { disabled: boolean }) {
     >
       {pending ? "Sending…" : "Send reminder"}
     </button>
+  );
+}
+
+function SendingStatus() {
+  const { pending } = useFormStatus();
+  const [stalled, setStalled] = useState(false);
+
+  useEffect(() => {
+    if (!pending) {
+      setStalled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setStalled(true), STALL_WARNING_MS);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
+
+  if (!pending) return null;
+
+  return (
+    <p className="text-xs text-zinc-600 dark:text-zinc-400" role="status">
+      {stalled
+        ? "This is taking longer than usual. You can close this window — sending continues on the server. Check Messages before sending again."
+        : "Sending. You can close this window; it will keep running."}
+    </p>
   );
 }
 
@@ -59,10 +84,9 @@ export function OutstandingInvoiceReminderPanel({
   const [sendWhatsApp, setSendWhatsApp] = useState(Boolean(customerPhone?.trim()) && canSendWhatsApp);
 
   useEffect(() => {
-    if (state.ok) {
-      router.refresh();
-      onSent?.();
-    }
+    if (!state.ok) return;
+    onSent?.();
+    router.refresh();
   }, [router, state.ok, onSent]);
 
   const selectedItems = useMemo(
@@ -181,18 +205,21 @@ export function OutstandingInvoiceReminderPanel({
             </p>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-3">
-            <SendButton disabled={selectedItems.length === 0 || (!sendEmail && !sendWhatsApp)} />
-            {state.error ? (
-              <span className="text-sm text-rose-700 dark:text-rose-400" role="alert">
-                {state.error}
-              </span>
-            ) : null}
-            {state.ok && state.message ? (
-              <span className="text-sm text-emerald-800 dark:text-emerald-300" role="status">
-                {state.message}
-              </span>
-            ) : null}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <SendButton disabled={selectedItems.length === 0 || (!sendEmail && !sendWhatsApp)} />
+              {state.error ? (
+                <span className="text-sm text-rose-700 dark:text-rose-400" role="alert">
+                  {state.error}
+                </span>
+              ) : null}
+              {state.ok && state.message ? (
+                <span className="text-sm text-emerald-800 dark:text-emerald-300" role="status">
+                  {state.message}
+                </span>
+              ) : null}
+            </div>
+            <SendingStatus />
           </div>
 
           {selectedItems.length > 0 ? (

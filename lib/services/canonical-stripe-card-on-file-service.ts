@@ -557,9 +557,42 @@ export async function completeCardOnFileCheckout(input: {
   return { alreadyComplete: false, subscriptionId };
 }
 
+export async function cancelOpenCanonicalCheckout(input: {
+  subscriptionId: string;
+  staffUserId: string;
+  kind: CanonicalCheckoutKind;
+}): Promise<void> {
+  const operationKey = input.kind === "pay_now" ? payNowOperationKey(input.subscriptionId) : cardOnFileOperationKey(input.subscriptionId);
+  const operation = await prisma.billingOperation.findUnique({ where: { operationKey } });
+  if (!operation?.providerReference || !["pending", "in_progress", "retry_required"].includes(operation.status)) {
+    fail("NO_OPEN_CHECKOUT", "There is no open Checkout link to cancel.");
+  }
+  const session = await getStripeClient().checkout.sessions.retrieve(operation.providerReference);
+  if (session.status === "complete") {
+    fail("ALREADY_COMPLETE", "This Checkout was already completed. The card is on file.");
+  }
+  if (session.status === "open") {
+    await expireCheckoutSessionIfOpen(operation.providerReference);
+  }
+  await expireCardOnFileCheckout({
+    operationKey,
+    checkoutSessionId: operation.providerReference,
+    canceledByStaff: true,
+  });
+  const configuration = await loadConfiguration(input.subscriptionId);
+  await recordOperationalEvent({
+    category: "subscription.checkout_canceled",
+    summary: "Staff canceled the Checkout link. It can no longer be opened.",
+    customerId: configuration.customerId,
+    actorUserId: input.staffUserId,
+    payload: { subscriptionId: input.subscriptionId, checkoutSessionId: operation.providerReference, kind: input.kind },
+  });
+}
+
 export async function expireCardOnFileCheckout(input: {
   operationKey: string;
   checkoutSessionId: string;
+  canceledByStaff?: boolean;
 }): Promise<void> {
   const operation = await prisma.billingOperation.findUnique({ where: { operationKey: input.operationKey } });
   if (!operation || operation.type !== "stripe_checkout_activation" || !isCardOnFileMetadata(operation.metadata)) return;
@@ -572,8 +605,10 @@ export async function expireCardOnFileCheckout(input: {
       data: {
         status: "failed",
         activeKey: null,
-        failureCode: "SESSION_EXPIRED",
-        failureMessage: "The customer did not finish Checkout before the link expired.",
+        failureCode: input.canceledByStaff ? "STAFF_CANCELED" : "SESSION_EXPIRED",
+        failureMessage: input.canceledByStaff
+          ? "Staff canceled the Checkout link so it can no longer be used."
+          : "The customer did not finish Checkout before the link expired.",
         providerReference: input.checkoutSessionId,
       },
     });

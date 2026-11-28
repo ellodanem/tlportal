@@ -6,6 +6,7 @@ import {
   startStripePayNowCheckoutAction,
   type CanonicalSubscriptionFormState,
 } from "@/app/admin/subscriptions/canonical/actions";
+import { CancelOpenCheckoutForm } from "@/components/admin/canonical-subscription/cancel-open-checkout";
 import type { CardOnFilePanelState } from "@/lib/services/canonical-stripe-card-on-file-service";
 
 const initialState: CanonicalSubscriptionFormState = {};
@@ -57,6 +58,9 @@ export function CollectPayNowControls({
           >
             Open
           </a>
+        </div>
+        <div className="mt-3">
+          <CancelOpenCheckoutForm subscriptionId={subscriptionId} kind="pay_now" />
         </div>
       </div>
     );

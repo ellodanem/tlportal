@@ -2,7 +2,7 @@ import "server-only";
 
 import nodemailer from "nodemailer";
 
-import { getSmtpMailFrom, getSmtpTransportOptions } from "./smtp-settings";
+import { getSmtpMailFrom, getSmtpTransportOptions, withSmtpSendTimeouts } from "./smtp-settings";
 
 export type SmtpSendConfig = {
   transport: {
@@ -35,7 +35,7 @@ export async function sendAppEmailWithConfig(
   }
 
   try {
-    const transporter = nodemailer.createTransport(config.transport);
+    const transporter = nodemailer.createTransport(withSmtpSendTimeouts(config.transport));
     await transporter.sendMail({
       from: from.name ? `"${from.name}" <${from.address}>` : from.address,
       to,

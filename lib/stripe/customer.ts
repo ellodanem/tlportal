@@ -25,6 +25,17 @@ export async function ensureStripeCustomerForTlCustomer(
     select: { externalCustomerId: true },
   });
   if (existing?.externalCustomerId) {
+    const email = customer.email?.trim();
+    if (email) {
+      try {
+        const current = await stripe.customers.retrieve(existing.externalCustomerId);
+        if (!("deleted" in current && current.deleted) && current.email !== email) {
+          await stripe.customers.update(existing.externalCustomerId, { email });
+        }
+      } catch {
+        // Keep using the known Stripe customer even if the email could not be refreshed.
+      }
+    }
     return { stripeCustomerId: existing.externalCustomerId };
   }
 

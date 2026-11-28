@@ -133,3 +133,18 @@ test("an expired Checkout does not revert the subscription if a newer session ow
   assert.match(source, /operation\.providerReference !== input\.checkoutSessionId/);
   assert.match(source, /operation\.status === "completed" \|\| operation\.status === "failed"/);
 });
+
+test("staff can cancel an open Checkout without emailing the customer for card-on-file", async () => {
+  const service = await readFile("lib/services/canonical-stripe-card-on-file-service.ts", "utf8");
+  assert.match(service, /export async function cancelOpenCanonicalCheckout/);
+  assert.match(service, /canceledByStaff: true/);
+  const cardOnFileAction = await readFile("app/admin/subscriptions/canonical/actions.ts", "utf8");
+  const startCardOnFile = cardOnFileAction.slice(
+    cardOnFileAction.indexOf("export async function startStripeCardOnFileCheckoutAction"),
+    cardOnFileAction.indexOf("export async function startStripePayNowCheckoutAction"),
+  );
+  assert.doesNotMatch(startCardOnFile, /notifyCheckout|sendAppEmail/);
+  assert.match(cardOnFileAction, /cancelOpenStripeCheckoutAction/);
+  const customer = await readFile("lib/stripe/customer.ts", "utf8");
+  assert.match(customer, /customers\.update\(existing\.externalCustomerId, \{ email \}\)/);
+});

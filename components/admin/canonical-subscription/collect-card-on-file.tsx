@@ -6,6 +6,7 @@ import {
   startStripeCardOnFileCheckoutAction,
   type CanonicalSubscriptionFormState,
 } from "@/app/admin/subscriptions/canonical/actions";
+import { CancelOpenCheckoutForm } from "@/components/admin/canonical-subscription/cancel-open-checkout";
 import type { CardOnFilePanelState } from "@/lib/services/canonical-stripe-card-on-file-service";
 
 const initialState: CanonicalSubscriptionFormState = {};
@@ -32,9 +33,9 @@ export function CollectCardOnFileControls({
   if (state.checkout?.url) {
     return (
       <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
-        <h3 className="text-sm font-semibold">Checkout sent — card not saved yet</h3>
+        <h3 className="text-sm font-semibold">Checkout link is open — card not saved yet</h3>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-          Send this link to the customer. Stripe stores the card and charges {amount} on {firstCharge}, not today.
+          This was not emailed. Copy or send the link yourself. Stripe stores the card and charges {amount} on {firstCharge}, not today. Stripe Checkout shows the email on the Stripe customer, which may differ from the address in TL Portal.
         </p>
         <p className="mt-2 break-all text-xs text-zinc-700 dark:text-zinc-200">{state.checkout.url}</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -53,6 +54,9 @@ export function CollectCardOnFileControls({
           >
             Open
           </a>
+        </div>
+        <div className="mt-3">
+          <CancelOpenCheckoutForm subscriptionId={subscriptionId} kind="card_on_file" />
         </div>
       </div>
     );

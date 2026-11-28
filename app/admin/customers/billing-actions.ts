@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { customerWorkspacePath } from "@/lib/admin/customer-workspace-path";
 
 import { getSession } from "@/lib/auth/get-session";
@@ -1223,18 +1224,22 @@ export async function sendOutstandingInvoiceReminderAction(
         failures.push(`Email: ${sent.error}`);
       } else {
         successes.push(`email to ${email}`);
-        await recordOperationalEvent({
-          category: "communication.message_sent",
-          customerId,
-          actorUserId: session.sub,
-          summary: `Outstanding invoice reminder emailed to ${email}`,
-          payload: {
-            channel: "email",
-            kind: "outstanding_invoice_reminder",
-            to: email,
-            selections: selectedItems.map((item) => item.selectionKey),
-          },
-        });
+        try {
+          await recordOperationalEvent({
+            category: "communication.message_sent",
+            customerId,
+            actorUserId: session.sub,
+            summary: `Outstanding invoice reminder emailed to ${email}`,
+            payload: {
+              channel: "email",
+              kind: "outstanding_invoice_reminder",
+              to: email,
+              selections: selectedItems.map((item) => item.selectionKey),
+            },
+          });
+        } catch (err) {
+          console.error("Outstanding invoice email logging failed", err);
+        }
       }
     }
   }
@@ -1291,11 +1296,19 @@ export async function sendOutstandingInvoiceReminderAction(
     }
   }
 
-  revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
-  revalidatePath(`/admin/customers/${customerId}`);
-  revalidatePath(`/admin/customers/${customerId}/messages`);
-  revalidatePath(customerWorkspacePath(customerId, "messages"));
-  revalidatePath("/admin/message-templates");
+  // Return the send result first. Refreshing the billing page here kept the
+  // dialog on "Sending…" even after email and WhatsApp had already gone out.
+  after(() => {
+    try {
+      revalidatePath(`/admin/customers/${customerId}/messages`);
+      revalidatePath(customerWorkspacePath(customerId, "messages"));
+      revalidatePath(`/admin/customers/${customerId}`);
+      revalidatePath(`/admin/subscriptions/customers/${customerId}/billing`);
+      revalidatePath("/admin/message-templates");
+    } catch (err) {
+      console.error("Outstanding invoice reminder revalidate failed", err);
+    }
+  });
 
   if (successes.length === 0) {
     return { error: failures.join(" ") || "Could not send the reminder." };
