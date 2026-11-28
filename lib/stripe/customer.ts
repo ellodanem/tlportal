@@ -1,16 +1,76 @@
 import "server-only";
 
 import type { Customer } from "@prisma/client";
+import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
 
-import { getStripeClient } from "./config";
+import { getStripeClient, isStripeBillingEnabled } from "./config";
 
-function stripeCustomerName(c: Customer): string | undefined {
+export type StripeCustomerContactFields = {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  company: string | null;
+};
+
+function stripeCustomerName(c: StripeCustomerContactFields): string | undefined {
   const co = c.company?.trim();
   if (co) return co;
   const person = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
   return person || undefined;
+}
+
+function stripeContactPatch(
+  current: Pick<Stripe.Customer, "email" | "phone" | "name">,
+  customer: StripeCustomerContactFields,
+): Stripe.CustomerUpdateParams {
+  const email = customer.email?.trim() || undefined;
+  const phone = customer.phone?.trim() || "";
+  const name = stripeCustomerName(customer);
+  const patch: Stripe.CustomerUpdateParams = {};
+  if (email && current.email !== email) patch.email = email;
+  if ((current.phone ?? "") !== phone) patch.phone = phone;
+  if (name && current.name !== name) patch.name = name;
+  return patch;
+}
+
+async function applyStripeCustomerContact(
+  stripeCustomerId: string,
+  customer: StripeCustomerContactFields,
+): Promise<void> {
+  const stripe = getStripeClient();
+  const current = await stripe.customers.retrieve(stripeCustomerId);
+  if ("deleted" in current && current.deleted) return;
+  const patch = stripeContactPatch(current, customer);
+  if (Object.keys(patch).length === 0) return;
+  await stripe.customers.update(stripeCustomerId, patch);
+}
+
+/**
+ * Copy TL Portal email, phone, and name onto an existing Stripe customer.
+ * Does not create a Stripe customer. Save in TL Portal still succeeds if Stripe is down.
+ */
+export async function syncLinkedStripeCustomerContact(
+  customer: StripeCustomerContactFields,
+): Promise<{ updated: boolean }> {
+  if (!isStripeBillingEnabled()) return { updated: false };
+  const existing = await prisma.billingAccount.findUnique({
+    where: {
+      customerId_provider: { customerId: customer.id, provider: "stripe" },
+    },
+    select: { externalCustomerId: true },
+  });
+  if (!existing?.externalCustomerId) return { updated: false };
+  try {
+    await applyStripeCustomerContact(existing.externalCustomerId, customer);
+    return { updated: true };
+  } catch (err) {
+    console.error("Stripe customer contact sync failed", err);
+    return { updated: false };
+  }
 }
 
 export async function ensureStripeCustomerForTlCustomer(
@@ -25,16 +85,10 @@ export async function ensureStripeCustomerForTlCustomer(
     select: { externalCustomerId: true },
   });
   if (existing?.externalCustomerId) {
-    const email = customer.email?.trim();
-    if (email) {
-      try {
-        const current = await stripe.customers.retrieve(existing.externalCustomerId);
-        if (!("deleted" in current && current.deleted) && current.email !== email) {
-          await stripe.customers.update(existing.externalCustomerId, { email });
-        }
-      } catch {
-        // Keep using the known Stripe customer even if the email could not be refreshed.
-      }
+    try {
+      await applyStripeCustomerContact(existing.externalCustomerId, customer);
+    } catch {
+      // Keep using the known Stripe customer even if contact details could not be refreshed.
     }
     return { stripeCustomerId: existing.externalCustomerId };
   }
@@ -63,6 +117,14 @@ export async function ensureStripeCustomerForTlCustomer(
     },
     { idempotencyKey: `tl-customer:${customer.id}` },
   );
+
+  if (recovered) {
+    try {
+      await applyStripeCustomerContact(created.id, customer);
+    } catch {
+      // Recovered customer is still usable even if contact details could not be refreshed.
+    }
+  }
 
   await prisma.billingAccount.upsert({
     where: {

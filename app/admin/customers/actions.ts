@@ -10,6 +10,7 @@ import { syncCustomerToInvoilessBilling } from "@/lib/services/billing-service";
 import { archiveCustomer, unarchiveCustomer } from "@/lib/services/customer-archive-service";
 import { enableCustomerBillingLifecycle } from "@/lib/services/billing-lifecycle-service";
 import { isStripeBillingEnabled } from "@/lib/stripe/config";
+import { syncLinkedStripeCustomerContact } from "@/lib/stripe/customer";
 import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 
 import type { CustomerFormActionState } from "./customer-form-state";
@@ -201,6 +202,17 @@ export async function updateCustomer(
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not update customer.";
     return { error: message };
+  }
+
+  if (section !== "gps") {
+    await syncLinkedStripeCustomerContact({
+      id,
+      email: fields.email,
+      phone: fields.phone,
+      firstName: fields.firstName,
+      lastName: fields.lastName,
+      company: fields.company,
+    });
   }
 
   revalidatePath("/admin/customers");

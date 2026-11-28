@@ -10,6 +10,7 @@ import { customerNewHref } from "@/lib/admin/customer-new";
 import { getSession } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/db";
 import { archiveCustomer, unarchiveCustomer } from "@/lib/services/customer-archive-service";
+import { syncLinkedStripeCustomerContact } from "@/lib/stripe/customer";
 import { normalizeWhatsAppPhone } from "@/lib/twilio/phone";
 
 function text(formData: FormData, key: string): string | null {
@@ -184,6 +185,17 @@ export async function updateCustomerNew(
     await prisma.customer.update({ where: { id }, data });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not update customer." };
+  }
+
+  if (section !== "gps") {
+    await syncLinkedStripeCustomerContact({
+      id,
+      email: fields.email,
+      phone: fields.phone,
+      firstName: fields.firstName,
+      lastName: fields.lastName,
+      company: fields.company,
+    });
   }
 
   revalidateCustomerNew(id);

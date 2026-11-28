@@ -146,5 +146,5 @@ test("staff can cancel an open Checkout without emailing the customer for card-o
   assert.doesNotMatch(startCardOnFile, /notifyCheckout|sendAppEmail/);
   assert.match(cardOnFileAction, /cancelOpenStripeCheckoutAction/);
   const customer = await readFile("lib/stripe/customer.ts", "utf8");
-  assert.match(customer, /customers\.update\(existing\.externalCustomerId, \{ email \}\)/);
+  assert.match(customer, /applyStripeCustomerContact\(existing\.externalCustomerId, customer\)/);
 });

@@ -6290,3 +6290,15 @@ Local, append-only log of **git commits** and **pushes** for Track Lucia / TL Po
 - Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
 - Pushed `5b0bebc..7684244` to origin/main.
 
+
+### 2026-11-28 12:03 UTC — commit `d623184`
+
+- feat(billing): cancel open Checkout and keep reminder sends from hanging
+- Agent notes: Collection **Cancel this link** expires the Stripe session. Card-on-file copy no longer says the link was emailed. Creating Checkout refreshes the Stripe customer email from TL Portal. Reminder dialog returns before page revalidate; SMTP/Twilio calls time out at 8s.
+
+
+### 2026-11-28 12:03 UTC — pre-push (`main` → origin) @ `d623184`
+
+- Hook runs before upload; if the push fails, this entry still exists (edit or add a follow-up note).
+- Pushed `7684244..d623184` to origin/main.
+

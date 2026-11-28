@@ -56,6 +56,8 @@ test("Customer (New) create stays lean and edit covers the old tab jobs", async 
   assert.match(actions, /export async function deleteCustomerNew/);
   assert.match(actions, /redirect\(customerNewHref\(\{ c: id \}\)\)/);
   assert.match(actions, /tab: section === "gps" \? "gps" : "overview"/);
+  assert.match(actions, /syncLinkedStripeCustomerContact/);
+  assert.match(editForm, /linked to Stripe/);
 });
 
 test("portal and contact mutations refresh Customer (New)", async () => {

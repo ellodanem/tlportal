@@ -94,6 +94,9 @@ export function EditCustomerProfileForm({
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Include the country code.</p>
           </div>
         </div>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          If this customer is linked to Stripe, Save also updates Stripe email, phone, and name. An open Checkout link still shows the old email until you cancel it.
+        </p>
       </div>
 
       <div className="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">

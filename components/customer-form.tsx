@@ -205,7 +205,7 @@ function CustomerFormInner({
               placeholder="+1 758 555 1234"
             />
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              WhatsApp reminders use this mobile number. Include the country code.
+              WhatsApp reminders use this mobile number. Include the country code. If this customer is linked to Stripe, Save also updates Stripe email, phone, and name.
             </p>
           </div>
         </div>
