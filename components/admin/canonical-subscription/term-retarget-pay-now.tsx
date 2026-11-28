@@ -54,6 +54,7 @@ export function TermRetargetPayNowForm({
     Object.fromEntries(services.map((service) => [service.id, service.suggestedAmount])),
   );
   const [disposition, setDisposition] = useState(openInvoices.length ? "void" : "");
+  const [pricesOpen, setPricesOpen] = useState(services.length <= 3);
 
   useEffect(() => {
     if (state.next) router.push(state.next);
@@ -99,25 +100,30 @@ export function TermRetargetPayNowForm({
 
       <fieldset className="mt-4">
         <legend className="text-sm font-medium">Price per service for the new term</legend>
-        <ul className="mt-2 space-y-3">
-          {services.map((service) => (
-            <li key={service.id} className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950">
-              <label className="block text-sm font-medium">
-                {service.label}
-                <span className="mt-0.5 block text-xs font-normal text-zinc-500">
-                  Currently {money(service.currentAmount, currency)} per {cycleUnitLabel(service.currentIntervalMonths)}
-                </span>
-                <input
-                  name={`serviceAmount:${service.id}`}
-                  inputMode="decimal"
-                  value={amounts[service.id] ?? ""}
-                  onChange={(event) => setAmounts((current) => ({ ...current, [service.id]: event.target.value }))}
-                  className={inputClass}
-                />
-              </label>
-            </li>
-          ))}
-        </ul>
+        <details className="mt-2" open={pricesOpen} onToggle={(event) => setPricesOpen(event.currentTarget.open)}>
+          <summary className="cursor-pointer text-sm text-zinc-700 dark:text-zinc-300">
+            {services.length} {services.length === 1 ? "service" : "services"} · adjust amounts
+          </summary>
+          <ul className="mt-2 space-y-3">
+            {services.map((service) => (
+              <li key={service.id} className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950">
+                <label className="block text-sm font-medium">
+                  {service.label}
+                  <span className="mt-0.5 block text-xs font-normal text-zinc-500">
+                    Currently {money(service.currentAmount, currency)} per {cycleUnitLabel(service.currentIntervalMonths)}
+                  </span>
+                  <input
+                    name={`serviceAmount:${service.id}`}
+                    inputMode="decimal"
+                    value={amounts[service.id] ?? ""}
+                    onChange={(event) => setAmounts((current) => ({ ...current, [service.id]: event.target.value }))}
+                    className={inputClass}
+                  />
+                </label>
+              </li>
+            ))}
+          </ul>
+        </details>
         <p className="mt-2 text-sm font-semibold tabular-nums">New cycle total {money(cycleTotal, currency)} per {cycleUnitLabel(targetMonths)}</p>
       </fieldset>
 
